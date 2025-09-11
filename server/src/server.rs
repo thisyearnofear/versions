@@ -1,6 +1,7 @@
 mod cli;
 mod logger;
 mod music_player_service;
+mod web3_service;
 
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
@@ -710,6 +711,7 @@ fn get_config(args: &cli::Args) -> Result<ServerOverlay> {
         music_dir_overwrite: music_dir,
         disable_discord_status: args.disable_discord,
         metadata_scan_depth: max_depth,
+        web3_config: None, // Default to no Web3 config for now
     };
 
     Ok(overlay)

@@ -117,6 +117,10 @@ walkdir = "2.5"
 wildmatch = "2.4"
 
 futures-util = "0.3.31"
+# Web3 and blockchain dependencies (minimal for Arbitrum)
+ethers = { version = "2.0", features = ["rustls"] }
+# IPFS client for decentralized storage
+ipfs-api-backend-hyper = { version = "0.6", features = ["with-hyper-rustls"] }
 alphanumeric-sort = "1.5"
 # for less dependencies, keep in sync with the version ratatui uses
 lru = "0.12.5"

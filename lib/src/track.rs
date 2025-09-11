@@ -24,7 +24,7 @@ use lru::LruCache;
 
 use crate::{
     player::playlist_helpers::PlaylistTrackSource, podcast::episode::Episode, songtag::lrc::Lyric,
-    utils::SplitArrayIter,
+    utils::SplitArrayIter, web3::VersionOwnership,
 };
 
 /// A simple no-value representation of [`MediaTypes`].
@@ -188,6 +188,7 @@ pub struct Track {
     duration: Option<Duration>,
     title: Option<String>,
     artist: Option<String>,
+    web3_ownership: VersionOwnership,
 }
 
 impl PartialEq for Track {
@@ -221,6 +222,7 @@ impl Track {
             duration,
             title: Some(ep.title.clone()),
             artist: None,
+            web3_ownership: VersionOwnership::default(),
         }
     }
 
@@ -235,6 +237,7 @@ impl Track {
             // will be fetched later, maybe consider storing a cache in the database?
             title: None,
             artist: None,
+            web3_ownership: VersionOwnership::default(),
         }
     }
 
@@ -280,6 +283,7 @@ impl Track {
             duration: metadata.duration,
             title: metadata.title,
             artist: metadata.artist,
+            web3_ownership: VersionOwnership::default(),
         })
     }
 

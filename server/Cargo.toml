@@ -33,6 +33,9 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 tonic.workspace = true
 clap.workspace = true
+# Web3 dependencies
+ethers.workspace = true
+ipfs-api-backend-hyper.workspace = true
 
 
 [features]

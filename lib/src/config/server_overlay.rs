@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use super::v2::server::ScanDepth;
+use crate::web3::Web3Config;
 
 /// The Server Settings to use, with possible overwrite (like from CLI)
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -19,6 +20,8 @@ pub struct ServerOverlay {
     pub disable_discord_status: bool,
     /// Overwrite the Metadata scan depth
     pub metadata_scan_depth: Option<ScanDepth>,
+    /// Web3 configuration for Arbitrum integration
+    pub web3_config: Option<Web3Config>,
 }
 
 impl ServerOverlay {
