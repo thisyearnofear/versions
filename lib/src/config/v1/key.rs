@@ -49,7 +49,6 @@ pub struct Keys {
     pub library_yank: BindingForEvent,
     pub library_paste: BindingForEvent,
     pub library_search: BindingForEvent,
-    pub library_search_youtube: BindingForEvent,
     pub library_tag_editor_open: BindingForEvent,
     pub library_switch_root: BindingForEvent,
     pub library_add_root: BindingForEvent,
@@ -62,21 +61,19 @@ pub struct Keys {
     pub playlist_search: BindingForEvent,
     pub playlist_swap_down: BindingForEvent,
     pub playlist_swap_up: BindingForEvent,
-    #[serde(rename = "playlist_cmus_lqueue")] // backwards compat, cannot easily be changed
     pub playlist_add_random_album: BindingForEvent,
-    #[serde(rename = "playlist_cmus_tqueue")] // backwards compat, cannot easily be changed
     pub playlist_add_random_tracks: BindingForEvent,
     pub database_add_all: BindingForEvent,
     pub config_save: BindingForEvent,
+    pub podcast_search_add_feed: BindingForEvent,
     pub podcast_mark_played: BindingForEvent,
     pub podcast_mark_all_played: BindingForEvent,
+    pub podcast_refresh_feed: BindingForEvent,
+    pub podcast_refresh_all_feeds: BindingForEvent,
     pub podcast_episode_download: BindingForEvent,
     pub podcast_episode_delete_file: BindingForEvent,
     pub podcast_delete_feed: BindingForEvent,
     pub podcast_delete_all_feeds: BindingForEvent,
-    pub podcast_search_add_feed: BindingForEvent,
-    pub podcast_refresh_feed: BindingForEvent,
-    pub podcast_refresh_all_feeds: BindingForEvent,
 }
 
 impl Keys {
@@ -127,7 +124,6 @@ impl Keys {
             .chain(once(self.library_yank))
             .chain(once(self.library_paste))
             .chain(once(self.library_search))
-            .chain(once(self.library_search_youtube))
             .chain(once(self.library_tag_editor_open))
             .chain(once(self.library_switch_root))
             .chain(once(self.library_add_root))
@@ -711,10 +707,7 @@ impl Default for Keys {
                 code: Key::Char('/'),
                 modifier: KeyModifiers::NONE,
             },
-            library_search_youtube: BindingForEvent {
-                code: Key::Char('s'),
-                modifier: KeyModifiers::NONE,
-            },
+
             library_tag_editor_open: BindingForEvent {
                 code: Key::Char('t'),
                 modifier: KeyModifiers::NONE,

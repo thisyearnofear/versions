@@ -1,6 +1,6 @@
 [package]
 name = "termusic-playback"
-description = "playback library to support termusic."
+description = "VERSIONS - Audio playback library with multiple backend support (Symphonia, MPV, GStreamer) for version-centric music platform."
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

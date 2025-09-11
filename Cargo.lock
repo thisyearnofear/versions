@@ -4870,7 +4870,6 @@ dependencies = [
  "viuer",
  "walkdir",
  "wildmatch",
- "ytd-rs",
 ]
 
 [[package]]
@@ -4933,7 +4932,6 @@ dependencies = [
  "viuer",
  "walkdir",
  "wildmatch",
- "ytd-rs",
 ]
 
 [[package]]
@@ -6360,16 +6358,6 @@ dependencies = [
  "quote",
  "syn 2.0.95",
  "synstructure",
-]
-
-[[package]]
-name = "ytd-rs"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "491153e7312fcd6bdcb33ac2ee2173ad318f784e766b4adb1a571b24d01165e9"
-dependencies = [
- "regex",
- "thiserror 1.0.63",
 ]
 
 [[package]]

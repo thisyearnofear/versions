@@ -4,12 +4,12 @@ use termusicplayback::BackendSelect;
 
 #[derive(Parser, Debug)]
 // mostly read from `Cargo.toml`
-#[clap(name = "Termusic-server", author, version = env!("TERMUSIC_VERSION"), about, long_about=None)]
+#[clap(name = "VERSIONS-server", author, version = env!("TERMUSIC_VERSION"), about, long_about=None)]
 pub struct Args {
     /// Subcommands, overwriting the default action of starting the server
     #[command(subcommand)]
     pub action: Option<Action>,
-    /// With no MUSIC_DIRECTORY, use config in `~/.config/termusic/config.toml`,
+    /// With no MUSIC_DIRECTORY, use config in `~/.config/versions/config.toml`,
     /// default is ~/Music.
     pub music_directory: Option<PathBuf>,
     // /// Not showing album cover. default is showing.
@@ -81,7 +81,7 @@ pub enum Action {
     },
 }
 
-const DEFAULT_LOGFILE_FILENAME: &str = "termusic-server.log";
+const DEFAULT_LOGFILE_FILENAME: &str = "versions-server.log";
 
 #[derive(Debug, Parser, Clone, PartialEq)]
 pub struct LogOptions {

@@ -4,12 +4,12 @@ use termusiclib::config::v2::server::Backend as ConfigBackend;
 
 #[derive(Parser, Debug)]
 // mostly read from `Cargo.toml`
-#[clap(name = "Termusic", author, version = env!("TERMUSIC_VERSION"), about, long_about=None)]
+#[clap(name = "VERSIONS", author, version = env!("TERMUSIC_VERSION"), about, long_about=None)]
 pub struct Args {
     /// Subcommands, overwriting default action of starting the TUI
     #[command(subcommand)]
     pub action: Option<Action>,
-    /// With no `MUSIC_DIRECTORY`, use config in `~/.config/termusic/config.toml`,
+    /// With no `MUSIC_DIRECTORY`, use config in `~/.config/versions/config.toml`,
     /// default is ~/Music.
     pub music_directory: Option<PathBuf>,
     /// Not showing album cover. default is showing.
@@ -78,7 +78,7 @@ pub enum Action {
     },
 }
 
-const DEFAULT_LOGFILE_FILENAME: &str = "termusic-tui.log";
+const DEFAULT_LOGFILE_FILENAME: &str = "versions-tui.log";
 
 #[derive(Debug, Parser, Clone, PartialEq)]
 pub struct LogOptions {

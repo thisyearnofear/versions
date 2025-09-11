@@ -22,7 +22,6 @@ pub struct TuiSettings {
     #[serde(flatten)]
     pub theme: theme::ThemeWrap,
     pub keys: keys::Keys,
-    pub ytdlp: Ytdlp,
 }
 
 impl TuiSettings {
@@ -115,17 +114,8 @@ pub enum Alignment {
     BottomLeft,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
-#[serde(default)] // allow missing fields and fill them with the `..Self::default()` in this struct
-pub struct Ytdlp {
-    /// Extra args for yt-dlp
-    pub extra_args: String,
-}
-
 mod v1_interop {
-    use super::{
-        Alignment, BehaviorSettings, CoverArtPosition, MaybeComSettings, TuiSettings, Ytdlp,
-    };
+    use super::{Alignment, BehaviorSettings, CoverArtPosition, MaybeComSettings, TuiSettings};
     use crate::config::v1;
 
     impl From<v1::Alignment> for Alignment {
@@ -165,7 +155,6 @@ mod v1_interop {
                 coverart: value.album_photo_xywh.into(),
                 theme,
                 keys: value.keys.into(),
-                ytdlp: Ytdlp::default(),
             }
         }
     }

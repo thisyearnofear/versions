@@ -1,6 +1,6 @@
 [package]
 name = "termusic"
-description = "Terminal Music and Podcast Player written in Rust. Can download music from youtube(netease/migu/kugou) and then embed lyrics and album photos into mp3/m4a/flac/wav/ogg vorbis files."
+description = "VERSIONS - Legacy terminal interface for the version-centric music platform (deprecated in favor of web interface)."
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -14,7 +14,7 @@ rust-version.workspace = true
 
 
 [[bin]]
-name = "termusic"
+name = "versions-tui"
 path = "src/main.rs"
 doctest = false
 
@@ -45,7 +45,7 @@ tui-realm-stdlib.workspace = true #   = "1"
 tui-realm-treeview.workspace = true #   = "1"
 unicode-width.workspace = true #   = "^0.1.8"
 viuer.workspace = true
-ytd-rs.workspace = true #   = { version = "0.1", features = ["yt-dlp"]}
+
 walkdir.workspace = true #   = "2"
 wildmatch.workspace = true #   = "2"
 escaper.workspace = true #   = "0.1.1"

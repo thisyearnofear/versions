@@ -1,19 +1,11 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
-use std::thread::{self, sleep};
-use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
-use lofty::TextEncoding;
-use lofty::config::WriteOptions;
-use lofty::id3::v2::{Frame, Id3v2Tag, UnsynchronizedTextFrame};
 use lofty::picture::Picture;
-use lofty::prelude::{Accessor, TagExt};
 use service::SongTagService;
-use ytd_rs::{Arg, YoutubeDL};
 
-use crate::common::const_unknown::{UNKNOWN_ARTIST, UNKNOWN_TITLE};
-use crate::utils::get_parent_folder;
+use crate::common::const_unknown::UNKNOWN_TITLE;
 
 mod kugou;
 pub mod lrc;
@@ -221,129 +213,27 @@ impl SongTag {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
+    /// Download functionality has been removed in favor of user-uploaded content model.
+    /// This method now returns an error to maintain API compatibility.
     pub async fn download(
         &self,
-        file: &Path,
+        _file: &Path,
         tx: impl Fn(TrackDLMsg) + Send + 'static,
     ) -> Result<()> {
-        let p_parent = get_parent_folder(file);
-        let artist = self
-            .artist
-            .clone()
-            .unwrap_or_else(|| UNKNOWN_ARTIST.to_string());
         let title = self
             .title
             .clone()
             .unwrap_or_else(|| UNKNOWN_TITLE.to_string());
 
-        let album = self.album.clone().unwrap_or_else(|| String::from("N/A"));
-        let lyric = self.fetch_lyric().await;
-        let photo = self.fetch_photo().await;
+        let url: TrackDLMsgURL = Arc::from("deprecated");
+        tx(TrackDLMsg::Err(
+            url.clone(),
+            title,
+            "Download functionality has been removed. Please upload music files directly."
+                .to_string(),
+        ));
+        tx(TrackDLMsg::Completed(url, None));
 
-        let filename = format!("{artist}-{title}.%(ext)s");
-
-        let args = vec![
-            Arg::new("--quiet"),
-            Arg::new_with_arg("--output", filename.as_ref()),
-            Arg::new("--extract-audio"),
-            Arg::new_with_arg("--audio-format", "mp3"),
-        ];
-
-        let p_full = p_parent.join(format!("{artist}-{title}.mp3"));
-        match std::fs::remove_file(&p_full) {
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => (),
-            v => v?,
-        }
-
-        if self.url().is_some_and(|v| *v == UrlTypes::Protected) {
-            bail!("The item is protected by copyright, please, select another one.");
-        }
-
-        let mut url = if let Some(UrlTypes::FreeDownloadable(url)) = &self.url {
-            url.clone()
-        } else {
-            String::new()
-        };
-
-        match self.service_provider {
-            ServiceProvider::Netease => {
-                let neteasev2_api = netease_v2::Api::new();
-                url = neteasev2_api
-                    .download_recording(self)
-                    .await
-                    .map_err(|v| anyhow!(v))?;
-            }
-            ServiceProvider::Migu => {}
-            ServiceProvider::Kugou => {
-                let kugou_api = kugou::Api::new();
-                url = kugou_api
-                    .download_recording(self)
-                    .await
-                    .map_err(|v| anyhow!(v))?;
-            }
-        }
-
-        if url.is_empty() {
-            bail!("failed to fetch url, please, try another item.");
-        }
-
-        // avoid full string clones when sending via a channel
-        let url = Arc::from(url.into_boxed_str());
-
-        let ytd = YoutubeDL::new(&PathBuf::from(p_parent), args, &url)?;
-
-        thread::spawn(move || -> Result<()> {
-            tx(TrackDLMsg::Start(url.clone(), title.clone()));
-
-            // start download
-            // check what the result is and print out the path to the download or the error
-            let _download_result = match ytd.download() {
-                Ok(res) => res,
-                Err(err) => {
-                    tx(TrackDLMsg::Err(url.clone(), title.clone(), err.to_string()));
-                    sleep(Duration::from_secs(1));
-                    tx(TrackDLMsg::Completed(url.clone(), None));
-
-                    return Ok(());
-                }
-            };
-
-            tx(TrackDLMsg::Success(url.clone()));
-            let mut tag = Id3v2Tag::default();
-
-            tag.set_title(title.clone());
-            tag.set_artist(artist);
-            tag.set_album(album);
-
-            if let Ok(Some(l)) = lyric {
-                let frame = Frame::UnsynchronizedText(UnsynchronizedTextFrame::new(
-                    TextEncoding::UTF8,
-                    *b"eng",
-                    String::from("saved by termusic"),
-                    l,
-                ));
-                tag.insert(frame);
-            }
-
-            if let Ok(picture) = photo {
-                tag.insert_picture(picture);
-            }
-
-            if tag.save_to_path(&p_full, WriteOptions::new()).is_ok() {
-                sleep(Duration::from_secs(1));
-                tx(TrackDLMsg::Completed(
-                    url,
-                    Some(p_full.to_string_lossy().to_string()),
-                ));
-            } else {
-                tx(TrackDLMsg::ErrEmbedData(url.clone(), title));
-                sleep(Duration::from_secs(1));
-                tx(TrackDLMsg::Completed(url, None));
-            }
-
-            Ok(())
-        });
-        Ok(())
+        bail!("Download functionality has been removed in favor of user-uploaded content model")
     }
 }

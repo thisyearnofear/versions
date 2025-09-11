@@ -1,6 +1,6 @@
 [package]
 name = "termusic-lib"
-description = "library to support termusic."
+description = "VERSIONS - Core library for version-centric music platform with audio processing, metadata management, and community features."
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -65,7 +65,7 @@ urlencoding.workspace = true #   = "2"
 viuer.workspace = true #   = "0.6"
 walkdir.workspace = true #   = "2"
 wildmatch.workspace = true #   = "2"
-ytd-rs.workspace = true #   = { version = "0.1", features = ["yt-dlp"]}
+
 futures-util.workspace = true
 tokio.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }

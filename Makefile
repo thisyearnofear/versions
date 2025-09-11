@@ -1,9 +1,9 @@
-prog := termusic
-server :=termusic-server
+prog := versions-tui
+server := versions-server
 ifeq ($(OS),Windows_NT)
 # Windows 
-	prog := termusic.exe
-	server := termusic-server.exe 
+	prog := versions-tui.exe
+	server := versions-server.exe 
 endif
 default_cargo_home = $(HOME)/.local/share/cargo
 # define CARGO_HOME if not defined
@@ -17,7 +17,10 @@ ifeq ($(OS),Windows_NT)
 	install_to = $(USERPROFILE)\.cargo\bin
 endif
 
-default: fmt 
+default: fmt
+
+build:
+	cargo build --all 
 
 fmt:
 	cargo fmt --all

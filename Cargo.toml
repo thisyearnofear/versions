@@ -6,14 +6,14 @@ members = ["lib", "playback", "server", "tui"]
 authors = ["tramhao <haoxinkui@gmail.com>"]
 edition = "2024"
 license = "MIT"
-description = "Terminal Music and Podcast Player written in Rust. Can download music from youtube(netease/migu/kugou) and then embed lyrics and album photos into mp3/m4a/flac/wav/ogg vorbis files."
-repository = "https://github.com/tramhao/termusic"
-homepage = "https://github.com/tramhao/termusic"
-keywords = ["terminal", "tui", "music", "youtube", "podcast"]
+description = "VERSIONS - A version-centric music platform for discovering, comparing, and sharing different versions of songs with community curation."
+repository = "https://github.com/thisyearnofear/versions"
+homepage = "https://github.com/thisyearnofear/versions"
+keywords = ["music", "versions", "community", "web", "discovery"]
 categories = [
-    "command-line-interface",
-    "command-line-utilities",
+    "web-programming",
     "multimedia::audio",
+    "database",
 ]
 readme = "./README.md"
 version = "0.11.0"
@@ -115,7 +115,7 @@ unicode-width = "^0.2.0"
 urlencoding = "2.1"
 walkdir = "2.5"
 wildmatch = "2.4"
-ytd-rs = { version = "0.1", features = ["yt-dlp"] }
+
 futures-util = "0.3.31"
 alphanumeric-sort = "1.5"
 # for less dependencies, keep in sync with the version ratatui uses

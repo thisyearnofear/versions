@@ -4,7 +4,7 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "server that can play music and running by itself. Works with termusic. "
+description = "VERSIONS - Server component for version-centric music platform with gRPC API and web services."
 repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
@@ -13,7 +13,7 @@ rust-version.workspace = true
 
 
 [[bin]]
-name = "termusic-server"
+name = "versions-server"
 path = "src/server.rs"
 
 
