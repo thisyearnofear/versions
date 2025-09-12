@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use super::v2::server::ScanDepth;
-use crate::web3::Web3Config;
+use crate::onchain::OnchainConfig;
+use crate::distributed::DistributedConfig;
 
 /// The Server Settings to use, with possible overwrite (like from CLI)
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -20,8 +21,10 @@ pub struct ServerOverlay {
     pub disable_discord_status: bool,
     /// Overwrite the Metadata scan depth
     pub metadata_scan_depth: Option<ScanDepth>,
-    /// Web3 configuration for Arbitrum integration
-    pub web3_config: Option<Web3Config>,
+    /// Blockchain configuration for Arbitrum integration
+    pub onchain_config: Option<OnchainConfig>,
+    /// Distributed storage configuration for IPFS and P2P
+    pub distributed_config: Option<DistributedConfig>,
 }
 
 impl ServerOverlay {

@@ -74,6 +74,7 @@ pub trait SongTagService {
     ) -> Result<Picture, SongTagServiceError<Self::Error>>;
 
     /// Try to get a URL for downloading the whole song
+    #[allow(dead_code)] // Will be used for future recording downloads
     async fn download_recording(
         &self,
         song: &SongTag,

@@ -1,6 +1,55 @@
+# ORGANIZED: Comprehensive .gitignore for VERSIONS
+
+# Rust
 /target
+**/*.rs.bk
+
+# Build artifacts
 *.diff
-# ignore custom cargo configuration, like changing linker
-.cargo
-# VSCode relation configuration
-.vscode
+*.orig
+*.rej
+
+# Cargo configuration
+.cargo/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Audio files (user content)
+audio_files/*.mp3
+audio_files/*.flac
+audio_files/*.wav
+audio_files/*.m4a
+audio_files/*.ogg
+audio_files/*.aiff
+!audio_files/README.md
+
+# Logs
+*.log
+/tmp/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Node.js (for web development)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

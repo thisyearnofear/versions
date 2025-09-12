@@ -27,15 +27,15 @@ pub enum VersionType {
     Remaster,
 }
 
-/// Minimal Web3 configuration
+/// Blockchain configuration for Arbitrum and IPFS integration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Web3Config {
+pub struct OnchainConfig {
     pub arbitrum_rpc_url: String,
     pub contract_address: String,
     pub ipfs_gateway: String,
 }
 
-impl Default for Web3Config {
+impl Default for OnchainConfig {
     fn default() -> Self {
         Self {
             arbitrum_rpc_url: "https://arb1.arbitrum.io/rpc".to_string(),

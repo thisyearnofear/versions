@@ -1,0 +1,38 @@
+{
+  "name": "versions-web",
+  "version": "0.1.0",
+  "description": "VERSIONS - Web community platform for version-centric music discovery",
+  "main": "index.html",
+  "scripts": {
+    "dev": "python3 -m http.server 3000",
+    "serve": "python3 -m http.server 3000",
+    "test-api": "curl -s http://localhost:8080/api/v1/health | jq '.'",
+    "build": "echo 'Static HTML - no build needed'"
+  },
+  "keywords": [
+    "music",
+    "versions",
+    "community",
+    "web3",
+    "arbitrum",
+    "discovery"
+  ],
+  "author": "VERSIONS Team",
+  "license": "MIT",
+  "dependencies": {
+    "@farcaster/miniapp-sdk": "^0.0.39"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "future": {
+    "framework": "React or Vue.js",
+    "features": [
+      "Audio player component",
+      "Version comparison interface", 
+      "Wallet integration (MetaMask)",
+      "Real-time updates (WebSocket)",
+      "Progressive Web App (PWA)"
+    ]
+  }
+}

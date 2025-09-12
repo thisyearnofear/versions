@@ -18,7 +18,8 @@ pub mod taskpool;
 pub mod track;
 pub mod ueberzug;
 pub mod utils;
-pub mod web3;
+pub mod onchain;
+pub mod distributed;
 pub mod xywh;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

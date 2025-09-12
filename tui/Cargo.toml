@@ -75,6 +75,8 @@ cover-viuer = ["cover-viuer-iterm", "cover-viuer-kitty", "cover-viuer-sixel"]
 cover-viuer-iterm = []
 cover-viuer-kitty = []
 cover-viuer-sixel = ["viuer/sixel"]
+# Legacy YouTube functionality (disabled by default for professional focus)
+youtube = []
 
 [dev-dependencies]
 pretty_assertions.workspace = true # = "1"

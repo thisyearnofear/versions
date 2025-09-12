@@ -33,9 +33,18 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 tonic.workspace = true
 clap.workspace = true
-# Web3 dependencies
+# Web framework for REST API
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+serde_json.workspace = true
+# Blockchain dependencies
 ethers.workspace = true
 ipfs-api-backend-hyper.workspace = true
+# PREVENT BLOAT: Minimal HTTP client for Farcaster API
+reqwest = { version = "0.12", features = ["json"] }
+# PREVENT BLOAT: Minimal base64 for audio uploads
+base64 = "0.22"
 
 
 [features]

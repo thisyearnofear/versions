@@ -342,6 +342,8 @@ fn get_config(args: &cli::Args) -> Result<CombinedSettings> {
     };
 
     let overlay_server = ServerOverlay {
+        onchain_config: None,
+        distributed_config: None,
         settings: config_server,
         music_dir_overwrite: music_dir,
         disable_discord_status: args.disable_discord,

@@ -1,7 +1,11 @@
 mod cli;
 mod logger;
 mod music_player_service;
-mod web3_service;
+mod onchain_service;
+mod distributed_service;
+mod farcaster_service; // ENHANCEMENT: Add Farcaster service
+mod audio_service; // ENHANCEMENT: Add Audio streaming service
+mod rest_api;
 
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
@@ -150,8 +154,10 @@ async fn actual_main() -> Result<()> {
 
     let service_cancel_token = CancellationToken::new();
 
-    let join_handle =
-        start_service(&config, music_player_service, service_cancel_token.clone()).await?;
+    let grpc_handle =
+        start_grpc_service(&config, music_player_service, service_cancel_token.clone()).await?;
+    
+    let rest_handle = start_rest_api(service_cancel_token.clone()).await?;
 
     let tokio_handle = Handle::current();
 
@@ -188,7 +194,8 @@ async fn actual_main() -> Result<()> {
 
     // ensure cleanup of the service tasks happens before main exits
     service_cancel_token.cancel();
-    let _ = join_handle.await;
+    let _ = grpc_handle.await;
+    let _ = rest_handle.await;
 
     // Graceful exit log
     info!("Bye");
@@ -226,8 +233,8 @@ fn start_playlist_save_interval(
     });
 }
 
-/// Start the [`MusicPlayerService`] with the according transport protocol.
-async fn start_service(
+/// Start the gRPC [`MusicPlayerService`] with the according transport protocol.
+async fn start_grpc_service(
     config: &SharedServerSettings,
     music_player_service: MusicPlayerService,
     cancel_token: CancellationToken,
@@ -265,6 +272,44 @@ async fn start_service(
         }
     };
 
+    Ok(handle)
+}
+
+/// Start the REST API server for web frontend
+async fn start_rest_api(
+    cancel_token: CancellationToken,
+) -> Result<JoinHandle<Result<(), std::io::Error>>> {
+    let app = rest_api::create_router();
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    
+    info!("REST API attempting to bind to {addr}");
+    
+    // Test binding first
+    let listener = tokio::net::TcpListener::bind(addr).await
+        .with_context(|| format!("Failed to bind REST API to {addr}"))?;
+    
+    let actual_addr = listener.local_addr()
+        .with_context(|| "Failed to get local address for REST API")?;
+    
+    info!("REST API successfully bound to {actual_addr}");
+    
+    let handle = tokio::spawn(async move {
+        info!("Starting REST API server...");
+        match axum::serve(listener, app)
+            .with_graceful_shutdown(cancel_token.cancelled_owned())
+            .await
+        {
+            Ok(()) => {
+                info!("REST API server stopped gracefully");
+                Ok(())
+            }
+            Err(e) => {
+                error!("REST API server error: {e:?}");
+                Err(e)
+            }
+        }
+    });
+    
     Ok(handle)
 }
 
@@ -711,7 +756,8 @@ fn get_config(args: &cli::Args) -> Result<ServerOverlay> {
         music_dir_overwrite: music_dir,
         disable_discord_status: args.disable_discord,
         metadata_scan_depth: max_depth,
-        web3_config: None, // Default to no Web3 config for now
+        onchain_config: None, // Default to no blockchain config for now
+        distributed_config: None, // Default to no distributed storage for now
     };
 
     Ok(overlay)

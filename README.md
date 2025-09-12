@@ -1,6 +1,6 @@
 # 🎭 VERSIONS
 
-**The version-centric music platform for discovering, comparing, and sharing different versions of songs.**
+**Version-centric music platform with dual interfaces: professional terminal tools for creators, community web platform with Farcaster social features.**
 
 [![Build status](https://github.com/thisyearnofear/versions/actions/workflows/build.yml/badge.svg)](https://github.com/thisyearnofear/versions/actions)
 [![crates.io](https://img.shields.io/crates/v/versions.svg)](https://crates.io/crates/versions)
@@ -8,125 +8,155 @@
 
 ## 🎯 **What is VERSIONS?**
 
-VERSIONS puts **song versions at the center** of music discovery. Instead of treating demos, remixes, and live recordings as afterthoughts, we make them the main attraction.
+VERSIONS puts **song versions at the center** of music discovery with **dual interfaces** and **Web3-native social features**:
 
-- **Version Timeline** - See how songs evolved from demo to final release
-- **Split-Screen Comparison** - Play two versions simultaneously 
-- **Community Curation** - Vote on the best versions, discover rare finds
-- **Artist Workshop** - Musicians get feedback on works-in-progress
+### **🖥️ Terminal Interface (Professional)**
+- **Local Management** - Privacy-first file system integration
+- **CLI Integration** - Script-friendly commands for creators
+- **Batch Operations** - Efficient multi-file processing
+- **Power Tools** - Advanced audio analysis and comparison
+
+### **🌐 Web Interface (Community)**
+- **Audio Streaming** - Professional player with range request support
+- **Farcaster Integration** - Web3-native social discovery
+- **Version Comparison** - Side-by-side audio analysis
+- **Social Curation** - Community-driven version discovery
+
+### **🟣 Farcaster Mini App**
+- **Social Authentication** - Sign in with Farcaster
+- **Version Discovery Casting** - Share discoveries to social feeds
+- **Social Recommendations** - Music suggestions from social graph
+- **Community Discussions** - Farcaster-based conversations
 
 ## 🚀 **Quick Start**
 
 ### **Requirements**
-- **Rust 1.85.0+**
-- **protobuf-compiler** (`brew install protobuf` on macOS)
+- **Rust 1.85.0+** - [Install Rust](https://rustup.rs/)
+- **protobuf-compiler** - `brew install protobuf` (macOS) or `sudo apt install protobuf-compiler` (Ubuntu)
 
-### **Build & Run**
+### **Installation & Setup**
 ```bash
 git clone https://github.com/thisyearnofear/versions.git
 cd versions
 make build
-
-# Start the legacy TUI (for development)
-./target/release/versions-tui
-
-# Start the server
-./target/release/versions-server
 ```
 
-### **Development**
+### **Running VERSIONS**
 ```bash
-# Build with all features
-make full
+# 1. Start the server (required)
+./target/debug/versions-server
+# Server runs on http://localhost:8080
 
-# Install binaries
-make install
+# 2. Web interface (community platform)
+cd web && python3 -m http.server 3000
+# Open http://localhost:3000
 
-# Run tests
-make test
+# 3. Terminal interface (professional tools)
+./target/debug/versions-tui
+```
+
+### **First Steps**
+```bash
+# Test the system
+./test_server.sh
+
+# Add audio files
+cp your-music.mp3 audio_files/
+
+# Verify build
+./verify_build.sh
 ```
 
 ## 🏗️ **Architecture**
 
-VERSIONS is built as a modern web platform with a robust Rust backend:
+Dual-interface architecture with shared Rust backend:
 
 ```
-Web Frontend ◄──► REST API ◄──► Audio Engine (Rust)
-                     │
-                 Database
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  Terminal (TUI) │    │   gRPC + REST    │    │  Audio Engine   │
+│ Professional    │◄──►│     Server       │◄──►│   (Rust)        │
+│    Tools        │    │                  │    │                 │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                │                        │
+┌─────────────────┐             │               ┌─────────────────┐
+│  Web Frontend   │◄────────────┘               │   Farcaster     │
+│ + Farcaster     │                             │ Social Layer    │
+│ Mini App        │◄────────────────────────────┤                 │
+└─────────────────┘                             └─────────────────┘
 ```
 
-### **Supported Formats**
-- **Audio**: FLAC, MP3, M4A, WAV, OGG, AIFF, Opus
-- **Backends**: Symphonia (default), MPV, GStreamer
-- **Platforms**: macOS, Linux, Windows
+### **Core Features**
+- **Audio Formats**: MP3, FLAC, WAV, M4A, OGG, AIFF
+- **Streaming**: Range request support for efficient playback
+- **Social Integration**: Native Farcaster Mini App
+- **Dual Interface**: Terminal tools + Web community platform
+- **Version-Centric**: Unique approach to music organization
 
 ## 📊 **Current Status**
 
-**🔄 In Active Development** - Transforming from terminal music player to web platform
+**🎵 Functional Music Platform** - Audio streaming and Farcaster social features operational
 
-### **Phase 1: Foundation** (Current)
-- ✅ Clean up legacy code
-- ✅ Remove external API dependencies  
-- 🔄 Build REST API foundation
-- 🔄 Create web frontend
+### **✅ Completed Features**
+- **Audio Streaming**: Professional player with range request support
+- **Farcaster Mini App**: Native Web3 social integration
+- **Dual Interface**: Terminal + Web platforms working together
+- **REST API**: Complete endpoints for audio and social features
+- **File Management**: Upload, stream, and organize audio files
 
-### **Phase 2: Core Features**
-- 🔄 Version upload & management
-- 🔄 Version comparison interface
-- 🔄 User authentication
-- 🔄 Basic community features
+### **🔄 In Development**
+- **Version Comparison**: Side-by-side audio analysis
+- **Database Integration**: Persistent storage layer
+- **Enhanced Search**: Advanced discovery features
+- **Mobile Optimization**: Better responsive design
 
-### **Phase 3: Community**
-- 🔄 Version voting & ranking
-- 🔄 Comments & discussions
-- 🔄 Artist tools & analytics
-- 🔄 Advanced discovery
+### **📋 Planned**
+- **Enhanced TUI**: Professional terminal tools
+- **Blockchain Integration**: Arbitrum L2 for ownership
+- **Creator Economy**: Direct fan funding
+- **Advanced Audio**: Waveform analysis and sync playback
 
 ## 🎵 **Key Concepts**
 
-### **Version-First Data Model**
+### **Version-Centric Approach**
 Every song is a collection of versions:
-- **Demo** - Early rough recordings
-- **Remix** - Alternative arrangements  
+- **Demo** - Early recordings and rough cuts
+- **Studio** - Official album releases
 - **Live** - Concert performances
-- **Alternative** - Different endings, arrangements
+- **Remix** - Alternative arrangements
 - **Remaster** - Updated audio quality
+- **Acoustic** - Stripped-down versions
 
-### **Community-Driven Discovery**
-- **Version Similarity** - AI matches related versions
-- **Democratic Ranking** - Community votes on quality
-- **Collaborative Filtering** - Learn from listening patterns
-- **Version Archaeology** - Discover rare/lost recordings
+### **Social Discovery**
+- **Farcaster Integration** - Web3-native social features
+- **Community Curation** - Social voting and recommendations
+- **Version Archaeology** - Discover rare recordings through social graph
+- **Artist Engagement** - Direct creator-fan interactions
 
 ## 🤝 **Contributing**
 
-We welcome contributions! VERSIONS follows these principles:
+VERSIONS follows **8 Core Principles** that guide all development:
 
 - **ENHANCEMENT FIRST** - Improve existing code before adding new features
 - **AGGRESSIVE CONSOLIDATION** - Delete unnecessary code
 - **PREVENT BLOAT** - Audit before adding features
-- **CLEAN & MODULAR** - Clear separation of concerns
+- **DRY** - Single source of truth for shared logic
+- **CLEAN** - Clear separation of concerns
+- **MODULAR** - Composable, testable components
+- **PERFORMANT** - Efficient operations and caching
+- **ORGANIZED** - Predictable structure and documentation
 
-### **Areas We Need Help**
-- 🎨 **Frontend Development** - React/Vue.js expertise
-- 🎵 **Music Industry Knowledge** - Version types and relationships
-- 🔍 **Search & Discovery** - Algorithm development
-- 📱 **Mobile Development** - iOS/Android apps
-- 🎯 **UX/UI Design** - Version comparison interfaces
-
-### **Development Workflow**
-1. Fork the repository
-2. Create feature branch from `main`
-3. Follow coding standards (`make lint`)
-4. Add tests for new functionality
-5. Submit pull request
+### **How to Contribute**
+1. **Read**: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for detailed guidelines
+2. **Fork**: Create your own repository fork
+3. **Follow**: Core Principles in all changes
+4. **Test**: Add tests and verify builds
+5. **Submit**: Pull request with clear description
 
 ## 📚 **Documentation**
 
-- **[Technical Architecture](docs/ARCHITECTURE.md)** - System design and implementation
-- **[API Reference](docs/API.md)** - REST API endpoints and usage
-- **[Roadmap](docs/ROADMAP.md)** - Detailed development timeline
+- **[Getting Started](docs/GETTING_STARTED.md)** - Setup, installation, and basic usage
+- **[API Reference](docs/API_REFERENCE.md)** - Complete REST API documentation
+- **[Development Guide](docs/DEVELOPMENT.md)** - Architecture, principles, and contributing
 
 ## 📄 **License**
 
@@ -135,13 +165,11 @@ We welcome contributions! VERSIONS follows these principles:
 
 ## 🙏 **Acknowledgments**
 
-VERSIONS builds upon [Termusic](https://github.com/tramhao/termusic) and the Rust audio ecosystem:
+Built on [Termusic](https://github.com/tramhao/termusic) and the Rust audio ecosystem:
 - [Symphonia](https://github.com/pdeljanov/Symphonia) - Audio decoding
-- [Rodio](https://github.com/RustAudio/rodio) - Audio playback
-- [tui-realm](https://github.com/veeso/tui-realm) - Terminal UI framework
+- [Axum](https://github.com/tokio-rs/axum) - Web framework
+- [Farcaster](https://farcaster.xyz) - Decentralized social protocol
 
 ---
 
-**🎭 VERSIONS - Where every song tells multiple stories.**
-
-*Join us in building the future of music discovery and community curation.*
+**🎭 VERSIONS - Version-centric music discovery with Web3-native social features.**

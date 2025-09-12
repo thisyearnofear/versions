@@ -10,6 +10,7 @@ use tuirealm::Update;
 use tuirealm::props::{AttrValue, Attribute};
 
 use crate::ui::ids::Id;
+#[cfg(feature = "youtube")]
 use crate::ui::model::youtube_options::YTDLMsg;
 use crate::ui::msg::{
     CoverDLResult, DBMsg, DeleteConfirmMsg, ErrorPopupMsg, GSMsg, HelpPopupMsg, LIMsg, LyricMsg,
@@ -51,6 +52,7 @@ impl Update<Msg> for Model {
             Msg::Player(msg) => self.update_player(msg),
 
             Msg::HelpPopup(msg) => self.update_help_popup_msg(&msg),
+            #[cfg(feature = "youtube")]
             Msg::YoutubeSearch(msg) => {
                 self.update_youtube_search(msg);
                 None
@@ -667,6 +669,7 @@ impl Model {
     }
 
     /// Handle all [`YSMsg`] messages. Sub-function for [`update`](Self::update).
+    #[cfg(feature = "youtube")]
     fn update_youtube_search(&mut self, msg: YSMsg) {
         match msg {
             YSMsg::InputPopupShow => {

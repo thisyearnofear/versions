@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎭 VERSIONS - Web Community Platform</title>
+    
+    <!-- Farcaster Mini App Embed Metadata -->
+    <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://versions.app/og-image.png","button":{"title":"🎭 Discover Versions","action":{"type":"launch_frame","name":"VERSIONS","url":"https://versions.app","splashImageUrl":"https://versions.app/splash.png","splashBackgroundColor":"#667eea"}}}' />
+    
+    <!-- Open Graph for social sharing -->
+    <meta property="og:title" content="VERSIONS - Version-Centric Music Discovery" />
+    <meta property="og:description" content="Discover, compare, and share different versions of your favorite songs" />
+    <meta property="og:image" content="https://versions.app/og-image.png" />
+    <meta property="og:url" content="https://versions.app" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .interface-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+        
+        .card p {
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        
+        .features {
+            list-style: none;
+            margin-bottom: 20px;
+        }
+        
+        .features li {
+            padding: 5px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .features li:before {
+            content: "✅";
+            position: absolute;
+            left: 0;
+        }
+        
+        .api-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .api-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .endpoint {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .endpoint-method {
+            font-weight: bold;
+            color: #28a745;
+            margin-right: 10px;
+        }
+        
+        .endpoint-url {
+            font-family: 'Monaco', 'Menlo', monospace;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        
+        .test-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-left: 10px;
+            transition: background 0.3s ease;
+        }
+        
+        .test-button:hover {
+            background: #5a6fd8;
+        }
+        
+        .response {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        @media (max-width: 768px) {
+            .interface-cards {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎭 VERSIONS</h1>
+            <p>The version-centric music platform that works how YOU work</p>
+        </div>
+        
+        <div class="interface-cards">
+            <div class="card">
+                <h2>🖥️ Terminal Interface (Professional)</h2>
+                <p>Professional tools for creators and power users</p>
+                <ul class="features">
+                    <li>Batch operations & CLI integration</li>
+                    <li>Local file management</li>
+                    <li>Script-friendly automation</li>
+                    <li>Advanced audio analysis</li>
+                    <li>Privacy-first workflows</li>
+                </ul>
+                <code>./target/release/versions-tui</code>
+            </div>
+            
+            <div class="card">
+                <h2>🌐 Web Interface (Community)</h2>
+                <p>Social platform for discovery and collaboration</p>
+                <ul class="features">
+                    <li>Visual version timelines</li>
+                    <li>Split-screen comparisons</li>
+                    <li>Community voting & curation</li>
+                    <li>Social discovery features</li>
+                    <li>Mobile-responsive design</li>
+                </ul>
+                <strong>You are here! 🎉</strong>
+            </div>
+        </div>
+        
+        <div class="api-section">
+            <h2>🔗 REST API Testing</h2>
+            <p>Test the backend API that powers both interfaces:</p>
+            
+            <div class="endpoint">
+                <span class="endpoint-method">GET</span>
+                <span class="endpoint-url">/api/v1/health</span>
+                <button class="test-button" onclick="testEndpoint('/api/v1/health', 'health-response')">Test</button>
+                <div id="health-response" class="response" style="display: none;"></div>
+            </div>
+            
+            <div class="endpoint">
+                <span class="endpoint-method">GET</span>
+                <span class="endpoint-url">/api/v1/songs</span>
+                <button class="test-button" onclick="testEndpoint('/api/v1/songs', 'songs-response')">Test</button>
+                <div id="songs-response" class="response" style="display: none;"></div>
+            </div>
+            
+            <div class="endpoint">
+                <span class="endpoint-method">GET</span>
+                <span class="endpoint-url">/api/v1/songs/song1</span>
+                <button class="test-button" onclick="testEndpoint('/api/v1/songs/song1', 'song-response')">Test</button>
+                <div id="song-response" class="response" style="display: none;"></div>
+            </div>
+            
+            <div class="endpoint">
+                <span class="endpoint-method">GET</span>
+                <span class="endpoint-url">/api/v1/versions/version1</span>
+                <button class="test-button" onclick="testEndpoint('/api/v1/versions/version1', 'version-response')">Test</button>
+                <div id="version-response" class="response" style="display: none;"></div>
+            </div>
+            
+            <div id="server-status" class="status disconnected">
+                🔴 Server Status: Checking...
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // ENHANCEMENT: Import our enhanced modules
+        import { farcasterManager } from './farcaster.js';
+        import { audioPlayer } from './audio-player.js';
+        import { appConfig, environment } from './config.js';
+        
+        // MODULAR: Import Farcaster SDK only when needed
+        let farcasterSDK = null;
+        
+        // PERFORMANT: Lazy load Farcaster SDK
+        async function loadFarcasterSDK() {
+            if (!farcasterSDK) {
+                try {
+                    const module = await import('https://esm.sh/@farcaster/miniapp-sdk');
+                    farcasterSDK = module.sdk;
+                    
+                    // CLEAN: Initialize Mini App when SDK loads
+                    await farcasterSDK.actions.ready();
+                    console.log('🟣 Farcaster Mini App ready!');
+                    
+                    // ENHANCEMENT: Add Farcaster features to existing UI
+                    addFarcasterFeatures();
+                } catch (error) {
+                    console.log('Running outside Farcaster environment:', error.message);
+                }
+            }
+            return farcasterSDK;
+        }
+        
+        // ENHANCEMENT: Enhanced Farcaster features
+        function addFarcasterFeatures() {
+            const statusDiv = document.getElementById('server-status');
+            if (statusDiv) {
+                statusDiv.innerHTML += `<br/>🟣 <strong>Farcaster Mini App Mode Active</strong> (${environment})`;
+                
+                // MODULAR: Create Farcaster controls section
+                const farcasterSection = document.createElement('div');
+                farcasterSection.innerHTML = `
+                    <h3>🟣 Farcaster Features</h3>
+                    <div id="farcaster-user-info"></div>
+                    <div id="farcaster-controls">
+                        <button id="farcaster-auth-btn" class="test-button">🔗 Sign In with Farcaster</button>
+                        <button id="cast-discovery-btn" class="test-button" style="display:none">📢 Cast Discovery</button>
+                        <button id="social-recs-btn" class="test-button" style="display:none">👥 Social Recommendations</button>
+                    </div>
+                    <div id="social-content"></div>
+                `;
+                
+                statusDiv.appendChild(farcasterSection);
+                
+                // ENHANCEMENT: Add audio player section
+                addAudioPlayerSection(statusDiv);
+                
+                // CLEAN: Bind event handlers
+                bindFarcasterEvents();
+            }
+        }
+        
+        // ENHANCEMENT: Add audio player section
+        function addAudioPlayerSection(parentDiv) {
+            const audioSection = document.createElement('div');
+            audioSection.innerHTML = `
+                <h3>🎵 Audio Player</h3>
+                <div id="audio-controls">
+                    <button id="load-audio-btn" class="test-button">🎵 Load Sample Audio</button>
+                    <button id="list-audio-btn" class="test-button">📁 List Audio Files</button>
+                </div>
+                <div id="audio-content"></div>
+            `;
+            
+            parentDiv.appendChild(audioSection);
+            
+            // CLEAN: Bind audio events
+            bindAudioEvents();
+        }
+        
+        // MODULAR: Bind audio event handlers
+        function bindAudioEvents() {
+            const loadBtn = document.getElementById('load-audio-btn');
+            const listBtn = document.getElementById('list-audio-btn');
+            
+            if (loadBtn) loadBtn.onclick = handleLoadSampleAudio;
+            if (listBtn) listBtn.onclick = handleListAudioFiles;
+        }
+        
+        // ENHANCEMENT: Enhanced auth and social features
+        function bindFarcasterEvents() {
+            const authBtn = document.getElementById('farcaster-auth-btn');
+            const castBtn = document.getElementById('cast-discovery-btn');
+            const socialBtn = document.getElementById('social-recs-btn');
+            
+            if (authBtn) authBtn.onclick = handleFarcasterAuth;
+            if (castBtn) castBtn.onclick = handleCastDiscovery;
+            if (socialBtn) socialBtn.onclick = handleSocialRecommendations;
+        }
+        
+        // ENHANCEMENT: Enhanced authentication
+        async function handleFarcasterAuth() {
+            try {
+                const user = await farcasterManager.authenticate();
+                
+                // CLEAN: Update UI with user info
+                const userInfoDiv = document.getElementById('farcaster-user-info');
+                if (userInfoDiv) {
+                    userInfoDiv.innerHTML = `
+                        <div style="padding: 10px; background: #f0f0f0; border-radius: 5px; margin: 10px 0;">
+                            <strong>👤 ${user.displayName || user.username}</strong><br/>
+                            <small>FID: ${user.fid} | Followers: ${user.follower_count || 'N/A'}</small><br/>
+                            <em>${user.bio || 'Music lover on Farcaster'}</em>
+                        </div>
+                    `;
+                }
+                
+                // MODULAR: Show authenticated features
+                document.getElementById('cast-discovery-btn').style.display = 'inline-block';
+                document.getElementById('social-recs-btn').style.display = 'inline-block';
+                document.getElementById('farcaster-auth-btn').textContent = '✅ Authenticated';
+                document.getElementById('farcaster-auth-btn').disabled = true;
+                
+            } catch (error) {
+                console.error('Farcaster auth error:', error);
+                alert('Authentication failed. Please try again.');
+            }
+        }
+        
+        // MODULAR: Cast version discovery
+        async function handleCastDiscovery() {
+            try {
+                // ENHANCEMENT: Use sample version data
+                const sampleVersion = {
+                    id: 'bohemian-rhapsody-demo',
+                    title: 'Bohemian Rhapsody',
+                    artist: 'Queen',
+                    version_type: 'Demo'
+                };
+                
+                await farcasterManager.castVersionDiscovery(sampleVersion);
+                alert('📢 Version discovery cast created!');
+                
+            } catch (error) {
+                console.error('Cast failed:', error);
+                alert('Failed to create cast. Please try again.');
+            }
+        }
+        
+        // MODULAR: Get social recommendations
+        async function handleSocialRecommendations() {
+            try {
+                const recommendations = await farcasterManager.getSocialRecommendations();
+                
+                const contentDiv = document.getElementById('social-content');
+                if (contentDiv) {
+                    contentDiv.innerHTML = `
+                        <h4>👥 Social Recommendations</h4>
+                        <div style="background: #f9f9f9; padding: 10px; border-radius: 5px;">
+                            ${recommendations.length > 0 
+                                ? recommendations.map(rec => `<div>• ${rec.title || 'Recommended version'}</div>`).join('')
+                                : '<div>🎵 No recommendations yet. Start following music lovers on Farcaster!</div>'
+                            }
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('Failed to get recommendations:', error);
+                alert('Failed to load recommendations.');
+            }
+        }
+        
+        const API_BASE = 'http://localhost:8080';
+        
+        async function testEndpoint(endpoint, responseId) {
+            const responseDiv = document.getElementById(responseId);
+            responseDiv.style.display = 'block';
+            responseDiv.textContent = 'Loading...';
+            
+            try {
+                const response = await fetch(API_BASE + endpoint);
+                const data = await response.json();
+                responseDiv.textContent = JSON.stringify(data, null, 2);
+                
+                if (response.ok) {
+                    responseDiv.style.background = '#d4edda';
+                    responseDiv.style.color = '#155724';
+                } else {
+                    responseDiv.style.background = '#f8d7da';
+                    responseDiv.style.color = '#721c24';
+                }
+            } catch (error) {
+                responseDiv.textContent = `Error: ${error.message}`;
+                responseDiv.style.background = '#f8d7da';
+                responseDiv.style.color = '#721c24';
+            }
+        }
+        
+        async function checkServerStatus() {
+            const statusDiv = document.getElementById('server-status');
+            
+            try {
+                const response = await fetch(API_BASE + '/api/v1/health');
+                if (response.ok) {
+                    statusDiv.className = 'status connected';
+                    statusDiv.textContent = '🟢 Server Status: Connected to VERSIONS API';
+                } else {
+                    throw new Error('Server responded with error');
+                }
+            } catch (error) {
+                statusDiv.className = 'status disconnected';
+                statusDiv.textContent = '🔴 Server Status: Disconnected (Start server with: cargo run -p termusic-server)';
+            }
+        }
+        
+        // ENHANCEMENT: Audio functionality
+        async function handleLoadSampleAudio() {
+            try {
+                // MODULAR: Load sample audio (using mock data for now)
+                const sampleMetadata = {
+                    title: 'Sample Audio Track',
+                    artist: 'VERSIONS Demo',
+                    duration_seconds: 180
+                };
+                
+                await audioPlayer.loadTrack('sample-track', sampleMetadata);
+                alert('🎵 Sample audio loaded! (Note: Requires actual audio file)');
+                
+            } catch (error) {
+                console.error('Failed to load sample audio:', error);
+                alert('Failed to load sample audio. Please add audio files to the server.');
+            }
+        }
+        
+        async function handleListAudioFiles() {
+            try {
+                const response = await fetch(`${appConfig.apiBase}/api/v1/audio/files`);
+                const data = await response.json();
+                
+                const contentDiv = document.getElementById('audio-content');
+                if (contentDiv) {
+                    if (data.success && data.data.length > 0) {
+                        const fileList = data.data.map(file => 
+                            `<div style="margin: 5px 0;">
+                                <button onclick="loadAudioFile('${file}')" class="test-button" style="margin-right: 10px;">▶️</button>
+                                <span>${file}</span>
+                            </div>`
+                        ).join('');
+                        
+                        contentDiv.innerHTML = `
+                            <h4>🎵 Available Audio Files</h4>
+                            <div style="background: #f9f9f9; padding: 10px; border-radius: 5px;">
+                                ${fileList}
+                            </div>
+                        `;
+                    } else {
+                        contentDiv.innerHTML = `
+                            <h4>🎵 Available Audio Files</h4>
+                            <div style="background: #f9f9f9; padding: 10px; border-radius: 5px;">
+                                <div>📁 No audio files found. Add some audio files to the server's audio_files directory.</div>
+                            </div>
+                        `;
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Failed to list audio files:', error);
+                alert('Failed to load audio files list.');
+            }
+        }
+        
+        // MODULAR: Load specific audio file
+        window.loadAudioFile = async function(fileId) {
+            try {
+                await audioPlayer.loadTrack(fileId);
+                console.log(`🎵 Loaded audio file: ${fileId}`);
+            } catch (error) {
+                console.error('Failed to load audio file:', error);
+                alert(`Failed to load audio file: ${fileId}`);
+            }
+        };
+        
+        // PERFORMANT: Initialize app
+        async function initializeApp() {
+            // ENHANCEMENT: Initialize audio player
+            audioPlayer.init();
+            
+            // Check if we're in a Farcaster Mini App
+            const isFarcaster = window.parent !== window || 
+                               window.location.search.includes('miniApp=true');
+            
+            if (isFarcaster) {
+                console.log('🟣 Detected Farcaster environment');
+                await loadFarcasterSDK();
+            }
+            
+            // ENHANCEMENT: Existing functionality
+            checkServerStatus();
+            setInterval(checkServerStatus, 10000);
+        }
+        
+        // Start the app
+        initializeApp();
+    </script>
+</body>
+</html>

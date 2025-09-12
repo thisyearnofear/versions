@@ -31,6 +31,7 @@ use super::tui_cmd::TuiCmd;
 use crate::CombinedSettings;
 use crate::ui::Application;
 use crate::ui::ids::Id;
+#[cfg(feature = "youtube")]
 use crate::ui::model::youtube_options::YoutubeOptions;
 use crate::ui::msg::{Msg, SearchCriteria};
 pub use download_tracker::DownloadTracker;
@@ -41,6 +42,7 @@ mod playlist;
 mod update;
 mod user_events;
 mod view;
+#[cfg(feature = "youtube")]
 pub mod youtube_options;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -318,6 +320,7 @@ pub struct Model {
     pub viuer_supported: ViuerSupported,
     pub xywh: xywh::Xywh,
 
+    #[cfg(feature = "youtube")]
     youtube_options: YoutubeOptions,
     pub songtag_options: Vec<SongTag>,
     pub download_tracker: DownloadTracker,
@@ -437,11 +440,13 @@ impl Model {
                 tree,
                 yanked_node_id: None,
             },
-            // TODO: Consider making YoutubeOptions async and use async reqwest in YoutubeOptions
-            // and avoid this `spawn_blocking` call.
-            youtube_options: tokio::task::spawn_blocking(YoutubeOptions::default)
-                .await
-                .expect("Failed to initialize YoutubeOptions in a blocking task due to a panic"),
+            #[cfg(feature = "youtube")]
+            youtube_options: {
+                // TODO: Consider making YoutubeOptions async and use async reqwest in YoutubeOptions
+                tokio::task::spawn_blocking(YoutubeOptions::default)
+                    .await
+                    .expect("Failed to initialize YoutubeOptions in a blocking task due to a panic")
+            },
             #[cfg(all(feature = "cover-ueberzug", not(target_os = "windows")))]
             ueberzug_instance,
             songtag_options: vec![],

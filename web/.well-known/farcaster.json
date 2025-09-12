@@ -1,0 +1,27 @@
+{
+  "miniapp": {
+    "version": "1",
+    "name": "VERSIONS",
+    "iconUrl": "https://versions.app/icon.png",
+    "homeUrl": "https://versions.app",
+    "imageUrl": "https://versions.app/og-image.png",
+    "buttonTitle": "🎭 Discover Versions",
+    "splashImageUrl": "https://versions.app/splash.png",
+    "splashBackgroundColor": "#667eea",
+    "description": "Discover, compare, and share different versions of your favorite songs. The version-centric music platform that works how YOU work.",
+    "subtitle": "Version-centric music discovery",
+    "primaryCategory": "entertainment",
+    "tags": [
+      "music",
+      "versions",
+      "discovery",
+      "comparison",
+      "community"
+    ],
+    "requiredCapabilities": [
+      "actions.signIn",
+      "actions.ready",
+      "actions.composeCast"
+    ]
+  }
+}
