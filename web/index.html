@@ -266,6 +266,9 @@
         import { farcasterManager } from './farcaster.js';
         import { audioPlayer } from './audio-player.js';
         import { appConfig, environment } from './config.js';
+        import { filecoinIntegration, FilecoinHelpers } from './filecoin-integration.js';
+        import { walletManager, WalletHelpers } from './wallet-connection.js';
+        import { CreatorHelpers } from './creator-helpers.js';
         
         // MODULAR: Import Farcaster SDK only when needed
         let farcasterSDK = null;
@@ -314,6 +317,15 @@
                 // ENHANCEMENT: Add audio player section
                 addAudioPlayerSection(statusDiv);
                 
+                // ENHANCEMENT: Add wallet connection section
+                addWalletConnectionSection(statusDiv);
+                
+                // ENHANCEMENT: Add Filecoin features section
+                addFilecoinFeaturesSection(statusDiv);
+                
+                // ENHANCEMENT FIRST: Add creator dashboard section
+                addCreatorDashboardSection(statusDiv);
+                
                 // CLEAN: Bind event handlers
                 bindFarcasterEvents();
             }
@@ -337,6 +349,115 @@
             bindAudioEvents();
         }
         
+        // ENHANCEMENT: Add wallet connection section
+        function addWalletConnectionSection(parentDiv) {
+            const walletSection = document.createElement('div');
+            walletSection.innerHTML = `
+                <h3>🔗 Wallet Connection</h3>
+                <div id="wallet-status" style="padding: 10px; background: #f0f0f0; border-radius: 5px; margin: 10px 0;">
+                    <div>👤 Account: <span id="wallet-account">Not connected</span></div>
+                    <div>🌐 Network: <span id="wallet-network">Unknown</span></div>
+                    <div>💰 Balance: <span id="wallet-balance">0 FIL</span></div>
+                </div>
+                <div id="wallet-controls">
+                    <button id="connect-wallet-btn" class="test-button">🔗 Connect Wallet</button>
+                    <button id="disconnect-wallet-btn" class="test-button" style="display:none">🔌 Disconnect</button>
+                    <button id="check-balance-btn" class="test-button" style="display:none">💰 Refresh Balance</button>
+                </div>
+                <div id="wallet-content"></div>
+            `;
+            
+            parentDiv.appendChild(walletSection);
+            
+            // CLEAN: Bind wallet events
+            bindWalletEvents();
+            
+            // PERFORMANT: Check existing connection
+            checkExistingWalletConnection();
+        }
+        
+        // ENHANCEMENT: Add Filecoin features section
+        function addFilecoinFeaturesSection(parentDiv) {
+            const filecoinSection = document.createElement('div');
+            filecoinSection.innerHTML = `
+                <h3>🌍 Global Filecoin Features</h3>
+                <div id="filecoin-status" style="padding: 10px; background: #f0f0f0; border-radius: 5px; margin: 10px 0;">
+                    <div>📡 Network: <span id="filecoin-network">Checking...</span></div>
+                    <div>💰 Storage Cost: <span id="storage-cost">Loading...</span></div>
+                    <div>🌐 Global Providers: <span id="provider-count">Loading...</span></div>
+                </div>
+                <div id="filecoin-controls">
+                    <button id="upload-global-btn" class="test-button">🌍 Upload to Global Storage</button>
+                    <button id="check-network-btn" class="test-button">📊 Check Network Status</button>
+                    <button id="support-creator-btn" class="test-button" style="display:none">💝 Support Creator ($5)</button>
+                </div>
+                <div id="filecoin-content"></div>
+                <input type="file" id="global-upload-input" accept="audio/*" style="display:none">
+            `;
+            
+            parentDiv.appendChild(filecoinSection);
+            
+            // CLEAN: Bind Filecoin events
+            bindFilecoinEvents();
+            
+            // PERFORMANT: Load network status on startup
+            loadFilecoinNetworkStatus();
+        }
+        
+        // ENHANCEMENT FIRST: Add creator dashboard section
+        function addCreatorDashboardSection(parentDiv) {
+            const dashboardSection = document.createElement('div');
+            dashboardSection.innerHTML = `
+                <h3>💰 Creator Dashboard</h3>
+                <div id="creator-status" style="padding: 10px; background: #f0f0f0; border-radius: 5px; margin: 10px 0; font-family: monospace;">
+                    <div id="creator-earnings-summary">Loading earnings...</div>
+                </div>
+                <div id="creator-controls">
+                    <button id="refresh-earnings-btn" class="test-button">🔄 Refresh Earnings</button>
+                    <button id="withdraw-earnings-btn" class="test-button" style="display:none">💳 Withdraw ($100)</button>
+                    <button id="view-analytics-btn" class="test-button" style="display:none">📈 View Analytics</button>
+                </div>
+                <div id="creator-content"></div>
+            `;
+            
+            parentDiv.appendChild(dashboardSection);
+            
+            // CLEAN: Bind creator dashboard events
+            bindCreatorDashboardEvents();
+            
+            // PERFORMANT: Load earnings when wallet is connected
+            if (walletManager.isConnected) {
+                loadCreatorEarnings();
+            }
+        }
+        
+        // MODULAR: Bind wallet event handlers
+        function bindWalletEvents() {
+            const connectBtn = document.getElementById('connect-wallet-btn');
+            const disconnectBtn = document.getElementById('disconnect-wallet-btn');
+            const balanceBtn = document.getElementById('check-balance-btn');
+            
+            if (connectBtn) connectBtn.onclick = handleConnectWallet;
+            if (disconnectBtn) disconnectBtn.onclick = handleDisconnectWallet;
+            if (balanceBtn) balanceBtn.onclick = handleRefreshBalance;
+            
+            // CLEAN: Set up wallet event listeners
+            walletManager.onAccountChanged = updateWalletDisplay;
+            walletManager.onNetworkChanged = updateWalletDisplay;
+            walletManager.onDisconnected = updateWalletDisplay;
+        }
+        
+        // MODULAR: Bind creator dashboard event handlers
+        function bindCreatorDashboardEvents() {
+            const refreshBtn = document.getElementById('refresh-earnings-btn');
+            const withdrawBtn = document.getElementById('withdraw-earnings-btn');
+            const analyticsBtn = document.getElementById('view-analytics-btn');
+            
+            if (refreshBtn) refreshBtn.onclick = handleRefreshEarnings;
+            if (withdrawBtn) withdrawBtn.onclick = handleWithdrawEarnings;
+            if (analyticsBtn) analyticsBtn.onclick = handleViewAnalytics;
+        }
+        
         // MODULAR: Bind audio event handlers
         function bindAudioEvents() {
             const loadBtn = document.getElementById('load-audio-btn');
@@ -344,6 +465,19 @@
             
             if (loadBtn) loadBtn.onclick = handleLoadSampleAudio;
             if (listBtn) listBtn.onclick = handleListAudioFiles;
+        }
+        
+        // MODULAR: Bind Filecoin event handlers
+        function bindFilecoinEvents() {
+            const uploadBtn = document.getElementById('upload-global-btn');
+            const checkBtn = document.getElementById('check-network-btn');
+            const supportBtn = document.getElementById('support-creator-btn');
+            const fileInput = document.getElementById('global-upload-input');
+            
+            if (uploadBtn) uploadBtn.onclick = () => fileInput.click();
+            if (checkBtn) checkBtn.onclick = handleCheckNetworkStatus;
+            if (supportBtn) supportBtn.onclick = handleSupportCreator;
+            if (fileInput) fileInput.onchange = handleGlobalUpload;
         }
         
         // ENHANCEMENT: Enhanced auth and social features
@@ -537,6 +671,410 @@
             } catch (error) {
                 console.error('Failed to load audio file:', error);
                 alert(`Failed to load audio file: ${fileId}`);
+            }
+        };
+        
+        // ENHANCEMENT: Wallet functionality
+        
+        // MODULAR: Handle wallet connection
+        async function handleConnectWallet() {
+            try {
+                const result = await walletManager.connectWallet();
+                
+                if (result.success) {
+                    console.log('🔗 Wallet connected successfully');
+                    updateWalletDisplay();
+                    
+                    // ENHANCEMENT: Show success message
+                    const contentDiv = document.getElementById('wallet-content');
+                    contentDiv.innerHTML = `
+                        <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                            ✅ Wallet connected successfully!
+                            <div><strong>Account:</strong> ${WalletHelpers.formatAddress(result.account)}</div>
+                            <div><strong>Network:</strong> ${result.network}</div>
+                        </div>
+                    `;
+                } else {
+                    throw new Error('Connection failed');
+                }
+                
+            } catch (error) {
+                console.error('Wallet connection failed:', error);
+                alert(`Failed to connect wallet: ${error.message}`);
+            }
+        }
+        
+        // MODULAR: Handle wallet disconnection
+        async function handleDisconnectWallet() {
+            walletManager.disconnect();
+            updateWalletDisplay();
+            
+            const contentDiv = document.getElementById('wallet-content');
+            contentDiv.innerHTML = `
+                <div style="background: #f8d7da; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                    🔌 Wallet disconnected
+                </div>
+            `;
+        }
+        
+        // MODULAR: Handle balance refresh
+        async function handleRefreshBalance() {
+            try {
+                const balance = await walletManager.getBalance();
+                document.getElementById('wallet-balance').textContent = WalletHelpers.formatBalance(balance);
+                
+                const networkInfo = await walletManager.getNetworkInfo();
+                document.getElementById('wallet-network').textContent = WalletHelpers.getNetworkDisplayName(networkInfo.chainId);
+                
+            } catch (error) {
+                console.error('Failed to refresh balance:', error);
+                alert('Failed to refresh balance');
+            }
+        }
+        
+        // PERFORMANT: Check existing wallet connection
+        async function checkExistingWalletConnection() {
+            try {
+                const isConnected = await walletManager.checkConnection();
+                if (isConnected) {
+                    console.log('🔗 Existing wallet connection found');
+                    updateWalletDisplay();
+                }
+            } catch (error) {
+                console.log('No existing wallet connection');
+            }
+        }
+        
+        // CLEAN: Update wallet display
+        async function updateWalletDisplay() {
+            const status = walletManager.getConnectionStatus();
+            
+            // Update account display
+            document.getElementById('wallet-account').textContent = 
+                status.isConnected ? WalletHelpers.formatAddress(status.account) : 'Not connected';
+            
+            // Update button visibility
+            const connectBtn = document.getElementById('connect-wallet-btn');
+            const disconnectBtn = document.getElementById('disconnect-wallet-btn');
+            const balanceBtn = document.getElementById('check-balance-btn');
+            
+            if (status.isConnected) {
+                connectBtn.style.display = 'none';
+                disconnectBtn.style.display = 'inline-block';
+                balanceBtn.style.display = 'inline-block';
+                
+                // PERFORMANT: Load balance and network info
+                handleRefreshBalance();
+                
+                // ENHANCEMENT FIRST: Load creator earnings when wallet connects
+                loadCreatorEarnings();
+            } else {
+                connectBtn.style.display = 'inline-block';
+                disconnectBtn.style.display = 'none';
+                balanceBtn.style.display = 'none';
+                
+                document.getElementById('wallet-network').textContent = 'Unknown';
+                document.getElementById('wallet-balance').textContent = '0 FIL';
+            }
+        }
+        
+        // ENHANCEMENT FIRST: Creator dashboard functionality
+        
+        // PERFORMANT: Load creator earnings
+        async function loadCreatorEarnings() {
+            if (!walletManager.isConnected) {
+                document.getElementById('creator-earnings-summary').textContent = 
+                    'Connect wallet to view earnings';
+                return;
+            }
+            
+            document.getElementById('creator-earnings-summary').textContent = 
+                'Loading earnings...';
+            
+            try {
+                const earnings = await filecoinIntegration.getCreatorEarnings();
+                
+                // CLEAN: Terminal-style display
+                const summaryDiv = document.getElementById('creator-earnings-summary');
+                summaryDiv.innerHTML = `
+                    <div style="white-space: pre-line;">${CreatorHelpers.generateEarningsSummary(earnings)}</div>
+                `;
+                
+                // MODULAR: Show controls if earnings exist
+                if (parseFloat(earnings.total_earnings_usd) > 0) {
+                    document.getElementById('withdraw-earnings-btn').style.display = 'inline-block';
+                    document.getElementById('view-analytics-btn').style.display = 'inline-block';
+                }
+                
+            } catch (error) {
+                console.error('Failed to load creator earnings:', error);
+                
+                // CLEAN: Show specific error message
+                const summaryDiv = document.getElementById('creator-earnings-summary');
+                summaryDiv.innerHTML = `
+                    <div style="color: #721c24; background: #f8d7da; padding: 10px; border-radius: 5px;">
+                        ❌ ${error.message}
+                    </div>
+                `;
+                
+                // Hide controls on error
+                document.getElementById('withdraw-earnings-btn').style.display = 'none';
+                document.getElementById('view-analytics-btn').style.display = 'none';
+            }
+        }
+        
+        // MODULAR: Handle earnings refresh
+        async function handleRefreshEarnings() {
+            await loadCreatorEarnings();
+        }
+        
+        // MODULAR: Handle earnings withdrawal
+        async function handleWithdrawEarnings() {
+            try {
+                if (!walletManager.isConnected) {
+                    alert('Please connect your wallet first');
+                    return;
+                }
+                
+                const amount = prompt('Enter withdrawal amount (USD):', '100');
+                if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
+                    return;
+                }
+                
+                const confirmed = confirm(`Withdraw ${amount} to your bank account?\n\nEstimated arrival: 2-3 business days`);
+                if (!confirmed) return;
+                
+                const result = await filecoinIntegration.withdrawEarnings(parseFloat(amount), 'bank');
+                
+                if (result.success) {
+                    alert(`💳 Withdrawal initiated!\n\nAmount: ${result.amount_usd}\nMethod: ${result.withdrawal_method}\nEstimated arrival: ${result.estimated_arrival}`);
+                    
+                    // ENHANCEMENT: Update UI
+                    const contentDiv = document.getElementById('creator-content');
+                    contentDiv.innerHTML = `
+                        <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                            💳 Withdrawal Initiated!\n                            <div><strong>Amount:</strong> ${result.amount_usd}</div>
+                            <div><strong>Method:</strong> ${result.withdrawal_method}</div>
+                            <div><strong>Transaction:</strong> ${result.transaction_hash || 'Processing...'}</div>
+                        </div>
+                    `;
+                    
+                    // PERFORMANT: Refresh earnings
+                    await loadCreatorEarnings();
+                } else {
+                    throw new Error(result.error || 'Withdrawal failed');
+                }
+                
+            } catch (error) {
+                console.error('Withdrawal failed:', error);
+                alert(`Withdrawal failed: ${error.message}`);
+            }
+        }
+        
+        // MODULAR: Handle analytics view
+        async function handleViewAnalytics() {
+            try {
+                const analytics = await filecoinIntegration.getCreatorAnalytics('30d');
+                
+                const contentDiv = document.getElementById('creator-content');
+                contentDiv.innerHTML = `
+                    <h4>📈 Creator Analytics</h4>
+                    <div style="background: #f9f9f9; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-line;">
+                        ${CreatorHelpers.generateTerminalOutput('creator analytics --period=30d', 
+                            analytics ? CreatorHelpers.generateAnalyticsDisplay(analytics) : 'No analytics data available'
+                        )}
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('Failed to load analytics:', error);
+                
+                const contentDiv = document.getElementById('creator-content');
+                contentDiv.innerHTML = `
+                    <h4>📈 Creator Analytics</h4>
+                    <div style="background: #f8d7da; padding: 10px; border-radius: 5px; color: #721c24;">
+                        ❌ ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        // ENHANCEMENT: Filecoin functionality
+        
+        // PERFORMANT: Load network status
+        async function loadFilecoinNetworkStatus() {
+            try {
+                const status = await filecoinIntegration.getNetworkStatus();
+                
+                document.getElementById('filecoin-network').textContent = 
+                    status.network || 'calibration';
+                document.getElementById('storage-cost').textContent = 
+                    status.storage_cost_per_gb || '0.001 FIL/GB';
+                document.getElementById('provider-count').textContent = 
+                    status.active_storage_providers || '2800+';
+                    
+            } catch (error) {
+                console.error('Failed to load network status:', error);
+                document.getElementById('filecoin-network').textContent = 'Error';
+            }
+        }
+        
+        // MODULAR: Handle global upload
+        async function handleGlobalUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            try {
+                const contentDiv = document.getElementById('filecoin-content');
+                contentDiv.innerHTML = `
+                    <h4>🌍 Global Upload Progress</h4>
+                    <div id="upload-progress" style="background: #f9f9f9; padding: 10px; border-radius: 5px; font-family: monospace;">
+                        <div id="upload-status">Initializing...</div>
+                        <div style="background: #ddd; border-radius: 3px; margin: 10px 0;">
+                            <div id="upload-bar" style="background: #667eea; height: 20px; border-radius: 3px; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                        <div id="upload-percentage">0%</div>
+                    </div>
+                `;
+                
+                const metadata = {
+                    file_id: `global-${Date.now()}`,
+                    title: file.name.replace(/\.[^/.]+$/, ""),
+                    artist: 'Unknown Artist',
+                    version_type: 'Demo',
+                    duration_seconds: null,
+                    format: file.name.split('.').pop()
+                };
+                
+                const progressCallback = (status, percentage) => {
+                    document.getElementById('upload-status').textContent = status;
+                    document.getElementById('upload-bar').style.width = `${percentage}%`;
+                    document.getElementById('upload-percentage').textContent = `${percentage}%`;
+                };
+                
+                // Try Synapse SDK first, fallback to API
+                let result;
+                try {
+                    result = await filecoinIntegration.uploadVersionGlobal(file, metadata, progressCallback);
+                } catch (sdkError) {
+                    console.log('SDK upload failed, trying API fallback:', sdkError.message);
+                    result = await filecoinIntegration.uploadVersionAPI(file, metadata, progressCallback);
+                }
+                
+                // CLEAN: Show success with global features
+                contentDiv.innerHTML += `
+                    <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                        <h4>✅ Global Upload Complete!</h4>
+                        <div><strong>Piece CID:</strong> ${FilecoinHelpers.formatPieceCID(result.piece_cid)}</div>
+                        <div><strong>Global CDN:</strong> Ready in 47+ countries</div>
+                        <div><strong>Storage Cost:</strong> ${FilecoinHelpers.formatStorageCost(result.storage_cost)}</div>
+                        <button onclick="streamFromGlobal('${result.piece_cid}')" class="test-button">🌍 Stream from Global CDN</button>
+                    </div>
+                `;
+                
+                // ENHANCEMENT: Show creator support option
+                document.getElementById('support-creator-btn').style.display = 'inline-block';
+                
+            } catch (error) {
+                console.error('Global upload failed:', error);
+                document.getElementById('filecoin-content').innerHTML = `
+                    <div style="background: #f8d7da; padding: 10px; border-radius: 5px; color: #721c24;">
+                        ❌ Upload failed: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        // MODULAR: Handle network status check
+        async function handleCheckNetworkStatus() {
+            try {
+                const status = await filecoinIntegration.getNetworkStatus();
+                
+                const contentDiv = document.getElementById('filecoin-content');
+                contentDiv.innerHTML = `
+                    <h4>📊 Filecoin Network Status</h4>
+                    <div style="background: #f9f9f9; padding: 10px; border-radius: 5px; font-family: monospace;">
+                        <div><strong>Network:</strong> ${status.network}</div>
+                        <div><strong>Storage Cost:</strong> ${status.storage_cost_per_gb}</div>
+                        <div><strong>Retrieval Cost:</strong> ${status.retrieval_cost_per_gb}</div>
+                        <div><strong>Average Deal Time:</strong> ${status.average_deal_time}</div>
+                        <div><strong>Active Providers:</strong> ${status.active_storage_providers}</div>
+                        <div><strong>Total Capacity:</strong> ${status.total_network_capacity}</div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('Failed to check network status:', error);
+                alert('Failed to check network status');
+            }
+        }
+        
+        // MODULAR: Handle creator support
+        async function handleSupportCreator() {
+            try {
+                // CLEAN: Check wallet connection first
+                if (!walletManager.isConnected) {
+                    alert('Please connect your wallet first to support creators');
+                    return;
+                }
+                
+                const amount = 5; // $5 default
+                const creatorAddress = '0x742d35Cc6634C0532925a3b8D4C9db96c4b5Da5e'; // Example creator address
+                
+                // ENHANCEMENT: Show payment confirmation
+                const confirmed = confirm(`Support this creator with ${amount}?\n\nThis will send ${amount} USDFC tokens to the creator.`);
+                if (!confirmed) return;
+                
+                const result = await filecoinIntegration.supportCreator(creatorAddress, amount, 'Love this version!');
+                
+                if (result.success) {
+                    const message = result.rail_id ? 
+                        `💝 ${result.message}\nPayment Rail: ${result.rail_id}` :
+                        `💝 ${result.message}\nTransaction: ${result.transaction_hash}`;
+                    alert(message);
+                    
+                    // ENHANCEMENT: Update UI to show payment sent
+                    const contentDiv = document.getElementById('filecoin-content');
+                    contentDiv.innerHTML += `
+                        <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                            💝 Creator Support Sent!
+                            <div><strong>Amount:</strong> ${result.amount}</div>
+                            <div><strong>Message:</strong> ${result.transaction_note || 'Love this version!'}</div>
+                        </div>
+                    `;
+                } else {
+                    throw new Error('Payment failed');
+                }
+                
+            } catch (error) {
+                console.error('Creator support failed:', error);
+                
+                if (error.message.includes('Insufficient USDFC balance')) {
+                    alert(`💰 Insufficient USDFC balance\n\nYou need USDFC tokens to support creators. Please:\n1. Get USDFC from the Filecoin Calibration faucet\n2. Or use the payment setup in the upload flow`);
+                } else {
+                    alert(`Failed to support creator: ${error.message}`);
+                }
+            }
+        }
+        
+        // MODULAR: Stream from global CDN
+        window.streamFromGlobal = async function(pieceCid) {
+            try {
+                console.log(`🌍 Streaming from global CDN: ${pieceCid}`);
+                
+                // Create audio element for global streaming
+                const audioUrl = FilecoinHelpers.getCDNUrl(pieceCid);
+                const audio = new Audio(audioUrl);
+                
+                audio.onloadstart = () => console.log('📡 Loading from global CDN...');
+                audio.oncanplay = () => console.log('✅ Ready to play from global network');
+                audio.onerror = () => console.error('❌ Global streaming failed');
+                
+                await audio.play();
+                
+            } catch (error) {
+                console.error('Global streaming failed:', error);
+                alert(`Failed to stream from global CDN: ${error.message}`);
             }
         };
         

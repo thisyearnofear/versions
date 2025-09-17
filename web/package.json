@@ -1,38 +1,23 @@
 {
   "name": "versions-web",
-  "version": "0.1.0",
-  "description": "VERSIONS - Web community platform for version-centric music discovery",
+  "version": "0.11.0",
+  "description": "VERSIONS Web Interface - Community platform for version-centric music discovery",
   "main": "index.html",
   "scripts": {
     "dev": "python3 -m http.server 3000",
-    "serve": "python3 -m http.server 3000",
-    "test-api": "curl -s http://localhost:8080/api/v1/health | jq '.'",
-    "build": "echo 'Static HTML - no build needed'"
+    "build": "echo 'Static files ready'",
+    "test": "echo 'No tests yet'"
   },
-  "keywords": [
-    "music",
-    "versions",
-    "community",
-    "web3",
-    "arbitrum",
-    "discovery"
-  ],
-  "author": "VERSIONS Team",
-  "license": "MIT",
   "dependencies": {
-    "@farcaster/miniapp-sdk": "^0.0.39"
+    "@farcaster/miniapp-sdk": "^0.1.0",
+    "@filoz/synapse-sdk": "^0.24.3",
+    "@rainbow-me/rainbowkit": "^2.2.8",
+    "wagmi": "^2.15.7",
+    "viem": "^2.32.0",
+    "ethers": "^6.14.3"
   },
-  "devDependencies": {
-    "http-server": "^14.1.1"
-  },
-  "future": {
-    "framework": "React or Vue.js",
-    "features": [
-      "Audio player component",
-      "Version comparison interface", 
-      "Wallet integration (MetaMask)",
-      "Real-time updates (WebSocket)",
-      "Progressive Web App (PWA)"
-    ]
-  }
+  "devDependencies": {},
+  "keywords": ["music", "versions", "web3", "farcaster", "filecoin"],
+  "author": "VERSIONS Team",
+  "license": "MIT"
 }

@@ -45,6 +45,8 @@ ipfs-api-backend-hyper.workspace = true
 reqwest = { version = "0.12", features = ["json"] }
 # PREVENT BLOAT: Minimal base64 for audio uploads
 base64 = "0.22"
+# PREVENT BLOAT: Minimal rand for mock data generation
+rand = "0.8"
 
 
 [features]

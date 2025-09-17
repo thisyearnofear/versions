@@ -5,6 +5,7 @@ mod onchain_service;
 mod distributed_service;
 mod farcaster_service; // ENHANCEMENT: Add Farcaster service
 mod audio_service; // ENHANCEMENT: Add Audio streaming service
+mod filecoin_service; // ENHANCEMENT: Add Filecoin integration service
 mod rest_api;
 
 use std::net::SocketAddr;

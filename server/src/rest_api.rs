@@ -8,6 +8,7 @@ use axum::{
 };
 use crate::farcaster_service::{FarcasterService, FarcasterUser, SocialRecommendation};
 use crate::audio_service::{AudioService, AudioMetadata};
+use crate::filecoin_service::{FilecoinService, FilecoinUploadRequest, CreatorPaymentRequest};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -94,6 +95,17 @@ pub fn create_router() -> Router {
         .route("/api/v1/audio/:file_id/metadata", get(get_audio_metadata))
         .route("/api/v1/audio/:file_id/stream", get(stream_audio))
         .route("/api/v1/audio/upload", post(upload_audio_file))
+        // ENHANCEMENT: Add Filecoin endpoints for global storage and creator economy
+        .route("/api/v1/filecoin/upload", post(upload_to_filecoin))
+        .route("/api/v1/filecoin/stream/:piece_cid", get(stream_from_filecoin))
+        .route("/api/v1/filecoin/storage/:file_id", get(get_filecoin_storage_info))
+        .route("/api/v1/filecoin/network/status", get(get_filecoin_network_status))
+        .route("/api/v1/filecoin/payment/creator", post(pay_creator))
+        .route("/api/v1/filecoin/payment/rail", post(create_payment_rail))
+        // ENHANCEMENT FIRST: Creator dashboard endpoints
+        .route("/api/v1/filecoin/creator/earnings", get(get_creator_earnings))
+        .route("/api/v1/filecoin/creator/withdraw", post(withdraw_creator_earnings))
+        .route("/api/v1/filecoin/creator/analytics", get(get_creator_analytics))
         // Enable CORS for web frontend
         .layer(
             tower_http::cors::CorsLayer::new()
@@ -229,6 +241,82 @@ async fn get_farcaster_profile(Path(fid): Path<u64>) -> Json<ApiResponse<Farcast
             error: Some("Failed to fetch Farcaster profile".to_string()),
         }),
     }
+}
+
+// ENHANCEMENT FIRST: Creator dashboard endpoints
+
+/// Get creator earnings and version performance
+async fn get_creator_earnings(Query(params): Query<HashMap<String, String>>) -> Json<ApiResponse<HashMap<String, serde_json::Value>>> {
+    let address = params.get("address").map_or("", |v| v);
+    
+    if address.is_empty() {
+        return Json(ApiResponse {
+            success: false,
+            data: None,
+            error: Some("Creator address is required".to_string()),
+        });
+    }
+    
+    // CLEAN: Return error - real implementation requires Filecoin Pay integration
+    Json(ApiResponse {
+        success: false,
+        data: None,
+        error: Some("Creator earnings feature requires Filecoin Pay integration. Please connect to Filecoin Calibration testnet and ensure you have active payment rails.".to_string()),
+    })
+}
+
+/// Withdraw creator earnings
+async fn withdraw_creator_earnings(Json(request): Json<HashMap<String, serde_json::Value>>) -> Json<ApiResponse<HashMap<String, String>>> {
+    let creator_address = request.get("creator_address")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let amount_usd = request.get("amount_usd")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    
+    if creator_address.is_empty() {
+        return Json(ApiResponse {
+            success: false,
+            data: None,
+            error: Some("Creator address is required".to_string()),
+        });
+    }
+    
+    if amount_usd <= 0.0 {
+        return Json(ApiResponse {
+            success: false,
+            data: None,
+            error: Some("Withdrawal amount must be greater than 0".to_string()),
+        });
+    }
+    
+    // CLEAN: Return error - real implementation requires fiat off-ramp integration
+    Json(ApiResponse {
+        success: false,
+        data: None,
+        error: Some("Withdrawal feature requires fiat off-ramp integration. This feature is not yet implemented.".to_string()),
+    })
+}
+
+/// Get creator analytics
+async fn get_creator_analytics(Query(params): Query<HashMap<String, String>>) -> Json<ApiResponse<HashMap<String, serde_json::Value>>> {
+    let address = params.get("address").map_or("", |v| v);
+    let _period = params.get("period").map_or("30d", |v| v);
+    
+    if address.is_empty() {
+        return Json(ApiResponse {
+            success: false,
+            data: None,
+            error: Some("Creator address is required".to_string()),
+        });
+    }
+    
+    // CLEAN: Return error - real implementation requires analytics service integration
+    Json(ApiResponse {
+        success: false,
+        data: None,
+        error: Some("Creator analytics feature requires analytics service integration. This feature is not yet implemented.".to_string()),
+    })
 }
 
 /// Cast data structure for API
@@ -401,4 +489,101 @@ fn parse_range_header(headers: &HeaderMap) -> Option<crate::audio_service::Range
             }
             None
         })
+}
+
+// ENHANCEMENT: Filecoin endpoints for global storage and creator economy
+
+/// Upload audio version to Filecoin global storage
+async fn upload_to_filecoin(Json(request): Json<FilecoinUploadRequest>) -> Json<ApiResponse<crate::filecoin_service::FilecoinStorageInfo>> {
+    let mut service = FilecoinService::default();
+    
+    match service.upload_version(request).await {
+        Ok(storage_info) => Json(ApiResponse::success(storage_info)),
+        Err(e) => Json(ApiResponse {
+            success: false,
+            data: None,
+            error: Some(format!("Filecoin upload failed: {}", e)),
+        }),
+    }
+}
+
+/// Stream audio from Filecoin CDN
+async fn stream_from_filecoin(Path(piece_cid): Path<String>) -> Result<Response<Body>, StatusCode> {
+    let service = FilecoinService::default();
+    
+    match service.stream_version(&piece_cid).await {
+        Ok(audio_data) => {
+            Response::builder()
+                .header(header::CONTENT_TYPE, "audio/mpeg") // TODO: Detect actual format
+                .header(header::CONTENT_LENGTH, audio_data.len().to_string())
+                .header(header::ACCEPT_RANGES, "bytes")
+                .body(Body::from(audio_data))
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+        }
+        Err(_) => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+/// Get Filecoin storage information for a version
+async fn get_filecoin_storage_info(Path(file_id): Path<String>) -> Json<ApiResponse<Option<crate::filecoin_service::FilecoinStorageInfo>>> {
+    let service = FilecoinService::default();
+    
+    match service.get_storage_info(&file_id).await {
+        Ok(storage_info) => Json(ApiResponse::success(storage_info)),
+        Err(e) => Json(ApiResponse {
+            success: false,
+            data: None,
+            error: Some(format!("Failed to get storage info: {}", e)),
+        }),
+    }
+}
+
+/// Get Filecoin network status and costs
+async fn get_filecoin_network_status() -> Json<ApiResponse<crate::filecoin_service::NetworkStatus>> {
+    let service = FilecoinService::default();
+    
+    match service.get_network_status().await {
+        Ok(status) => Json(ApiResponse::success(status)),
+        Err(e) => Json(ApiResponse {
+            success: false,
+            data: None,
+            error: Some(format!("Failed to get network status: {}", e)),
+        }),
+    }
+}
+
+/// Pay creator through Filecoin Pay
+async fn pay_creator(Json(request): Json<CreatorPaymentRequest>) -> Json<ApiResponse<HashMap<String, String>>> {
+    let service = FilecoinService::default();
+    
+    match service.pay_creator(request).await {
+        Ok(tx_hash) => {
+            let mut response = HashMap::new();
+            response.insert("transaction_hash".to_string(), tx_hash);
+            response.insert("status".to_string(), "success".to_string());
+            Json(ApiResponse::success(response))
+        },
+        Err(e) => Json(ApiResponse {
+            success: false,
+            data: None,
+            error: Some(format!("Payment failed: {}", e)),
+        }),
+    }
+}
+
+/// Create payment rail for creator economy
+async fn create_payment_rail(Json(request): Json<HashMap<String, String>>) -> Json<ApiResponse<crate::filecoin_service::PaymentRail>> {
+    let service = FilecoinService::default();
+    
+    let creator_address = request.get("creator_address").map_or("", |v| v);
+    let fan_address = request.get("fan_address").map_or("", |v| v);
+    
+    match service.create_payment_rail(creator_address, fan_address).await {
+        Ok(rail) => Json(ApiResponse::success(rail)),
+        Err(e) => Json(ApiResponse {
+            success: false,
+            data: None,
+            error: Some(format!("Failed to create payment rail: {}", e)),
+        }),
+    }
 }
