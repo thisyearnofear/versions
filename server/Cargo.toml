@@ -47,6 +47,8 @@ reqwest = { version = "0.12", features = ["json"] }
 base64 = "0.22"
 # PREVENT BLOAT: Minimal rand for mock data generation
 rand = "0.8"
+# OpenSSL with vendored feature for easier deployment
+openssl = { version = "0.10", features = ["vendored"] }
 
 
 [features]
