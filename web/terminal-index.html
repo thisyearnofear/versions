@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎭 VERSIONS - Terminal Interface</title>
+    
+    <!-- Farcaster Mini App Embed Metadata -->
+    <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://versions.app/og-image.png","button":{"title":"🎭 Discover Versions","action":{"type":"launch_frame","name":"VERSIONS","url":"https://versions.app","splashImageUrl":"https://versions.app/splash.png","splashBackgroundColor":"#101421"}}}' />
+    
+    <!-- Open Graph for social sharing -->
+    <meta property="og:title" content="VERSIONS - Terminal Music Platform" />
+    <meta property="og:description" content="Version-centric music platform with terminal aesthetic" />
+    <meta property="og:image" content="https://versions.app/og-image.png" />
+    <meta property="og:url" content="https://versions.app" />
+    
+    <style>
+        /* TERMINAL THEME - Based on TUI theme system */
+        :root {
+            /* Primary colors from ThemePrimary::default() */
+            --bg-primary: #101421;
+            --fg-primary: #fffbf6;
+            
+            /* Normal colors from ThemeNormal::default() */
+            --color-black: #2e2e2e;
+            --color-red: #eb4129;
+            --color-green: #abe047;
+            --color-yellow: #f6c744;
+            --color-blue: #47a0f3;
+            --color-magenta: #7b5cb0;
+            --color-cyan: #64dbed;
+            --color-white: #e5e9f0;
+            
+            /* Bright colors from ThemeBright::default() */
+            --color-bright-black: #565656;
+            --color-bright-red: #ec5357;
+            --color-bright-green: #c0e17d;
+            --color-bright-yellow: #f9da6a;
+            --color-bright-blue: #49a4f8;
+            --color-bright-magenta: #a47de9;
+            --color-bright-cyan: #99faf2;
+            --color-bright-white: #ffffff;
+            
+            /* Cursor colors */
+            --cursor-text: #1e1e1e;
+            --cursor-bg: #ffffff;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Monaco', 'Menlo', 'Consolas', 'DejaVu Sans Mono', monospace;
+            background: var(--bg-primary);
+            color: var(--fg-primary);
+            min-height: 100vh;
+            line-height: 1.4;
+            font-size: 14px;
+        }
+        
+        .terminal-container {
+            max-width: 120ch;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .terminal-header {
+            border: 1px solid var(--color-bright-black);
+            border-radius: 4px;
+            margin-bottom: 20px;
+            background: var(--bg-primary);
+        }
+        
+        .terminal-title-bar {
+            background: var(--color-bright-black);
+            padding: 8px 16px;
+            border-bottom: 1px solid var(--color-black);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .terminal-dots {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .terminal-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .terminal-dot.red { background: var(--color-red); }
+        .terminal-dot.yellow { background: var(--color-yellow); }
+        .terminal-dot.green { background: var(--color-green); }
+        
+        .terminal-title {
+            color: var(--fg-primary);
+            font-weight: normal;
+            margin-left: 12px;
+        }
+        
+        .terminal-content {
+            padding: 20px;
+        }
+        
+        .ascii-art {
+            color: var(--color-cyan);
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 12px;
+            line-height: 1.2;
+        }
+        
+        .prompt-line {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .prompt {
+            color: var(--color-green);
+            margin-right: 8px;
+        }
+        
+        .command {
+            color: var(--color-blue);
+        }
+        
+        .output {
+            margin-left: 16px;
+            margin-bottom: 12px;
+        }
+        
+        .section {
+            border: 1px solid var(--color-bright-black);
+            border-radius: 4px;
+            margin-bottom: 16px;
+            background: rgba(46, 46, 46, 0.2);
+        }
+        
+        .section-header {
+            background: var(--color-bright-black);
+            padding: 8px 16px;
+            border-bottom: 1px solid var(--color-black);
+            color: var(--color-bright-cyan);
+            font-weight: bold;
+        }
+        
+        .section-content {
+            padding: 16px;
+        }
+        
+        .interface-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .interface-box {
+            border: 1px solid var(--color-blue);
+            border-radius: 4px;
+            padding: 16px;
+            background: rgba(71, 160, 243, 0.1);
+        }
+        
+        .interface-title {
+            color: var(--color-bright-blue);
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        
+        .interface-desc {
+            color: var(--color-white);
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+        
+        .feature-list {
+            list-style: none;
+            margin-bottom: 12px;
+        }
+        
+        .feature-list li {
+            color: var(--color-green);
+            margin-bottom: 4px;
+            position: relative;
+            padding-left: 16px;
+        }
+        
+        .feature-list li:before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: var(--color-cyan);
+        }
+        
+        .command-example {
+            background: var(--color-black);
+            padding: 8px;
+            border-radius: 2px;
+            color: var(--color-yellow);
+            font-size: 12px;
+            border-left: 3px solid var(--color-blue);
+        }
+        
+        .api-endpoints {
+            background: rgba(46, 46, 46, 0.3);
+            border-radius: 4px;
+            padding: 16px;
+        }
+        
+        .endpoint {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 8px;
+            background: var(--color-black);
+            border-radius: 2px;
+            border-left: 3px solid var(--color-magenta);
+        }
+        
+        .method {
+            color: var(--color-bright-green);
+            font-weight: bold;
+            margin-right: 12px;
+            min-width: 40px;
+        }
+        
+        .url {
+            color: var(--color-cyan);
+            margin-right: 12px;
+            flex: 1;
+        }
+        
+        .test-btn {
+            background: var(--color-blue);
+            color: var(--bg-primary);
+            border: none;
+            padding: 4px 8px;
+            border-radius: 2px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 11px;
+            transition: background 0.2s;
+        }
+        
+        .test-btn:hover {
+            background: var(--color-bright-blue);
+        }
+        
+        .response-area {
+            background: var(--color-black);
+            border: 1px solid var(--color-bright-black);
+            border-radius: 2px;
+            padding: 12px;
+            margin-top: 8px;
+            font-size: 11px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+        
+        .response-area.success {
+            border-left: 3px solid var(--color-green);
+            color: var(--color-bright-green);
+        }
+        
+        .response-area.error {
+            border-left: 3px solid var(--color-red);
+            color: var(--color-bright-red);
+        }
+        
+        .status-bar {
+            background: var(--color-black);
+            border: 1px solid var(--color-bright-black);
+            border-radius: 4px;
+            padding: 12px;
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--color-red);
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.connected {
+            background: var(--color-green);
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .cursor {
+            background: var(--cursor-bg);
+            color: var(--cursor-text);
+            padding: 0 2px;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        .current-path {
+            color: var(--color-magenta);
+        }
+        
+        .highlight {
+            background: var(--color-yellow);
+            color: var(--color-black);
+            padding: 0 2px;
+        }
+        
+        @media (max-width: 768px) {
+            .interface-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .terminal-container {
+                padding: 10px;
+            }
+            
+            body {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal-container">
+        <div class="terminal-header">
+            <div class="terminal-title-bar">
+                <div class="terminal-dots">
+                    <div class="terminal-dot red"></div>
+                    <div class="terminal-dot yellow"></div>
+                    <div class="terminal-dot green"></div>
+                </div>
+                <div class="terminal-title">versions@web:~$ ./versions-web</div>
+            </div>
+            
+            <div class="terminal-content">
+                <div class="ascii-art">
+██╗   ██╗███████╗██████╗ ███████╗██╗ ██████╗ ███╗   ██╗███████╗
+██║   ██║██╔════╝██╔══██╗██╔════╝██║██╔═══██╗████╗  ██║██╔════╝
+██║   ██║█████╗  ██████╔╝███████╗██║██║   ██║██╔██╗ ██║███████╗
+╚██╗ ██╔╝██╔══╝  ██╔══██╗╚════██║██║██║   ██║██║╚██╗██║╚════██║
+ ╚████╔╝ ███████╗██║  ██║███████║██║╚██████╔╝██║ ╚████║███████║
+  ╚═══╝  ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝
+                </div>
+                
+                <div class="prompt-line">
+                    <span class="prompt">versions@web:~$</span>
+                    <span class="command">./versions --help</span>
+                </div>
+                
+                <div class="output">
+                    <div style="color: var(--color-cyan);">VERSIONS v0.11.0 - Version-centric music platform</div>
+                    <div style="color: var(--color-white); margin-top: 8px;">
+                        The platform that works how <span class="highlight">YOU</span> work.
+                    </div>
+                </div>
+                
+                <div class="interface-grid">
+                    <div class="interface-box">
+                        <div class="interface-title">🖥️ Terminal Interface</div>
+                        <div class="interface-desc">Professional tools for creators and power users</div>
+                        <ul class="feature-list">
+                            <li>Batch operations & CLI integration</li>
+                            <li>Local file management</li>
+                            <li>Script-friendly automation</li>
+                            <li>Advanced audio analysis</li>
+                            <li>Privacy-first workflows</li>
+                        </ul>
+                        <div class="command-example">$ ./target/release/versions-tui</div>
+                    </div>
+                    
+                    <div class="interface-box" style="border-color: var(--color-green); background: rgba(171, 224, 71, 0.1);">
+                        <div class="interface-title" style="color: var(--color-bright-green);">🌐 Web Interface</div>
+                        <div class="interface-desc">Social platform for discovery and collaboration</div>
+                        <ul class="feature-list">
+                            <li>Visual version timelines</li>
+                            <li>Split-screen comparisons</li>
+                            <li>Community voting & curation</li>
+                            <li>Social discovery features</li>
+                            <li>Mobile-responsive design</li>
+                        </ul>
+                        <div class="command-example" style="border-color: var(--color-green); color: var(--color-bright-green);">
+                            <span class="cursor">█</span> You are here!
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <div class="section-header">🔗 REST API Endpoints</div>
+                    <div class="section-content">
+                        <div class="prompt-line">
+                            <span class="prompt">versions@web:~$</span>
+                            <span class="command">curl -X GET /api/v1/health</span>
+                        </div>
+                        
+                        <div class="api-endpoints">
+                            <div class="endpoint">
+                                <span class="method">GET</span>
+                                <span class="url">/api/v1/health</span>
+                                <button class="test-btn" onclick="testEndpoint('/api/v1/health', 'health-response')">Test</button>
+                            </div>
+                            <div id="health-response" class="response-area"></div>
+                            
+                            <div class="endpoint">
+                                <span class="method">GET</span>
+                                <span class="url">/api/v1/songs</span>
+                                <button class="test-btn" onclick="testEndpoint('/api/v1/songs', 'songs-response')">Test</button>
+                            </div>
+                            <div id="songs-response" class="response-area"></div>
+                            
+                            <div class="endpoint">
+                                <span class="method">GET</span>
+                                <span class="url">/api/v1/songs/:id</span>
+                                <button class="test-btn" onclick="testEndpoint('/api/v1/songs/song1', 'song-response')">Test</button>
+                            </div>
+                            <div id="song-response" class="response-area"></div>
+                            
+                            <div class="endpoint">
+                                <span class="method">GET</span>
+                                <span class="url">/api/v1/versions/:id</span>
+                                <button class="test-btn" onclick="testEndpoint('/api/v1/versions/version1', 'version-response')">Test</button>
+                            </div>
+                            <div id="version-response" class="response-area"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="status-bar">
+                    <div class="status-indicator">
+                        <div id="status-dot" class="status-dot"></div>
+                        <span id="status-text">Server Status: Checking...</span>
+                    </div>
+                    <div class="current-path">
+                        <span style="color: var(--color-magenta);">~/versions</span>
+                        <span style="color: var(--color-blue);"> on </span>
+                        <span style="color: var(--color-yellow);">main</span>
+                        <span style="color: var(--color-green);"> ✓</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // ENHANCEMENT: Import our enhanced modules
+        import { farcasterManager } from './farcaster.js';
+        import { audioPlayer } from './audio-player.js';
+        import { appConfig, environment } from './config.js';
+        import { filecoinIntegration, FilecoinHelpers } from './filecoin-integration.js';
+        import { walletManager, WalletHelpers } from './wallet-connection.js';
+        import { CreatorHelpers } from './creator-helpers.js';
+        
+        const API_BASE = window.location.origin;
+        
+        // CLEAN: Terminal-style API testing
+        async function testEndpoint(endpoint, responseId) {
+            const responseDiv = document.getElementById(responseId);
+            responseDiv.style.display = 'block';
+            responseDiv.className = 'response-area';
+            responseDiv.textContent = '$ curl ' + API_BASE + endpoint + '\n\nLoading...';
+            
+            try {
+                const response = await fetch(API_BASE + endpoint);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    responseDiv.className = 'response-area success';
+                    responseDiv.textContent = `$ curl ${API_BASE}${endpoint}\n\nHTTP/${response.status} ${response.statusText}\n\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    responseDiv.className = 'response-area error';
+                    responseDiv.textContent = `$ curl ${API_BASE}${endpoint}\n\nHTTP/${response.status} ${response.statusText}\n\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                responseDiv.className = 'response-area error';
+                responseDiv.textContent = `$ curl ${API_BASE}${endpoint}\n\nERROR: ${error.message}`;
+            }
+        }
+        
+        // CLEAN: Terminal-style status checking
+        async function checkServerStatus() {
+            const statusDot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            
+            try {
+                const response = await fetch(API_BASE + '/api/v1/health');
+                if (response.ok) {
+                    statusDot.className = 'status-dot connected';
+                    statusText.textContent = 'Server Status: Connected to VERSIONS API';
+                    statusText.style.color = 'var(--color-green)';
+                } else {
+                    throw new Error('Server responded with error');
+                }
+            } catch (error) {
+                statusDot.className = 'status-dot';
+                statusText.textContent = 'Server Status: Disconnected (Start: cargo run -p termusic-server)';
+                statusText.style.color = 'var(--color-red)';
+            }
+        }
+        
+        // MODULAR: Initialize terminal interface
+        async function initializeTerminalInterface() {
+            // ENHANCEMENT: Initialize audio player
+            audioPlayer.init();
+            
+            // Check if we're in a Farcaster Mini App
+            const isFarcaster = window.parent !== window || 
+                               window.location.search.includes('miniApp=true');
+            
+            if (isFarcaster) {
+                console.log('🟣 Detected Farcaster environment');
+                // PERFORMANT: Lazy load Farcaster SDK only when needed
+                try {
+                    const module = await import('https://esm.sh/@farcaster/miniapp-sdk');
+                    const farcasterSDK = module.sdk;
+                    await farcasterSDK.actions.ready();
+                    console.log('🟣 Farcaster Mini App ready!');
+                } catch (error) {
+                    console.log('Running outside Farcaster environment:', error.message);
+                }
+            }
+            
+            // ENHANCEMENT: Check server status
+            checkServerStatus();
+            setInterval(checkServerStatus, 10000);
+        }
+        
+        // CLEAN: Make testEndpoint globally available
+        window.testEndpoint = testEndpoint;
+        
+        // Start the terminal interface
+        initializeTerminalInterface();
+    </script>
+</body>
+</html>

@@ -79,9 +79,6 @@ impl Model {
             return true;
         }
 
-        if self.app.mounted(&Id::YoutubeSearchTablePopup) {
-            return true;
-        }
 
         if self.app.mounted(&Id::GeneralSearchInput) {
             return true;

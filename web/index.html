@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎭 VERSIONS - Web Community Platform</title>
-    
+    <title>🖥️ VERSIONS Terminal - Music Discovery Platform</title>
+
     <!-- Farcaster Mini App Embed Metadata -->
-    <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://versions.app/og-image.png","button":{"title":"🎭 Discover Versions","action":{"type":"launch_frame","name":"VERSIONS","url":"https://versions.app","splashImageUrl":"https://versions.app/splash.png","splashBackgroundColor":"#667eea"}}}' />
-    
+    <meta name="fc:miniapp"
+        content='{"version":"1","imageUrl":"https://versions.app/og-image.png","button":{"title":"🎭 Discover Versions","action":{"type":"launch_frame","name":"VERSIONS","url":"https://versions.app","splashImageUrl":"https://versions.app/splash.png","splashBackgroundColor":"#667eea"}}}' />
+
     <!-- Open Graph for social sharing -->
     <meta property="og:title" content="VERSIONS - Version-Centric Music Discovery" />
     <meta property="og:description" content="Discover, compare, and share different versions of your favorite songs" />
@@ -19,136 +21,166 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #333;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            background: #101421;
+            color: #fffbf6;
             min-height: 100vh;
+            margin: 0;
+            padding: 20px;
         }
-        
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
+            background: rgba(16, 20, 33, 0.95);
+            border: 1px solid #2a3441;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
         }
-        
+
         .header {
             text-align: center;
-            color: white;
-            margin-bottom: 40px;
+            color: #fffbf6;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #2a3441;
+            padding-bottom: 20px;
         }
-        
+
         .header h1 {
-            font-size: 3rem;
+            font-size: 2.5rem;
             margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            color: #00d4ff;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
         }
-        
+
         .header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
+            font-size: 1rem;
+            opacity: 0.8;
+            color: #b8c5d6;
         }
-        
+
         .interface-cards {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 30px;
             margin-bottom: 40px;
         }
-        
+
         .card {
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
+            background: rgba(26, 32, 44, 0.9);
+            border: 1px solid #2a3441;
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            border-left: 3px solid #00d4ff;
         }
-        
+
         .card:hover {
-            transform: translateY(-5px);
+            border-left-color: #00ff88;
+            box-shadow: 0 6px 20px rgba(0, 212, 255, 0.2);
         }
-        
+
         .card h2 {
-            color: #667eea;
+            color: #00d4ff;
             margin-bottom: 15px;
-            font-size: 1.5rem;
+            font-size: 1.4rem;
+            border-bottom: 1px solid #2a3441;
+            padding-bottom: 8px;
         }
-        
+
         .card p {
             margin-bottom: 20px;
             line-height: 1.6;
+            color: #b8c5d6;
         }
-        
+
         .features {
             list-style: none;
             margin-bottom: 20px;
+            font-family: 'Monaco', 'Menlo', monospace;
         }
-        
+
         .features li {
             padding: 5px 0;
-            padding-left: 20px;
+            padding-left: 25px;
             position: relative;
+            color: #b8c5d6;
         }
-        
+
         .features li:before {
-            content: "✅";
+            content: "▶";
             position: absolute;
             left: 0;
+            color: #00ff88;
         }
-        
+
         .api-section {
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        }
-        
-        .api-section h2 {
-            color: #667eea;
-            margin-bottom: 20px;
-        }
-        
-        .endpoint {
-            background: #f8f9fa;
+            background: rgba(26, 32, 44, 0.9);
+            border: 1px solid #2a3441;
             border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border-top: 3px solid #00d4ff;
+        }
+
+        .api-section h2 {
+            color: #00d4ff;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #2a3441;
+            padding-bottom: 10px;
+        }
+
+        .endpoint {
+            background: rgba(42, 52, 65, 0.8);
+            border-radius: 6px;
             padding: 15px;
             margin-bottom: 15px;
-            border-left: 4px solid #667eea;
+            border-left: 4px solid #00d4ff;
+            border: 1px solid #2a3441;
         }
-        
+
         .endpoint-method {
             font-weight: bold;
-            color: #28a745;
+            color: #00ff88;
             margin-right: 10px;
+            font-family: 'Monaco', 'Menlo', monospace;
         }
-        
+
         .endpoint-url {
             font-family: 'Monaco', 'Menlo', monospace;
-            background: #e9ecef;
+            background: rgba(16, 20, 33, 0.8);
+            color: #fffbf6;
             padding: 2px 6px;
             border-radius: 4px;
+            border: 1px solid #2a3441;
         }
-        
+
         .test-button {
-            background: #667eea;
-            color: white;
-            border: none;
+            background: rgba(0, 212, 255, 0.2);
+            color: #00d4ff;
+            border: 1px solid #00d4ff;
             padding: 8px 16px;
-            border-radius: 6px;
+            border-radius: 4px;
             cursor: pointer;
             margin-left: 10px;
-            transition: background 0.3s ease;
+            transition: all 0.3s ease;
+            font-family: 'Monaco', 'Menlo', monospace;
         }
-        
+
         .test-button:hover {
-            background: #5a6fd8;
+            background: rgba(0, 212, 255, 0.4);
+            color: #fffbf6;
+            box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
         }
-        
+
         .response {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
+            background: rgba(16, 20, 33, 0.9);
+            border: 1px solid #2a3441;
+            border-radius: 4px;
             padding: 15px;
             margin-top: 10px;
             font-family: 'Monaco', 'Menlo', monospace;
@@ -156,49 +188,63 @@
             white-space: pre-wrap;
             max-height: 300px;
             overflow-y: auto;
+            color: #b8c5d6;
         }
-        
+
         .status {
             margin-top: 20px;
             padding: 15px;
-            border-radius: 8px;
+            border-radius: 6px;
             text-align: center;
+            border: 1px solid #2a3441;
+            font-family: 'Monaco', 'Menlo', monospace;
         }
-        
+
         .status.connected {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+            background: rgba(0, 255, 136, 0.1);
+            color: #00ff88;
+            border-color: #00ff88;
         }
-        
+
         .status.disconnected {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+            background: rgba(255, 85, 85, 0.1);
+            color: #ff5555;
+            border-color: #ff5555;
         }
-        
+
         @media (max-width: 768px) {
             .interface-cards {
                 grid-template-columns: 1fr;
             }
-            
+
             .header h1 {
                 font-size: 2rem;
+            }
+
+            .container {
+                margin: 10px;
+                padding: 15px;
+            }
+
+            .card,
+            .api-section {
+                padding: 20px;
             }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎭 VERSIONS</h1>
-            <p>The version-centric music platform that works how YOU work</p>
+            <h1>🖥️ VERSIONS Terminal</h1>
+            <p>$ versions --help | Discover, compare, and share different versions of your favorite songs</p>
         </div>
-        
+
         <div class="interface-cards">
             <div class="card">
                 <h2>🖥️ Terminal Interface (Professional)</h2>
-                <p>Professional tools for creators and power users</p>
+                <p>$ versions-tui --mode=professional</p>
                 <ul class="features">
                     <li>Batch operations & CLI integration</li>
                     <li>Local file management</li>
@@ -206,12 +252,12 @@
                     <li>Advanced audio analysis</li>
                     <li>Privacy-first workflows</li>
                 </ul>
-                <code>./target/release/versions-tui</code>
+                <code>$ ./target/release/versions-tui</code>
             </div>
-            
+
             <div class="card">
                 <h2>🌐 Web Interface (Community)</h2>
-                <p>Social platform for discovery and collaboration</p>
+                <p>$ versions-web --mode=community</p>
                 <ul class="features">
                     <li>Visual version timelines</li>
                     <li>Split-screen comparisons</li>
@@ -219,44 +265,45 @@
                     <li>Social discovery features</li>
                     <li>Mobile-responsive design</li>
                 </ul>
-                <strong>You are here! 🎉</strong>
+                <strong>$ pwd<br />/versions/terminal/session 🎉</strong>
             </div>
         </div>
-        
+
         <div class="api-section">
             <h2>🔗 REST API Testing</h2>
-            <p>Test the backend API that powers both interfaces:</p>
-            
+            <p>$ curl -X GET http://localhost:8080/api/v1/health</p>
+
             <div class="endpoint">
                 <span class="endpoint-method">GET</span>
                 <span class="endpoint-url">/api/v1/health</span>
                 <button class="test-button" onclick="testEndpoint('/api/v1/health', 'health-response')">Test</button>
                 <div id="health-response" class="response" style="display: none;"></div>
             </div>
-            
+
             <div class="endpoint">
                 <span class="endpoint-method">GET</span>
                 <span class="endpoint-url">/api/v1/songs</span>
                 <button class="test-button" onclick="testEndpoint('/api/v1/songs', 'songs-response')">Test</button>
                 <div id="songs-response" class="response" style="display: none;"></div>
             </div>
-            
+
             <div class="endpoint">
                 <span class="endpoint-method">GET</span>
                 <span class="endpoint-url">/api/v1/songs/song1</span>
                 <button class="test-button" onclick="testEndpoint('/api/v1/songs/song1', 'song-response')">Test</button>
                 <div id="song-response" class="response" style="display: none;"></div>
             </div>
-            
+
             <div class="endpoint">
                 <span class="endpoint-method">GET</span>
                 <span class="endpoint-url">/api/v1/versions/version1</span>
-                <button class="test-button" onclick="testEndpoint('/api/v1/versions/version1', 'version-response')">Test</button>
+                <button class="test-button"
+                    onclick="testEndpoint('/api/v1/versions/version1', 'version-response')">Test</button>
                 <div id="version-response" class="response" style="display: none;"></div>
             </div>
-            
+
             <div id="server-status" class="status disconnected">
-                🔴 Server Status: Checking...
+                $ systemctl status versions-server<br />🔴 Server Status: Checking connection...
             </div>
         </div>
     </div>
@@ -269,21 +316,21 @@
         import { filecoinIntegration, FilecoinHelpers } from './filecoin-integration.js';
         import { walletManager, WalletHelpers } from './wallet-connection.js';
         import { CreatorHelpers } from './creator-helpers.js';
-        
+
         // MODULAR: Import Farcaster SDK only when needed
         let farcasterSDK = null;
-        
+
         // PERFORMANT: Lazy load Farcaster SDK
         async function loadFarcasterSDK() {
             if (!farcasterSDK) {
                 try {
                     const module = await import('https://esm.sh/@farcaster/miniapp-sdk');
                     farcasterSDK = module.sdk;
-                    
+
                     // CLEAN: Initialize Mini App when SDK loads
                     await farcasterSDK.actions.ready();
                     console.log('🟣 Farcaster Mini App ready!');
-                    
+
                     // ENHANCEMENT: Add Farcaster features to existing UI
                     addFarcasterFeatures();
                 } catch (error) {
@@ -292,13 +339,13 @@
             }
             return farcasterSDK;
         }
-        
+
         // ENHANCEMENT: Enhanced Farcaster features
         function addFarcasterFeatures() {
             const statusDiv = document.getElementById('server-status');
             if (statusDiv) {
                 statusDiv.innerHTML += `<br/>🟣 <strong>Farcaster Mini App Mode Active</strong> (${environment})`;
-                
+
                 // MODULAR: Create Farcaster controls section
                 const farcasterSection = document.createElement('div');
                 farcasterSection.innerHTML = `
@@ -311,26 +358,26 @@
                     </div>
                     <div id="social-content"></div>
                 `;
-                
+
                 statusDiv.appendChild(farcasterSection);
-                
+
                 // ENHANCEMENT: Add audio player section
                 addAudioPlayerSection(statusDiv);
-                
+
                 // ENHANCEMENT: Add wallet connection section
                 addWalletConnectionSection(statusDiv);
-                
+
                 // ENHANCEMENT: Add Filecoin features section
                 addFilecoinFeaturesSection(statusDiv);
-                
+
                 // ENHANCEMENT FIRST: Add creator dashboard section
                 addCreatorDashboardSection(statusDiv);
-                
+
                 // CLEAN: Bind event handlers
                 bindFarcasterEvents();
             }
         }
-        
+
         // ENHANCEMENT: Add audio player section
         function addAudioPlayerSection(parentDiv) {
             const audioSection = document.createElement('div');
@@ -342,13 +389,13 @@
                 </div>
                 <div id="audio-content"></div>
             `;
-            
+
             parentDiv.appendChild(audioSection);
-            
+
             // CLEAN: Bind audio events
             bindAudioEvents();
         }
-        
+
         // ENHANCEMENT: Add wallet connection section
         function addWalletConnectionSection(parentDiv) {
             const walletSection = document.createElement('div');
@@ -366,16 +413,16 @@
                 </div>
                 <div id="wallet-content"></div>
             `;
-            
+
             parentDiv.appendChild(walletSection);
-            
+
             // CLEAN: Bind wallet events
             bindWalletEvents();
-            
+
             // PERFORMANT: Check existing connection
             checkExistingWalletConnection();
         }
-        
+
         // ENHANCEMENT: Add Filecoin features section
         function addFilecoinFeaturesSection(parentDiv) {
             const filecoinSection = document.createElement('div');
@@ -394,16 +441,16 @@
                 <div id="filecoin-content"></div>
                 <input type="file" id="global-upload-input" accept="audio/*" style="display:none">
             `;
-            
+
             parentDiv.appendChild(filecoinSection);
-            
+
             // CLEAN: Bind Filecoin events
             bindFilecoinEvents();
-            
+
             // PERFORMANT: Load network status on startup
             loadFilecoinNetworkStatus();
         }
-        
+
         // ENHANCEMENT FIRST: Add creator dashboard section
         function addCreatorDashboardSection(parentDiv) {
             const dashboardSection = document.createElement('div');
@@ -419,83 +466,83 @@
                 </div>
                 <div id="creator-content"></div>
             `;
-            
+
             parentDiv.appendChild(dashboardSection);
-            
+
             // CLEAN: Bind creator dashboard events
             bindCreatorDashboardEvents();
-            
+
             // PERFORMANT: Load earnings when wallet is connected
             if (walletManager.isConnected) {
                 loadCreatorEarnings();
             }
         }
-        
+
         // MODULAR: Bind wallet event handlers
         function bindWalletEvents() {
             const connectBtn = document.getElementById('connect-wallet-btn');
             const disconnectBtn = document.getElementById('disconnect-wallet-btn');
             const balanceBtn = document.getElementById('check-balance-btn');
-            
+
             if (connectBtn) connectBtn.onclick = handleConnectWallet;
             if (disconnectBtn) disconnectBtn.onclick = handleDisconnectWallet;
             if (balanceBtn) balanceBtn.onclick = handleRefreshBalance;
-            
+
             // CLEAN: Set up wallet event listeners
             walletManager.onAccountChanged = updateWalletDisplay;
             walletManager.onNetworkChanged = updateWalletDisplay;
             walletManager.onDisconnected = updateWalletDisplay;
         }
-        
+
         // MODULAR: Bind creator dashboard event handlers
         function bindCreatorDashboardEvents() {
             const refreshBtn = document.getElementById('refresh-earnings-btn');
             const withdrawBtn = document.getElementById('withdraw-earnings-btn');
             const analyticsBtn = document.getElementById('view-analytics-btn');
-            
+
             if (refreshBtn) refreshBtn.onclick = handleRefreshEarnings;
             if (withdrawBtn) withdrawBtn.onclick = handleWithdrawEarnings;
             if (analyticsBtn) analyticsBtn.onclick = handleViewAnalytics;
         }
-        
+
         // MODULAR: Bind audio event handlers
         function bindAudioEvents() {
             const loadBtn = document.getElementById('load-audio-btn');
             const listBtn = document.getElementById('list-audio-btn');
-            
+
             if (loadBtn) loadBtn.onclick = handleLoadSampleAudio;
             if (listBtn) listBtn.onclick = handleListAudioFiles;
         }
-        
+
         // MODULAR: Bind Filecoin event handlers
         function bindFilecoinEvents() {
             const uploadBtn = document.getElementById('upload-global-btn');
             const checkBtn = document.getElementById('check-network-btn');
             const supportBtn = document.getElementById('support-creator-btn');
             const fileInput = document.getElementById('global-upload-input');
-            
+
             if (uploadBtn) uploadBtn.onclick = () => fileInput.click();
             if (checkBtn) checkBtn.onclick = handleCheckNetworkStatus;
             if (supportBtn) supportBtn.onclick = handleSupportCreator;
             if (fileInput) fileInput.onchange = handleGlobalUpload;
         }
-        
+
         // ENHANCEMENT: Enhanced auth and social features
         function bindFarcasterEvents() {
             const authBtn = document.getElementById('farcaster-auth-btn');
             const castBtn = document.getElementById('cast-discovery-btn');
             const socialBtn = document.getElementById('social-recs-btn');
-            
+
             if (authBtn) authBtn.onclick = handleFarcasterAuth;
             if (castBtn) castBtn.onclick = handleCastDiscovery;
             if (socialBtn) socialBtn.onclick = handleSocialRecommendations;
         }
-        
+
         // ENHANCEMENT: Enhanced authentication
         async function handleFarcasterAuth() {
             try {
                 const user = await farcasterManager.authenticate();
-                
+
                 // CLEAN: Update UI with user info
                 const userInfoDiv = document.getElementById('farcaster-user-info');
                 if (userInfoDiv) {
@@ -507,19 +554,19 @@
                         </div>
                     `;
                 }
-                
+
                 // MODULAR: Show authenticated features
                 document.getElementById('cast-discovery-btn').style.display = 'inline-block';
                 document.getElementById('social-recs-btn').style.display = 'inline-block';
                 document.getElementById('farcaster-auth-btn').textContent = '✅ Authenticated';
                 document.getElementById('farcaster-auth-btn').disabled = true;
-                
+
             } catch (error) {
                 console.error('Farcaster auth error:', error);
                 alert('Authentication failed. Please try again.');
             }
         }
-        
+
         // MODULAR: Cast version discovery
         async function handleCastDiscovery() {
             try {
@@ -530,52 +577,52 @@
                     artist: 'Queen',
                     version_type: 'Demo'
                 };
-                
+
                 await farcasterManager.castVersionDiscovery(sampleVersion);
                 alert('📢 Version discovery cast created!');
-                
+
             } catch (error) {
                 console.error('Cast failed:', error);
                 alert('Failed to create cast. Please try again.');
             }
         }
-        
+
         // MODULAR: Get social recommendations
         async function handleSocialRecommendations() {
             try {
                 const recommendations = await farcasterManager.getSocialRecommendations();
-                
+
                 const contentDiv = document.getElementById('social-content');
                 if (contentDiv) {
                     contentDiv.innerHTML = `
                         <h4>👥 Social Recommendations</h4>
                         <div style="background: #f9f9f9; padding: 10px; border-radius: 5px;">
-                            ${recommendations.length > 0 
-                                ? recommendations.map(rec => `<div>• ${rec.title || 'Recommended version'}</div>`).join('')
-                                : '<div>🎵 No recommendations yet. Start following music lovers on Farcaster!</div>'
-                            }
+                            ${recommendations.length > 0
+                            ? recommendations.map(rec => `<div>• ${rec.title || 'Recommended version'}</div>`).join('')
+                            : '<div>🎵 No recommendations yet. Start following music lovers on Farcaster!</div>'
+                        }
                         </div>
                     `;
                 }
-                
+
             } catch (error) {
                 console.error('Failed to get recommendations:', error);
                 alert('Failed to load recommendations.');
             }
         }
-        
+
         const API_BASE = 'http://localhost:8080';
-        
+
         async function testEndpoint(endpoint, responseId) {
             const responseDiv = document.getElementById(responseId);
             responseDiv.style.display = 'block';
             responseDiv.textContent = 'Loading...';
-            
+
             try {
                 const response = await fetch(API_BASE + endpoint);
                 const data = await response.json();
                 responseDiv.textContent = JSON.stringify(data, null, 2);
-                
+
                 if (response.ok) {
                     responseDiv.style.background = '#d4edda';
                     responseDiv.style.color = '#155724';
@@ -589,24 +636,24 @@
                 responseDiv.style.color = '#721c24';
             }
         }
-        
+
         async function checkServerStatus() {
             const statusDiv = document.getElementById('server-status');
-            
+
             try {
                 const response = await fetch(API_BASE + '/api/v1/health');
                 if (response.ok) {
                     statusDiv.className = 'status connected';
-                    statusDiv.textContent = '🟢 Server Status: Connected to VERSIONS API';
+                    statusDiv.innerHTML = '$ systemctl status versions-server<br/>🟢 Server Status: Active (running) - Connected to VERSIONS API';
                 } else {
                     throw new Error('Server responded with error');
                 }
             } catch (error) {
                 statusDiv.className = 'status disconnected';
-                statusDiv.textContent = '🔴 Server Status: Disconnected (Start server with: cargo run -p termusic-server)';
+                statusDiv.innerHTML = '$ systemctl status versions-server<br/>🔴 Server Status: Inactive (dead) - Start with: cargo run -p termusic-server';
             }
         }
-        
+
         // ENHANCEMENT: Audio functionality
         async function handleLoadSampleAudio() {
             try {
@@ -616,31 +663,31 @@
                     artist: 'VERSIONS Demo',
                     duration_seconds: 180
                 };
-                
+
                 await audioPlayer.loadTrack('sample-track', sampleMetadata);
                 alert('🎵 Sample audio loaded! (Note: Requires actual audio file)');
-                
+
             } catch (error) {
                 console.error('Failed to load sample audio:', error);
                 alert('Failed to load sample audio. Please add audio files to the server.');
             }
         }
-        
+
         async function handleListAudioFiles() {
             try {
                 const response = await fetch(`${appConfig.apiBase}/api/v1/audio/files`);
                 const data = await response.json();
-                
+
                 const contentDiv = document.getElementById('audio-content');
                 if (contentDiv) {
                     if (data.success && data.data.length > 0) {
-                        const fileList = data.data.map(file => 
+                        const fileList = data.data.map(file =>
                             `<div style="margin: 5px 0;">
                                 <button onclick="loadAudioFile('${file}')" class="test-button" style="margin-right: 10px;">▶️</button>
                                 <span>${file}</span>
                             </div>`
                         ).join('');
-                        
+
                         contentDiv.innerHTML = `
                             <h4>🎵 Available Audio Files</h4>
                             <div style="background: #f9f9f9; padding: 10px; border-radius: 5px;">
@@ -656,15 +703,15 @@
                         `;
                     }
                 }
-                
+
             } catch (error) {
                 console.error('Failed to list audio files:', error);
                 alert('Failed to load audio files list.');
             }
         }
-        
+
         // MODULAR: Load specific audio file
-        window.loadAudioFile = async function(fileId) {
+        window.loadAudioFile = async function (fileId) {
             try {
                 await audioPlayer.loadTrack(fileId);
                 console.log(`🎵 Loaded audio file: ${fileId}`);
@@ -673,18 +720,18 @@
                 alert(`Failed to load audio file: ${fileId}`);
             }
         };
-        
+
         // ENHANCEMENT: Wallet functionality
-        
+
         // MODULAR: Handle wallet connection
         async function handleConnectWallet() {
             try {
                 const result = await walletManager.connectWallet();
-                
+
                 if (result.success) {
                     console.log('🔗 Wallet connected successfully');
                     updateWalletDisplay();
-                    
+
                     // ENHANCEMENT: Show success message
                     const contentDiv = document.getElementById('wallet-content');
                     contentDiv.innerHTML = `
@@ -697,18 +744,18 @@
                 } else {
                     throw new Error('Connection failed');
                 }
-                
+
             } catch (error) {
                 console.error('Wallet connection failed:', error);
                 alert(`Failed to connect wallet: ${error.message}`);
             }
         }
-        
+
         // MODULAR: Handle wallet disconnection
         async function handleDisconnectWallet() {
             walletManager.disconnect();
             updateWalletDisplay();
-            
+
             const contentDiv = document.getElementById('wallet-content');
             contentDiv.innerHTML = `
                 <div style="background: #f8d7da; padding: 10px; border-radius: 5px; margin: 10px 0;">
@@ -716,22 +763,22 @@
                 </div>
             `;
         }
-        
+
         // MODULAR: Handle balance refresh
         async function handleRefreshBalance() {
             try {
                 const balance = await walletManager.getBalance();
                 document.getElementById('wallet-balance').textContent = WalletHelpers.formatBalance(balance);
-                
+
                 const networkInfo = await walletManager.getNetworkInfo();
                 document.getElementById('wallet-network').textContent = WalletHelpers.getNetworkDisplayName(networkInfo.chainId);
-                
+
             } catch (error) {
                 console.error('Failed to refresh balance:', error);
                 alert('Failed to refresh balance');
             }
         }
-        
+
         // PERFORMANT: Check existing wallet connection
         async function checkExistingWalletConnection() {
             try {
@@ -744,71 +791,71 @@
                 console.log('No existing wallet connection');
             }
         }
-        
+
         // CLEAN: Update wallet display
         async function updateWalletDisplay() {
             const status = walletManager.getConnectionStatus();
-            
+
             // Update account display
-            document.getElementById('wallet-account').textContent = 
+            document.getElementById('wallet-account').textContent =
                 status.isConnected ? WalletHelpers.formatAddress(status.account) : 'Not connected';
-            
+
             // Update button visibility
             const connectBtn = document.getElementById('connect-wallet-btn');
             const disconnectBtn = document.getElementById('disconnect-wallet-btn');
             const balanceBtn = document.getElementById('check-balance-btn');
-            
+
             if (status.isConnected) {
                 connectBtn.style.display = 'none';
                 disconnectBtn.style.display = 'inline-block';
                 balanceBtn.style.display = 'inline-block';
-                
+
                 // PERFORMANT: Load balance and network info
                 handleRefreshBalance();
-                
+
                 // ENHANCEMENT FIRST: Load creator earnings when wallet connects
                 loadCreatorEarnings();
             } else {
                 connectBtn.style.display = 'inline-block';
                 disconnectBtn.style.display = 'none';
                 balanceBtn.style.display = 'none';
-                
+
                 document.getElementById('wallet-network').textContent = 'Unknown';
                 document.getElementById('wallet-balance').textContent = '0 FIL';
             }
         }
-        
+
         // ENHANCEMENT FIRST: Creator dashboard functionality
-        
+
         // PERFORMANT: Load creator earnings
         async function loadCreatorEarnings() {
             if (!walletManager.isConnected) {
-                document.getElementById('creator-earnings-summary').textContent = 
+                document.getElementById('creator-earnings-summary').textContent =
                     'Connect wallet to view earnings';
                 return;
             }
-            
-            document.getElementById('creator-earnings-summary').textContent = 
+
+            document.getElementById('creator-earnings-summary').textContent =
                 'Loading earnings...';
-            
+
             try {
                 const earnings = await filecoinIntegration.getCreatorEarnings();
-                
+
                 // CLEAN: Terminal-style display
                 const summaryDiv = document.getElementById('creator-earnings-summary');
                 summaryDiv.innerHTML = `
                     <div style="white-space: pre-line;">${CreatorHelpers.generateEarningsSummary(earnings)}</div>
                 `;
-                
+
                 // MODULAR: Show controls if earnings exist
                 if (parseFloat(earnings.total_earnings_usd) > 0) {
                     document.getElementById('withdraw-earnings-btn').style.display = 'inline-block';
                     document.getElementById('view-analytics-btn').style.display = 'inline-block';
                 }
-                
+
             } catch (error) {
                 console.error('Failed to load creator earnings:', error);
-                
+
                 // CLEAN: Show specific error message
                 const summaryDiv = document.getElementById('creator-earnings-summary');
                 summaryDiv.innerHTML = `
@@ -816,18 +863,18 @@
                         ❌ ${error.message}
                     </div>
                 `;
-                
+
                 // Hide controls on error
                 document.getElementById('withdraw-earnings-btn').style.display = 'none';
                 document.getElementById('view-analytics-btn').style.display = 'none';
             }
         }
-        
+
         // MODULAR: Handle earnings refresh
         async function handleRefreshEarnings() {
             await loadCreatorEarnings();
         }
-        
+
         // MODULAR: Handle earnings withdrawal
         async function handleWithdrawEarnings() {
             try {
@@ -835,20 +882,20 @@
                     alert('Please connect your wallet first');
                     return;
                 }
-                
+
                 const amount = prompt('Enter withdrawal amount (USD):', '100');
                 if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
                     return;
                 }
-                
+
                 const confirmed = confirm(`Withdraw ${amount} to your bank account?\n\nEstimated arrival: 2-3 business days`);
                 if (!confirmed) return;
-                
+
                 const result = await filecoinIntegration.withdrawEarnings(parseFloat(amount), 'bank');
-                
+
                 if (result.success) {
                     alert(`💳 Withdrawal initiated!\n\nAmount: ${result.amount_usd}\nMethod: ${result.withdrawal_method}\nEstimated arrival: ${result.estimated_arrival}`);
-                    
+
                     // ENHANCEMENT: Update UI
                     const contentDiv = document.getElementById('creator-content');
                     contentDiv.innerHTML = `
@@ -858,37 +905,37 @@
                             <div><strong>Transaction:</strong> ${result.transaction_hash || 'Processing...'}</div>
                         </div>
                     `;
-                    
+
                     // PERFORMANT: Refresh earnings
                     await loadCreatorEarnings();
                 } else {
                     throw new Error(result.error || 'Withdrawal failed');
                 }
-                
+
             } catch (error) {
                 console.error('Withdrawal failed:', error);
                 alert(`Withdrawal failed: ${error.message}`);
             }
         }
-        
+
         // MODULAR: Handle analytics view
         async function handleViewAnalytics() {
             try {
                 const analytics = await filecoinIntegration.getCreatorAnalytics('30d');
-                
+
                 const contentDiv = document.getElementById('creator-content');
                 contentDiv.innerHTML = `
                     <h4>📈 Creator Analytics</h4>
                     <div style="background: #f9f9f9; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-line;">
-                        ${CreatorHelpers.generateTerminalOutput('creator analytics --period=30d', 
-                            analytics ? CreatorHelpers.generateAnalyticsDisplay(analytics) : 'No analytics data available'
-                        )}
+                        ${CreatorHelpers.generateTerminalOutput('creator analytics --period=30d',
+                    analytics ? CreatorHelpers.generateAnalyticsDisplay(analytics) : 'No analytics data available'
+                )}
                     </div>
                 `;
-                
+
             } catch (error) {
                 console.error('Failed to load analytics:', error);
-                
+
                 const contentDiv = document.getElementById('creator-content');
                 contentDiv.innerHTML = `
                     <h4>📈 Creator Analytics</h4>
@@ -898,32 +945,32 @@
                 `;
             }
         }
-        
+
         // ENHANCEMENT: Filecoin functionality
-        
+
         // PERFORMANT: Load network status
         async function loadFilecoinNetworkStatus() {
             try {
                 const status = await filecoinIntegration.getNetworkStatus();
-                
-                document.getElementById('filecoin-network').textContent = 
+
+                document.getElementById('filecoin-network').textContent =
                     status.network || 'calibration';
-                document.getElementById('storage-cost').textContent = 
+                document.getElementById('storage-cost').textContent =
                     status.storage_cost_per_gb || '0.001 FIL/GB';
-                document.getElementById('provider-count').textContent = 
+                document.getElementById('provider-count').textContent =
                     status.active_storage_providers || '2800+';
-                    
+
             } catch (error) {
                 console.error('Failed to load network status:', error);
                 document.getElementById('filecoin-network').textContent = 'Error';
             }
         }
-        
+
         // MODULAR: Handle global upload
         async function handleGlobalUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
-            
+
             try {
                 const contentDiv = document.getElementById('filecoin-content');
                 contentDiv.innerHTML = `
@@ -936,7 +983,7 @@
                         <div id="upload-percentage">0%</div>
                     </div>
                 `;
-                
+
                 const metadata = {
                     file_id: `global-${Date.now()}`,
                     title: file.name.replace(/\.[^/.]+$/, ""),
@@ -945,13 +992,13 @@
                     duration_seconds: null,
                     format: file.name.split('.').pop()
                 };
-                
+
                 const progressCallback = (status, percentage) => {
                     document.getElementById('upload-status').textContent = status;
                     document.getElementById('upload-bar').style.width = `${percentage}%`;
                     document.getElementById('upload-percentage').textContent = `${percentage}%`;
                 };
-                
+
                 // Try Synapse SDK first, fallback to API
                 let result;
                 try {
@@ -960,7 +1007,7 @@
                     console.log('SDK upload failed, trying API fallback:', sdkError.message);
                     result = await filecoinIntegration.uploadVersionAPI(file, metadata, progressCallback);
                 }
-                
+
                 // CLEAN: Show success with global features
                 contentDiv.innerHTML += `
                     <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0;">
@@ -971,10 +1018,10 @@
                         <button onclick="streamFromGlobal('${result.piece_cid}')" class="test-button">🌍 Stream from Global CDN</button>
                     </div>
                 `;
-                
+
                 // ENHANCEMENT: Show creator support option
                 document.getElementById('support-creator-btn').style.display = 'inline-block';
-                
+
             } catch (error) {
                 console.error('Global upload failed:', error);
                 document.getElementById('filecoin-content').innerHTML = `
@@ -984,12 +1031,12 @@
                 `;
             }
         }
-        
+
         // MODULAR: Handle network status check
         async function handleCheckNetworkStatus() {
             try {
                 const status = await filecoinIntegration.getNetworkStatus();
-                
+
                 const contentDiv = document.getElementById('filecoin-content');
                 contentDiv.innerHTML = `
                     <h4>📊 Filecoin Network Status</h4>
@@ -1002,13 +1049,13 @@
                         <div><strong>Total Capacity:</strong> ${status.total_network_capacity}</div>
                     </div>
                 `;
-                
+
             } catch (error) {
                 console.error('Failed to check network status:', error);
                 alert('Failed to check network status');
             }
         }
-        
+
         // MODULAR: Handle creator support
         async function handleSupportCreator() {
             try {
@@ -1017,22 +1064,22 @@
                     alert('Please connect your wallet first to support creators');
                     return;
                 }
-                
+
                 const amount = 5; // $5 default
                 const creatorAddress = '0x742d35Cc6634C0532925a3b8D4C9db96c4b5Da5e'; // Example creator address
-                
+
                 // ENHANCEMENT: Show payment confirmation
                 const confirmed = confirm(`Support this creator with ${amount}?\n\nThis will send ${amount} USDFC tokens to the creator.`);
                 if (!confirmed) return;
-                
+
                 const result = await filecoinIntegration.supportCreator(creatorAddress, amount, 'Love this version!');
-                
+
                 if (result.success) {
-                    const message = result.rail_id ? 
+                    const message = result.rail_id ?
                         `💝 ${result.message}\nPayment Rail: ${result.rail_id}` :
                         `💝 ${result.message}\nTransaction: ${result.transaction_hash}`;
                     alert(message);
-                    
+
                     // ENHANCEMENT: Update UI to show payment sent
                     const contentDiv = document.getElementById('filecoin-content');
                     contentDiv.innerHTML += `
@@ -1045,10 +1092,10 @@
                 } else {
                     throw new Error('Payment failed');
                 }
-                
+
             } catch (error) {
                 console.error('Creator support failed:', error);
-                
+
                 if (error.message.includes('Insufficient USDFC balance')) {
                     alert(`💰 Insufficient USDFC balance\n\nYou need USDFC tokens to support creators. Please:\n1. Get USDFC from the Filecoin Calibration faucet\n2. Or use the payment setup in the upload flow`);
                 } else {
@@ -1056,49 +1103,50 @@
                 }
             }
         }
-        
+
         // MODULAR: Stream from global CDN
-        window.streamFromGlobal = async function(pieceCid) {
+        window.streamFromGlobal = async function (pieceCid) {
             try {
                 console.log(`🌍 Streaming from global CDN: ${pieceCid}`);
-                
+
                 // Create audio element for global streaming
                 const audioUrl = FilecoinHelpers.getCDNUrl(pieceCid);
                 const audio = new Audio(audioUrl);
-                
+
                 audio.onloadstart = () => console.log('📡 Loading from global CDN...');
                 audio.oncanplay = () => console.log('✅ Ready to play from global network');
                 audio.onerror = () => console.error('❌ Global streaming failed');
-                
+
                 await audio.play();
-                
+
             } catch (error) {
                 console.error('Global streaming failed:', error);
                 alert(`Failed to stream from global CDN: ${error.message}`);
             }
         };
-        
+
         // PERFORMANT: Initialize app
         async function initializeApp() {
             // ENHANCEMENT: Initialize audio player
             audioPlayer.init();
-            
+
             // Check if we're in a Farcaster Mini App
-            const isFarcaster = window.parent !== window || 
-                               window.location.search.includes('miniApp=true');
-            
+            const isFarcaster = window.parent !== window ||
+                window.location.search.includes('miniApp=true');
+
             if (isFarcaster) {
                 console.log('🟣 Detected Farcaster environment');
                 await loadFarcasterSDK();
             }
-            
+
             // ENHANCEMENT: Existing functionality
             checkServerStatus();
             setInterval(checkServerStatus, 10000);
         }
-        
+
         // Start the app
         initializeApp();
     </script>
 </body>
+
 </html>

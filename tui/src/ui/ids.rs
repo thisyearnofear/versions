@@ -31,8 +31,6 @@ pub enum Id {
     SavePlaylistLabel,
     SavePlaylistConfirm,
     TagEditor(IdTagEditor),
-    YoutubeSearchInputPopup,
-    YoutubeSearchTablePopup,
     DatabaseAddConfirmPopup,
 }
 
@@ -55,7 +53,6 @@ pub enum IdConfigEditor {
     CEThemeSelect,
     ConfigSavePopup,
     ExitConfirmation,
-    ExtraYtdlpArgs,
     Footer,
     Header,
     KeyGlobal(IdKeyGlobal),
@@ -167,7 +164,6 @@ pub enum IdKeyOther {
     LibraryYank,
     LibraryPaste,
     LibrarySearch,
-    LibrarySearchYoutube,
     LibraryTagEditor,
 
     PlaylistShuffle,

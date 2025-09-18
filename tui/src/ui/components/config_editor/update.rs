@@ -39,7 +39,7 @@ impl Model {
             ConfigEditorMsg::ChangeLayout => self.action_change_layout(),
             ConfigEditorMsg::ConfigChanged => self.config_editor.config_changed = true,
             // Handle focus of general page
-            ConfigEditorMsg::ExtraYtdlpArgsBlurDown | ConfigEditorMsg::ExitConfirmationBlurUp => {
+            ConfigEditorMsg::ExitConfirmationBlurUp => {
                 self.app
                     .active(&Id::ConfigEditor(IdConfigEditor::MusicDir))
                     .ok();
@@ -121,15 +121,9 @@ impl Model {
                     .ok();
             }
 
-            ConfigEditorMsg::PlayerUseDiscordBlurDown | ConfigEditorMsg::ExtraYtdlpArgsBlurUp => {
+            ConfigEditorMsg::PlayerUseDiscordBlurDown | ConfigEditorMsg::MusicDirBlurUp => {
                 self.app
                     .active(&Id::ConfigEditor(IdConfigEditor::PlayerPort))
-                    .ok();
-            }
-
-            ConfigEditorMsg::PlayerPortBlurDown | ConfigEditorMsg::MusicDirBlurUp => {
-                self.app
-                    .active(&Id::ConfigEditor(IdConfigEditor::ExtraYtdlpArgs))
                     .ok();
             }
 
@@ -548,9 +542,6 @@ impl Model {
             IdKey::Other(IdKeyOther::LibraryLoadDir) => keys.library_keys.load_dir = binding,
             IdKey::Other(IdKeyOther::LibraryPaste) => keys.library_keys.paste = binding,
             IdKey::Other(IdKeyOther::LibrarySearch) => keys.library_keys.search = binding,
-            IdKey::Other(IdKeyOther::LibrarySearchYoutube) => {
-                keys.library_keys.youtube_search = binding;
-            }
             IdKey::Other(IdKeyOther::LibraryTagEditor) => {
                 keys.library_keys.open_tag_editor = binding;
             }

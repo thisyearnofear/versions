@@ -1142,9 +1142,6 @@ impl KEModifierSelect {
             IdKey::Other(IdKeyOther::LibraryLoadDir) => keys.library_keys.load_dir.mod_key(),
             IdKey::Other(IdKeyOther::LibraryPaste) => keys.library_keys.paste.mod_key(),
             IdKey::Other(IdKeyOther::LibrarySearch) => keys.library_keys.search.mod_key(),
-            IdKey::Other(IdKeyOther::LibrarySearchYoutube) => {
-                keys.library_keys.youtube_search.mod_key()
-            }
             IdKey::Other(IdKeyOther::LibraryTagEditor) => {
                 keys.library_keys.open_tag_editor.mod_key()
             }
@@ -2097,30 +2094,6 @@ impl Component<Msg, UserEvent> for ConfigLibrarySearch {
     }
 }
 
-#[derive(MockComponent)]
-pub struct ConfigLibrarySearchYoutube {
-    component: KEModifierSelect,
-}
-
-impl ConfigLibrarySearchYoutube {
-    pub fn new(config: SharedTuiSettings) -> Self {
-        Self {
-            component: KEModifierSelect::new(
-                " Library Search Youtube ",
-                IdKey::Other(IdKeyOther::LibrarySearchYoutube),
-                config,
-                Msg::ConfigEditor(ConfigEditorMsg::KeyFocusOther(KFMsg::Next)),
-                Msg::ConfigEditor(ConfigEditorMsg::KeyFocusOther(KFMsg::Previous)),
-            ),
-        }
-    }
-}
-
-impl Component<Msg, UserEvent> for ConfigLibrarySearchYoutube {
-    fn on(&mut self, ev: Event<UserEvent>) -> Option<Msg> {
-        self.component.on(ev)
-    }
-}
 
 #[derive(MockComponent)]
 pub struct ConfigLibraryTagEditor {
@@ -3220,11 +3193,6 @@ impl Model {
             Vec::new(),
         )?;
         self.app.remount(
-            Id::ConfigEditor(IdConfigEditor::KeyOther(IdKeyOther::LibrarySearchYoutube)),
-            Box::new(ConfigLibrarySearchYoutube::new(self.config_tui.clone())),
-            Vec::new(),
-        )?;
-        self.app.remount(
             Id::ConfigEditor(IdConfigEditor::KeyOther(IdKeyOther::LibraryTagEditor)),
             Box::new(ConfigLibraryTagEditor::new(self.config_tui.clone())),
             Vec::new(),
@@ -3548,9 +3516,6 @@ impl Model {
         )))?;
         self.app.umount(&Id::ConfigEditor(IdConfigEditor::KeyOther(
             IdKeyOther::LibrarySearch,
-        )))?;
-        self.app.umount(&Id::ConfigEditor(IdConfigEditor::KeyOther(
-            IdKeyOther::LibrarySearchYoutube,
         )))?;
         self.app.umount(&Id::ConfigEditor(IdConfigEditor::KeyOther(
             IdKeyOther::LibraryTagEditor,

@@ -866,58 +866,12 @@ impl Component<Msg, UserEvent> for PlayerPort {
             &mut self.component,
             ev,
             &self.config.read().settings.keys,
-            Msg::ConfigEditor(ConfigEditorMsg::PlayerPortBlurDown),
+            Msg::ConfigEditor(ConfigEditorMsg::PlayerPortBlurUp),
             Msg::ConfigEditor(ConfigEditorMsg::PlayerPortBlurUp),
         )
     }
 }
 
-#[derive(MockComponent)]
-pub struct ExtraYtdlpArgs {
-    component: Input,
-    config: SharedTuiSettings,
-}
-
-impl ExtraYtdlpArgs {
-    pub fn new(config: CombinedSettings) -> Self {
-        // TODO: this should likely also cover the MaybeCom settings from the TUI
-        let component = {
-            let config_tui = config.tui.read();
-            Input::default()
-                .borders(
-                    Borders::default()
-                        .color(config_tui.settings.theme.library_border())
-                        .modifiers(BorderType::Rounded),
-                )
-                .foreground(config_tui.settings.theme.library_highlight())
-                .input_type(InputType::Text)
-                .invalid_style(Style::default().fg(Color::Red))
-                .placeholder(
-                    r#"--cookies-from-browser brave+gnomekeyring or --cookies "d:\src\cookies.txt""#,
-                    Style::default().fg(Color::Rgb(128, 128, 128)),
-                )
-                .title(" Extra Args for yt-dlp: ", Alignment::Left)
-                .value(&config_tui.settings.ytdlp.extra_args)
-        };
-
-        Self {
-            component,
-            config: config.tui,
-        }
-    }
-}
-
-impl Component<Msg, UserEvent> for ExtraYtdlpArgs {
-    fn on(&mut self, ev: Event<UserEvent>) -> Option<Msg> {
-        handle_input_ev(
-            &mut self.component,
-            ev,
-            &self.config.read().settings.keys,
-            Msg::ConfigEditor(ConfigEditorMsg::ExtraYtdlpArgsBlurDown),
-            Msg::ConfigEditor(ConfigEditorMsg::ExtraYtdlpArgsBlurUp),
-        )
-    }
-}
 
 impl Model {
     /// Mount / Remount the Config-Editor's First Page, the General Options
@@ -1013,11 +967,6 @@ impl Model {
             Vec::new(),
         )?;
 
-        self.app.remount(
-            Id::ConfigEditor(IdConfigEditor::ExtraYtdlpArgs),
-            Box::new(ExtraYtdlpArgs::new(self.get_combined_settings())),
-            Vec::new(),
-        )?;
 
         Ok(())
     }
@@ -1065,8 +1014,6 @@ impl Model {
         self.app
             .umount(&Id::ConfigEditor(IdConfigEditor::PlayerPort))?;
 
-        self.app
-            .umount(&Id::ConfigEditor(IdConfigEditor::ExtraYtdlpArgs))?;
 
         Ok(())
     }

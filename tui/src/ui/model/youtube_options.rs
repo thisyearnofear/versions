@@ -1,32 +1,54 @@
+#[cfg(feature = "youtube")]
 use std::path::{Path, PathBuf};
+#[cfg(feature = "youtube")]
 use std::sync::{Arc, LazyLock};
+#[cfg(feature = "youtube")]
 use std::thread;
+#[cfg(feature = "youtube")]
 use std::time::Duration;
 
+#[cfg(feature = "youtube")]
 use anyhow::{Context, Result, anyhow, bail};
+#[cfg(feature = "youtube")]
 use id3::TagLike;
+#[cfg(feature = "youtube")]
 use id3::Version::Id3v24;
+#[cfg(feature = "youtube")]
 use regex::Regex;
+#[cfg(feature = "youtube")]
 use shell_words;
+#[cfg(feature = "youtube")]
 use termusiclib::invidious::{Instance, YoutubeVideo};
+#[cfg(feature = "youtube")]
 use termusiclib::track::DurationFmtShort;
+#[cfg(feature = "youtube")]
 use termusiclib::utils::get_parent_folder;
+#[cfg(feature = "youtube")]
 use tokio::runtime::Handle;
+#[cfg(feature = "youtube")]
 use tuirealm::props::{Alignment, AttrValue, Attribute, TableBuilder, TextSpan};
+#[cfg(feature = "youtube")]
 use tuirealm::{State, StateValue};
+#[cfg(feature = "youtube")]
 use ytd_rs::{Arg, YoutubeDL};
 
+#[cfg(feature = "youtube")]
 use super::Model;
+#[cfg(feature = "youtube")]
 use crate::ui::ids::Id;
+#[cfg(feature = "youtube")]
 use crate::ui::msg::{Msg, YSMsg};
 
+#[cfg(feature = "youtube")]
 #[expect(dead_code)]
 static RE_FILENAME: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[ffmpeg\] Destination: (?P<name>.*)\.mp3").unwrap());
 
+#[cfg(feature = "youtube")]
 static RE_FILENAME_YTDLP: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[ExtractAudio\] Destination: (?P<name>.*)\.mp3").unwrap());
 
+#[cfg(feature = "youtube")]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct YoutubeOptions {
     pub items: Vec<YoutubeVideo>,
@@ -34,6 +56,7 @@ pub struct YoutubeOptions {
     pub invidious_instance: Instance,
 }
 
+#[cfg(feature = "youtube")]
 impl Default for YoutubeOptions {
     fn default() -> Self {
         Self {
@@ -44,6 +67,7 @@ impl Default for YoutubeOptions {
     }
 }
 
+#[cfg(feature = "youtube")]
 impl YoutubeOptions {
     pub fn get_by_index(&self, index: usize) -> Result<&YoutubeVideo> {
         if let Some(item) = self.items.get(index) {
@@ -72,6 +96,7 @@ impl YoutubeOptions {
     }
 }
 
+#[cfg(feature = "youtube")]
 impl Model {
     pub fn youtube_options_download(&mut self, index: usize) -> Result<()> {
         // download from search result here
@@ -284,8 +309,10 @@ impl Model {
     }
 }
 
+#[cfg(feature = "youtube")]
 pub type YTDLMsgURL = Arc<str>;
 
+#[cfg(feature = "youtube")]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum YTDLMsg {
     /// Indicates a Start of a download.
@@ -309,6 +336,7 @@ pub enum YTDLMsg {
 // This just parsing the output from youtubedl to get the audio path
 // This is used because we need to get the song name
 // example ~/path/to/song/song.mp3
+#[cfg(feature = "youtube")]
 fn extract_filepath(output: &str, dir: &str) -> Option<String> {
     // #[cfg(not(feature = "yt-dlp"))]
     // if let Some(cap) = RE_FILENAME.captures(output) {
@@ -327,6 +355,7 @@ fn extract_filepath(output: &str, dir: &str) -> Option<String> {
     None
 }
 
+#[cfg(feature = "youtube")]
 fn remove_downloaded_json(path: &Path, file_fullname: &str) {
     let files = walkdir::WalkDir::new(path).follow_links(true);
     for f in files
@@ -352,6 +381,7 @@ fn remove_downloaded_json(path: &Path, file_fullname: &str) {
     }
 }
 
+#[cfg(feature = "youtube")]
 fn embed_downloaded_lrc(path: &Path, file_fullname: &str) {
     let mut id3_tag = if let Ok(tag) = id3::Tag::read_from_path(file_fullname) {
         tag
@@ -409,6 +439,7 @@ fn embed_downloaded_lrc(path: &Path, file_fullname: &str) {
     id3_tag.write_to_path(file_fullname, Id3v24).ok();
 }
 
+#[cfg(feature = "youtube")]
 #[derive(Debug, Clone, PartialEq)]
 enum ArgOrVal {
     ArgumentWithVal(String),
@@ -418,6 +449,7 @@ enum ArgOrVal {
 }
 
 /// Parse the input shell-like string into a Vector of `argument` and `maybe argument value`.
+#[cfg(feature = "youtube")]
 fn parse_args(input: &str) -> Result<Vec<ArgOrVal>, shell_words::ParseError> {
     let result = shell_words::split(input)?
         .into_iter()
@@ -439,6 +471,7 @@ fn parse_args(input: &str) -> Result<Vec<ArgOrVal>, shell_words::ParseError> {
 }
 
 /// Convert the `argument, maybe value` vector to [ytdrs Arguments](Arg).
+#[cfg(feature = "youtube")]
 fn convert_to_args(extra_args: Vec<ArgOrVal>) -> Vec<Arg> {
     // This capacity *may* be a little inaccurate, but should broadly reflect what we need
     let mut extra_args_parsed = Vec::with_capacity(extra_args.len());
@@ -484,7 +517,7 @@ fn convert_to_args(extra_args: Vec<ArgOrVal>) -> Vec<Arg> {
     extra_args_parsed
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "youtube"))]
 mod tests {
 
     use crate::ui::model::youtube_options::extract_filepath;

@@ -8,8 +8,6 @@ use termusiclib::podcast::{PodcastDLResult, PodcastFeed, PodcastSyncResult};
 use termusiclib::songtag::{SongtagSearchResult, TrackDLMsg};
 
 use crate::ui::ids::{IdConfigEditor, IdKey, IdKeyGlobal, IdKeyOther};
-#[cfg(feature = "youtube")]
-use crate::ui::model::youtube_options::{YTDLMsg, YoutubeOptions};
 
 /// Main message type that encapsulates everything else.
 // Note that the style is for each thing to have a sub-type, unless it is top-level like "ForceRedraw".
@@ -26,8 +24,6 @@ pub enum Msg {
     Podcast(PCMsg),
     SavePlaylist(SavePlaylistMsg),
     TagEditor(TEMsg),
-    #[cfg(feature = "youtube")]
-    YoutubeSearch(YSMsg),
     Xywh(XYWHMsg),
     LyricMessage(LyricMsg),
     DeleteConfirm(DeleteConfirmMsg),
@@ -193,8 +189,6 @@ pub enum ConfigEditorMsg {
     ConfigSaveCancel,
     ExitConfirmationBlurDown,
     ExitConfirmationBlurUp,
-    ExtraYtdlpArgsBlurDown,
-    ExtraYtdlpArgsBlurUp,
     Open,
     KeyFocusGlobal(KFMsg),
     KeyFocusOther(KFMsg),
@@ -260,7 +254,6 @@ pub enum ConfigEditorMsg {
     PlayerUseMprisBlurUp,
     PlayerUseDiscordBlurDown,
     PlayerUseDiscordBlurUp,
-    PlayerPortBlurDown,
     PlayerPortBlurUp,
 
     CurrentlyPlayingTrackSymbolBlurDown,
@@ -337,8 +330,6 @@ pub const KFOTHER_FOCUS_ORDER: &[IdKey] = &[
     IdKey::Other(IdKeyOther::LibraryYank),
     IdKey::Other(IdKeyOther::LibraryPaste),
     IdKey::Other(IdKeyOther::LibrarySearch),
-    #[cfg(feature = "youtube")]
-    IdKey::Other(IdKeyOther::LibrarySearchYoutube),
     IdKey::Other(IdKeyOther::LibraryTagEditor),
     // playlist keys
     IdKey::Other(IdKeyOther::PlaylistShuffle),
@@ -463,18 +454,6 @@ pub enum YSMsg {
     TablePopupPrevious,
     TablePopupCloseCancel,
     TablePopupCloseOk(usize),
-
-    #[cfg(feature = "youtube")]
-    /// The youtube search was a success, with all values.
-    YoutubeSearchSuccess(YoutubeOptions),
-    #[cfg(feature = "youtube")]
-    /// Indicates that the youtube search has failed, with error message.
-    /// The error message is the first parameter, and the second parameter is the search term.
-    /// The search term is used to display the error message in the popup.
-    YoutubeSearchFail(String),
-
-    #[cfg(feature = "youtube")]
-    Download(YTDLMsg),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

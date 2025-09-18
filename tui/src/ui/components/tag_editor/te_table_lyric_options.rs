@@ -115,12 +115,6 @@ impl Component<Msg, UserEvent> for TETableLyricOptions {
             Event::Keyboard(k) if k == keys.navigation_keys.goto_bottom.get() => {
                 self.perform(Cmd::GoTo(Position::End))
             }
-            Event::Keyboard(k) if k == keys.library_keys.youtube_search.get() => {
-                if let State::One(StateValue::Usize(index)) = self.state() {
-                    return Some(Msg::TagEditor(TEMsg::Download(index)));
-                }
-                CmdResult::None
-            }
             Event::Keyboard(KeyEvent {
                 code: Key::Enter, ..
             }) => {

@@ -175,12 +175,11 @@ impl Model {
                     IdConfigEditor::PlayerUseMpris => 12,
                     IdConfigEditor::PlayerUseDiscord => 13,
                     IdConfigEditor::PlayerPort => 14,
-                    IdConfigEditor::ExtraYtdlpArgs => 15,
                     _ => return None,
                 })
             });
 
-        let cells = UniformDynamicGrid::new(16, 3, 56 + 2)
+        let cells = UniformDynamicGrid::new(15, 3, 56 + 2)
             .draw_row_low_space()
             .distribute_row_space()
             .focus_node(focus_elem)
@@ -210,8 +209,6 @@ impl Model {
             &Id::ConfigEditor(IdConfigEditor::PlayerUseMpris) => cells[12],
             &Id::ConfigEditor(IdConfigEditor::PlayerUseDiscord) => cells[13],
             &Id::ConfigEditor(IdConfigEditor::PlayerPort) => cells[14],
-
-            &Id::ConfigEditor(IdConfigEditor::ExtraYtdlpArgs) => cells[15],
         }
     }
 
@@ -807,12 +804,6 @@ impl Model {
             }
         }
 
-        if let Ok(State::One(StateValue::String(extra_ytdlp_args))) = self
-            .app
-            .state(&Id::ConfigEditor(IdConfigEditor::ExtraYtdlpArgs))
-        {
-            config_tui.settings.ytdlp.extra_args = extra_ytdlp_args;
-        }
         Ok(())
     }
 

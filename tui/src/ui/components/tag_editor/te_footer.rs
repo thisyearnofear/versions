@@ -31,13 +31,6 @@ impl TEFooter {
                     TextSpan::new("<ENTER>")
                         .bold()
                         .fg(config.settings.theme.library_highlight()),
-                    TextSpan::new(" Download: ").fg(config.settings.theme.library_foreground()),
-                    TextSpan::new(format!(
-                        "<{}>",
-                        config.settings.keys.library_keys.youtube_search
-                    ))
-                    .bold()
-                    .fg(config.settings.theme.library_highlight()),
                 ],
             )),
         }

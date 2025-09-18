@@ -9,7 +9,6 @@ mod mock_yn_confirm;
 mod podcast;
 mod quit;
 mod saveplaylist;
-pub mod youtube_search;
 
 #[allow(unused_imports)]
 pub use deleteconfirm::{DeleteConfirmInputPopup, DeleteConfirmRadioPopup};

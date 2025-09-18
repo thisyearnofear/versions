@@ -10,12 +10,10 @@ use tuirealm::Update;
 use tuirealm::props::{AttrValue, Attribute};
 
 use crate::ui::ids::Id;
-#[cfg(feature = "youtube")]
-use crate::ui::model::youtube_options::YTDLMsg;
 use crate::ui::msg::{
     CoverDLResult, DBMsg, DeleteConfirmMsg, ErrorPopupMsg, GSMsg, HelpPopupMsg, LIMsg, LyricMsg,
     MainLayoutMsg, Msg, NotificationMsg, PCMsg, PLMsg, PlayerMsg, QuitPopupMsg, SavePlaylistMsg,
-    XYWHMsg, YSMsg,
+    XYWHMsg,
 };
 use crate::ui::tui_cmd::TuiCmd;
 use crate::ui::{Model, model::TermusicLayout};
@@ -52,11 +50,6 @@ impl Update<Msg> for Model {
             Msg::Player(msg) => self.update_player(msg),
 
             Msg::HelpPopup(msg) => self.update_help_popup_msg(&msg),
-            #[cfg(feature = "youtube")]
-            Msg::YoutubeSearch(msg) => {
-                self.update_youtube_search(msg);
-                None
-            }
             Msg::TagEditor(msg) => {
                 self.update_tageditor(msg);
                 None
@@ -668,102 +661,6 @@ impl Model {
         }
     }
 
-    /// Handle all [`YSMsg`] messages. Sub-function for [`update`](Self::update).
-    #[cfg(feature = "youtube")]
-    fn update_youtube_search(&mut self, msg: YSMsg) {
-        match msg {
-            YSMsg::InputPopupShow => {
-                self.mount_youtube_search_input();
-            }
-            YSMsg::InputPopupCloseCancel => {
-                if self.app.mounted(&Id::YoutubeSearchInputPopup) {
-                    assert!(self.app.umount(&Id::YoutubeSearchInputPopup).is_ok());
-                }
-            }
-            YSMsg::InputPopupCloseOk(url) => {
-                if self.app.mounted(&Id::YoutubeSearchInputPopup) {
-                    assert!(self.app.umount(&Id::YoutubeSearchInputPopup).is_ok());
-                }
-                if url.starts_with("http") {
-                    match self.youtube_dl(&url) {
-                        Ok(()) => {}
-                        Err(e) => {
-                            self.mount_error_popup(e.context("youtube-dl download"));
-                        }
-                    }
-                } else {
-                    self.mount_youtube_search_table();
-                    self.youtube_options_search(url);
-                }
-            }
-            YSMsg::TablePopupCloseCancel => {
-                self.umount_youtube_search_table_popup();
-            }
-            YSMsg::TablePopupNext => {
-                self.youtube_options_next_page();
-            }
-            YSMsg::TablePopupPrevious => {
-                self.youtube_options_prev_page();
-            }
-            YSMsg::TablePopupCloseOk(index) => {
-                if let Err(e) = self.youtube_options_download(index) {
-                    self.library_reload_with_node_focus(None);
-                    self.mount_error_popup(e.context("youtube-dl options download"));
-                }
-            }
-            YSMsg::YoutubeSearchSuccess(youtube_options) => {
-                self.youtube_options = youtube_options;
-                self.sync_youtube_options();
-                self.redraw = true;
-            }
-            YSMsg::YoutubeSearchFail(e) => {
-                self.redraw = true;
-                self.mount_error_popup(anyhow!("Youtube search fail: {e}"));
-            }
-            YSMsg::Download(msg) => self.update_ys_download_msg(msg),
-        }
-    }
-
-    /// Handle all [`YSMsg`] messages. Sub-function for [`update_youtube_search`](Self::update_youtube_search).
-    fn update_ys_download_msg(&mut self, msg: YTDLMsg) {
-        match msg {
-            YTDLMsg::Start(url, title) => {
-                self.download_tracker.increase_one(&*url);
-                self.show_message_timeout_label_help(
-                    self.download_tracker.message_download_start(&title),
-                    None,
-                    None,
-                    None,
-                );
-            }
-            YTDLMsg::Success(url) => {
-                self.download_tracker.decrease_one(&url);
-                self.show_message_timeout_label_help(
-                    self.download_tracker.message_download_complete(),
-                    None,
-                    None,
-                    None,
-                );
-            }
-            YTDLMsg::Completed(_url, file) => {
-                if self.download_tracker.visible() {
-                    return;
-                }
-                self.library_reload_with_node_focus(file);
-            }
-            YTDLMsg::Err(url, title, error_message) => {
-                self.download_tracker.decrease_one(&url);
-                self.mount_error_popup(anyhow!("download failed: {error_message}"));
-                self.show_message_timeout_label_help(
-                    self.download_tracker
-                        .message_download_error_response(&title),
-                    None,
-                    None,
-                    None,
-                );
-            }
-        }
-    }
 
     /// Handle all [`GSMsg`] messages. Sub-function for [`update`](Self::update).
     #[allow(clippy::too_many_lines)]
