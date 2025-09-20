@@ -1,7 +1,7 @@
 # Netlify deployment configuration for VERSIONS web interface
 [build]
   base = "web"
-  publish = "."
+  publish = "web"
   command = "npm ci && npm run build"
 
 # Redirect all API calls to the backend
