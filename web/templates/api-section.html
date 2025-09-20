@@ -1,0 +1,100 @@
+<!-- VERSIONS API Testing Section -->
+<!-- ORGANIZED: API endpoints and testing interface -->
+<div class="terminal-section bordered-top">
+    <h2>🔗 REST API Testing</h2>
+    <p>$ curl -X GET http://localhost:8080/api/v1/health</p>
+
+    <div class="terminal-endpoint">
+        <span class="endpoint-method">GET</span>
+        <span class="endpoint-url">/api/v1/health</span>
+        <button class="terminal-button" onclick="testEndpoint('/api/v1/health', 'health-response')">Test</button>
+        <div id="health-response" class="terminal-response"></div>
+    </div>
+
+    <div class="terminal-endpoint">
+        <span class="endpoint-method">GET</span>
+        <span class="endpoint-url">/api/v1/songs</span>
+        <button class="terminal-button" onclick="testEndpoint('/api/v1/songs', 'songs-response')">Test</button>
+        <div id="songs-response" class="terminal-response"></div>
+    </div>
+
+    <div class="terminal-endpoint">
+        <span class="endpoint-method">GET</span>
+        <span class="endpoint-url">/api/v1/songs/song1</span>
+        <button class="terminal-button" onclick="testEndpoint('/api/v1/songs/song1', 'song-response')">Test</button>
+        <div id="song-response" class="terminal-response"></div>
+    </div>
+
+    <div class="terminal-endpoint">
+        <span class="endpoint-method">GET</span>
+        <span class="endpoint-url">/api/v1/versions/version1</span>
+        <button class="terminal-button" onclick="testEndpoint('/api/v1/versions/version1', 'version-response')">Test</button>
+        <div id="version-response" class="terminal-response"></div>
+    </div>
+
+    <div class="terminal-endpoint">
+        <span class="endpoint-method">GET</span>
+        <span class="endpoint-url">/api/v1/audio/files</span>
+        <button class="terminal-button" onclick="testEndpoint('/api/v1/audio/files', 'audio-files-response')">Test</button>
+        <div id="audio-files-response" class="terminal-response"></div>
+    </div>
+
+    <div id="server-status" class="terminal-status disconnected">
+        $ systemctl status versions-server<br />🔴 Server Status: Checking connection...
+    </div>
+</div>
+
+<script>
+// CLEAN: API testing logic
+const API_BASE = 'http://localhost:8080';
+
+async function testEndpoint(endpoint, responseId) {
+    const responseDiv = document.getElementById(responseId);
+    responseDiv.style.display = 'block';
+    responseDiv.textContent = 'Loading...';
+
+    try {
+        const response = await fetch(API_BASE + endpoint);
+        const data = await response.json();
+        responseDiv.textContent = JSON.stringify(data, null, 2);
+
+        if (response.ok) {
+            responseDiv.classList.remove('error');
+            responseDiv.classList.add('success');
+        } else {
+            responseDiv.classList.remove('success');
+            responseDiv.classList.add('error');
+        }
+    } catch (error) {
+        responseDiv.textContent = `Error: ${error.message}`;
+        responseDiv.classList.remove('success');
+        responseDiv.classList.add('error');
+    }
+}
+
+// PERFORMANT: Check server status on load
+async function checkServerStatus() {
+    const statusDiv = document.getElementById('server-status');
+    
+    try {
+        const response = await fetch(API_BASE + '/api/v1/health');
+        if (response.ok) {
+            statusDiv.className = 'terminal-status connected';
+            statusDiv.innerHTML = '$ systemctl status versions-server<br/>🟢 Server Status: Active (running) - Connected to VERSIONS API';
+        } else {
+            throw new Error('Server responded with error');
+        }
+    } catch (error) {
+        statusDiv.className = 'terminal-status disconnected';
+        statusDiv.innerHTML = '$ systemctl status versions-server<br/>🔴 Server Status: Inactive (dead) - Start with: cargo run -p termusic-server';
+    }
+}
+
+// Auto-check status when template loads
+document.addEventListener('template-loaded', (event) => {
+    if (event.detail.templateName === 'api-section') {
+        checkServerStatus();
+        setInterval(checkServerStatus, 10000);
+    }
+});
+</script>

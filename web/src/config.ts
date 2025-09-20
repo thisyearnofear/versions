@@ -1,27 +1,32 @@
 // MODULAR: Configuration for different deployment environments
 // This allows easy deployment to Netlify, Vercel, or custom domains
 
-const config = {
-    // ORGANIZED: Environment-based configuration
+import type { ClientConfig } from './shared/types/api-types';
+
+// ORGANIZED: Environment-based configuration with proper typing
+const config: Record<string, ClientConfig> = {
     development: {
+        environment: 'development',
         domain: 'localhost:3000',
         apiBase: 'http://localhost:8080',
         manifestUrl: 'http://localhost:3000/.well-known/farcaster.json'
     },
     netlify: {
+        environment: 'netlify',
         domain: 'versions-app.netlify.app', // Will be updated with actual Netlify URL
         apiBase: 'https://versions-api.herokuapp.com', // Or wherever you deploy the API
         manifestUrl: 'https://versions-app.netlify.app/.well-known/farcaster.json'
     },
     production: {
+        environment: 'production',
         domain: 'versions.app', // Future production domain
         apiBase: 'https://api.versions.app',
         manifestUrl: 'https://versions.app/.well-known/farcaster.json'
     }
 };
 
-// CLEAN: Auto-detect environment
-function getEnvironment() {
+// CLEAN: Auto-detect environment with proper typing
+function getEnvironment(): keyof typeof config {
     const hostname = window.location.hostname;
     
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -33,9 +38,17 @@ function getEnvironment() {
     }
 }
 
-// PERFORMANT: Export current config
+// PERFORMANT: Export current config with type safety
 const currentEnv = getEnvironment();
-export const appConfig = config[currentEnv];
-export const environment = currentEnv;
+export const appConfig: ClientConfig = config[currentEnv];
+export const environment: string = currentEnv;
 
 console.log(`🎭 VERSIONS running in ${currentEnv} mode`);
+
+// ENHANCEMENT: Export type-safe config getter
+export function getConfig(): ClientConfig {
+    return appConfig;
+}
+
+// MODULAR: Export for testing and debugging
+export { config as allConfigs };

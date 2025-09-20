@@ -1,33 +1,84 @@
 // MODULAR: Wallet connection module for VERSIONS
 // CLEAN: Abstracts wallet complexity from the main app
 
-import { appConfig } from './config.js';
+import { appConfig } from './config';
+
+// CLEAN: Types for wallet integration
+interface WalletConnection {
+    success: boolean;
+    account: string;
+    network: string;
+}
+
+interface NetworkInfo {
+    chainId: string;
+    name: string;
+    isFilecoin: boolean;
+}
+
+interface BalanceInfo {
+    wei: string;
+    fil: string;
+    formatted: string;
+}
+
+interface FilecoinNetwork {
+    chainId: string;
+    chainName: string;
+    nativeCurrency: {
+        name: string;
+        symbol: string;
+        decimals: number;
+    };
+    rpcUrls: string[];
+    blockExplorerUrls: string[];
+}
+
+// CLEAN: Ethereum provider types
+interface EthereumProvider {
+    request(args: { method: string; params?: any[] }): Promise<any>;
+    on(event: string, handler: (...args: any[]) => void): void;
+    removeListener(event: string, handler: (...args: any[]) => void): void;
+}
+
+declare global {
+    interface Window {
+        ethereum?: EthereumProvider;
+    }
+}
 
 class WalletManager {
+    public isConnected: boolean;
+    public account: string | null;
+    public provider: any | null; // ethers provider
+    public signer: any | null; // ethers signer
+    public network: string;
+    // PERFORMANT: Cache wallet state
+    private connectionCache: Map<string, any>;
+
     constructor() {
         this.isConnected = false;
         this.account = null;
         this.provider = null;
         this.signer = null;
         this.network = 'calibration'; // Start with Filecoin testnet
-        // PERFORMANT: Cache wallet state
         this.connectionCache = new Map();
     }
 
     // PERFORMANT: Check if wallet is available
-    isWalletAvailable() {
+    isWalletAvailable(): boolean {
         return typeof window.ethereum !== 'undefined';
     }
 
     // CLEAN: Connect to wallet with proper error handling
-    async connectWallet() {
+    async connectWallet(): Promise<WalletConnection> {
         try {
             if (!this.isWalletAvailable()) {
                 throw new Error('No wallet detected. Please install MetaMask or another Web3 wallet.');
             }
 
             // Request account access
-            const accounts = await window.ethereum.request({
+            const accounts = await window.ethereum!.request({
                 method: 'eth_requestAccounts'
             });
 
@@ -47,7 +98,7 @@ class WalletManager {
             console.log('🔗 Wallet connected:', this.account);
             return {
                 success: true,
-                account: this.account,
+                account: this.account!,
                 network: this.network
             };
 
@@ -58,16 +109,16 @@ class WalletManager {
     }
 
     // CLEAN: Setup provider and signer
-    async setupProvider() {
+    private async setupProvider(): Promise<void> {
         try {
             // Use ethers.js for provider setup
-            const { ethers } = await import('https://esm.sh/ethers@6.14.3');
+            const { ethers } = await (new Function('return import("https://esm.sh/ethers@6.14.3")')()) as any;
             
-            this.provider = new ethers.BrowserProvider(window.ethereum);
+            this.provider = new ethers.BrowserProvider(window.ethereum!);
             this.signer = await this.provider.getSigner();
 
             // Listen for account changes
-            window.ethereum.on('accountsChanged', (accounts) => {
+            window.ethereum!.on('accountsChanged', (accounts: string[]) => {
                 if (accounts.length === 0) {
                     this.disconnect();
                 } else {
@@ -77,7 +128,7 @@ class WalletManager {
             });
 
             // Listen for network changes
-            window.ethereum.on('chainChanged', (chainId) => {
+            window.ethereum!.on('chainChanged', (chainId: string) => {
                 this.onNetworkChanged(chainId);
             });
 
@@ -88,9 +139,9 @@ class WalletManager {
     }
 
     // MODULAR: Ensure we're on Filecoin network
-    async ensureFilecoinNetwork() {
+    private async ensureFilecoinNetwork(): Promise<void> {
         try {
-            const filecoinNetworks = {
+            const filecoinNetworks: Record<string, FilecoinNetwork> = {
                 calibration: {
                     chainId: '0x4cb2f', // 314159 in hex
                     chainName: 'Filecoin Calibration',
@@ -119,14 +170,14 @@ class WalletManager {
             
             try {
                 // Try to switch to the network
-                await window.ethereum.request({
+                await window.ethereum!.request({
                     method: 'wallet_switchEthereumChain',
                     params: [{ chainId: targetNetwork.chainId }]
                 });
-            } catch (switchError) {
+            } catch (switchError: any) {
                 // If network doesn't exist, add it
                 if (switchError.code === 4902) {
-                    await window.ethereum.request({
+                    await window.ethereum!.request({
                         method: 'wallet_addEthereumChain',
                         params: [targetNetwork]
                     });
@@ -144,7 +195,7 @@ class WalletManager {
     }
 
     // CLEAN: Disconnect wallet
-    disconnect() {
+    disconnect(): void {
         this.isConnected = false;
         this.account = null;
         this.provider = null;
@@ -156,14 +207,14 @@ class WalletManager {
     }
 
     // MODULAR: Get wallet balance
-    async getBalance() {
+    async getBalance(): Promise<BalanceInfo> {
         try {
             if (!this.provider || !this.account) {
                 throw new Error('Wallet not connected');
             }
 
             const balance = await this.provider.getBalance(this.account);
-            const { ethers } = await import('https://esm.sh/ethers@6.14.3');
+            const { ethers } = await (new Function('return import("https://esm.sh/ethers@6.14.3")')()) as any;
             
             return {
                 wei: balance.toString(),
@@ -178,7 +229,7 @@ class WalletManager {
     }
 
     // CLEAN: Get network info
-    async getNetworkInfo() {
+    async getNetworkInfo(): Promise<NetworkInfo> {
         try {
             if (!this.provider) {
                 throw new Error('Provider not available');
@@ -198,7 +249,7 @@ class WalletManager {
     }
 
     // MODULAR: Sign message for authentication
-    async signMessage(message) {
+    async signMessage(message: string): Promise<string> {
         try {
             if (!this.signer) {
                 throw new Error('Signer not available');
@@ -213,91 +264,63 @@ class WalletManager {
         }
     }
 
-    // CLEAN: Event handlers (to be overridden)
-    onAccountChanged(newAccount) {
-        console.log('👤 Account changed:', newAccount);
-        // Override in main app
+    // ENHANCEMENT: Event handlers (can be overridden)
+    protected onAccountChanged(account: string): void {
+        console.log('🔄 Account changed:', account);
+        // Override in subclass or add event listeners
     }
 
-    onNetworkChanged(chainId) {
-        console.log('🌐 Network changed:', chainId);
-        // Override in main app
+    protected onNetworkChanged(chainId: string): void {
+        console.log('🔄 Network changed:', chainId);
+        // Override in subclass or add event listeners
     }
 
-    onDisconnected() {
+    protected onDisconnected(): void {
         console.log('🔌 Wallet disconnected');
-        // Override in main app
+        // Override in subclass or add event listeners
     }
 
-    // PERFORMANT: Check connection status
-    async checkConnection() {
-        try {
-            if (!this.isWalletAvailable()) {
-                return false;
-            }
-
-            const accounts = await window.ethereum.request({
-                method: 'eth_accounts'
-            });
-
-            if (accounts.length > 0) {
-                this.account = accounts[0];
-                this.isConnected = true;
-                await this.setupProvider();
-                return true;
-            }
-
-            return false;
-
-        } catch (error) {
-            console.error('Connection check failed:', error);
-            return false;
-        }
-    }
-
-    // CLEAN: Get connection status
-    getConnectionStatus() {
+    // CLEAN: Utility methods
+    getWalletStatus(): {
+        available: boolean;
+        connected: boolean;
+        account: string | null;
+        network: string;
+    } {
         return {
-            isConnected: this.isConnected,
+            available: this.isWalletAvailable(),
+            connected: this.isConnected,
             account: this.account,
-            network: this.network,
-            hasWallet: this.isWalletAvailable()
+            network: this.network
         };
+    }
+
+    // PERFORMANT: Clear cache
+    clearCache(): void {
+        this.connectionCache.clear();
+    }
+
+    // MODULAR: Switch network
+    async switchNetwork(networkName: 'calibration' | 'mainnet'): Promise<void> {
+        this.network = networkName;
+        await this.ensureFilecoinNetwork();
+    }
+
+    // CLEAN: Get current account safely
+    getCurrentAccount(): string | null {
+        return this.account;
+    }
+
+    // MODULAR: Check if on correct network
+    async isOnFilecoinNetwork(): Promise<boolean> {
+        const networkInfo = await this.getNetworkInfo();
+        return networkInfo.isFilecoin;
     }
 }
 
 // MODULAR: Export singleton instance
 export const walletManager = new WalletManager();
 
-// CLEAN: Helper functions for UI integration
-export const WalletHelpers = {
-    // CLEAN: Format address for display
-    formatAddress(address) {
-        if (!address) return 'Not connected';
-        return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
-    },
-
-    // CLEAN: Format balance for display
-    formatBalance(balance) {
-        if (!balance || !balance.fil) return '0 FIL';
-        const fil = parseFloat(balance.fil);
-        if (fil < 0.001) return '< 0.001 FIL';
-        return `${fil.toFixed(3)} FIL`;
-    },
-
-    // CLEAN: Get network display name
-    getNetworkDisplayName(chainId) {
-        const networks = {
-            '314': 'Filecoin Mainnet',
-            '314159': 'Filecoin Calibration',
-            '1': 'Ethereum Mainnet',
-            '11155111': 'Ethereum Sepolia'
-        };
-        return networks[chainId] || `Network ${chainId}`;
-    },
-
-    // CLEAN: Check if network is supported
-    isSupportedNetwork(chainId) {
-        return ['314', '314159'].includes(chainId.toString());
-    }
-};
+// DRY: Export class and types
+export { WalletManager };
+export type { WalletConnection, NetworkInfo, BalanceInfo, FilecoinNetwork };

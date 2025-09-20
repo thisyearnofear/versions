@@ -309,13 +309,12 @@
     </div>
 
     <script type="module">
-        // ENHANCEMENT: Import our enhanced modules
-        import { farcasterManager } from './farcaster.js';
-        import { audioPlayer } from './audio-player.js';
-        import { appConfig, environment } from './config.js';
-        import { filecoinIntegration, FilecoinHelpers } from './filecoin-integration.js';
-        import { walletManager, WalletHelpers } from './wallet-connection.js';
-        import { CreatorHelpers } from './creator-helpers.js';
+        // ENHANCEMENT: Import our compiled TypeScript modules
+        import { farcasterManager } from './dist/farcaster.js';
+        import { audioPlayer } from './dist/audio-player.js';
+        import { appConfig, environment } from './dist/config.js';
+        import { filecoinIntegration } from './dist/filecoin-integration.js';
+        import { walletManager } from './dist/wallet-connection.js';
 
         // MODULAR: Import Farcaster SDK only when needed
         let farcasterSDK = null;
@@ -737,7 +736,7 @@
                     contentDiv.innerHTML = `
                         <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0;">
                             ✅ Wallet connected successfully!
-                            <div><strong>Account:</strong> ${WalletHelpers.formatAddress(result.account)}</div>
+                            <div><strong>Account:</strong> ${result.account}</div>
                             <div><strong>Network:</strong> ${result.network}</div>
                         </div>
                     `;
@@ -768,10 +767,10 @@
         async function handleRefreshBalance() {
             try {
                 const balance = await walletManager.getBalance();
-                document.getElementById('wallet-balance').textContent = WalletHelpers.formatBalance(balance);
+                document.getElementById('wallet-balance').textContent = balance.formatted;
 
                 const networkInfo = await walletManager.getNetworkInfo();
-                document.getElementById('wallet-network').textContent = WalletHelpers.getNetworkDisplayName(networkInfo.chainId);
+                document.getElementById('wallet-network').textContent = networkInfo.name;
 
             } catch (error) {
                 console.error('Failed to refresh balance:', error);
@@ -782,7 +781,7 @@
         // PERFORMANT: Check existing wallet connection
         async function checkExistingWalletConnection() {
             try {
-                const isConnected = await walletManager.checkConnection();
+                const isConnected = walletManager.isConnected;
                 if (isConnected) {
                     console.log('🔗 Existing wallet connection found');
                     updateWalletDisplay();
@@ -794,18 +793,18 @@
 
         // CLEAN: Update wallet display
         async function updateWalletDisplay() {
-            const status = walletManager.getConnectionStatus();
+            const status = walletManager.getWalletStatus();
 
             // Update account display
             document.getElementById('wallet-account').textContent =
-                status.isConnected ? WalletHelpers.formatAddress(status.account) : 'Not connected';
+                status.connected ? status.account : 'Not connected';
 
             // Update button visibility
             const connectBtn = document.getElementById('connect-wallet-btn');
             const disconnectBtn = document.getElementById('disconnect-wallet-btn');
             const balanceBtn = document.getElementById('check-balance-btn');
 
-            if (status.isConnected) {
+            if (status.connected) {
                 connectBtn.style.display = 'none';
                 disconnectBtn.style.display = 'inline-block';
                 balanceBtn.style.display = 'inline-block';
@@ -844,7 +843,7 @@
                 // CLEAN: Terminal-style display
                 const summaryDiv = document.getElementById('creator-earnings-summary');
                 summaryDiv.innerHTML = `
-                    <div style="white-space: pre-line;">${CreatorHelpers.generateEarningsSummary(earnings)}</div>
+                    <div style="white-space: pre-line;">💰 Total Earnings: $${earnings.total_earnings_usd}\n📊 Active Rails: ${earnings.active_rails}\n📅 Last Updated: ${new Date(earnings.last_updated).toLocaleString()}</div>
                 `;
 
                 // MODULAR: Show controls if earnings exist
@@ -927,9 +926,7 @@
                 contentDiv.innerHTML = `
                     <h4>📈 Creator Analytics</h4>
                     <div style="background: #f9f9f9; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-line;">
-                        ${CreatorHelpers.generateTerminalOutput('creator analytics --period=30d',
-                    analytics ? CreatorHelpers.generateAnalyticsDisplay(analytics) : 'No analytics data available'
-                )}
+                        $ creator analytics --period=30d\n${analytics ? JSON.stringify(analytics, null, 2) : 'No analytics data available'}
                     </div>
                 `;
 
@@ -1012,9 +1009,9 @@
                 contentDiv.innerHTML += `
                     <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0;">
                         <h4>✅ Global Upload Complete!</h4>
-                        <div><strong>Piece CID:</strong> ${FilecoinHelpers.formatPieceCID(result.piece_cid)}</div>
+                        <div><strong>Piece CID:</strong> ${result.piece_cid}</div>
                         <div><strong>Global CDN:</strong> Ready in 47+ countries</div>
-                        <div><strong>Storage Cost:</strong> ${FilecoinHelpers.formatStorageCost(result.storage_cost)}</div>
+                        <div><strong>Storage Cost:</strong> ${result.storage_cost}</div>
                         <button onclick="streamFromGlobal('${result.piece_cid}')" class="test-button">🌍 Stream from Global CDN</button>
                     </div>
                 `;

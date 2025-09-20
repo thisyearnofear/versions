@@ -32,13 +32,19 @@ VERSIONS puts **song versions at the center** of music discovery with **dual int
 
 ### **Requirements**
 - **Rust 1.85.0+** - [Install Rust](https://rustup.rs/)
+- **Node.js 16+** - For TypeScript web interface
 - **protobuf-compiler** - `brew install protobuf` (macOS) or `sudo apt install protobuf-compiler` (Ubuntu)
 
 ### **Installation & Setup**
 ```bash
 git clone https://github.com/thisyearnofear/versions.git
 cd versions
-make build
+
+# Install web dependencies
+make web-install
+
+# Build everything (Rust + TypeScript)
+make full-build
 ```
 
 ### **Running VERSIONS**
@@ -47,7 +53,11 @@ make build
 ./target/debug/versions-server
 # Server runs on http://localhost:8080
 
-# 2. Web interface (community platform)
+# 2a. Web interface - Development with TypeScript watch
+make web-dev
+# Opens http://localhost:3000 with live reloading
+
+# 2b. Web interface - Production (static files)
 cd web && python3 -m http.server 3000
 # Open http://localhost:3000
 
@@ -57,14 +67,14 @@ cd web && python3 -m http.server 3000
 
 ### **First Steps**
 ```bash
-# Test the system
-./test_server.sh
+# Test the complete system (Rust + TypeScript)
+./scripts/test_server.sh
 
 # Add audio files
 cp your-music.mp3 audio_files/
 
-# Verify build
-./verify_build.sh
+# Verify complete build
+make verify-build
 ```
 
 ## 🏗️ **Architecture**
@@ -91,6 +101,7 @@ Dual-interface architecture with shared Rust backend:
 - **Social Integration**: Native Farcaster Mini App
 - **Dual Interface**: Terminal tools + Web community platform
 - **Version-Centric**: Unique approach to music organization
+- **TypeScript Web Interface**: Type-safe, modern frontend development
 
 ## 📊 **Current Status**
 
@@ -114,6 +125,47 @@ Dual-interface architecture with shared Rust backend:
 - **Blockchain Integration**: Arbitrum L2 for ownership
 - **Creator Economy**: Direct fan funding
 - **Advanced Audio**: Waveform analysis and sync playback
+
+## 🛠️ **Development Workflow**
+
+### **TypeScript Web Interface**
+The web interface is built with TypeScript for type safety and better development experience:
+
+```bash
+# Development with live reloading
+make web-dev
+
+# Build TypeScript to JavaScript
+make web-build
+
+# Clean build artifacts
+make web-clean
+
+# Install/update dependencies
+make web-install
+```
+
+### **File Structure**
+```
+web/
+├── src/                    # TypeScript source files
+│   ├── audio-player.ts     # Audio playback with type safety
+│   ├── config.ts           # Environment configuration
+│   ├── farcaster.ts        # Social integration
+│   ├── wallet-connection.ts # Web3 wallet support
+│   ├── filecoin-integration.ts # Global storage
+│   └── shared/types/       # Shared type definitions
+├── dist/                   # Compiled JavaScript (auto-generated)
+├── index.html              # Main web interface
+├── package.json            # Node.js dependencies
+└── tsconfig.json           # TypeScript configuration
+```
+
+### **Type-Safe Development**
+- **Shared Types**: Common interfaces between frontend and backend
+- **API Integration**: Type-safe REST API client calls
+- **Modern ES6+**: Latest JavaScript features with compatibility
+- **Development Server**: Live reloading for rapid iteration
 
 ## 🎵 **Key Concepts**
 

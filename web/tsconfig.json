@@ -1,0 +1,58 @@
+{
+  "compilerOptions": {
+    // MODULAR: ES6 modules for modern browser support
+    "target": "ES2020",
+    "module": "ES2020",
+    "moduleResolution": "node",
+    
+    // CLEAN: Output to dist directory for organized build
+    "outDir": "./dist",
+    "rootDir": "./src",
+    
+    // PERFORMANT: Enable source maps for debugging
+    "sourceMap": true,
+    "declaration": false,
+    
+    // ORGANIZED: Strict type checking
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    
+    // CLEAN: Modern language features
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    
+    // ENHANCEMENT: DOM types for web development
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    
+    // MODULAR: Path mapping for cleaner imports
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": ["../shared/*"],
+      "@types/*": ["../shared/types/*"]
+    },
+    "typeRoots": ["node_modules/@types"],
+    
+    // ORGANIZED: Include type checking for JS files during transition
+    "allowJs": true,
+    "checkJs": false,
+    "noImplicitAny": false
+  },
+  
+  // CLEAN: Include TypeScript source files
+  "include": [
+    "src/**/*"
+  ],
+  
+  // PREVENT BLOAT: Exclude unnecessary files
+  "exclude": [
+    "node_modules",
+    "dist",
+    "*.js",
+    "js/**/*"
+  ]
+}

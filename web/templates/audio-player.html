@@ -1,0 +1,241 @@
+<!-- VERSIONS Audio Player Section -->
+<!-- LAZY: Loaded only when user interacts with audio features -->
+<div class="terminal-section bordered-left">
+    <h3>🎵 Audio Player</h3>
+    <p>$ audio-player --mode=streaming</p>
+    
+    <div id="audio-controls" class="button-group">
+        <button id="list-audio-btn" class="terminal-button">
+            📁 List Audio Files
+        </button>
+        <button id="load-sample-btn" class="terminal-button">
+            🎵 Load Sample
+        </button>
+        <button id="upload-audio-btn" class="terminal-button">
+            ⬆️ Upload Audio
+        </button>
+    </div>
+    
+    <div id="audio-file-list" class="terminal-response" style="display: none;">
+        <!-- Audio file list populated dynamically -->
+    </div>
+    
+    <div id="audio-player-container" style="display: none;">
+        <!-- Audio player UI inserted here by audio-player.js -->
+    </div>
+    
+    <input type="file" id="audio-file-input" accept="audio/*" style="display: none;">
+</div>
+
+<style>
+.audio-file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 4px 0;
+    background: rgba(42, 52, 65, 0.4);
+    border-radius: 4px;
+    border-left: 2px solid var(--terminal-cyan);
+}
+
+.audio-file-item:hover {
+    background: rgba(42, 52, 65, 0.6);
+}
+
+.play-btn {
+    background: var(--terminal-green);
+    color: var(--terminal-bg);
+    border: none;
+    padding: 4px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.play-btn:hover {
+    background: var(--color-bright-green);
+}
+
+.file-info {
+    flex: 1;
+    margin: 0 12px;
+}
+
+.file-name {
+    font-weight: bold;
+    color: var(--terminal-fg);
+}
+
+.file-meta {
+    font-size: 11px;
+    color: var(--color-white);
+    opacity: 0.7;
+}
+</style>
+
+<script>
+// MODULAR: Audio player feature initialization  
+document.addEventListener('template-loaded', async (event) => {
+    if (event.detail.templateName === 'audio-player') {
+        console.log('🎵 Initializing audio player...');
+        
+        // LAZY: Only import audio player when needed
+        try {
+            const { audioPlayer } = await import('../dist/audio-player.js');
+            setupAudioControls(audioPlayer);
+            
+            // Initialize the audio player UI
+            audioPlayer.init();
+            
+        } catch (error) {
+            console.warn('Audio player unavailable:', error);
+            showAudioError();
+        }
+    }
+});
+
+function setupAudioControls(audioPlayer) {
+    const listBtn = document.getElementById('list-audio-btn');
+    const sampleBtn = document.getElementById('load-sample-btn');
+    const uploadBtn = document.getElementById('upload-audio-btn');
+    const fileInput = document.getElementById('audio-file-input');
+    
+    if (listBtn) listBtn.onclick = handleListAudioFiles;
+    if (sampleBtn) sampleBtn.onclick = handleLoadSample;
+    if (uploadBtn) uploadBtn.onclick = () => fileInput.click();
+    if (fileInput) fileInput.onchange = handleFileUpload;
+}
+
+async function handleListAudioFiles() {
+    try {
+        const { appConfig } = await import('../dist/config.js');
+        const response = await fetch(`${appConfig.apiBase}/api/v1/audio/files`);
+        const data = await response.json();
+        
+        const listDiv = document.getElementById('audio-file-list');
+        
+        if (data.success && data.data.length > 0) {
+            const fileList = data.data.map(file => 
+                `<div class="audio-file-item">
+                    <button onclick="loadAudioFile('${file}')" class="play-btn">▶️</button>
+                    <div class="file-info">
+                        <div class="file-name">${file}</div>
+                        <div class="file-meta">Ready to play</div>
+                    </div>
+                </div>`
+            ).join('');
+            
+            listDiv.innerHTML = `
+                <h4>🎵 Available Audio Files</h4>
+                <div style="max-height: 300px; overflow-y: auto;">
+                    ${fileList}
+                </div>
+            `;
+        } else {
+            listDiv.innerHTML = `
+                <h4>🎵 Available Audio Files</h4>
+                <div class="status-container info">
+                    📁 No audio files found. Add some audio files to the server's audio_files directory.
+                </div>
+            `;
+        }
+        
+        listDiv.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Failed to list audio files:', error);
+        showAudioError('Failed to load audio files list.');
+    }
+}
+
+async function handleLoadSample() {
+    try {
+        const { audioPlayer } = await import('../dist/audio-player.js');
+        
+        const sampleMetadata = {
+            title: 'Sample Audio Track',
+            artist: 'VERSIONS Demo',
+            duration_seconds: 180
+        };
+        
+        await audioPlayer.loadTrack('sample-track', sampleMetadata);
+        
+        const playerContainer = document.getElementById('audio-player-container');
+        playerContainer.innerHTML = `
+            <div class="status-container success">
+                🎵 Sample audio loaded! (Note: Requires actual audio file in audio_files/)
+            </div>
+        `;
+        playerContainer.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Failed to load sample audio:', error);
+        showAudioError('Failed to load sample audio. Please add audio files to the server.');
+    }
+}
+
+async function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    try {
+        // Show upload progress
+        const listDiv = document.getElementById('audio-file-list');
+        listDiv.innerHTML = `
+            <h4>⬆️ Uploading Audio File</h4>
+            <div class="status-container info">
+                <div>📁 ${file.name}</div>
+                <div>💾 Size: ${(file.size / 1024 / 1024).toFixed(2)} MB</div>
+                <div>🔄 Processing...</div>
+            </div>
+        `;
+        listDiv.style.display = 'block';
+        
+        // TODO: Implement actual upload to server
+        // For now, just show success message
+        setTimeout(() => {
+            listDiv.innerHTML += `
+                <div class="status-container success">
+                    ✅ File uploaded successfully! 
+                    <div><em>Note: Upload functionality requires server implementation</em></div>
+                </div>
+            `;
+        }, 2000);
+        
+    } catch (error) {
+        console.error('File upload failed:', error);
+        showAudioError('File upload failed.');
+    }
+}
+
+// MODULAR: Load specific audio file
+window.loadAudioFile = async function(fileId) {
+    try {
+        const { audioPlayer } = await import('../audio-player.js');
+        await audioPlayer.loadTrack(fileId);
+        
+        const playerContainer = document.getElementById('audio-player-container');
+        playerContainer.innerHTML = `
+            <div class="status-container success">
+                🎵 Now playing: <strong>${fileId}</strong>
+                <div><em>Use the audio player controls at the bottom of the page</em></div>
+            </div>
+        `;
+        playerContainer.style.display = 'block';
+        
+        console.log(`🎵 Loaded audio file: ${fileId}`);
+    } catch (error) {
+        console.error('Failed to load audio file:', error);
+        showAudioError(`Failed to load audio file: ${fileId}`);
+    }
+};
+
+function showAudioError(message = 'Audio player unavailable') {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'status-container error';
+    errorDiv.innerHTML = `❌ ${message}`;
+    document.querySelector('.terminal-section').appendChild(errorDiv);
+}
+</script>

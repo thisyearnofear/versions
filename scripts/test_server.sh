@@ -34,8 +34,21 @@ curl -s "http://127.0.0.1:8080/api/v1/farcaster/recommendations?fid=1" | jq '.' 
 echo -e "\nTesting audio files list endpoint..."
 curl -s http://127.0.0.1:8080/api/v1/audio/files | jq '.' || echo "Audio files endpoint failed"
 
-echo -e "\nTesting audio metadata endpoint..."
+echo "\nTesting audio metadata endpoint..."
 curl -s http://127.0.0.1:8080/api/v1/audio/sample-track/metadata | jq '.' || echo "Audio metadata endpoint failed (expected - no sample file)"
+
+echo "\nTesting Filecoin network status endpoint..."
+curl -s http://127.0.0.1:8080/api/v1/filecoin/network/status | jq '.' || echo "Filecoin network endpoint failed"
+
+# ENHANCEMENT FIRST: Test web interface TypeScript compilation
+echo -e "\n🌍 Testing web interface TypeScript build..."
+if [ -d "web/dist" ]; then
+    echo "✅ TypeScript compiled successfully - dist directory exists"
+    ls -la web/dist/*.js | head -5
+else
+    echo "❌ TypeScript build failed - no dist directory found"
+    echo "Run: cd web && npm run build"
+fi
 
 # Stop server
 echo -e "\nStopping server..."

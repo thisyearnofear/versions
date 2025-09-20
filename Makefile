@@ -17,7 +17,7 @@ ifeq ($(OS),Windows_NT)
 	install_to = $(USERPROFILE)\.cargo\bin
 endif
 
-default: fmt
+default: fmt web-build
 
 build:
 	cargo build --all 
@@ -86,3 +86,42 @@ wininstall: winrelease winpost
 wintest: win winpost
 
 fulltest: all-backends-test post
+
+# ENHANCEMENT FIRST: Web interface TypeScript build targets
+web-build:
+	@echo "🌍 Building web interface TypeScript..."
+	cd web && npm run build
+
+# PERFORMANT: Watch mode for development
+web-dev:
+	@echo "🌍 Starting web development server with TypeScript watch..."
+	cd web && npm run dev
+
+# CLEAN: Clean web build artifacts
+web-clean:
+	@echo "🧹 Cleaning web build artifacts..."
+	cd web && npm run clean
+	rm -rf web/dist/
+	rm -f web/*.js.bak web/src/*.js.bak
+	@echo "✅ Web build artifacts cleaned"
+
+# MODULAR: Install web dependencies
+web-install:
+	@echo "📦 Installing web dependencies..."
+	cd web && npm install
+
+# DRY: Complete build including web interface
+full-build: build web-build
+	@echo "✅ Complete VERSIONS build finished"
+
+# ORGANIZED: Verify complete build
+verify-build: full-build
+	@echo "🔍 Verifying complete build..."
+	./scripts/verify_build.sh
+	cd web && npm run build
+
+# AGGRESSIVE CONSOLIDATION: Complete cleanup
+clean-all: web-clean
+	@echo "🧹 Cleaning all build artifacts..."
+	cargo clean
+	@echo "✅ Complete cleanup finished"

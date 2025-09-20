@@ -1,0 +1,158 @@
+<!-- VERSIONS Farcaster Integration Section -->
+<!-- LAZY: Loaded only when user interacts with Farcaster features -->
+<div class="terminal-section bordered-left">
+    <h3>🟣 Farcaster Features</h3>
+    <p>$ farcaster --mode=social-discovery</p>
+    
+    <div id="farcaster-user-info" class="status-container info" style="display: none;">
+        <!-- User info populated after authentication -->
+    </div>
+    
+    <div id="farcaster-controls" class="button-group">
+        <button id="farcaster-auth-btn" class="terminal-button">
+            🔗 Sign In with Farcaster
+        </button>
+        <button id="cast-discovery-btn" class="terminal-button" style="display:none">
+            📢 Cast Discovery
+        </button>
+        <button id="social-recs-btn" class="terminal-button" style="display:none">
+            👥 Social Recommendations
+        </button>
+    </div>
+    
+    <div id="social-content" class="terminal-response" style="display: none;">
+        <!-- Social content populated dynamically -->
+    </div>
+</div>
+
+<style>
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin: 15px 0;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+    .button-group {
+        flex-direction: column;
+    }
+    
+    .button-group .terminal-button {
+        margin-left: 0;
+        margin-bottom: 8px;
+    }
+}
+</style>
+
+<script>
+// MODULAR: Farcaster feature initialization
+document.addEventListener('template-loaded', async (event) => {
+    if (event.detail.templateName === 'farcaster-section') {
+        console.log('🟣 Initializing Farcaster features...');
+        
+        // LAZY: Only import Farcaster manager when needed
+        try {
+            const { farcasterManager } = await import('../dist/farcaster.js');
+            setupFarcasterControls(farcasterManager);
+        } catch (error) {
+            console.warn('Farcaster integration unavailable:', error);
+            showFarcasterError();
+        }
+    }
+});
+
+function setupFarcasterControls(farcasterManager) {
+    const authBtn = document.getElementById('farcaster-auth-btn');
+    const castBtn = document.getElementById('cast-discovery-btn');
+    const socialBtn = document.getElementById('social-recs-btn');
+    
+    if (authBtn) authBtn.onclick = handleFarcasterAuth;
+    if (castBtn) castBtn.onclick = handleCastDiscovery;
+    if (socialBtn) socialBtn.onclick = handleSocialRecommendations;
+    
+    // Check if already in Farcaster environment
+    if (farcasterManager.isFarcasterEnvironment()) {
+        document.querySelector('.terminal-section h3').innerHTML += ' <span style="color: var(--terminal-green)">(Active)</span>';
+    }
+}
+
+async function handleFarcasterAuth() {
+    try {
+        const { farcasterManager } = await import('../dist/farcaster.js');
+        const user = await farcasterManager.authenticate();
+        
+        // Update UI with user info
+        const userInfoDiv = document.getElementById('farcaster-user-info');
+        if (userInfoDiv) {
+            userInfoDiv.innerHTML = `
+                <div><strong>👤 ${user.displayName || user.username}</strong></div>
+                <div>FID: ${user.fid} | Followers: ${user.follower_count || 'N/A'}</div>
+                <div><em>${user.bio || 'Music lover on Farcaster'}</em></div>
+            `;
+            userInfoDiv.style.display = 'block';
+        }
+        
+        // Show authenticated features
+        document.getElementById('cast-discovery-btn').style.display = 'inline-block';
+        document.getElementById('social-recs-btn').style.display = 'inline-block';
+        document.getElementById('farcaster-auth-btn').textContent = '✅ Authenticated';
+        document.getElementById('farcaster-auth-btn').disabled = true;
+        
+    } catch (error) {
+        console.error('Farcaster auth error:', error);
+        showFarcasterError('Authentication failed. Please try again.');
+    }
+}
+
+async function handleCastDiscovery() {
+    try {
+        const { farcasterManager } = await import('../dist/farcaster.js');
+        const sampleVersion = {
+            id: 'bohemian-rhapsody-demo',
+            title: 'Bohemian Rhapsody',
+            artist: 'Queen',
+            version_type: 'Demo'
+        };
+        
+        await farcasterManager.castVersionDiscovery(sampleVersion);
+        
+        const contentDiv = document.getElementById('social-content');
+        contentDiv.innerHTML = '📢 Version discovery cast created successfully!';
+        contentDiv.style.display = 'block';
+        contentDiv.classList.add('success');
+        
+    } catch (error) {
+        console.error('Cast failed:', error);
+        showFarcasterError('Failed to create cast. Please try again.');
+    }
+}
+
+async function handleSocialRecommendations() {
+    try {
+        const { farcasterManager } = await import('../dist/farcaster.js');
+        const recommendations = await farcasterManager.getSocialRecommendations();
+        
+        const contentDiv = document.getElementById('social-content');
+        contentDiv.innerHTML = `
+            <h4>👥 Social Recommendations</h4>
+            ${recommendations.length > 0
+                ? recommendations.map(rec => `<div>• ${rec.title || 'Recommended version'}</div>`).join('')
+                : '<div>🎵 No recommendations yet. Start following music lovers on Farcaster!</div>'
+            }
+        `;
+        contentDiv.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Failed to get recommendations:', error);
+        showFarcasterError('Failed to load recommendations.');
+    }
+}
+
+function showFarcasterError(message = 'Farcaster integration unavailable') {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'status-container error';
+    errorDiv.innerHTML = `❌ ${message}`;
+    document.querySelector('.terminal-section').appendChild(errorDiv);
+}
+</script>

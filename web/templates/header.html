@@ -1,0 +1,37 @@
+<!-- VERSIONS Header Component -->
+<!-- CLEAN: Separated header logic from main HTML -->
+<div class="terminal-section bordered-top">
+    <div class="header">
+        <h1>🖥️ VERSIONS Terminal</h1>
+        <p>$ versions --help | Discover, compare, and share different versions of your favorite songs</p>
+    </div>
+</div>
+
+<style>
+.header {
+    text-align: center;
+    color: var(--terminal-foreground);
+    margin-bottom: 30px;
+    border-bottom: 1px solid var(--terminal-border);
+    padding-bottom: 20px;
+}
+
+.header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    color: var(--terminal-blue);
+    text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+}
+
+.header p {
+    font-size: 1rem;
+    opacity: 0.8;
+    color: #b8c5d6;
+}
+
+@media (max-width: 768px) {
+    .header h1 {
+        font-size: 2rem;
+    }
+}
+</style>

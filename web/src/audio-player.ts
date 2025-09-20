@@ -1,9 +1,31 @@
 // MODULAR: Audio player module for VERSIONS
 // CLEAN: Separate audio logic from main app
 
-import { appConfig } from './config.js';
+import { appConfig } from './config';
+import type { 
+    AudioMetadata, 
+    AudioPlayerState, 
+    VersionInfo,
+    ApiResponse,
+    VersionWithAudio 
+} from './shared/types/api-types';
+
+// CLEAN: Interface for internal track data
+interface TrackData {
+    fileId: string;
+    metadata: AudioMetadata;
+}
 
 class AudioPlayer {
+    private audio: HTMLAudioElement | null;
+    private currentTrack: TrackData | null;
+    private isPlaying: boolean;
+    private volume: number;
+    private currentTime: number;
+    private duration: number;
+    // PERFORMANT: Cache for audio metadata
+    private metadataCache: Map<string, AudioMetadata>;
+
     constructor() {
         this.audio = null;
         this.currentTrack = null;
@@ -11,18 +33,17 @@ class AudioPlayer {
         this.volume = 0.7;
         this.currentTime = 0;
         this.duration = 0;
-        // PERFORMANT: Cache for audio metadata
         this.metadataCache = new Map();
     }
 
     // CLEAN: Initialize audio player
-    init() {
+    init(): void {
         this.createPlayerUI();
         this.bindEvents();
     }
 
     // MODULAR: Create player UI elements
-    createPlayerUI() {
+    private createPlayerUI(): void {
         const playerHTML = `
             <div id="audio-player" style="
                 position: fixed;
@@ -84,24 +105,25 @@ class AudioPlayer {
     }
 
     // CLEAN: Bind event handlers
-    bindEvents() {
+    private bindEvents(): void {
         const playPauseBtn = document.getElementById('play-pause-btn');
-        const volumeSlider = document.getElementById('volume-slider');
-        const progressSlider = document.getElementById('progress-slider');
+        const volumeSlider = document.getElementById('volume-slider') as HTMLInputElement;
+        const progressSlider = document.getElementById('progress-slider') as HTMLInputElement;
         const closeBtn = document.getElementById('close-player-btn');
 
         if (playPauseBtn) playPauseBtn.onclick = () => this.togglePlayPause();
-        if (volumeSlider) volumeSlider.oninput = (e) => this.setVolume(e.target.value / 100);
-        if (progressSlider) progressSlider.oninput = (e) => this.seek(e.target.value / 100);
+        if (volumeSlider) volumeSlider.oninput = (e) => this.setVolume(parseInt((e.target as HTMLInputElement).value) / 100);
+        if (progressSlider) progressSlider.oninput = (e) => this.seek(parseInt((e.target as HTMLInputElement).value) / 100);
         if (closeBtn) closeBtn.onclick = () => this.close();
     }
 
     // ENHANCEMENT: Load and play audio track
-    async loadTrack(fileId, metadata = null) {
+    async loadTrack(fileId: string, metadata?: AudioMetadata): Promise<void> {
         try {
             // PERFORMANT: Get metadata if not provided
-            if (!metadata) {
-                metadata = await this.getAudioMetadata(fileId);
+            let trackMetadata = metadata;
+            if (!trackMetadata) {
+                trackMetadata = await this.getAudioMetadata(fileId);
             }
 
             // CLEAN: Create new audio element
@@ -112,16 +134,16 @@ class AudioPlayer {
 
             const streamUrl = `${appConfig.apiBase}/api/v1/audio/${fileId}/stream`;
             this.audio = new Audio(streamUrl);
-            this.currentTrack = { fileId, metadata };
+            this.currentTrack = { fileId, metadata: trackMetadata };
 
             // MODULAR: Set up audio event listeners
             this.setupAudioEvents();
 
             // CLEAN: Update UI
-            this.updateTrackInfo(metadata);
+            this.updateTrackInfo(trackMetadata);
             this.showPlayer();
 
-            console.log(`🎵 Loaded track: ${metadata.title || fileId}`);
+            console.log(`🎵 Loaded track: ${trackMetadata.title || fileId}`);
             
         } catch (error) {
             console.error('Failed to load track:', error);
@@ -130,18 +152,22 @@ class AudioPlayer {
     }
 
     // MODULAR: Setup audio element event listeners
-    setupAudioEvents() {
+    private setupAudioEvents(): void {
         if (!this.audio) return;
 
         this.audio.addEventListener('loadedmetadata', () => {
-            this.duration = this.audio.duration;
-            this.updateTimeDisplay();
+            if (this.audio) {
+                this.duration = this.audio.duration;
+                this.updateTimeDisplay();
+            }
         });
 
         this.audio.addEventListener('timeupdate', () => {
-            this.currentTime = this.audio.currentTime;
-            this.updateTimeDisplay();
-            this.updateProgressBar();
+            if (this.audio) {
+                this.currentTime = this.audio.currentTime;
+                this.updateTimeDisplay();
+                this.updateProgressBar();
+            }
         });
 
         this.audio.addEventListener('ended', () => {
@@ -159,7 +185,7 @@ class AudioPlayer {
     }
 
     // CLEAN: Update track information display
-    updateTrackInfo(metadata) {
+    private updateTrackInfo(metadata: AudioMetadata): void {
         const titleEl = document.getElementById('track-title');
         const artistEl = document.getElementById('track-artist');
 
@@ -168,7 +194,7 @@ class AudioPlayer {
     }
 
     // MODULAR: Toggle play/pause
-    togglePlayPause() {
+    togglePlayPause(): void {
         if (!this.audio) return;
 
         if (this.isPlaying) {
@@ -179,7 +205,7 @@ class AudioPlayer {
     }
 
     // CLEAN: Play audio
-    async play() {
+    async play(): Promise<void> {
         if (!this.audio) return;
 
         try {
@@ -193,7 +219,7 @@ class AudioPlayer {
     }
 
     // CLEAN: Pause audio
-    pause() {
+    pause(): void {
         if (!this.audio) return;
 
         this.audio.pause();
@@ -202,7 +228,7 @@ class AudioPlayer {
     }
 
     // MODULAR: Set volume
-    setVolume(volume) {
+    setVolume(volume: number): void {
         this.volume = Math.max(0, Math.min(1, volume));
         if (this.audio) {
             this.audio.volume = this.volume;
@@ -210,7 +236,7 @@ class AudioPlayer {
     }
 
     // MODULAR: Seek to position
-    seek(position) {
+    seek(position: number): void {
         if (!this.audio || !this.duration) return;
 
         const time = position * this.duration;
@@ -218,16 +244,16 @@ class AudioPlayer {
     }
 
     // PERFORMANT: Get audio metadata with caching
-    async getAudioMetadata(fileId) {
+    async getAudioMetadata(fileId: string): Promise<AudioMetadata> {
         if (this.metadataCache.has(fileId)) {
-            return this.metadataCache.get(fileId);
+            return this.metadataCache.get(fileId)!;
         }
 
         try {
             const response = await fetch(`${appConfig.apiBase}/api/v1/audio/${fileId}/metadata`);
-            const data = await response.json();
+            const data: ApiResponse<AudioMetadata> = await response.json();
             
-            if (data.success) {
+            if (data.success && data.data) {
                 this.metadataCache.set(fileId, data.data);
                 return data.data;
             } else {
@@ -235,23 +261,28 @@ class AudioPlayer {
             }
         } catch (error) {
             console.error('Failed to get audio metadata:', error);
-            return {
+            // CLEAN: Return fallback metadata with proper typing
+            const fallbackMetadata: AudioMetadata = {
+                file_path: fileId,
                 title: fileId,
                 artist: 'Unknown',
-                duration_seconds: null
+                file_size: 0,
+                format: 'mp3',
+                duration_seconds: undefined
             };
+            return fallbackMetadata;
         }
     }
 
     // CLEAN: Update UI elements
-    updatePlayPauseButton() {
+    private updatePlayPauseButton(): void {
         const btn = document.getElementById('play-pause-btn');
         if (btn) {
             btn.textContent = this.isPlaying ? '⏸️' : '▶️';
         }
     }
 
-    updateTimeDisplay() {
+    private updateTimeDisplay(): void {
         const currentEl = document.getElementById('current-time');
         const totalEl = document.getElementById('total-time');
 
@@ -259,16 +290,16 @@ class AudioPlayer {
         if (totalEl) totalEl.textContent = this.formatTime(this.duration);
     }
 
-    updateProgressBar() {
-        const progressSlider = document.getElementById('progress-slider');
+    private updateProgressBar(): void {
+        const progressSlider = document.getElementById('progress-slider') as HTMLInputElement;
         if (progressSlider && this.duration > 0) {
             const progress = (this.currentTime / this.duration) * 100;
-            progressSlider.value = progress;
+            progressSlider.value = progress.toString();
         }
     }
 
     // CLEAN: Format time for display
-    formatTime(seconds) {
+    private formatTime(seconds: number): string {
         if (!seconds || isNaN(seconds)) return '0:00';
         
         const mins = Math.floor(seconds / 60);
@@ -277,7 +308,7 @@ class AudioPlayer {
     }
 
     // MODULAR: Show player
-    showPlayer() {
+    showPlayer(): void {
         const player = document.getElementById('audio-player');
         if (player) {
             player.style.display = 'block';
@@ -285,7 +316,7 @@ class AudioPlayer {
     }
 
     // MODULAR: Close player
-    close() {
+    close(): void {
         if (this.audio) {
             this.audio.pause();
             this.audio = null;
@@ -300,16 +331,61 @@ class AudioPlayer {
         this.isPlaying = false;
     }
 
+    // CLEAN: Public API for getting player state
+    getState(): AudioPlayerState {
+        return {
+            isPlaying: this.isPlaying,
+            currentTrack: this.currentTrack ? {
+                id: this.currentTrack.fileId,
+                title: this.currentTrack.metadata.title || 'Unknown Title',
+                artist: this.currentTrack.metadata.artist || 'Unknown Artist',
+                version_type: 'Studio', // Default, should be passed in
+                duration: this.currentTrack.metadata.duration_seconds,
+                upload_date: '',
+                play_count: 0,
+                vote_score: 0
+            } : undefined,
+            currentTime: this.currentTime,
+            duration: this.duration,
+            volume: this.volume
+        };
+    }
+
     // CLEAN: Get current track info
-    getCurrentTrack() {
+    getCurrentTrack(): TrackData | null {
         return this.currentTrack;
     }
 
     // CLEAN: Check if playing
-    getIsPlaying() {
+    getIsPlaying(): boolean {
         return this.isPlaying;
+    }
+
+    // ENHANCEMENT: Load version with proper typing
+    async loadVersion(version: VersionInfo): Promise<void> {
+        await this.loadTrack(version.id, {
+            file_path: version.id,
+            title: version.title,
+            artist: version.artist,
+            duration_seconds: version.duration,
+            file_size: version.file_size || 0,
+            format: 'mp3' // Default format, could be enhanced
+        });
+    }
+
+    // PERFORMANT: Clear cache
+    clearMetadataCache(): void {
+        this.metadataCache.clear();
+    }
+
+    // MODULAR: Get cache size for debugging
+    getCacheSize(): number {
+        return this.metadataCache.size;
     }
 }
 
 // MODULAR: Export singleton instance
 export const audioPlayer = new AudioPlayer();
+
+// DRY: Export class for potential multiple instances
+export { AudioPlayer };

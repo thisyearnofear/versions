@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎭 VERSIONS Terminal - Music Discovery Platform</title>
+
+    <!-- Farcaster Mini App Embed Metadata -->
+    <meta name="fc:miniapp"
+        content='{"version":"1","imageUrl":"https://versions.app/og-image.png","button":{"title":"🎭 Discover Versions","action":{"type":"launch_frame","name":"VERSIONS","url":"https://versions.app","splashImageUrl":"https://versions.app/splash.png","splashBackgroundColor":"#667eea"}}}' />
+
+    <!-- Open Graph for social sharing -->
+    <meta property="og:title" content="VERSIONS - Version-Centric Music Discovery" />
+    <meta property="og:description" content="Discover, compare, and share different versions of your favorite songs" />
+    <meta property="og:image" content="https://versions.app/og-image.png" />
+    <meta property="og:url" content="https://versions.app" />
+
+    <!-- CLEAN: Separated stylesheets -->
+    <link rel="stylesheet" href="./terminal-shared.css">
+    
+    <style>
+        /* ENHANCEMENT FIRST: Base styles that work with theme bridge */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            background: var(--terminal-bg);
+            color: var(--terminal-fg);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.4;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* PERFORMANT: Loading states */
+        .loading-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 20px;
+            color: var(--terminal-blue);
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+
+        .cursor {
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* MODULAR: Component containers */
+        .component-container {
+            margin-bottom: 20px;
+        }
+
+        .lazy-component-placeholder {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .lazy-component-placeholder .loading-indicator {
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                padding: 15px;
+            }
+            
+            body {
+                font-size: 14px;
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- MODULAR: Template containers -->
+        <div id="header-container" class="component-container">
+            <div class="loading-indicator">
+                <span class="cursor">▋</span> Loading header...
+            </div>
+        </div>
+
+        <div id="interface-container" class="component-container">
+            <div class="loading-indicator">
+                <span class="cursor">▋</span> Loading interface cards...
+            </div>
+        </div>
+
+        <div id="api-container" class="component-container">
+            <div class="loading-indicator">
+                <span class="cursor">▋</span> Loading API section...
+            </div>
+        </div>
+
+        <!-- PERFORMANT: Lazy-loaded optional components -->
+        <div id="farcaster-container" class="component-container"></div>
+        <div id="audio-container" class="component-container"></div>
+        <div id="wallet-container" class="component-container"></div>
+        <div id="filecoin-container" class="component-container"></div>
+        <div id="creator-container" class="component-container"></div>
+    </div>
+
+    <script type="module">
+        // ENHANCEMENT FIRST: Import our existing modules with new template system
+        import { templateLoader } from './js/template-loader.js';
+        import { applyTheme } from './theme-bridge.js';
+        import { appConfig, environment } from './dist/config.js';
+
+        // CLEAN: Initialize app with modular approach
+        async function initializeApp() {
+            console.log('🎭 VERSIONS Terminal - Initializing modular interface...');
+            
+            // PERFORMANT: Apply theme first for immediate visual consistency
+            applyTheme();
+            
+            try {
+                // ORGANIZED: Load critical components first
+                console.log('📦 Loading critical components...');
+                await templateLoader.loadCriticalComponents();
+                console.log('✅ Critical components loaded');
+                
+                // PERFORMANT: Load optional components with lazy loading
+                console.log('🔄 Setting up lazy loading for optional components...');
+                await templateLoader.loadOptionalComponents();
+                console.log('✅ Optional components configured');
+                
+                // MODULAR: Initialize existing features if needed
+                await initializeExistingFeatures();
+                
+                console.log(`🎉 VERSIONS Terminal ready in ${environment} mode!`);
+                
+            } catch (error) {
+                console.error('❌ Failed to initialize app:', error);
+                document.body.innerHTML = `
+                    <div class="container">
+                        <div class="terminal-section error">
+                            <h2 style="color: var(--color-bright-red);">⚠️ Initialization Error</h2>
+                            <p>Failed to load VERSIONS Terminal interface.</p>
+                            <pre style="background: var(--color-black); padding: 10px; margin-top: 10px; border-radius: 4px;">
+${error.message}
+${error.stack || ''}
+                            </pre>
+                            <button class="terminal-button" onclick="location.reload()">Reload</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // ENHANCEMENT FIRST: Bridge to existing functionality
+        async function initializeExistingFeatures() {
+            // Check if we're in a Farcaster Mini App environment
+            const isFarcaster = window.parent !== window || 
+                               window.location.search.includes('miniApp=true');
+
+            if (isFarcaster) {
+                console.log('🟣 Farcaster environment detected');
+                // Could dynamically load Farcaster modules here
+            }
+
+            // Add any other existing initialization logic here
+        }
+
+        // PERFORMANT: Progressive enhancement approach
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            initializeApp();
+        }
+
+        // CLEAN: Global error handling
+        window.addEventListener('error', (event) => {
+            console.error('🚨 Global error:', event.error);
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('🚨 Unhandled promise rejection:', event.reason);
+        });
+    </script>
+</body>
+
+</html>
