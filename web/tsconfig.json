@@ -32,8 +32,7 @@
     // MODULAR: Path mapping for cleaner imports
     "baseUrl": ".",
     "paths": {
-      "@shared/*": ["../shared/*"],
-      "@types/*": ["../shared/types/*"]
+      "@shared/*": ["src/shared/*"]
     },
     "typeRoots": ["node_modules/@types"],
     

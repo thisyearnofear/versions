@@ -45,6 +45,15 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Web build artifacts
+web/dist/
+*.js.map
+*.d.ts
+web/src/**/*.js.map
+
+# TypeScript build cache
+*.tsbuildinfo
+
 # OS generated files
 .DS_Store
 .DS_Store?

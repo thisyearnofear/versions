@@ -1,1149 +1,1021 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🖥️ VERSIONS Terminal - Music Discovery Platform</title>
-
+    <meta name=\"viewport\" content="width=device-width, initial-scale=1.0">
+    <title>🎭 VERSIONS - Unified Terminal Interface</title>
+    
     <!-- Farcaster Mini App Embed Metadata -->
     <meta name="fc:miniapp"
-        content='{"version":"1","imageUrl":"https://versions.app/og-image.png","button":{"title":"🎭 Discover Versions","action":{"type":"launch_frame","name":"VERSIONS","url":"https://versions.app","splashImageUrl":"https://versions.app/splash.png","splashBackgroundColor":"#667eea"}}}' />
-
+        content='{"version":"1","imageUrl":"https://versions.app/og-image.png","button":{"title":"🎭 Discover Versions","action":{"type":"launch_frame","name":"VERSIONS","url":"https://versions.app","splashImageUrl":"https://versions.app/splash.png","splashBackgroundColor":"#101421"}}}' />
+    
     <!-- Open Graph for social sharing -->
-    <meta property="og:title" content="VERSIONS - Version-Centric Music Discovery" />
-    <meta property="og:description" content="Discover, compare, and share different versions of your favorite songs" />
+    <meta property="og:title" content="VERSIONS - Unified Terminal Experience" />
+    <meta property="og:description" content="Version-centric music platform with terminal interface for professionals and community" />
     <meta property="og:image" content="https://versions.app/og-image.png" />
     <meta property="og:url" content="https://versions.app" />
+    
     <style>
+        /* CLEAN: Terminal-inspired styling following Core Principles */
+        :root {
+            --bg-primary: #101421;
+            --fg-primary: #fffbf6;
+            --color-green: #00ff88;
+            --color-blue: #00d4ff;
+            --color-yellow: #f6c744;
+            --color-red: #ff5555;
+            --color-cyan: #64dbed;
+        }
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
+        
         body {
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            background: #101421;
-            color: #fffbf6;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            background: var(--bg-primary);
+            color: var(--fg-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background: rgba(16, 20, 33, 0.95);
-            border: 1px solid #2a3441;
-            border-radius: 8px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-        }
-
+        
+        /* CLEAN: Header with status indicators */
         .header {
-            text-align: center;
-            color: #fffbf6;
-            margin-bottom: 30px;
-            border-bottom: 1px solid #2a3441;
-            padding-bottom: 20px;
+            background: #2a3441;
+            padding: 12px 20px;
+            border-bottom: 2px solid var(--color-blue);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
         }
-
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            color: #00d4ff;
-            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
-        }
-
-        .header p {
-            font-size: 1rem;
-            opacity: 0.8;
-            color: #b8c5d6;
-        }
-
-        .interface-cards {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 40px;
-        }
-
-        .card {
-            background: rgba(26, 32, 44, 0.9);
-            border: 1px solid #2a3441;
-            border-radius: 8px;
-            padding: 25px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s ease;
-            border-left: 3px solid #00d4ff;
-        }
-
-        .card:hover {
-            border-left-color: #00ff88;
-            box-shadow: 0 6px 20px rgba(0, 212, 255, 0.2);
-        }
-
-        .card h2 {
-            color: #00d4ff;
-            margin-bottom: 15px;
-            font-size: 1.4rem;
-            border-bottom: 1px solid #2a3441;
-            padding-bottom: 8px;
-        }
-
-        .card p {
-            margin-bottom: 20px;
-            line-height: 1.6;
-            color: #b8c5d6;
-        }
-
-        .features {
-            list-style: none;
-            margin-bottom: 20px;
-            font-family: 'Monaco', 'Menlo', monospace;
-        }
-
-        .features li {
-            padding: 5px 0;
-            padding-left: 25px;
-            position: relative;
-            color: #b8c5d6;
-        }
-
-        .features li:before {
-            content: "▶";
-            position: absolute;
-            left: 0;
-            color: #00ff88;
-        }
-
-        .api-section {
-            background: rgba(26, 32, 44, 0.9);
-            border: 1px solid #2a3441;
-            border-radius: 8px;
-            padding: 25px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            border-top: 3px solid #00d4ff;
-        }
-
-        .api-section h2 {
-            color: #00d4ff;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #2a3441;
-            padding-bottom: 10px;
-        }
-
-        .endpoint {
-            background: rgba(42, 52, 65, 0.8);
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-left: 4px solid #00d4ff;
-            border: 1px solid #2a3441;
-        }
-
-        .endpoint-method {
+        
+        .title {
+            color: var(--color-blue);
             font-weight: bold;
-            color: #00ff88;
-            margin-right: 10px;
-            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 1.2rem;
         }
-
-        .endpoint-url {
-            font-family: 'Monaco', 'Menlo', monospace;
-            background: rgba(16, 20, 33, 0.8);
-            color: #fffbf6;
-            padding: 2px 6px;
-            border-radius: 4px;
+        
+        .status {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9rem;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--color-red);
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.ok {
+            background: var(--color-green);
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        /* MODULAR: Terminal container */
+        .terminal-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            min-height: 0;
+        }
+        
+        #terminal-canvas {
             border: 1px solid #2a3441;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            background: var(--bg-primary);
+            max-width: 100%;
+            max-height: 100%;
         }
-
-        .test-button {
+        
+        /* CLEAN: Footer controls */
+        .controls {
+            background: #1a2332;
+            padding: 15px 20px;
+            border-top: 1px solid #2a3441;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .control-btn {
             background: rgba(0, 212, 255, 0.2);
-            color: #00d4ff;
-            border: 1px solid #00d4ff;
-            padding: 8px 16px;
+            color: var(--color-blue);
+            border: 1px solid var(--color-blue);
+            padding: 6px 12px;
             border-radius: 4px;
             cursor: pointer;
-            margin-left: 10px;
-            transition: all 0.3s ease;
-            font-family: 'Monaco', 'Menlo', monospace;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
         }
-
-        .test-button:hover {
+        
+        .control-btn:hover {
             background: rgba(0, 212, 255, 0.4);
-            color: #fffbf6;
+            color: var(--fg-primary);
             box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
         }
-
-        .response {
-            background: rgba(16, 20, 33, 0.9);
-            border: 1px solid #2a3441;
-            border-radius: 4px;
-            padding: 15px;
-            margin-top: 10px;
-            font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 0.9rem;
-            white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
-            color: #b8c5d6;
+        
+        .info-display {
+            color: var(--color-yellow);
+            font-size: 0.85rem;
+            text-align: center;
         }
-
-        .status {
-            margin-top: 20px;
-            padding: 15px;
+        
+        /* PERFORMANT: Loading and error states */
+        .loading-message {
+            text-align: center;
+            color: var(--color-cyan);
+            font-size: 1.1rem;
+            padding: 40px;
+        }
+        
+        .error-message {
+            text-align: center;
+            color: var(--color-red);
+            font-size: 1.1rem;
+            padding: 40px;
+            background: rgba(255, 85, 85, 0.1);
+            border: 1px solid var(--color-red);
+            border-radius: 8px;
+            margin: 20px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        /* VERSION DISCOVERY: Visual elements for version-centric interface */
+        .discovery-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 999;
+        }
+        
+        .discovery-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .version-discovery-sidebar {
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 350px;
+            height: 100vh;
+            background: linear-gradient(135deg, rgba(16, 20, 33, 0.98), rgba(26, 35, 50, 0.98));
+            backdrop-filter: blur(15px);
+            border-left: 2px solid var(--color-blue);
+            box-shadow: -5px 0 20px rgba(0, 0, 0, 0.3);
+            transform: translateX(100%);
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            z-index: 1000;
+            padding: 25px;
+            overflow-y: auto;
+        }
+        
+        .version-discovery-sidebar.open {
+            transform: translateX(0);
+        }
+        
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+        }
+        
+        .sidebar-close {
+            background: none;
+            border: none;
+            color: var(--color-blue);
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        
+        .sidebar-close:hover {
+            background: rgba(0, 212, 255, 0.1);
+            color: var(--fg-primary);
+        }
+        
+        .version-type-indicator {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        
+        .version-type-demo { background: rgba(246, 199, 68, 0.2); color: var(--color-yellow); }
+        .version-type-studio { background: rgba(0, 212, 255, 0.2); color: var(--color-blue); }
+        .version-type-live { background: rgba(0, 255, 136, 0.2); color: var(--color-green); }
+        .version-type-remix { background: rgba(100, 219, 237, 0.2); color: var(--color-cyan); }
+        .version-type-remaster { background: rgba(255, 85, 85, 0.2); color: var(--color-red); }
+        .version-type-acoustic { background: rgba(184, 197, 214, 0.2); color: #B8C5D6; }
+        
+        .quick-commands {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            background: rgba(16, 20, 33, 0.9);
+            border: 1px solid var(--color-blue);
+            border-radius: 8px;
+            padding: 10px;
+            backdrop-filter: blur(5px);
+            font-size: 0.8rem;
+            max-width: 200px;
+            opacity: 0.7;
+            transition: opacity 0.2s ease;
+        }
+        
+        .quick-commands:hover {
+            opacity: 1;
+        }
+        
+        .quick-commands h4 {
+            color: var(--color-blue);
+            margin-bottom: 5px;
+            font-size: 0.75rem;
+        }
+        
+        .quick-commands ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .quick-commands li {
+            padding: 2px 0;
+            color: var(--color-cyan);
+            cursor: pointer;
+        }
+        
+        .quick-commands li:hover {
+            color: var(--fg-primary);
+        }
+        
+        /* SOCIAL DISCOVERY: Farcaster integration visuals */
+        .social-indicator {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: rgba(126, 92, 177, 0.1);
+            border: 1px solid #7E5CB1;
+            border-radius: 50px;
+            padding: 8px 15px;
+            font-size: 0.75rem;
+            color: #C0A7E9;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .social-pulse {
+            width: 6px;
+            height: 6px;
+            background: #C0A7E9;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        /* AUDIO PREVIEW: Mini player for version comparison */
+        .audio-preview-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background: linear-gradient(135deg, rgba(16, 20, 33, 0.95), rgba(26, 35, 50, 0.95));
+            backdrop-filter: blur(10px);
+            border-top: 2px solid var(--color-blue);
+            box-shadow: 0 -3px 15px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            z-index: 1001;
+        }
+        
+        .audio-preview-bar.show {
+            transform: translateY(0);
+        }
+        
+        /* ADJUST CONTROLS: Move controls up when audio bar is showing */
+        .controls.with-audio-bar {
+            transform: translateY(-70px);
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        
+        .version-comparison {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+        }
+        
+        .version-slot {
+            flex: 1;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px dashed rgba(255, 255, 255, 0.2);
             border-radius: 6px;
             text-align: center;
-            border: 1px solid #2a3441;
-            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
         }
-
-        .status.connected {
-            background: rgba(0, 255, 136, 0.1);
-            color: #00ff88;
-            border-color: #00ff88;
+        
+        .version-slot.loaded {
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid var(--color-blue);
+            color: var(--color-blue);
         }
-
-        .status.disconnected {
-            background: rgba(255, 85, 85, 0.1);
-            color: #ff5555;
-            border-color: #ff5555;
+        
+        .play-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
-
+        
+        .play-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--color-blue);
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .play-btn:hover {
+            background: var(--color-cyan);
+            transform: scale(1.05);
+        }
+        
+        /* ORGANIZED: Responsive design with discovery elements */
         @media (max-width: 768px) {
-            .interface-cards {
-                grid-template-columns: 1fr;
+            .header {
+                padding: 8px 15px;
             }
-
-            .header h1 {
-                font-size: 2rem;
+            
+            .title {
+                font-size: 1rem;
             }
-
-            .container {
-                margin: 10px;
-                padding: 15px;
+            
+            .status {
+                gap: 10px;
+                font-size: 0.8rem;
             }
-
-            .card,
-            .api-section {
+            
+            .controls {
+                padding: 10px 15px;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .control-group {
+                gap: 8px;
+                justify-content: center;
+            }
+            
+            .control-btn {
+                padding: 5px 10px;
+                font-size: 0.7rem;
+                min-width: 80px;
+            }
+            
+            .terminal-container {
+                padding: 10px;
+            }
+            
+            /* VERSION DISCOVERY: Mobile adjustments */
+            .version-discovery-sidebar {
+                width: 100%;
                 padding: 20px;
+                border-left: none;
+                border-top: 2px solid var(--color-blue);
+            }
+            
+            .sidebar-header h3 {
+                font-size: 1.1rem;
+            }
+            
+            .quick-commands {
+                top: 60px;
+                right: 10px;
+                font-size: 0.7rem;
+                padding: 8px;
+            }
+            
+            .social-indicator {
+                bottom: 80px;
+                right: 10px;
+                padding: 6px 10px;
+                font-size: 0.7rem;
+            }
+            
+            .audio-preview-bar {
+                padding: 0 15px;
+                height: 70px;
+            }
+            
+            .version-comparison {
+                gap: 10px;
+            }
+            
+            .version-slot {
+                padding: 6px 8px;
+                font-size: 0.7rem;
+            }
+            
+            .play-btn {
+                width: 35px;
+                height: 35px;
             }
         }
     </style>
 </head>
-
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🖥️ VERSIONS Terminal</h1>
-            <p>$ versions --help | Discover, compare, and share different versions of your favorite songs</p>
-        </div>
-
-        <div class="interface-cards">
-            <div class="card">
-                <h2>🖥️ Terminal Interface (Professional)</h2>
-                <p>$ versions-tui --mode=professional</p>
-                <ul class="features">
-                    <li>Batch operations & CLI integration</li>
-                    <li>Local file management</li>
-                    <li>Script-friendly automation</li>
-                    <li>Advanced audio analysis</li>
-                    <li>Privacy-first workflows</li>
-                </ul>
-                <code>$ ./target/release/versions-tui</code>
+    <!-- CLEAN: Simple header with essential status -->
+    <div class="header">
+        <div class="title">🎭 VERSIONS</div>
+        <div class="status">
+            <div class="status-item">
+                <div class="status-dot" id="app-status"></div>
+                <span>App</span>
             </div>
-
-            <div class="card">
-                <h2>🌐 Web Interface (Community)</h2>
-                <p>$ versions-web --mode=community</p>
-                <ul class="features">
-                    <li>Visual version timelines</li>
-                    <li>Split-screen comparisons</li>
-                    <li>Community voting & curation</li>
-                    <li>Social discovery features</li>
-                    <li>Mobile-responsive design</li>
-                </ul>
-                <strong>$ pwd<br />/versions/terminal/session 🎉</strong>
+            <div class="status-item">
+                <div class="status-dot" id="audio-status"></div>
+                <span>Audio</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="social-status"></div>
+                <span>Social</span>
             </div>
         </div>
-
-        <div class="api-section">
-            <h2>🔗 REST API Testing</h2>
-            <p>$ curl -X GET http://localhost:8080/api/v1/health</p>
-
-            <div class="endpoint">
-                <span class="endpoint-method">GET</span>
-                <span class="endpoint-url">/api/v1/health</span>
-                <button class="test-button" onclick="testEndpoint('/api/v1/health', 'health-response')">Test</button>
-                <div id="health-response" class="response" style="display: none;"></div>
+    </div>
+    
+    <!-- MODULAR: Terminal container -->
+    <div class="terminal-container">
+        <div id="loading-message" class="loading-message">
+            🔄 Loading VERSIONS interface...
+        </div>
+        
+        <div id="error-message" class="error-message hidden">
+            ❌ Failed to load interface
+        </div>
+        
+        <canvas id="terminal-canvas" 
+                width="1200" 
+                height="700" 
+                class="hidden"
+                tabindex="0">
+            Your browser doesn't support this interface. Please update your browser.
+        </canvas>
+    </div>
+    
+    <!-- CLEAN: Essential controls only -->
+    <div class="controls">
+        <div class="control-group">
+            <button class="control-btn" onclick="runCommand('help')">📖 Help</button>
+            <button class="control-btn" onclick="runCommand('status')">📊 Status</button>
+            <button class="control-btn" onclick="runCommand('clear')">🧹 Clear</button>
+        </div>
+        
+        <div class="info-display">
+            <span id="info-text">Initializing terminal...</span>
+        </div>
+        
+        <div class="control-group">
+            <button class="control-btn" onclick="toggleVersionDiscovery()" title="Open version discovery sidebar (Cmd+D)">🎵 Discover Versions</button>
+            <button class="control-btn" onclick="toggleAudioPreview()" title="Open audio comparison bar (Cmd+M)">🎧 Compare Audio</button>
+            <button class="control-btn" onclick="focusTerminal()" title="Focus terminal for typing">🎯 Focus</button>
+            <button class="control-btn" onclick="toggleFullscreen()" id="fullscreen-btn" title="Toggle fullscreen mode">⛶ Fullscreen</button>
+        </div>
+    </div>
+    
+    <!-- VERSION DISCOVERY: Command hints overlay -->
+    <div class="quick-commands">
+        <h4>Quick Commands</h4>
+        <ul>
+            <li onclick="runCommand('songs')">🎵 songs</li>
+            <li onclick="runCommand('social')">🤝 social</li>
+            <li onclick="runCommand('status')">📊 status</li>
+            <li onclick="runCommand('help')">📖 help</li>
+        </ul>
+    </div>
+    
+    <!-- SOCIAL DISCOVERY: Farcaster activity indicator -->
+    <div class="social-indicator">
+        <div class="social-pulse"></div>
+        <span>3 friends active</span>
+    </div>
+    
+    <!-- VERSION DISCOVERY: Overlay background -->
+    <div class="discovery-overlay" id="discovery-overlay" onclick="closeVersionDiscovery()"></div>
+    
+    <!-- VERSION DISCOVERY: Sliding sidebar -->
+    <div class="version-discovery-sidebar" id="version-sidebar">
+        <div class="sidebar-header">
+            <h3 style="color: var(--color-blue); margin: 0;">🎭 Version Discovery</h3>
+            <button class="sidebar-close" onclick="closeVersionDiscovery()" title="Close">✕</button>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <h4 style="color: var(--color-green); font-size: 0.9rem; margin-bottom: 8px;">Trending Versions</h4>
+            
+            <div style="padding: 10px; background: rgba(0, 255, 136, 0.05); border-left: 3px solid var(--color-green); margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                    <span class="version-type-indicator version-type-live">LIVE</span>
+                    <span style="font-size: 0.8rem;">Bohemian Rhapsody</span>
+                </div>
+                <div style="font-size: 0.7rem; color: #B8C5D6;">Live Aid 1985 • 1.2k plays today</div>
             </div>
-
-            <div class="endpoint">
-                <span class="endpoint-method">GET</span>
-                <span class="endpoint-url">/api/v1/songs</span>
-                <button class="test-button" onclick="testEndpoint('/api/v1/songs', 'songs-response')">Test</button>
-                <div id="songs-response" class="response" style="display: none;"></div>
+            
+            <div style="padding: 10px; background: rgba(0, 212, 255, 0.05); border-left: 3px solid var(--color-blue); margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                    <span class="version-type-indicator version-type-studio">STUDIO</span>
+                    <span style="font-size: 0.8rem;">Imagine</span>
+                </div>
+                <div style="font-size: 0.7rem; color: #B8C5D6;">Original 1971 • 856 plays today</div>
             </div>
-
-            <div class="endpoint">
-                <span class="endpoint-method">GET</span>
-                <span class="endpoint-url">/api/v1/songs/song1</span>
-                <button class="test-button" onclick="testEndpoint('/api/v1/songs/song1', 'song-response')">Test</button>
-                <div id="song-response" class="response" style="display: none;"></div>
+            
+            <div style="padding: 10px; background: rgba(246, 199, 68, 0.05); border-left: 3px solid var(--color-yellow);">
+                <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                    <span class="version-type-indicator version-type-demo">DEMO</span>
+                    <span style="font-size: 0.8rem;">Yesterday</span>
+                </div>
+                <div style="font-size: 0.7rem; color: #B8C5D6;">Home recording • 634 plays today</div>
             </div>
-
-            <div class="endpoint">
-                <span class="endpoint-method">GET</span>
-                <span class="endpoint-url">/api/v1/versions/version1</span>
-                <button class="test-button"
-                    onclick="testEndpoint('/api/v1/versions/version1', 'version-response')">Test</button>
-                <div id="version-response" class="response" style="display: none;"></div>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <h4 style="color: var(--color-cyan); font-size: 0.9rem; margin-bottom: 8px;">🤝 Social Recommendations</h4>
+            <div style="font-size: 0.75rem; line-height: 1.4; color: #B8C5D6;">
+                <div style="margin-bottom: 8px;">🎭 @musiclover shared a rare demo version</div>
+                <div style="margin-bottom: 8px;">🎯 @producer recommended studio take #3</div>
+                <div>📈 @audiophile voted for 2011 remaster</div>
             </div>
-
-            <div id="server-status" class="status disconnected">
-                $ systemctl status versions-server<br />🔴 Server Status: Checking connection...
+        </div>
+        
+        <div>
+            <h4 style="color: var(--color-yellow); font-size: 0.9rem; margin-bottom: 8px;">🎵 Version Types</h4>
+            <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                <span class="version-type-indicator version-type-demo">DEMO</span>
+                <span class="version-type-indicator version-type-studio">STUDIO</span>
+                <span class="version-type-indicator version-type-live">LIVE</span>
+                <span class="version-type-indicator version-type-remix">REMIX</span>
+                <span class="version-type-indicator version-type-remaster">REMASTER</span>
+                <span class="version-type-indicator version-type-acoustic">ACOUSTIC</span>
             </div>
+        </div>
+    </div>
+    
+    <!-- AUDIO PREVIEW: Version comparison bar -->
+    <div class="audio-preview-bar" id="audio-preview">
+        <div class="version-comparison">
+            <div class="version-slot" onclick="selectVersionForComparison('A')">
+                Click to load Version A
+            </div>
+            <div style="color: var(--color-blue); font-weight: bold;">VS</div>
+            <div class="version-slot" onclick="selectVersionForComparison('B')">
+                Click to load Version B
+            </div>
+        </div>
+        
+        <div class="play-controls">
+            <button class="play-btn" onclick="playComparison()" title="Play comparison">
+                ▶
+            </button>
+            <button class="control-btn" onclick="toggleAudioPreview()" style="background: transparent; padding: 4px;">
+                ✕
+            </button>
         </div>
     </div>
 
     <script type="module">
-        // ENHANCEMENT: Import our compiled TypeScript modules
-        import { farcasterManager } from './dist/farcaster.js';
-        import { audioPlayer } from './dist/audio-player.js';
-        import { appConfig, environment } from './dist/config.js';
-        import { filecoinIntegration } from './dist/filecoin-integration.js';
-        import { walletManager } from './dist/wallet-connection.js';
-
-        // MODULAR: Import Farcaster SDK only when needed
-        let farcasterSDK = null;
-
-        // PERFORMANT: Lazy load Farcaster SDK
-        async function loadFarcasterSDK() {
-            if (!farcasterSDK) {
-                try {
-                    const module = await import('https://esm.sh/@farcaster/miniapp-sdk');
-                    farcasterSDK = module.sdk;
-
-                    // CLEAN: Initialize Mini App when SDK loads
-                    await farcasterSDK.actions.ready();
-                    console.log('🟣 Farcaster Mini App ready!');
-
-                    // ENHANCEMENT: Add Farcaster features to existing UI
-                    addFarcasterFeatures();
-                } catch (error) {
-                    console.log('Running outside Farcaster environment:', error.message);
-                }
-            }
-            return farcasterSDK;
-        }
-
-        // ENHANCEMENT: Enhanced Farcaster features
-        function addFarcasterFeatures() {
-            const statusDiv = document.getElementById('server-status');
-            if (statusDiv) {
-                statusDiv.innerHTML += `<br/>🟣 <strong>Farcaster Mini App Mode Active</strong> (${environment})`;
-
-                // MODULAR: Create Farcaster controls section
-                const farcasterSection = document.createElement('div');
-                farcasterSection.innerHTML = `
-                    <h3>🟣 Farcaster Features</h3>
-                    <div id="farcaster-user-info"></div>
-                    <div id="farcaster-controls">
-                        <button id="farcaster-auth-btn" class="test-button">🔗 Sign In with Farcaster</button>
-                        <button id="cast-discovery-btn" class="test-button" style="display:none">📢 Cast Discovery</button>
-                        <button id="social-recs-btn" class="test-button" style="display:none">👥 Social Recommendations</button>
-                    </div>
-                    <div id="social-content"></div>
-                `;
-
-                statusDiv.appendChild(farcasterSection);
-
-                // ENHANCEMENT: Add audio player section
-                addAudioPlayerSection(statusDiv);
-
-                // ENHANCEMENT: Add wallet connection section
-                addWalletConnectionSection(statusDiv);
-
-                // ENHANCEMENT: Add Filecoin features section
-                addFilecoinFeaturesSection(statusDiv);
-
-                // ENHANCEMENT FIRST: Add creator dashboard section
-                addCreatorDashboardSection(statusDiv);
-
-                // CLEAN: Bind event handlers
-                bindFarcasterEvents();
-            }
-        }
-
-        // ENHANCEMENT: Add audio player section
-        function addAudioPlayerSection(parentDiv) {
-            const audioSection = document.createElement('div');
-            audioSection.innerHTML = `
-                <h3>🎵 Audio Player</h3>
-                <div id="audio-controls">
-                    <button id="load-audio-btn" class="test-button">🎵 Load Sample Audio</button>
-                    <button id="list-audio-btn" class="test-button">📁 List Audio Files</button>
-                </div>
-                <div id="audio-content"></div>
-            `;
-
-            parentDiv.appendChild(audioSection);
-
-            // CLEAN: Bind audio events
-            bindAudioEvents();
-        }
-
-        // ENHANCEMENT: Add wallet connection section
-        function addWalletConnectionSection(parentDiv) {
-            const walletSection = document.createElement('div');
-            walletSection.innerHTML = `
-                <h3>🔗 Wallet Connection</h3>
-                <div id="wallet-status" style="padding: 10px; background: #f0f0f0; border-radius: 5px; margin: 10px 0;">
-                    <div>👤 Account: <span id="wallet-account">Not connected</span></div>
-                    <div>🌐 Network: <span id="wallet-network">Unknown</span></div>
-                    <div>💰 Balance: <span id="wallet-balance">0 FIL</span></div>
-                </div>
-                <div id="wallet-controls">
-                    <button id="connect-wallet-btn" class="test-button">🔗 Connect Wallet</button>
-                    <button id="disconnect-wallet-btn" class="test-button" style="display:none">🔌 Disconnect</button>
-                    <button id="check-balance-btn" class="test-button" style="display:none">💰 Refresh Balance</button>
-                </div>
-                <div id="wallet-content"></div>
-            `;
-
-            parentDiv.appendChild(walletSection);
-
-            // CLEAN: Bind wallet events
-            bindWalletEvents();
-
-            // PERFORMANT: Check existing connection
-            checkExistingWalletConnection();
-        }
-
-        // ENHANCEMENT: Add Filecoin features section
-        function addFilecoinFeaturesSection(parentDiv) {
-            const filecoinSection = document.createElement('div');
-            filecoinSection.innerHTML = `
-                <h3>🌍 Global Filecoin Features</h3>
-                <div id="filecoin-status" style="padding: 10px; background: #f0f0f0; border-radius: 5px; margin: 10px 0;">
-                    <div>📡 Network: <span id="filecoin-network">Checking...</span></div>
-                    <div>💰 Storage Cost: <span id="storage-cost">Loading...</span></div>
-                    <div>🌐 Global Providers: <span id="provider-count">Loading...</span></div>
-                </div>
-                <div id="filecoin-controls">
-                    <button id="upload-global-btn" class="test-button">🌍 Upload to Global Storage</button>
-                    <button id="check-network-btn" class="test-button">📊 Check Network Status</button>
-                    <button id="support-creator-btn" class="test-button" style="display:none">💝 Support Creator ($5)</button>
-                </div>
-                <div id="filecoin-content"></div>
-                <input type="file" id="global-upload-input" accept="audio/*" style="display:none">
-            `;
-
-            parentDiv.appendChild(filecoinSection);
-
-            // CLEAN: Bind Filecoin events
-            bindFilecoinEvents();
-
-            // PERFORMANT: Load network status on startup
-            loadFilecoinNetworkStatus();
-        }
-
-        // ENHANCEMENT FIRST: Add creator dashboard section
-        function addCreatorDashboardSection(parentDiv) {
-            const dashboardSection = document.createElement('div');
-            dashboardSection.innerHTML = `
-                <h3>💰 Creator Dashboard</h3>
-                <div id="creator-status" style="padding: 10px; background: #f0f0f0; border-radius: 5px; margin: 10px 0; font-family: monospace;">
-                    <div id="creator-earnings-summary">Loading earnings...</div>
-                </div>
-                <div id="creator-controls">
-                    <button id="refresh-earnings-btn" class="test-button">🔄 Refresh Earnings</button>
-                    <button id="withdraw-earnings-btn" class="test-button" style="display:none">💳 Withdraw ($100)</button>
-                    <button id="view-analytics-btn" class="test-button" style="display:none">📈 View Analytics</button>
-                </div>
-                <div id="creator-content"></div>
-            `;
-
-            parentDiv.appendChild(dashboardSection);
-
-            // CLEAN: Bind creator dashboard events
-            bindCreatorDashboardEvents();
-
-            // PERFORMANT: Load earnings when wallet is connected
-            if (walletManager.isConnected) {
-                loadCreatorEarnings();
-            }
-        }
-
-        // MODULAR: Bind wallet event handlers
-        function bindWalletEvents() {
-            const connectBtn = document.getElementById('connect-wallet-btn');
-            const disconnectBtn = document.getElementById('disconnect-wallet-btn');
-            const balanceBtn = document.getElementById('check-balance-btn');
-
-            if (connectBtn) connectBtn.onclick = handleConnectWallet;
-            if (disconnectBtn) disconnectBtn.onclick = handleDisconnectWallet;
-            if (balanceBtn) balanceBtn.onclick = handleRefreshBalance;
-
-            // CLEAN: Set up wallet event listeners
-            walletManager.onAccountChanged = updateWalletDisplay;
-            walletManager.onNetworkChanged = updateWalletDisplay;
-            walletManager.onDisconnected = updateWalletDisplay;
-        }
-
-        // MODULAR: Bind creator dashboard event handlers
-        function bindCreatorDashboardEvents() {
-            const refreshBtn = document.getElementById('refresh-earnings-btn');
-            const withdrawBtn = document.getElementById('withdraw-earnings-btn');
-            const analyticsBtn = document.getElementById('view-analytics-btn');
-
-            if (refreshBtn) refreshBtn.onclick = handleRefreshEarnings;
-            if (withdrawBtn) withdrawBtn.onclick = handleWithdrawEarnings;
-            if (analyticsBtn) analyticsBtn.onclick = handleViewAnalytics;
-        }
-
-        // MODULAR: Bind audio event handlers
-        function bindAudioEvents() {
-            const loadBtn = document.getElementById('load-audio-btn');
-            const listBtn = document.getElementById('list-audio-btn');
-
-            if (loadBtn) loadBtn.onclick = handleLoadSampleAudio;
-            if (listBtn) listBtn.onclick = handleListAudioFiles;
-        }
-
-        // MODULAR: Bind Filecoin event handlers
-        function bindFilecoinEvents() {
-            const uploadBtn = document.getElementById('upload-global-btn');
-            const checkBtn = document.getElementById('check-network-btn');
-            const supportBtn = document.getElementById('support-creator-btn');
-            const fileInput = document.getElementById('global-upload-input');
-
-            if (uploadBtn) uploadBtn.onclick = () => fileInput.click();
-            if (checkBtn) checkBtn.onclick = handleCheckNetworkStatus;
-            if (supportBtn) supportBtn.onclick = handleSupportCreator;
-            if (fileInput) fileInput.onchange = handleGlobalUpload;
-        }
-
-        // ENHANCEMENT: Enhanced auth and social features
-        function bindFarcasterEvents() {
-            const authBtn = document.getElementById('farcaster-auth-btn');
-            const castBtn = document.getElementById('cast-discovery-btn');
-            const socialBtn = document.getElementById('social-recs-btn');
-
-            if (authBtn) authBtn.onclick = handleFarcasterAuth;
-            if (castBtn) castBtn.onclick = handleCastDiscovery;
-            if (socialBtn) socialBtn.onclick = handleSocialRecommendations;
-        }
-
-        // ENHANCEMENT: Enhanced authentication
-        async function handleFarcasterAuth() {
-            try {
-                const user = await farcasterManager.authenticate();
-
-                // CLEAN: Update UI with user info
-                const userInfoDiv = document.getElementById('farcaster-user-info');
-                if (userInfoDiv) {
-                    userInfoDiv.innerHTML = `
-                        <div style="padding: 10px; background: #f0f0f0; border-radius: 5px; margin: 10px 0;">
-                            <strong>👤 ${user.displayName || user.username}</strong><br/>
-                            <small>FID: ${user.fid} | Followers: ${user.follower_count || 'N/A'}</small><br/>
-                            <em>${user.bio || 'Music lover on Farcaster'}</em>
-                        </div>
-                    `;
-                }
-
-                // MODULAR: Show authenticated features
-                document.getElementById('cast-discovery-btn').style.display = 'inline-block';
-                document.getElementById('social-recs-btn').style.display = 'inline-block';
-                document.getElementById('farcaster-auth-btn').textContent = '✅ Authenticated';
-                document.getElementById('farcaster-auth-btn').disabled = true;
-
-            } catch (error) {
-                console.error('Farcaster auth error:', error);
-                alert('Authentication failed. Please try again.');
-            }
-        }
-
-        // MODULAR: Cast version discovery
-        async function handleCastDiscovery() {
-            try {
-                // ENHANCEMENT: Use sample version data
-                const sampleVersion = {
-                    id: 'bohemian-rhapsody-demo',
-                    title: 'Bohemian Rhapsody',
-                    artist: 'Queen',
-                    version_type: 'Demo'
+        // MODULAR: Import WASM terminal and theme
+        import init, { VersionsTerminalPOC } from './pkg/versions_wasm_poc.js';
+        import { applyTheme, ThemeUtils } from './theme-bridge.js';
+        
+        // CLEAN: Inline configuration for browser compatibility
+        function getConfig() {
+            const hostname = window.location.hostname;
+            
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                return {
+                    environment: 'development',
+                    domain: 'localhost:3000',
+                    apiBase: 'http://localhost:8080',
+                    manifestUrl: 'http://localhost:3000/.well-known/farcaster.json'
                 };
-
-                await farcasterManager.castVersionDiscovery(sampleVersion);
-                alert('📢 Version discovery cast created!');
-
-            } catch (error) {
-                console.error('Cast failed:', error);
-                alert('Failed to create cast. Please try again.');
-            }
-        }
-
-        // MODULAR: Get social recommendations
-        async function handleSocialRecommendations() {
-            try {
-                const recommendations = await farcasterManager.getSocialRecommendations();
-
-                const contentDiv = document.getElementById('social-content');
-                if (contentDiv) {
-                    contentDiv.innerHTML = `
-                        <h4>👥 Social Recommendations</h4>
-                        <div style="background: #f9f9f9; padding: 10px; border-radius: 5px;">
-                            ${recommendations.length > 0
-                            ? recommendations.map(rec => `<div>• ${rec.title || 'Recommended version'}</div>`).join('')
-                            : '<div>🎵 No recommendations yet. Start following music lovers on Farcaster!</div>'
-                        }
-                        </div>
-                    `;
-                }
-
-            } catch (error) {
-                console.error('Failed to get recommendations:', error);
-                alert('Failed to load recommendations.');
-            }
-        }
-
-        const API_BASE = 'http://localhost:8080';
-
-        async function testEndpoint(endpoint, responseId) {
-            const responseDiv = document.getElementById(responseId);
-            responseDiv.style.display = 'block';
-            responseDiv.textContent = 'Loading...';
-
-            try {
-                const response = await fetch(API_BASE + endpoint);
-                const data = await response.json();
-                responseDiv.textContent = JSON.stringify(data, null, 2);
-
-                if (response.ok) {
-                    responseDiv.style.background = '#d4edda';
-                    responseDiv.style.color = '#155724';
-                } else {
-                    responseDiv.style.background = '#f8d7da';
-                    responseDiv.style.color = '#721c24';
-                }
-            } catch (error) {
-                responseDiv.textContent = `Error: ${error.message}`;
-                responseDiv.style.background = '#f8d7da';
-                responseDiv.style.color = '#721c24';
-            }
-        }
-
-        async function checkServerStatus() {
-            const statusDiv = document.getElementById('server-status');
-
-            try {
-                const response = await fetch(API_BASE + '/api/v1/health');
-                if (response.ok) {
-                    statusDiv.className = 'status connected';
-                    statusDiv.innerHTML = '$ systemctl status versions-server<br/>🟢 Server Status: Active (running) - Connected to VERSIONS API';
-                } else {
-                    throw new Error('Server responded with error');
-                }
-            } catch (error) {
-                statusDiv.className = 'status disconnected';
-                statusDiv.innerHTML = '$ systemctl status versions-server<br/>🔴 Server Status: Inactive (dead) - Start with: cargo run -p termusic-server';
-            }
-        }
-
-        // ENHANCEMENT: Audio functionality
-        async function handleLoadSampleAudio() {
-            try {
-                // MODULAR: Load sample audio (using mock data for now)
-                const sampleMetadata = {
-                    title: 'Sample Audio Track',
-                    artist: 'VERSIONS Demo',
-                    duration_seconds: 180
+            } else if (hostname.includes('netlify.app')) {
+                return {
+                    environment: 'netlify',
+                    domain: 'versions-app.netlify.app',
+                    apiBase: 'https://versions-api.herokuapp.com',
+                    manifestUrl: 'https://versions-app.netlify.app/.well-known/farcaster.json'
                 };
-
-                await audioPlayer.loadTrack('sample-track', sampleMetadata);
-                alert('🎵 Sample audio loaded! (Note: Requires actual audio file)');
-
-            } catch (error) {
-                console.error('Failed to load sample audio:', error);
-                alert('Failed to load sample audio. Please add audio files to the server.');
+            } else {
+                return {
+                    environment: 'production',
+                    domain: 'versions.app',
+                    apiBase: 'https://api.versions.app',
+                    manifestUrl: 'https://versions.app/.well-known/farcaster.json'
+                };
             }
         }
 
-        async function handleListAudioFiles() {
+        let terminal = null;
+        let animationId = null;
+        let config = null;
+
+        // CLEAN: Status management
+        function updateStatus(elementId, isOk) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                if (isOk) {
+                    element.classList.add('ok');
+                } else {
+                    element.classList.remove('ok');
+                }
+            }
+        }
+
+        function updateInfo(message) {
+            const element = document.getElementById('info-text');
+            if (element) {
+                element.textContent = message;
+            }
+        }
+
+        // PERFORMANT: Animation loop for terminal rendering
+        function renderLoop() {
+            if (terminal) {
+                terminal.render();
+                animationId = requestAnimationFrame(renderLoop);
+            }
+        }
+
+        // ORGANIZED: Initialize unified terminal
+        async function initializeTerminal() {
             try {
-                const response = await fetch(`${appConfig.apiBase}/api/v1/audio/files`);
-                const data = await response.json();
-
-                const contentDiv = document.getElementById('audio-content');
-                if (contentDiv) {
-                    if (data.success && data.data.length > 0) {
-                        const fileList = data.data.map(file =>
-                            `<div style="margin: 5px 0;">
-                                <button onclick="loadAudioFile('${file}')" class="test-button" style="margin-right: 10px;">▶️</button>
-                                <span>${file}</span>
-                            </div>`
-                        ).join('');
-
-                        contentDiv.innerHTML = `
-                            <h4>🎵 Available Audio Files</h4>
-                            <div style="background: #f9f9f9; padding: 10px; border-radius: 5px;">
-                                ${fileList}
-                            </div>
-                        `;
-                    } else {
-                        contentDiv.innerHTML = `
-                            <h4>🎵 Available Audio Files</h4>
-                            <div style="background: #f9f9f9; padding: 10px; border-radius: 5px;">
-                                <div>📁 No audio files found. Add some audio files to the server's audio_files directory.</div>
-                            </div>
-                        `;
+                updateInfo('Loading WASM module...');
+                console.log('🎭 Initializing VERSIONS Unified Terminal...');
+                
+                // ENHANCEMENT: Apply theme and load config
+                applyTheme();
+                config = getConfig();
+                console.log(`🔧 Configuration loaded for ${config.environment}`);
+                
+                // CLEAN: Load application
+                await init();
+                updateStatus('app-status', true);
+                updateInfo('App loaded, setting up interface...');
+                
+                // MODULAR: Get canvas element
+                const canvas = document.getElementById('terminal-canvas');
+                if (!canvas) {
+                    throw new Error('Interface element not found');
+                }
+                
+                // CLEAN: Create interface instance
+                terminal = new VersionsTerminalPOC(canvas);
+                updateStatus('audio-status', true);
+                updateInfo('Interface ready, connecting to services...');
+                
+                // ENHANCEMENT: Enhanced keyboard handling
+                canvas.addEventListener('keydown', (event) => {
+                    // Allow some browser shortcuts
+                    if (event.ctrlKey && ['t', 'w', 'r', 'l'].includes(event.key)) {
+                        return; // Let browser handle these
                     }
-                }
-
+                    
+                    event.preventDefault();
+                    
+                    try {
+                        terminal.handle_keypress(event);
+                    } catch (error) {
+                        console.error('Key handling error:', error);
+                    }
+                });
+                
+                // CLEAN: Handle focus management
+                canvas.addEventListener('blur', () => {
+                    updateInfo('Click terminal to focus and start typing');
+                });
+                
+                canvas.addEventListener('focus', () => {
+                    updateInfo('Terminal focused - type commands or "help"');
+                });
+                
+                // PERFORMANT: Start render loop
+                renderLoop();
+                
+                // CLEAN: Show terminal, hide loading
+                document.getElementById('loading-message').classList.add('hidden');
+                canvas.classList.remove('hidden');
+                
+                // ENHANCEMENT: Focus terminal for immediate use
+                canvas.focus();
+                
+                // CLEAN: Check server connection
+                checkServerConnection();
+                
+                console.log('✅ VERSIONS interface loaded successfully');
+                updateInfo('Ready to discover versions - type "help" for commands');
+                
+                return true;
+                
             } catch (error) {
-                console.error('Failed to list audio files:', error);
-                alert('Failed to load audio files list.');
+                console.error('❌ Terminal initialization failed:', error);
+                
+                // CLEAN: Show error message
+                document.getElementById('loading-message').classList.add('hidden');
+                document.getElementById('error-message').classList.remove('hidden');
+                document.getElementById('error-message').innerHTML = 
+                    `❌ Failed to load interface<br><small>Please refresh the page</small>`;
+                
+                updateInfo('Interface failed to load');
+                return false;
             }
         }
 
-        // MODULAR: Load specific audio file
-        window.loadAudioFile = async function (fileId) {
+        // MODULAR: Service connection check
+        async function checkServerConnection() {
             try {
-                await audioPlayer.loadTrack(fileId);
-                console.log(`🎵 Loaded audio file: ${fileId}`);
+                if (!config) {
+                    config = getConfig();
+                }
+                const response = await fetch(`${config.apiBase}/api/v1/health`);
+                const isOk = response.ok;
+                updateStatus('social-status', isOk);
+                
+                if (isOk) {
+                    updateInfo('All services connected - ready to discover versions!');
+                } else {
+                    updateInfo('Some features offline - basic functions available');
+                }
             } catch (error) {
-                console.error('Failed to load audio file:', error);
-                alert(`Failed to load audio file: ${fileId}`);
+                updateStatus('social-status', false);
+                updateInfo('Services connecting... basic features available');
             }
+        }
+
+        // CLEAN: Control functions with discovery integration
+        window.runCommand = function(command) {
+            if (!terminal) return;
+            
+            // Simulate typing the command
+            const canvas = document.getElementById('terminal-canvas');
+            
+            // Clear any existing command and type new one
+            for (const char of command) {
+                const keyEvent = new KeyboardEvent('keydown', {
+                    key: char,
+                    bubbles: true
+                });
+                canvas.dispatchEvent(keyEvent);
+            }
+            
+            // Press Enter
+            const enterEvent = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                bubbles: true
+            });
+            canvas.dispatchEvent(enterEvent);
+            
+            // ENHANCEMENT: Trigger discovery UI for relevant commands
+            showDiscoveryForCommand(command);
         };
 
-        // ENHANCEMENT: Wallet functionality
+        window.focusTerminal = function() {
+            const canvas = document.getElementById('terminal-canvas');
+            canvas.focus();
+            updateInfo('Terminal focused - type away!');
+        };
 
-        // MODULAR: Handle wallet connection
-        async function handleConnectWallet() {
-            try {
-                const result = await walletManager.connectWallet();
-
-                if (result.success) {
-                    console.log('🔗 Wallet connected successfully');
-                    updateWalletDisplay();
-
-                    // ENHANCEMENT: Show success message
-                    const contentDiv = document.getElementById('wallet-content');
-                    contentDiv.innerHTML = `
-                        <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0;">
-                            ✅ Wallet connected successfully!
-                            <div><strong>Account:</strong> ${result.account}</div>
-                            <div><strong>Network:</strong> ${result.network}</div>
-                        </div>
-                    `;
-                } else {
-                    throw new Error('Connection failed');
-                }
-
-            } catch (error) {
-                console.error('Wallet connection failed:', error);
-                alert(`Failed to connect wallet: ${error.message}`);
-            }
-        }
-
-        // MODULAR: Handle wallet disconnection
-        async function handleDisconnectWallet() {
-            walletManager.disconnect();
-            updateWalletDisplay();
-
-            const contentDiv = document.getElementById('wallet-content');
-            contentDiv.innerHTML = `
-                <div style="background: #f8d7da; padding: 10px; border-radius: 5px; margin: 10px 0;">
-                    🔌 Wallet disconnected
-                </div>
-            `;
-        }
-
-        // MODULAR: Handle balance refresh
-        async function handleRefreshBalance() {
-            try {
-                const balance = await walletManager.getBalance();
-                document.getElementById('wallet-balance').textContent = balance.formatted;
-
-                const networkInfo = await walletManager.getNetworkInfo();
-                document.getElementById('wallet-network').textContent = networkInfo.name;
-
-            } catch (error) {
-                console.error('Failed to refresh balance:', error);
-                alert('Failed to refresh balance');
-            }
-        }
-
-        // PERFORMANT: Check existing wallet connection
-        async function checkExistingWalletConnection() {
-            try {
-                const isConnected = walletManager.isConnected;
-                if (isConnected) {
-                    console.log('🔗 Existing wallet connection found');
-                    updateWalletDisplay();
-                }
-            } catch (error) {
-                console.log('No existing wallet connection');
-            }
-        }
-
-        // CLEAN: Update wallet display
-        async function updateWalletDisplay() {
-            const status = walletManager.getWalletStatus();
-
-            // Update account display
-            document.getElementById('wallet-account').textContent =
-                status.connected ? status.account : 'Not connected';
-
-            // Update button visibility
-            const connectBtn = document.getElementById('connect-wallet-btn');
-            const disconnectBtn = document.getElementById('disconnect-wallet-btn');
-            const balanceBtn = document.getElementById('check-balance-btn');
-
-            if (status.connected) {
-                connectBtn.style.display = 'none';
-                disconnectBtn.style.display = 'inline-block';
-                balanceBtn.style.display = 'inline-block';
-
-                // PERFORMANT: Load balance and network info
-                handleRefreshBalance();
-
-                // ENHANCEMENT FIRST: Load creator earnings when wallet connects
-                loadCreatorEarnings();
+        window.toggleFullscreen = function() {
+            const button = document.getElementById('fullscreen-btn');
+            
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+                button.textContent = '⥤ Exit Fullscreen';
+                updateInfo('Fullscreen mode - press Escape to exit');
             } else {
-                connectBtn.style.display = 'inline-block';
-                disconnectBtn.style.display = 'none';
-                balanceBtn.style.display = 'none';
-
-                document.getElementById('wallet-network').textContent = 'Unknown';
-                document.getElementById('wallet-balance').textContent = '0 FIL';
+                document.exitFullscreen();
+                button.textContent = '⛶ Fullscreen';
+                updateInfo('Exited fullscreen mode');
             }
-        }
-
-        // ENHANCEMENT FIRST: Creator dashboard functionality
-
-        // PERFORMANT: Load creator earnings
-        async function loadCreatorEarnings() {
-            if (!walletManager.isConnected) {
-                document.getElementById('creator-earnings-summary').textContent =
-                    'Connect wallet to view earnings';
+        };
+        
+        // VERSION DISCOVERY: Toggle discovery sidebar with overlay
+        window.toggleVersionDiscovery = function() {
+            const sidebar = document.getElementById('version-sidebar');
+            const overlay = document.getElementById('discovery-overlay');
+            
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+            
+            if (sidebar.classList.contains('open')) {
+                updateInfo('Version discovery opened - explore trending versions');
+                // Prevent body scroll
+                document.body.style.overflow = 'hidden';
+            } else {
+                updateInfo('Version discovery closed');
+                document.body.style.overflow = 'auto';
+            }
+        };
+        
+        // VERSION DISCOVERY: Close discovery sidebar
+        window.closeVersionDiscovery = function() {
+            const sidebar = document.getElementById('version-sidebar');
+            const overlay = document.getElementById('discovery-overlay');
+            
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+            document.body.style.overflow = 'auto';
+            updateInfo('Version discovery closed');
+        };
+        
+        // AUDIO PREVIEW: Toggle comparison bar and adjust controls
+        window.toggleAudioPreview = function() {
+            const previewBar = document.getElementById('audio-preview');
+            const controls = document.querySelector('.controls');
+            
+            previewBar.classList.toggle('show');
+            
+            if (previewBar.classList.contains('show')) {
+                controls.classList.add('with-audio-bar');
+                updateInfo('Audio comparison ready - select two versions to compare');
+            } else {
+                controls.classList.remove('with-audio-bar');
+                updateInfo('Audio comparison closed');
+            }
+        };
+        
+        // VERSION COMPARISON: Select version for comparison
+        window.selectVersionForComparison = function(slot) {
+            updateInfo(`Please select a version for slot ${slot} (coming soon)`);
+            // TODO: Open version selector modal
+        };
+        
+        // AUDIO PLAYBACK: Play version comparison
+        window.playComparison = function() {
+            const slots = document.querySelectorAll('.version-slot');
+            const loadedSlots = Array.from(slots).filter(slot => slot.classList.contains('loaded'));
+            
+            if (loadedSlots.length < 2) {
+                updateInfo('Load two versions first to start comparison');
                 return;
             }
-
-            document.getElementById('creator-earnings-summary').textContent =
-                'Loading earnings...';
-
-            try {
-                const earnings = await filecoinIntegration.getCreatorEarnings();
-
-                // CLEAN: Terminal-style display
-                const summaryDiv = document.getElementById('creator-earnings-summary');
-                summaryDiv.innerHTML = `
-                    <div style="white-space: pre-line;">💰 Total Earnings: $${earnings.total_earnings_usd}\n📊 Active Rails: ${earnings.active_rails}\n📅 Last Updated: ${new Date(earnings.last_updated).toLocaleString()}</div>
-                `;
-
-                // MODULAR: Show controls if earnings exist
-                if (parseFloat(earnings.total_earnings_usd) > 0) {
-                    document.getElementById('withdraw-earnings-btn').style.display = 'inline-block';
-                    document.getElementById('view-analytics-btn').style.display = 'inline-block';
-                }
-
-            } catch (error) {
-                console.error('Failed to load creator earnings:', error);
-
-                // CLEAN: Show specific error message
-                const summaryDiv = document.getElementById('creator-earnings-summary');
-                summaryDiv.innerHTML = `
-                    <div style="color: #721c24; background: #f8d7da; padding: 10px; border-radius: 5px;">
-                        ❌ ${error.message}
-                    </div>
-                `;
-
-                // Hide controls on error
-                document.getElementById('withdraw-earnings-btn').style.display = 'none';
-                document.getElementById('view-analytics-btn').style.display = 'none';
-            }
-        }
-
-        // MODULAR: Handle earnings refresh
-        async function handleRefreshEarnings() {
-            await loadCreatorEarnings();
-        }
-
-        // MODULAR: Handle earnings withdrawal
-        async function handleWithdrawEarnings() {
-            try {
-                if (!walletManager.isConnected) {
-                    alert('Please connect your wallet first');
-                    return;
-                }
-
-                const amount = prompt('Enter withdrawal amount (USD):', '100');
-                if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
-                    return;
-                }
-
-                const confirmed = confirm(`Withdraw ${amount} to your bank account?\n\nEstimated arrival: 2-3 business days`);
-                if (!confirmed) return;
-
-                const result = await filecoinIntegration.withdrawEarnings(parseFloat(amount), 'bank');
-
-                if (result.success) {
-                    alert(`💳 Withdrawal initiated!\n\nAmount: ${result.amount_usd}\nMethod: ${result.withdrawal_method}\nEstimated arrival: ${result.estimated_arrival}`);
-
-                    // ENHANCEMENT: Update UI
-                    const contentDiv = document.getElementById('creator-content');
-                    contentDiv.innerHTML = `
-                        <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0;">
-                            💳 Withdrawal Initiated!\n                            <div><strong>Amount:</strong> ${result.amount_usd}</div>
-                            <div><strong>Method:</strong> ${result.withdrawal_method}</div>
-                            <div><strong>Transaction:</strong> ${result.transaction_hash || 'Processing...'}</div>
-                        </div>
-                    `;
-
-                    // PERFORMANT: Refresh earnings
-                    await loadCreatorEarnings();
-                } else {
-                    throw new Error(result.error || 'Withdrawal failed');
-                }
-
-            } catch (error) {
-                console.error('Withdrawal failed:', error);
-                alert(`Withdrawal failed: ${error.message}`);
-            }
-        }
-
-        // MODULAR: Handle analytics view
-        async function handleViewAnalytics() {
-            try {
-                const analytics = await filecoinIntegration.getCreatorAnalytics('30d');
-
-                const contentDiv = document.getElementById('creator-content');
-                contentDiv.innerHTML = `
-                    <h4>📈 Creator Analytics</h4>
-                    <div style="background: #f9f9f9; padding: 10px; border-radius: 5px; font-family: monospace; white-space: pre-line;">
-                        $ creator analytics --period=30d\n${analytics ? JSON.stringify(analytics, null, 2) : 'No analytics data available'}
-                    </div>
-                `;
-
-            } catch (error) {
-                console.error('Failed to load analytics:', error);
-
-                const contentDiv = document.getElementById('creator-content');
-                contentDiv.innerHTML = `
-                    <h4>📈 Creator Analytics</h4>
-                    <div style="background: #f8d7da; padding: 10px; border-radius: 5px; color: #721c24;">
-                        ❌ ${error.message}
-                    </div>
-                `;
-            }
-        }
-
-        // ENHANCEMENT: Filecoin functionality
-
-        // PERFORMANT: Load network status
-        async function loadFilecoinNetworkStatus() {
-            try {
-                const status = await filecoinIntegration.getNetworkStatus();
-
-                document.getElementById('filecoin-network').textContent =
-                    status.network || 'calibration';
-                document.getElementById('storage-cost').textContent =
-                    status.storage_cost_per_gb || '0.001 FIL/GB';
-                document.getElementById('provider-count').textContent =
-                    status.active_storage_providers || '2800+';
-
-            } catch (error) {
-                console.error('Failed to load network status:', error);
-                document.getElementById('filecoin-network').textContent = 'Error';
-            }
-        }
-
-        // MODULAR: Handle global upload
-        async function handleGlobalUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            try {
-                const contentDiv = document.getElementById('filecoin-content');
-                contentDiv.innerHTML = `
-                    <h4>🌍 Global Upload Progress</h4>
-                    <div id="upload-progress" style="background: #f9f9f9; padding: 10px; border-radius: 5px; font-family: monospace;">
-                        <div id="upload-status">Initializing...</div>
-                        <div style="background: #ddd; border-radius: 3px; margin: 10px 0;">
-                            <div id="upload-bar" style="background: #667eea; height: 20px; border-radius: 3px; width: 0%; transition: width 0.3s;"></div>
-                        </div>
-                        <div id="upload-percentage">0%</div>
-                    </div>
-                `;
-
-                const metadata = {
-                    file_id: `global-${Date.now()}`,
-                    title: file.name.replace(/\.[^/.]+$/, ""),
-                    artist: 'Unknown Artist',
-                    version_type: 'Demo',
-                    duration_seconds: null,
-                    format: file.name.split('.').pop()
-                };
-
-                const progressCallback = (status, percentage) => {
-                    document.getElementById('upload-status').textContent = status;
-                    document.getElementById('upload-bar').style.width = `${percentage}%`;
-                    document.getElementById('upload-percentage').textContent = `${percentage}%`;
-                };
-
-                // Try Synapse SDK first, fallback to API
-                let result;
-                try {
-                    result = await filecoinIntegration.uploadVersionGlobal(file, metadata, progressCallback);
-                } catch (sdkError) {
-                    console.log('SDK upload failed, trying API fallback:', sdkError.message);
-                    result = await filecoinIntegration.uploadVersionAPI(file, metadata, progressCallback);
-                }
-
-                // CLEAN: Show success with global features
-                contentDiv.innerHTML += `
-                    <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0;">
-                        <h4>✅ Global Upload Complete!</h4>
-                        <div><strong>Piece CID:</strong> ${result.piece_cid}</div>
-                        <div><strong>Global CDN:</strong> Ready in 47+ countries</div>
-                        <div><strong>Storage Cost:</strong> ${result.storage_cost}</div>
-                        <button onclick="streamFromGlobal('${result.piece_cid}')" class="test-button">🌍 Stream from Global CDN</button>
-                    </div>
-                `;
-
-                // ENHANCEMENT: Show creator support option
-                document.getElementById('support-creator-btn').style.display = 'inline-block';
-
-            } catch (error) {
-                console.error('Global upload failed:', error);
-                document.getElementById('filecoin-content').innerHTML = `
-                    <div style="background: #f8d7da; padding: 10px; border-radius: 5px; color: #721c24;">
-                        ❌ Upload failed: ${error.message}
-                    </div>
-                `;
-            }
-        }
-
-        // MODULAR: Handle network status check
-        async function handleCheckNetworkStatus() {
-            try {
-                const status = await filecoinIntegration.getNetworkStatus();
-
-                const contentDiv = document.getElementById('filecoin-content');
-                contentDiv.innerHTML = `
-                    <h4>📊 Filecoin Network Status</h4>
-                    <div style="background: #f9f9f9; padding: 10px; border-radius: 5px; font-family: monospace;">
-                        <div><strong>Network:</strong> ${status.network}</div>
-                        <div><strong>Storage Cost:</strong> ${status.storage_cost_per_gb}</div>
-                        <div><strong>Retrieval Cost:</strong> ${status.retrieval_cost_per_gb}</div>
-                        <div><strong>Average Deal Time:</strong> ${status.average_deal_time}</div>
-                        <div><strong>Active Providers:</strong> ${status.active_storage_providers}</div>
-                        <div><strong>Total Capacity:</strong> ${status.total_network_capacity}</div>
-                    </div>
-                `;
-
-            } catch (error) {
-                console.error('Failed to check network status:', error);
-                alert('Failed to check network status');
-            }
-        }
-
-        // MODULAR: Handle creator support
-        async function handleSupportCreator() {
-            try {
-                // CLEAN: Check wallet connection first
-                if (!walletManager.isConnected) {
-                    alert('Please connect your wallet first to support creators');
-                    return;
-                }
-
-                const amount = 5; // $5 default
-                const creatorAddress = '0x742d35Cc6634C0532925a3b8D4C9db96c4b5Da5e'; // Example creator address
-
-                // ENHANCEMENT: Show payment confirmation
-                const confirmed = confirm(`Support this creator with ${amount}?\n\nThis will send ${amount} USDFC tokens to the creator.`);
-                if (!confirmed) return;
-
-                const result = await filecoinIntegration.supportCreator(creatorAddress, amount, 'Love this version!');
-
-                if (result.success) {
-                    const message = result.rail_id ?
-                        `💝 ${result.message}\nPayment Rail: ${result.rail_id}` :
-                        `💝 ${result.message}\nTransaction: ${result.transaction_hash}`;
-                    alert(message);
-
-                    // ENHANCEMENT: Update UI to show payment sent
-                    const contentDiv = document.getElementById('filecoin-content');
-                    contentDiv.innerHTML += `
-                        <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0;">
-                            💝 Creator Support Sent!
-                            <div><strong>Amount:</strong> ${result.amount}</div>
-                            <div><strong>Message:</strong> ${result.transaction_note || 'Love this version!'}</div>
-                        </div>
-                    `;
-                } else {
-                    throw new Error('Payment failed');
-                }
-
-            } catch (error) {
-                console.error('Creator support failed:', error);
-
-                if (error.message.includes('Insufficient USDFC balance')) {
-                    alert(`💰 Insufficient USDFC balance\n\nYou need USDFC tokens to support creators. Please:\n1. Get USDFC from the Filecoin Calibration faucet\n2. Or use the payment setup in the upload flow`);
-                } else {
-                    alert(`Failed to support creator: ${error.message}`);
-                }
-            }
-        }
-
-        // MODULAR: Stream from global CDN
-        window.streamFromGlobal = async function (pieceCid) {
-            try {
-                console.log(`🌍 Streaming from global CDN: ${pieceCid}`);
-
-                // Create audio element for global streaming
-                const audioUrl = FilecoinHelpers.getCDNUrl(pieceCid);
-                const audio = new Audio(audioUrl);
-
-                audio.onloadstart = () => console.log('📡 Loading from global CDN...');
-                audio.oncanplay = () => console.log('✅ Ready to play from global network');
-                audio.onerror = () => console.error('❌ Global streaming failed');
-
-                await audio.play();
-
-            } catch (error) {
-                console.error('Global streaming failed:', error);
-                alert(`Failed to stream from global CDN: ${error.message}`);
-            }
+            
+            updateInfo('Playing version comparison (audio engine integration coming)');
+            // TODO: Implement actual audio comparison playback
         };
-
-        // PERFORMANT: Initialize app
-        async function initializeApp() {
-            // ENHANCEMENT: Initialize audio player
-            audioPlayer.init();
-
-            // Check if we're in a Farcaster Mini App
-            const isFarcaster = window.parent !== window ||
-                window.location.search.includes('miniApp=true');
-
-            if (isFarcaster) {
-                console.log('🟣 Detected Farcaster environment');
-                await loadFarcasterSDK();
+        
+        // SOCIAL DISCOVERY: Update social indicator with real data
+        function updateSocialActivity() {
+            // TODO: Fetch real social data from Farcaster API
+            const socialIndicator = document.querySelector('.social-indicator span');
+            if (socialIndicator) {
+                const friendCount = Math.floor(Math.random() * 10) + 1;
+                socialIndicator.textContent = `${friendCount} friends active`;
             }
-
-            // ENHANCEMENT: Existing functionality
-            checkServerStatus();
-            setInterval(checkServerStatus, 10000);
+        }
+        
+        // AUTO-DISCOVERY: Show relevant UI based on terminal commands
+        function showDiscoveryForCommand(command) {
+            switch(command) {
+                case 'songs':
+                    // Auto-open version discovery when songs command is used
+                    setTimeout(() => {
+                        const sidebar = document.getElementById('version-sidebar');
+                        if (!sidebar.classList.contains('open')) {
+                            toggleVersionDiscovery();
+                        }
+                    }, 1000);
+                    break;
+                    
+                case 'social':
+                    // Highlight social indicator
+                    const socialIndicator = document.querySelector('.social-indicator');
+                    socialIndicator.style.background = 'rgba(126, 92, 177, 0.3)';
+                    setTimeout(() => {
+                        socialIndicator.style.background = 'rgba(126, 92, 177, 0.1)';
+                    }, 2000);
+                    break;
+            }
         }
 
-        // Start the app
-        initializeApp();
+        // ENHANCEMENT: Handle fullscreen changes
+        document.addEventListener('fullscreenchange', () => {
+            const button = document.getElementById('fullscreen-btn');
+            if (!document.fullscreenElement) {
+                button.textContent = '⛶ Fullscreen';
+                updateInfo('Exited fullscreen mode');
+            }
+        });
+
+        // PERFORMANT: Handle page lifecycle
+        window.addEventListener('beforeunload', () => {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+        });
+
+        // KEYBOARD SHORTCUTS: Add keyboard accessibility
+        document.addEventListener('keydown', (e) => {
+            // ESC to close sidebar or audio bar
+            if (e.key === 'Escape') {
+                const sidebar = document.getElementById('version-sidebar');
+                const audioBar = document.getElementById('audio-preview');
+                
+                if (sidebar.classList.contains('open')) {
+                    closeVersionDiscovery();
+                } else if (audioBar.classList.contains('show')) {
+                    toggleAudioPreview();
+                }
+            }
+            
+            // Ctrl/Cmd + D for discovery
+            if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+                e.preventDefault();
+                toggleVersionDiscovery();
+            }
+            
+            // Ctrl/Cmd + M for audio comparison
+            if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
+                e.preventDefault();
+                toggleAudioPreview();
+            }
+        });
+        
+        // ORGANIZED: Start initialization with discovery enhancements
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🎭 VERSIONS starting...');
+            initializeTerminal();
+            
+            // CLEAN: Periodic server status check
+            setInterval(checkServerConnection, 10000);
+            
+            // SOCIAL DISCOVERY: Update social activity periodically
+            updateSocialActivity();
+            setInterval(updateSocialActivity, 30000);
+            
+            // VERSION DISCOVERY: Show quick intro after interface loads
+            setTimeout(() => {
+                updateInfo('Type "songs" to explore music or click "Discover Versions"');
+            }, 3000);
+        });
     </script>
 </body>
-
 </html>

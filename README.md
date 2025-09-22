@@ -2,7 +2,7 @@
 
 <!-- Test webhook deployment - 2025-09-20 -->
 
-**Version-centric music platform with dual interfaces: professional terminal tools for creators, community web platform with Farcaster social features.**
+**Version-centric music platform with unified web interface: professional terminal-like tools + community features with Farcaster social integration.**
 
 [![Build status](https://github.com/thisyearnofear/versions/actions/workflows/build.yml/badge.svg)](https://github.com/thisyearnofear/versions/actions)
 [![crates.io](https://img.shields.io/crates/v/versions.svg)](https://crates.io/crates/versions)
@@ -10,15 +10,15 @@
 
 ## 🎯 **What is VERSIONS?**
 
-VERSIONS puts **song versions at the center** of music discovery with **dual interfaces** and **Web3-native social features**:
+VERSIONS puts **song versions at the center** of music discovery with a **unified web interface** that combines **professional tools** and **Web3-native social features**:
 
-### **🖥️ Terminal Interface (Professional)**
-- **Local Management** - Privacy-first file system integration
-- **CLI Integration** - Script-friendly commands for creators
-- **Batch Operations** - Efficient multi-file processing
-- **Power Tools** - Advanced audio analysis and comparison
+### **🖥️ Professional Tools (Terminal-Style)**
+- **Terminal-Like UX** - Familiar command-line interface in browser
+- **Audio Analysis** - Advanced version comparison and processing
+- **Batch Operations** - Efficient multi-file operations
+- **Power User Features** - Professional creator workflows
 
-### **🌐 Web Interface (Community)**
+### **🌐 Community Features**
 - **Audio Streaming** - Professional player with range request support
 - **Farcaster Integration** - Web3-native social discovery
 - **Version Comparison** - Side-by-side audio analysis
@@ -63,8 +63,8 @@ make web-dev
 cd web && python3 -m http.server 3000
 # Open http://localhost:3000
 
-# 3. Terminal interface (professional tools)
-./target/debug/versions-tui
+# 3. Future: Unified WASM terminal interface
+# Coming: Same Rust code running in browser and terminal
 ```
 
 ### **First Steps**
@@ -81,27 +81,30 @@ make verify-build
 
 ## 🏗️ **Architecture**
 
-Dual-interface architecture with shared Rust backend:
+Unified web interface architecture with Rust backend:
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  Terminal (TUI) │    │   gRPC + REST    │    │  Audio Engine   │
-│ Professional    │◄──►│     Server       │◄──►│   (Rust)        │
-│    Tools        │    │                  │    │                 │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │                        │
-┌─────────────────┐             │               ┌─────────────────┐
-│  Web Frontend   │◄────────────┘               │   Farcaster     │
-│ + Farcaster     │                             │ Social Layer    │
-│ Mini App        │◄────────────────────────────┤                 │
-└─────────────────┘                             └─────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    Unified Web Interface                        │
+│  ┌──────────────────────┐  ┌──────────────────────────────────┐ │
+│  │  Terminal-Style UI   │  │       Community Platform         │ │
+│  │  Professional Tools  │  │   Social Features & Discovery    │ │
+│  └──────────────────────┘  └──────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌──────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   gRPC + REST    │    │  Audio Engine   │    │   Farcaster     │
+│     Server       │◄──►│   (Rust)        │    │ Social Layer    │
+│                  │    │                 │    │                 │
+└──────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
 ### **Core Features**
 - **Audio Formats**: MP3, FLAC, WAV, M4A, OGG, AIFF
 - **Streaming**: Range request support for efficient playback
 - **Social Integration**: Native Farcaster Mini App
-- **Dual Interface**: Terminal tools + Web community platform
+- **Unified Interface**: Terminal-like tools + Community platform in browser
 - **Version-Centric**: Unique approach to music organization
 - **TypeScript Web Interface**: Type-safe, modern frontend development
 
@@ -112,7 +115,7 @@ Dual-interface architecture with shared Rust backend:
 ### **✅ Completed Features**
 - **Audio Streaming**: Professional player with range request support
 - **Farcaster Mini App**: Native Web3 social integration
-- **Dual Interface**: Terminal + Web platforms working together
+- **Unified Interface**: Terminal-style UX + Community features in browser
 - **REST API**: Complete endpoints for audio and social features
 - **File Management**: Upload, stream, and organize audio files
 
@@ -123,7 +126,7 @@ Dual-interface architecture with shared Rust backend:
 - **Mobile Optimization**: Better responsive design
 
 ### **📋 Planned**
-- **Enhanced TUI**: Professional terminal tools
+- **WASM Terminal**: Unified terminal interface in browser
 - **Blockchain Integration**: Arbitrum L2 for ownership
 - **Creator Economy**: Direct fan funding
 - **Advanced Audio**: Waveform analysis and sync playback

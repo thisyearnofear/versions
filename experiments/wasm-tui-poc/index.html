@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎭 VERSIONS WASM Terminal POC</title>
+    <style>
+        /* CLEAN: Terminal-inspired styling following VERSIONS theme */
+        :root {
+            --bg-primary: #101421;
+            --fg-primary: #fffbf6;
+            --color-green: #00ff88;
+            --color-blue: #00d4ff;
+            --color-yellow: #f6c744;
+            --color-red: #ff5555;
+            --color-cyan: #64dbed;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            background: var(--bg-primary);
+            color: var(--fg-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .poc-header {
+            background: #2a3441;
+            padding: 12px 20px;
+            border-bottom: 2px solid var(--color-blue);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .poc-title {
+            color: var(--color-blue);
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        .poc-status {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9rem;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--color-red);
+        }
+        
+        .status-dot.ok {
+            background: var(--color-green);
+        }
+        
+        .terminal-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        #terminal-canvas {
+            border: 1px solid #2a3441;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            background: var(--bg-primary);
+        }
+        
+        .controls {
+            background: #1a2332;
+            padding: 15px 20px;
+            border-top: 1px solid #2a3441;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .control-btn {
+            background: rgba(0, 212, 255, 0.2);
+            color: var(--color-blue);
+            border: 1px solid var(--color-blue);
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+        
+        .control-btn:hover {
+            background: rgba(0, 212, 255, 0.4);
+            color: var(--fg-primary);
+        }
+        
+        .performance-display {
+            color: var(--color-yellow);
+            font-size: 0.85rem;
+        }
+        
+        .loading-message {
+            text-align: center;
+            color: var(--color-cyan);
+            font-size: 1.1rem;
+            padding: 40px;
+        }
+        
+        .error-message {
+            text-align: center;
+            color: var(--color-red);
+            font-size: 1.1rem;
+            padding: 40px;
+            background: rgba(255, 85, 85, 0.1);
+            border: 1px solid var(--color-red);
+            border-radius: 8px;
+            margin: 20px;
+        }
+        
+        /* PERFORMANT: Hide canvas until WASM loads */
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="poc-header">
+        <div class="poc-title">🎭 VERSIONS WASM Terminal POC</div>
+        <div class="poc-status">
+            <div class="status-item">
+                <div class="status-dot" id="wasm-status"></div>
+                <span>WASM</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="canvas-status"></div>
+                <span>Canvas</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="input-status"></div>
+                <span>Input</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="terminal-container">
+        <div id="loading-message" class="loading-message">
+            🔄 Loading WASM Terminal Interface...
+        </div>
+        
+        <div id="error-message" class="error-message hidden">
+            ❌ Failed to load WASM Terminal Interface
+        </div>
+        
+        <canvas id="terminal-canvas" 
+                width="1000" 
+                height="600" 
+                class="hidden"
+                tabindex="0">
+            Your browser does not support the HTML5 Canvas element.
+        </canvas>
+    </div>
+    
+    <div class="controls">
+        <div class="control-group">
+            <button class="control-btn" onclick="runPerformanceTest()">🧪 Performance Test</button>
+            <button class="control-btn" onclick="validatePOC()">✅ Validate POC</button>
+            <button class="control-btn" onclick="clearTerminal()">🧹 Clear</button>
+        </div>
+        
+        <div class="performance-display">
+            <span id="performance-info">Ready for testing</span>
+        </div>
+        
+        <div class="control-group">
+            <button class="control-btn" onclick="showDimensions()">📏 Dimensions</button>
+            <button class="control-btn" onclick="focusTerminal()">🎯 Focus</button>
+        </div>
+    </div>
+
+    <script type="module">
+        // MODULAR: Import WASM module
+        import init, { VersionsTerminalPOC } from './pkg/versions_wasm_poc.js';
+
+        let terminal = null;
+        let animationId = null;
+
+        // CLEAN: Status update functions
+        function updateStatus(elementId, isOk) {
+            const element = document.getElementById(elementId);
+            if (isOk) {
+                element.classList.add('ok');
+            } else {
+                element.classList.remove('ok');
+            }
+        }
+
+        // PERFORMANT: Animation loop for terminal rendering
+        function renderLoop() {
+            if (terminal) {
+                terminal.render();
+                animationId = requestAnimationFrame(renderLoop);
+            }
+        }
+
+        // ORGANIZED: Initialize WASM terminal
+        async function initializeTerminal() {
+            try {
+                console.log('🎭 Initializing VERSIONS WASM Terminal POC...');
+                
+                // CLEAN: Load WASM module
+                await init();
+                updateStatus('wasm-status', true);
+                
+                // MODULAR: Get canvas element
+                const canvas = document.getElementById('terminal-canvas');
+                if (!canvas) {
+                    throw new Error('Canvas element not found');
+                }
+                
+                // CLEAN: Create terminal instance
+                terminal = new VersionsTerminalPOC(canvas);
+                updateStatus('canvas-status', true);
+                
+                // ENHANCEMENT: Set up keyboard event handling
+                canvas.addEventListener('keydown', (event) => {
+                    event.preventDefault(); // Prevent browser shortcuts
+                    
+                    try {
+                        terminal.handle_keypress(event);
+                        updateStatus('input-status', true);
+                    } catch (error) {
+                        console.error('Key handling error:', error);
+                        updateStatus('input-status', false);
+                    }
+                });
+                
+                // PERFORMANT: Start render loop
+                renderLoop();
+                
+                // CLEAN: Show terminal, hide loading message
+                document.getElementById('loading-message').classList.add('hidden');
+                canvas.classList.remove('hidden');
+                
+                // ENHANCEMENT: Focus canvas for immediate input
+                canvas.focus();
+                
+                console.log('✅ WASM Terminal POC initialized successfully');
+                document.getElementById('performance-info').textContent = 'Terminal ready - try typing!';
+                
+                return true;
+                
+            } catch (error) {
+                console.error('❌ Terminal initialization failed:', error);
+                
+                // CLEAN: Show error message
+                document.getElementById('loading-message').classList.add('hidden');
+                document.getElementById('error-message').classList.remove('hidden');
+                document.getElementById('error-message').innerHTML = 
+                    `❌ Failed to load WASM Terminal Interface<br><small>${error.message}</small>`;
+                
+                return false;
+            }
+        }
+
+        // MODULAR: Control functions for buttons
+        window.runPerformanceTest = function() {
+            if (!terminal) return;
+            
+            const start = performance.now();
+            
+            // PERFORMANT: Test terminal operations
+            try {
+                const isValid = terminal.validate_poc();
+                const dimensions = terminal.get_dimensions();
+                const end = performance.now();
+                
+                const info = `POC Valid: ${isValid} | Dimensions: ${dimensions[0]}x${dimensions[1]} | Test: ${(end - start).toFixed(2)}ms`;
+                document.getElementById('performance-info').textContent = info;
+                
+                console.log('🧪 Performance test completed:', info);
+            } catch (error) {
+                console.error('Performance test failed:', error);
+                document.getElementById('performance-info').textContent = `Test failed: ${error.message}`;
+            }
+        };
+
+        window.validatePOC = function() {
+            if (!terminal) return;
+            
+            try {
+                const isValid = terminal.validate_poc();
+                const status = isValid ? '✅ POC Valid' : '❌ POC Invalid';
+                document.getElementById('performance-info').textContent = status;
+                
+                updateStatus('canvas-status', isValid);
+                console.log('🔍 POC validation:', status);
+            } catch (error) {
+                console.error('Validation failed:', error);
+                document.getElementById('performance-info').textContent = 'Validation error';
+            }
+        };
+
+        window.clearTerminal = function() {
+            if (!terminal) return;
+            
+            // Send clear command through terminal
+            const canvas = document.getElementById('terminal-canvas');
+            const clearEvent = new KeyboardEvent('keydown', {
+                key: 'c',
+                ctrlKey: true
+            });
+            
+            // Simulate typing "clear" command
+            console.log('🧹 Clearing terminal...');
+        };
+
+        window.showDimensions = function() {
+            if (!terminal) return;
+            
+            try {
+                const dimensions = terminal.get_dimensions();
+                document.getElementById('performance-info').textContent = 
+                    `Terminal: ${dimensions[0]}x${dimensions[1]} characters`;
+            } catch (error) {
+                console.error('Failed to get dimensions:', error);
+            }
+        };
+
+        window.focusTerminal = function() {
+            const canvas = document.getElementById('terminal-canvas');
+            canvas.focus();
+            document.getElementById('performance-info').textContent = 'Terminal focused - type away!';
+        };
+
+        // ENHANCEMENT: Handle page lifecycle
+        window.addEventListener('beforeunload', () => {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+        });
+
+        // ORGANIZED: Start initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🎭 VERSIONS WASM POC page loaded');
+            initializeTerminal();
+        });
+    </script>
+</body>
+</html>

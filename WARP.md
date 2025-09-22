@@ -4,22 +4,25 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-**VERSIONS** is a version-centric music platform with dual interfaces: professional terminal tools for creators and a community web platform with Farcaster social features. The platform puts song versions at the center of music discovery.
+**VERSIONS** is a version-centric music platform with a unified web interface that provides professional terminal-like tools alongside community features. The platform puts song versions at the center of music discovery.
 
 ### Core Architecture
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  Terminal (TUI) │    │   gRPC + REST    │    │  Audio Engine   │
-│ Professional    │◄──►│     Server       │◄──►│   (Rust)        │
-│    Tools        │    │                  │    │                 │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │                        │
-┌─────────────────┐             │               ┌─────────────────┐
-│  Web Frontend   │◄────────────┘               │   Farcaster     │
-│ + Farcaster     │                             │ Social Layer    │
-│ Mini App        │◄────────────────────────────┤                 │
-└─────────────────┘                             └─────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    Unified Web Interface                        │
+│  ┌──────────────────────┐  ┌──────────────────────────────────┐ │
+│  │  Terminal-Style UI   │  │       Community Platform         │ │
+│  │  Professional Tools  │  │   Social Features & Discovery    │ │
+│  └──────────────────────┘  └──────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌──────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   gRPC + REST    │    │  Audio Engine   │    │   Farcaster     │
+│     Server       │◄──►│   (Rust)        │    │ Social Layer    │
+│                  │    │                 │    │                 │
+└──────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
 ## Common Development Commands
@@ -41,7 +44,7 @@ make full
 
 # Build specific components
 cargo build -p termusic-server    # Server only
-cargo build -p termusic           # TUI only
+cargo build -p termusic-playback  # Audio engine only
 cargo build -p termusic-lib       # Library only
 ```
 
@@ -62,16 +65,16 @@ cargo test -p termusic-server
 
 ### Running the Platform
 ```bash
-# 1. Start the dual-interface server (required)
-./target/debug/versions-server
+# 1. Start the backend server (required)
+cargo run -p termusic-server
 # Server runs on http://localhost:8080 (gRPC + REST)
 
-# 2. Web interface (community platform)
+# 2. Web interface (unified platform)
 cd web && python3 -m http.server 3000
 # Open http://localhost:3000
 
-# 3. Terminal interface (professional tools)
-./target/debug/versions-tui
+# Note: Building unified WASM terminal interface
+# Future: Single interface with terminal-like UX in browser
 ```
 
 ### Development Workflow
@@ -92,9 +95,8 @@ cp your-music.mp3 audio_files/
 ### Rust Workspace Structure
 - **`lib/`** - Shared library code with core data structures and utilities
 - **`server/`** - Backend server providing both gRPC and REST APIs
-- **`tui/`** - Terminal user interface for professional users
 - **`playback/`** - Audio playback engine with multiple backend support
-- **`web/`** - Static web assets for community platform
+- **`web/`** - Unified web interface (terminal-like UX + community features)
 
 ### Key Server Components
 - **`server/src/rest_api.rs`** - REST API router with all endpoints
@@ -174,9 +176,9 @@ make all-backends
 - **Async Operations**: Non-blocking I/O throughout
 - **Lazy Loading**: Components loaded only when needed
 
-### Dual Interface Strategy
-- **Terminal (TUI)**: Professional tools, CLI integration, batch operations
-- **Web Platform**: Community features, social discovery, visual interfaces
+### Unified Interface Strategy
+- **Web Platform**: Terminal-like professional tools + community features
+- **Future WASM**: Same Rust code running in browser and terminal
 - **Shared Backend**: Unified business logic via gRPC and REST APIs
 
 ## Development Environment Setup

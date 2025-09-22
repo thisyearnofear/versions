@@ -1,0 +1,55 @@
+[package]
+name = "versions-wasm-poc"
+version = "0.1.0"
+edition = "2021"
+description = "VERSIONS WASM Terminal Interface Proof of Concept"
+
+# ORGANIZED: Exclude from parent workspace
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# WASM bindings
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+
+# ENHANCEMENT FIRST: Simplified POC without complex dependencies
+
+# PERFORMANT: Error handling and panic hooks
+console_error_panic_hook = { version = "0.1", optional = true }
+wee_alloc = { version = "0.4", optional = true }
+
+# MODULAR: Async support for WASM
+wasm-bindgen-futures = "0.4"
+
+# CLEAN: Serialization for API communication
+serde = { version = "1.0", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+
+# CLEAN: Web APIs with required features
+web-sys = { version = "0.3", features = [
+  "console",
+  "CanvasRenderingContext2d",
+  "Document",
+  "Element",
+  "HtmlCanvasElement",
+  "HtmlElement",
+  "KeyboardEvent",
+  "Window",
+  "AudioContext",
+  "AudioBuffer",
+  "AudioBufferSourceNode",
+  "GainNode",
+]}
+
+[features]
+default = ["console_error_panic_hook"]
+console_error_panic_hook = ["dep:console_error_panic_hook"]
+wee_alloc = ["dep:wee_alloc"]
+
+[profile.release]
+# PERFORMANT: Optimize for size in WASM
+opt-level = 's'
+lto = true

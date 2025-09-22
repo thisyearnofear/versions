@@ -1,8 +1,6 @@
-prog := versions-tui
 server := versions-server
 ifeq ($(OS),Windows_NT)
 # Windows 
-	prog := versions-tui.exe
 	server := versions-server.exe 
 endif
 default_cargo_home = $(HOME)/.local/share/cargo
@@ -65,7 +63,6 @@ minimal: release post
 
 post: 
 	echo $(install_to)
-	cp -f target/release/$(prog) "$(install_to)"
 	cp -f target/release/$(server) "$(install_to)"
 
 install: release post
@@ -78,7 +75,6 @@ winrelease:
 
 winpost:
 	powershell -noprofile -command "Write-Host $(install_to)"
-	cp -f target/release/$(prog) "$(install_to)"
 	cp -f target/release/$(server) "$(install_to)"
 
 wininstall: winrelease winpost
