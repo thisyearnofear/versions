@@ -20,21 +20,21 @@ VERSIONS puts **song versions at the center** of music discovery with a **unifie
 
 ### **🌐 Community Features**
 - **Audio Streaming** - Professional player with range request support
-- **Farcaster Integration** - Web3-native social discovery
-- **Version Comparison** - Side-by-side audio analysis
-- **Social Curation** - Community-driven version discovery
+- **Farcaster Integration** - Web3-native social discovery and Mini App
+- **Version Discovery** - Interactive sidebar with trending versions
+- **Social Recommendations** - Community-driven discovery through social graph
+- **Terminal-Style UX** - Professional command-like interface in browser
 
-### **🟣 Farcaster Mini App**
-- **Social Authentication** - Sign in with Farcaster
-- **Version Discovery Casting** - Share discoveries to social feeds
-- **Social Recommendations** - Music suggestions from social graph
-- **Community Discussions** - Farcaster-based conversations
+### **🟣 Farcaster Mini App**  
+- **Native Integration** - Built-in Farcaster Mini App support
+- **Social Discovery** - Version recommendations from social graph
+- **Community Curation** - Trending versions and social voting
+- **Real-time Activity** - Live social indicators and friend activity
 
 ## 🚀 **Quick Start**
 
 ### **Requirements**
 - **Rust 1.85.0+** - [Install Rust](https://rustup.rs/)
-- **Node.js 16+** - For TypeScript web interface
 - **protobuf-compiler** - `brew install protobuf` (macOS) or `sudo apt install protobuf-compiler` (Ubuntu)
 
 ### **Installation & Setup**
@@ -42,10 +42,7 @@ VERSIONS puts **song versions at the center** of music discovery with a **unifie
 git clone https://github.com/thisyearnofear/versions.git
 cd versions
 
-# Install web dependencies
-make web-install
-
-# Build everything (Rust + TypeScript)
+# Build complete Rust workspace
 make full-build
 ```
 
@@ -55,21 +52,17 @@ make full-build
 ./target/debug/versions-server
 # Server runs on http://localhost:8080
 
-# 2a. Web interface - Development with TypeScript watch
-make web-dev
-# Opens http://localhost:3000 with live reloading
-
-# 2b. Web interface - Production (static files)
+# 2. Web interface (unified platform)
 cd web && python3 -m http.server 3000
 # Open http://localhost:3000
 
-# 3. Future: Unified WASM terminal interface
+# 3. Future: WASM terminal interface
 # Coming: Same Rust code running in browser and terminal
 ```
 
 ### **First Steps**
 ```bash
-# Test the complete system (Rust + TypeScript)
+# Test the complete system
 ./scripts/test_server.sh
 
 # Add audio files
@@ -106,7 +99,7 @@ Unified web interface architecture with Rust backend:
 - **Social Integration**: Native Farcaster Mini App
 - **Unified Interface**: Terminal-like tools + Community platform in browser
 - **Version-Centric**: Unique approach to music organization
-- **TypeScript Web Interface**: Type-safe, modern frontend development
+- **Rust-First Platform**: Single language, unified architecture
 
 ## 📊 **Current Status**
 
@@ -114,16 +107,17 @@ Unified web interface architecture with Rust backend:
 
 ### **✅ Completed Features**
 - **Audio Streaming**: Professional player with range request support
-- **Farcaster Mini App**: Native Web3 social integration
-- **Unified Interface**: Terminal-style UX + Community features in browser
-- **REST API**: Complete endpoints for audio and social features
+- **Unified Web Interface**: Terminal-style UX with version discovery sidebar
+- **Farcaster UI Framework**: Social integration interface ready
+- **REST API**: Complete endpoints for audio streaming and version management
 - **File Management**: Upload, stream, and organize audio files
+- **Theme Integration**: Terminal-style design with CSS theming system
 
 ### **🔄 In Development**
-- **Version Comparison**: Side-by-side audio analysis
-- **Database Integration**: Persistent storage layer
-- **Enhanced Search**: Advanced discovery features
-- **Mobile Optimization**: Better responsive design
+- **Database Integration**: Replace mock data with persistent storage
+- **Farcaster API Integration**: Connect UI framework to real Farcaster APIs
+- **Version Comparison**: Functional side-by-side audio analysis
+- **Enhanced Search**: Advanced discovery and filtering features
 
 ### **📋 Planned**
 - **WASM Terminal**: Unified terminal interface in browser
@@ -133,44 +127,31 @@ Unified web interface architecture with Rust backend:
 
 ## 🛠️ **Development Workflow**
 
-### **TypeScript Web Interface**
-The web interface is built with TypeScript for type safety and better development experience:
+### **Unified Web Platform**
+The web interface uses modern HTML/CSS/JavaScript with a terminal-inspired design:
 
 ```bash
-# Development with live reloading
-make web-dev
+# Build complete Rust workspace
+make full-build
 
-# Build TypeScript to JavaScript
-make web-build
-
-# Clean build artifacts
-make web-clean
-
-# Install/update dependencies
-make web-install
+# Start development
+./target/debug/versions-server &
+cd web && python3 -m http.server 3000
 ```
 
 ### **File Structure**
 ```
 web/
-├── src/                    # TypeScript source files
-│   ├── audio-player.ts     # Audio playback with type safety
-│   ├── config.ts           # Environment configuration
-│   ├── farcaster.ts        # Social integration
-│   ├── wallet-connection.ts # Web3 wallet support
-│   ├── filecoin-integration.ts # Global storage
-│   └── shared/types/       # Shared type definitions
-├── dist/                   # Compiled JavaScript (auto-generated)
-├── index.html              # Main web interface
-├── package.json            # Node.js dependencies
-└── tsconfig.json           # TypeScript configuration
+├── index.html              # Main unified interface
+├── theme-bridge.js         # Terminal theme integration
+└── _redirects              # Netlify deployment config
 ```
 
-### **Type-Safe Development**
-- **Shared Types**: Common interfaces between frontend and backend
-- **API Integration**: Type-safe REST API client calls
-- **Modern ES6+**: Latest JavaScript features with compatibility
-- **Development Server**: Live reloading for rapid iteration
+### **Rust-First Development**
+- **Single Language**: Rust for both backend and future WASM frontend
+- **Unified Types**: Shared data structures across the platform
+- **Performance**: Direct Rust-to-WASM compilation path
+- **Simplicity**: No build toolchain complexity
 
 ## 🎵 **Key Concepts**
 

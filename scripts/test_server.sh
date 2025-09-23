@@ -40,14 +40,14 @@ curl -s http://127.0.0.1:8080/api/v1/audio/sample-track/metadata | jq '.' || ech
 echo "\nTesting Filecoin network status endpoint..."
 curl -s http://127.0.0.1:8080/api/v1/filecoin/network/status | jq '.' || echo "Filecoin network endpoint failed"
 
-# ENHANCEMENT FIRST: Test web interface TypeScript compilation
-echo -e "\n🌍 Testing web interface TypeScript build..."
-if [ -d "web/dist" ]; then
-    echo "✅ TypeScript compiled successfully - dist directory exists"
-    ls -la web/dist/*.js | head -5
+# CLEAN: Test web interface
+echo -e "\n🌍 Testing web interface..."
+if [ -f "web/index.html" ] && [ -f "web/theme-bridge.js" ]; then
+    echo "✅ Web interface files present"
+    echo "   HTML: web/index.html"
+    echo "   JS: web/theme-bridge.js"
 else
-    echo "❌ TypeScript build failed - no dist directory found"
-    echo "Run: cd web && npm run build"
+    echo "❌ Web interface files missing"
 fi
 
 # Stop server

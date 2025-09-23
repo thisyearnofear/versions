@@ -6,6 +6,8 @@ mod distributed_service;
 mod farcaster_service; // ENHANCEMENT: Add Farcaster service
 mod audio_service; // ENHANCEMENT: Add Audio streaming service
 mod filecoin_service; // ENHANCEMENT: Add Filecoin integration service
+mod database_simple;
+use database_simple as database; // MODULAR: Add simplified database module
 mod rest_api;
 
 use std::net::SocketAddr;
@@ -21,6 +23,7 @@ use parking_lot::Mutex;
 use termusiclib::config::v2::server::config_extra::ServerConfigVersionedDefaulted;
 use termusiclib::config::v2::server::{ComProtocol, ScanDepth};
 use termusiclib::config::{ServerOverlay, SharedServerSettings, new_shared_server_settings};
+use database::Database;
 use termusiclib::player::music_player_server::MusicPlayerServer;
 use termusiclib::player::{GetProgressResponse, PlayerProgress, PlayerTime, RunningStatus};
 use termusiclib::track::MediaTypesSimple;
@@ -276,11 +279,25 @@ async fn start_grpc_service(
     Ok(handle)
 }
 
-/// Start the REST API server for web frontend
+/// Start the REST API server for web frontend (ENHANCEMENT FIRST: now with database)
 async fn start_rest_api(
     cancel_token: CancellationToken,
 ) -> Result<JoinHandle<Result<(), std::io::Error>>> {
-    let app = rest_api::create_router();
+    // MODULAR: Initialize database
+    let database_path = "./data/versions.db";
+    info!("Initializing database at {}", database_path);
+    
+    let db = Database::new(database_path).await
+        .context("Failed to initialize database")?;
+    
+    // ORGANIZED: Seed example data for development
+    if let Err(e) = db.seed_example_data().await {
+        warn!("Failed to seed example data: {}", e);
+    } else {
+        info!("Database initialized with example data");
+    }
+    
+    let app = rest_api::create_router(db);
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
     
     info!("REST API attempting to bind to {addr}");
@@ -296,7 +313,8 @@ async fn start_rest_api(
     
     let handle = tokio::spawn(async move {
         info!("Starting REST API server...");
-        match axum::serve(listener, app)
+        // For axum 0.7 with state, we need to convert properly
+        match axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>())
             .with_graceful_shutdown(cancel_token.cancelled_owned())
             .await
         {

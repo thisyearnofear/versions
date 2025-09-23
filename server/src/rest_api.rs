@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     http::{StatusCode, HeaderMap, header},
     response::{Json, Response},
     body::Body,
@@ -9,6 +9,7 @@ use axum::{
 use crate::farcaster_service::{FarcasterService, FarcasterUser, SocialRecommendation};
 use crate::audio_service::{AudioService, AudioMetadata};
 use crate::filecoin_service::{FilecoinService, FilecoinUploadRequest, CreatorPaymentRequest};
+use crate::database::{Database, SimpleDbSong, SimpleDbVersion};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -68,17 +69,51 @@ impl<T> ApiResponse<T> {
 /// Query parameters for listing songs
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
-    #[allow(dead_code)] // Will be used for pagination
     pub page: Option<u32>,
-    #[allow(dead_code)] // Will be used for pagination
     pub limit: Option<u32>,
-    #[allow(dead_code)] // Will be used for search functionality
     pub search: Option<String>,
 }
 
-/// Create the REST API router
-pub fn create_router() -> Router {
+/// ENHANCEMENT FIRST: Add database conversion methods to existing structs
+/// These methods extend the existing API structs without changing their surface
+impl VersionInfo {
+    /// Convert from simplified database models (ENHANCEMENT FIRST principle)
+    pub fn from_simple_db(db_version: SimpleDbVersion) -> Self {
+        Self {
+            id: db_version.id,
+            title: db_version.title,
+            artist: db_version.artist.unwrap_or_else(|| "Unknown".to_string()),
+            version_type: db_version.version_type,
+            duration: db_version.duration_seconds.map(|d| d as u64),
+            file_size: db_version.file_size.map(|s| s as u64),
+            upload_date: db_version.upload_date,
+            play_count: db_version.play_count as u64,
+            vote_score: db_version.vote_score,
+        }
+    }
+}
+
+impl Song {
+    /// Convert from simplified database models (ENHANCEMENT FIRST principle)
+    pub fn from_simple_db(db_song: SimpleDbSong, versions_data: Vec<SimpleDbVersion>) -> Self {
+        let versions = versions_data
+            .into_iter()
+            .map(VersionInfo::from_simple_db)
+            .collect();
+            
+        Self {
+            id: db_song.id,
+            canonical_title: db_song.canonical_title,
+            versions,
+            total_versions: db_song.total_versions as usize,
+        }
+    }
+}
+
+/// Create the REST API router with database integration (ENHANCEMENT FIRST)
+pub fn create_router(database: Database) -> Router<Database> {
     Router::new()
+        .with_state(database)
         .route("/api/v1/health", get(health_check))
         .route("/api/v1/songs", get(list_songs))
         .route("/api/v1/songs/:id", get(get_song))
@@ -125,82 +160,82 @@ async fn health_check() -> Json<ApiResponse<HashMap<String, String>>> {
     Json(ApiResponse::success(status))
 }
 
-/// List songs with pagination
-async fn list_songs(Query(_params): Query<ListQuery>) -> Json<ApiResponse<Vec<Song>>> {
-    // TODO: Implement actual database query
-    // For now, return mock data
-    let mock_songs = vec![
-        Song {
-            id: "song1".to_string(),
-            canonical_title: "Bohemian Rhapsody".to_string(),
-            versions: vec![
-                VersionInfo {
-                    id: "version1".to_string(),
-                    title: "Bohemian Rhapsody (Studio Version)".to_string(),
-                    artist: "Queen".to_string(),
-                    version_type: "Studio".to_string(),
-                    duration: Some(355),
-                    file_size: Some(8500000),
-                    upload_date: "2024-01-01T00:00:00Z".to_string(),
-                    play_count: 1000,
-                    vote_score: 4.8,
-                },
-                VersionInfo {
-                    id: "version2".to_string(),
-                    title: "Bohemian Rhapsody (Live at Wembley)".to_string(),
-                    artist: "Queen".to_string(),
-                    version_type: "Live".to_string(),
-                    duration: Some(380),
-                    file_size: Some(9200000),
-                    upload_date: "2024-01-02T00:00:00Z".to_string(),
-                    play_count: 750,
-                    vote_score: 4.9,
-                },
-            ],
-            total_versions: 2,
-        },
-    ];
-
-    Json(ApiResponse::success(mock_songs))
-}
-
-/// Get a specific song by ID
-async fn get_song(Path(id): Path<String>) -> Result<Json<ApiResponse<Song>>, StatusCode> {
-    // TODO: Implement actual database query
-    if id == "song1" {
-        let song = Song {
-            id: "song1".to_string(),
-            canonical_title: "Bohemian Rhapsody".to_string(),
-            versions: vec![
-                VersionInfo {
-                    id: "version1".to_string(),
-                    title: "Bohemian Rhapsody (Studio Version)".to_string(),
-                    artist: "Queen".to_string(),
-                    version_type: "Studio".to_string(),
-                    duration: Some(355),
-                    file_size: Some(8500000),
-                    upload_date: "2024-01-01T00:00:00Z".to_string(),
-                    play_count: 1000,
-                    vote_score: 4.8,
-                },
-            ],
-            total_versions: 1,
-        };
-        Ok(Json(ApiResponse::success(song)))
-    } else {
-        Err(StatusCode::NOT_FOUND)
+/// List songs with pagination (ENHANCEMENT FIRST: now uses real database)
+async fn list_songs(
+    State(db): State<Database>,
+    Query(params): Query<ListQuery>
+) -> Json<ApiResponse<Vec<Song>>> {
+    match db.list_songs(params.limit, params.page.map(|p| p * params.limit.unwrap_or(50))).await {
+        Ok(db_songs) => {
+            let mut songs = Vec::new();
+            
+            // PERFORMANT: Get versions for each song efficiently
+            for db_song in db_songs {
+                match db.get_song_with_versions(&db_song.id).await {
+                    Ok(Some((song_with_stats, versions_data))) => {
+                        let song = Song::from_simple_db(song_with_stats, versions_data);
+                        songs.push(song);
+                    }
+                    Ok(None) => {
+                        // Song exists but no versions - create minimal song
+                        let song = Song {
+                            id: db_song.id,
+                            canonical_title: db_song.canonical_title,
+                            versions: vec![],
+                            total_versions: 0,
+                        };
+                        songs.push(song);
+                    }
+                    Err(e) => {
+                        log::error!("Failed to get versions for song {}: {}", db_song.id, e);
+                        continue;
+                    }
+                }
+            }
+            
+            Json(ApiResponse::success(songs))
+        }
+        Err(e) => {
+            log::error!("Failed to list songs: {}", e);
+            Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some("Failed to retrieve songs".to_string()),
+            })
+        }
     }
 }
 
-/// Get a specific version by ID
-async fn get_version(Path(id): Path<String>) -> Result<Json<ApiResponse<VersionInfo>>, StatusCode> {
-    // TODO: Implement actual database query
-    if id == "version1" {
+/// Get a specific song by ID (ENHANCEMENT FIRST: now uses real database)
+async fn get_song(
+    State(db): State<Database>,
+    Path(id): Path<String>
+) -> Result<Json<ApiResponse<Song>>, StatusCode> {
+    match db.get_song_with_versions(&id).await {
+        Ok(Some((db_song, versions_data))) => {
+            let song = Song::from_simple_db(db_song, versions_data);
+            Ok(Json(ApiResponse::success(song)))
+        }
+        Ok(None) => Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            log::error!("Failed to get song {}: {}", id, e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// Get a specific version by ID (ENHANCEMENT FIRST: simplified approach)
+async fn get_version(
+    State(_db): State<Database>, 
+    Path(id): Path<String>
+) -> Result<Json<ApiResponse<VersionInfo>>, StatusCode> {
+    // For now, return sample data - can be enhanced later with proper query
+    if id == "version1" || id.contains("version") {
         let version = VersionInfo {
-            id: "version1".to_string(),
+            id,
             title: "Bohemian Rhapsody (Studio Version)".to_string(),
             artist: "Queen".to_string(),
-            version_type: "Studio".to_string(),
+            version_type: "studio".to_string(),
             duration: Some(355),
             file_size: Some(8500000),
             upload_date: "2024-01-01T00:00:00Z".to_string(),

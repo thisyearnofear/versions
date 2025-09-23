@@ -33,11 +33,11 @@ else
 fi
 
 echo ""
-echo "🖥️ Testing TUI component..."
-if cargo check -p termusic --quiet; then
-    echo "✅ TUI component builds successfully"
+echo "🎵 Testing playback component..."
+if cargo check -p termusic-playback --quiet; then
+    echo "✅ Playback component builds successfully"
 else
-    echo "❌ TUI component build failed"
+    echo "❌ Playback component build failed"
     exit 1
 fi
 
@@ -54,25 +54,13 @@ fi
 echo ""
 echo "🌐 Checking web components..."
 
-# Check for TypeScript source files
-if [ ! -d "web/src" ] || [ ! -f "web/src/config.ts" ] || [ ! -f "web/src/audio-player.ts" ]; then
-    echo "❌ TypeScript source files missing"
-    exit 1
-fi
-
-# Check for compiled JavaScript files
-if [ ! -d "web/dist" ] || [ ! -f "web/dist/config.js" ] || [ ! -f "web/dist/audio-player.js" ]; then
-    echo "❌ Compiled JavaScript files missing - run 'make web-build'"
-    exit 1
-fi
-
-# Check for main HTML files
-if [ ! -f "web/index.html" ] || [ ! -f "web/package.json" ] || [ ! -f "web/tsconfig.json" ]; then
+# Check for web interface files
+if [ ! -f "web/index.html" ] || [ ! -f "web/theme-bridge.js" ]; then
     echo "❌ Essential web files missing"
     exit 1
 fi
 
-echo "✅ Web components present (TypeScript + compiled JavaScript)"
+echo "✅ Web interface present (HTML + JavaScript)"
 
 # CLEAN: Check documentation
 echo ""
@@ -88,9 +76,9 @@ echo ""
 echo "🎉 Build verification complete!"
 echo ""
 echo "📋 Next steps:"
-echo "   1. make full-build         # Complete build (Rust + TypeScript)"
-echo "   2. ./scripts/test_server.sh # Test API endpoints + TypeScript"
-echo "   3. make web-dev            # Start development server with live reload"
+echo "   1. make full-build         # Complete Rust build"
+echo "   2. ./scripts/test_server.sh # Test API endpoints"
+echo "   3. cd web && python3 -m http.server 3000  # Start web interface"
 echo "   4. ./target/debug/versions-server  # Start backend server"
 echo ""
 echo "🎵 VERSIONS is ready for version-centric music discovery!"

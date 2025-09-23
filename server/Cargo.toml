@@ -49,6 +49,10 @@ base64 = "0.22"
 rand = "0.8"
 # OpenSSL with vendored feature for easier deployment
 openssl = { version = "0.10", features = ["vendored"] }
+# MODULAR: Database dependencies (use existing rusqlite - AGGRESSIVE CONSOLIDATION)
+rusqlite.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
 
 
 [features]

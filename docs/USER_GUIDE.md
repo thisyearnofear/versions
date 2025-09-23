@@ -7,7 +7,6 @@ VERSIONS is a version-centric music platform with dual interfaces: professional 
 ### **Requirements**
 - **Rust 1.85.0+** - [Install Rust](https://rustup.rs/)
 - **protobuf-compiler** - `brew install protobuf` (macOS) or `sudo apt install protobuf-compiler` (Ubuntu)
-- **Node.js 22.11.0+** (for web interface) - [Install Node.js](https://nodejs.org/)
 
 ### **Installation**
 ```bash
