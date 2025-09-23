@@ -1,9 +1,8 @@
-use rusqlite::{Connection, params, Row};
+use rusqlite::{Connection, params};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use anyhow::{Result, Context};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use std::sync::{Arc, Mutex};
 
 /// ENHANCEMENT FIRST: Simple database using existing rusqlite
 /// CLEAN: Single responsibility - only database concerns
@@ -199,5 +198,64 @@ impl Database {
         
         let songs: Result<Vec<_>, _> = song_iter.collect();
         songs.map_err(Into::into)
+    }
+    
+    /// MODULAR: Create a new song
+    pub async fn create_song(&self, song_id: &str, title: &str, artist: Option<&str>) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        
+        conn.execute(
+            "INSERT INTO songs (id, canonical_title, original_artist, total_versions, total_play_count, average_vote_score) VALUES (?1, ?2, ?3, 0, 0, 0.0)",
+            params![song_id, title, artist],
+        )?;
+        
+        log::info!("Created song: {} with ID: {}", title, song_id);
+        Ok(())
+    }
+    
+    /// MODULAR: Create a new version
+    pub async fn create_version(
+        &self,
+        version_id: &str,
+        song_id: &str,
+        version_type_id: i32,
+        title: &str,
+        artist: Option<&str>,
+        file_path: Option<&str>,
+        file_size: i32,
+        duration_seconds: Option<i32>,
+        format: &str,
+        sample_rate: Option<i32>,
+        channels: Option<i32>,
+        bitrate: Option<i32>,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        
+        conn.execute(
+            "INSERT INTO versions (id, song_id, version_type_id, title, artist, file_path, file_size, duration_seconds, format, sample_rate, channels, bitrate, upload_date, play_count, vote_score, vote_count) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, datetime('now'), 0, 0.0, 0)",
+            params![
+                version_id, 
+                song_id, 
+                version_type_id, 
+                title, 
+                artist, 
+                file_path, 
+                file_size, 
+                duration_seconds, 
+                format, 
+                sample_rate, 
+                channels, 
+                bitrate
+            ],
+        )?;
+        
+        // PERFORMANT: Update song statistics
+        conn.execute(
+            "UPDATE songs SET total_versions = total_versions + 1 WHERE id = ?1",
+            params![song_id],
+        )?;
+        
+        log::info!("Created version: {} for song: {}", title, song_id);
+        Ok(())
     }
 }

@@ -25,6 +25,7 @@ anyhow.workspace = true
 ctrlc.workspace = true
 log.workspace = true
 flexi_logger.workspace = true
+tracing.workspace = true
 colored.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
@@ -34,7 +35,7 @@ tokio-util.workspace = true
 tonic.workspace = true
 clap.workspace = true
 # Web framework for REST API
-axum = "0.7"
+axum = { version = "0.7", features = ["multipart"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "fs"] }
 serde_json.workspace = true
@@ -53,6 +54,8 @@ openssl = { version = "0.10", features = ["vendored"] }
 rusqlite.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
+# ENHANCEMENT: Audio metadata extraction
+lofty.workspace = true
 
 
 [features]

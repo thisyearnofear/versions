@@ -1,18 +1,22 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, Query, State, Multipart},
     http::{StatusCode, HeaderMap, header},
     response::{Json, Response},
     body::Body,
     routing::{get, post},
     Router,
 };
+use serde_json::json;
 use crate::farcaster_service::{FarcasterService, FarcasterUser, SocialRecommendation};
 use crate::audio_service::{AudioService, AudioMetadata};
 use crate::filecoin_service::{FilecoinService, FilecoinUploadRequest, CreatorPaymentRequest};
 use crate::database::{Database, SimpleDbSong, SimpleDbVersion};
-use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
+use chrono;
+use uuid::Uuid;
+use anyhow;
 // AGGRESSIVE CONSOLIDATION: Remove unused import
 // use tower_http::cors::CorsLayer; // Not needed, using tower_http::cors::CorsLayer directly
 
@@ -111,9 +115,8 @@ impl Song {
 }
 
 /// Create the REST API router with database integration (ENHANCEMENT FIRST)
-pub fn create_router(database: Database) -> Router<Database> {
+pub fn create_router(database: Database) -> Router {
     Router::new()
-        .with_state(database)
         .route("/api/v1/health", get(health_check))
         .route("/api/v1/songs", get(list_songs))
         .route("/api/v1/songs/:id", get(get_song))
@@ -125,6 +128,8 @@ pub fn create_router(database: Database) -> Router<Database> {
         .route("/api/v1/farcaster/cast", post(create_farcaster_cast))
         .route("/api/v1/farcaster/recommendations", get(get_social_recommendations))
         .route("/api/v1/versions/:id/discussions", get(get_version_discussions))
+        // Farcaster Mini App manifest at well-known path
+        .route("/.well-known/farcaster.json", get(get_farcaster_manifest))
         // ENHANCEMENT: Add audio streaming endpoints
         .route("/api/v1/audio/files", get(list_audio_files))
         .route("/api/v1/audio/:file_id/metadata", get(get_audio_metadata))
@@ -148,6 +153,7 @@ pub fn create_router(database: Database) -> Router<Database> {
                 .allow_methods(tower_http::cors::Any)
                 .allow_headers(tower_http::cors::Any),
         )
+        .with_state(database)
 }
 
 /// Health check endpoint
@@ -158,6 +164,40 @@ async fn health_check() -> Json<ApiResponse<HashMap<String, String>>> {
     status.insert("version".to_string(), env!("CARGO_PKG_VERSION").to_string());
     
     Json(ApiResponse::success(status))
+}
+
+/// Serve Farcaster Mini App manifest at well-known path
+async fn get_farcaster_manifest() -> Response {
+    // Read configuration from environment with sensible defaults
+    let name = env::var("FARCASTER_APP_NAME").unwrap_or_else(|_| "VERSIONS".to_string());
+    let domain = env::var("FARCASTER_DOMAIN").unwrap_or_else(|_| "localhost:3000".to_string());
+    let icon_url = env::var("FARCASTER_ICON_URL").unwrap_or_else(|_| format!("https://{}/app.png", domain));
+    let home_url = env::var("FARCASTER_HOME_URL").unwrap_or_else(|_| format!("https://{}/", domain));
+    let image_url = env::var("FARCASTER_IMAGE_URL").unwrap_or_else(|_| format!("https://{}/opengraph-image.png", domain));
+    let button_title = env::var("FARCASTER_BUTTON_TITLE").unwrap_or_else(|_| "Open".to_string());
+    let splash_image_url = env::var("FARCASTER_SPLASH_IMAGE_URL").unwrap_or_else(|_| icon_url.clone());
+    let splash_bg = env::var("FARCASTER_SPLASH_BG").unwrap_or_else(|_| "#000000".to_string());
+
+    let manifest = json!({
+        "miniapp": {
+            "version": "1",
+            "name": name,
+            "iconUrl": icon_url,
+            "homeUrl": home_url,
+            "imageUrl": image_url,
+            "buttonTitle": button_title,
+            "splashImageUrl": splash_image_url,
+            "splashBackgroundColor": splash_bg
+        }
+    });
+
+    let body = serde_json::to_string_pretty(&manifest).unwrap_or_else(|_| "{}".to_string());
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body))
+        .unwrap()
 }
 
 /// List songs with pagination (ENHANCEMENT FIRST: now uses real database)
@@ -471,36 +511,236 @@ async fn stream_audio(Path(file_id): Path<String>, headers: HeaderMap) -> Result
     }
 }
 
-/// Upload audio file
-async fn upload_audio_file(Json(request): Json<UploadRequest>) -> Json<ApiResponse<AudioMetadata>> {
+/// Upload audio file using multipart form data
+async fn upload_audio_file(
+    State(db): State<Database>,
+    mut multipart: Multipart
+) -> Json<ApiResponse<AudioMetadata>> {
     let service = AudioService::default();
+    let mut file_data: Option<Vec<u8>> = None;
+    let mut filename: Option<String> = None;
+    let mut file_format: Option<String> = None;
     
-    // CLEAN: Decode base64 content
-    let content = match base64::engine::general_purpose::STANDARD.decode(&request.content) {
-        Ok(data) => data,
-        Err(_) => return Json(ApiResponse {
-            success: false,
-            data: None,
-            error: Some("Invalid base64 content".to_string()),
-        }),
+    // ENHANCEMENT: Process multipart form data
+    while let Some(field) = multipart.next_field().await.unwrap_or(None) {
+        let field_name = field.name().unwrap_or("").to_string();
+        
+        match field_name.as_str() {
+            "file" => {
+                // Extract filename from field
+                if let Some(file_name) = field.file_name() {
+                    filename = Some(file_name.to_string());
+                    
+                    // Extract format from filename extension
+                    if let Some(extension) = std::path::Path::new(file_name)
+                        .extension()
+                        .and_then(|ext| ext.to_str()) 
+                    {
+                        file_format = Some(extension.to_lowercase());
+                    }
+                }
+                
+                // Read file content
+                match field.bytes().await {
+                    Ok(bytes) => {
+                        file_data = Some(bytes.to_vec());
+                        log::info!("Received file upload: {} bytes, format: {:?}", 
+                                  bytes.len(), file_format);
+                    }
+                    Err(e) => {
+                        return Json(ApiResponse {
+                            success: false,
+                            data: None,
+                            error: Some(format!("Failed to read file data: {}", e)),
+                        });
+                    }
+                }
+            }
+            _ => {
+                // Skip unknown fields
+                log::warn!("Unknown form field: {}", field_name);
+            }
+        }
+    }
+    
+    // CLEAN: Validate required data
+    let content = match file_data {
+        Some(data) => data,
+        None => {
+            return Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some("No file data received".to_string()),
+            });
+        }
     };
     
-    match service.upload_audio_file(&request.file_id, content, &request.format).await {
-        Ok(metadata) => Json(ApiResponse::success(metadata)),
-        Err(e) => Json(ApiResponse {
-            success: false,
-            data: None,
-            error: Some(format!("Upload failed: {}", e)),
-        }),
+    let format = match file_format {
+        Some(fmt) => fmt,
+        None => {
+            return Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some("Could not determine file format".to_string()),
+            });
+        }
+    };
+    
+    // MODULAR: Generate unique file ID from filename or create one
+    let file_id = if let Some(ref name) = filename {
+        std::path::Path::new(name)
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or("upload")
+            .to_string()
+    } else {
+        format!("upload-{}", chrono::Utc::now().timestamp())
+    };
+    
+    log::info!("Processing upload: file_id={}, format={}, size={} bytes", 
+               file_id, format, content.len());
+    
+    // ENHANCEMENT: Upload and extract metadata
+    match service.upload_audio_file(&file_id, content, &format).await {
+        Ok(metadata) => {
+            log::info!("Upload successful: {:?}", metadata);
+            
+            // MODULAR: Create database entries for the uploaded audio
+            match create_database_entries(&db, &metadata, &file_id).await {
+                Ok(_) => {
+                    log::info!("Database entries created successfully for {}", file_id);
+                    Json(ApiResponse::success(metadata))
+                }
+                Err(e) => {
+                    log::error!("Failed to create database entries: {}", e);
+                    // File was uploaded successfully but database failed
+                    Json(ApiResponse {
+                        success: false,
+                        data: None,
+                        error: Some(format!("Upload succeeded but database integration failed: {}", e)),
+                    })
+                }
+            }
+        }
+        Err(e) => {
+            log::error!("Upload failed: {}", e);
+            Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some(format!("Upload failed: {}", e)),
+            })
+        }
     }
 }
 
-/// CLEAN: Upload request structure
-#[derive(Deserialize)]
-struct UploadRequest {
-    file_id: String,
-    content: String, // base64 encoded
-    format: String,
+/// MODULAR: Create database entries for uploaded audio file
+async fn create_database_entries(db: &Database, metadata: &AudioMetadata, file_id: &str) -> Result<(), String> {
+    
+    // CLEAN: Extract song title and artist from metadata
+    let song_title = metadata.title.as_deref().unwrap_or("Unknown Title").to_string();
+    let artist = metadata.artist.as_deref().unwrap_or("Unknown Artist").to_string();
+    
+    // MODULAR: Try to find existing song or create new one
+    let song_id = match find_or_create_song(db, &song_title, &artist).await {
+        Ok(id) => id,
+        Err(e) => return Err(format!("Failed to create/find song: {}", e)),
+    };
+    
+    // ENHANCEMENT: Determine version type based on filename or metadata
+    let version_type = determine_version_type(file_id, metadata);
+    
+    // MODULAR: Create version entry with audio metadata
+    match create_version_entry(db, &song_id, file_id, metadata, &version_type, &artist).await {
+        Ok(_) => {
+            log::info!("Created version entry for song '{}' with type '{}'", song_title, version_type);
+            Ok(())
+        }
+        Err(e) => Err(format!("Failed to create version: {}", e)),
+    }
+}
+
+/// CLEAN: Find existing song or create new one
+async fn find_or_create_song(db: &Database, title: &str, artist: &str) -> Result<String, anyhow::Error> {
+    // PERFORMANT: Try to find existing song by title (fuzzy match)
+    let similar_songs = db.list_songs(Some(10), None).await?;
+    
+    for song in similar_songs {
+        if song.canonical_title.to_lowercase().contains(&title.to_lowercase()) {
+            log::info!("Found existing song: {} ({})", song.canonical_title, song.id);
+            return Ok(song.id);
+        }
+    }
+    
+    // MODULAR: Create new song if not found
+    let song_id = Uuid::new_v4().to_string();
+    
+    match db.create_song(&song_id, title, Some(artist)).await {
+        Ok(_) => {
+            log::info!("Created new song: {} ({})", title, song_id);
+            Ok(song_id)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// ENHANCEMENT: Determine version type from filename or metadata
+fn determine_version_type(file_id: &str, metadata: &AudioMetadata) -> String {
+    let file_lower = file_id.to_lowercase();
+    let title_lower = metadata.title.as_deref().unwrap_or("").to_lowercase();
+    
+    // CLEAN: Smart version type detection
+    if file_lower.contains("live") || title_lower.contains("live") {
+        "live".to_string()
+    } else if file_lower.contains("demo") || title_lower.contains("demo") {
+        "demo".to_string()
+    } else if file_lower.contains("acoustic") || title_lower.contains("acoustic") {
+        "acoustic".to_string()
+    } else if file_lower.contains("remix") || title_lower.contains("remix") {
+        "remix".to_string()
+    } else if file_lower.contains("remaster") || title_lower.contains("remaster") {
+        "remaster".to_string()
+    } else {
+        "studio".to_string() // Default to studio version
+    }
+}
+
+/// MODULAR: Create version entry in database
+async fn create_version_entry(
+    db: &Database,
+    song_id: &str,
+    file_id: &str,
+    metadata: &AudioMetadata,
+    version_type: &str,
+    artist: &str,
+) -> Result<(), anyhow::Error> {
+    let version_id = Uuid::new_v4().to_string();
+    let title = metadata.title.as_deref().unwrap_or(file_id).to_string();
+    
+    // CLEAN: Get version type ID from database
+    let version_type_id = match version_type {
+        "demo" => 1,
+        "studio" => 2,
+        "live" => 3,
+        "remix" => 4,
+        "remaster" => 5,
+        "acoustic" => 6,
+        _ => 2, // Default to studio
+    };
+    
+    db.create_version(
+        &version_id,
+        song_id,
+        version_type_id,
+        &title,
+        Some(artist),
+        Some(&metadata.file_path),
+        metadata.file_size as i32,
+        metadata.duration_seconds.map(|d| d as i32),
+        &metadata.format,
+        metadata.sample_rate.map(|r| r as i32),
+        metadata.channels.map(|c| c as i32),
+        metadata.bitrate.map(|b| b as i32),
+    ).await
 }
 
 /// MODULAR: Parse HTTP range header

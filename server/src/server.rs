@@ -313,8 +313,8 @@ async fn start_rest_api(
     
     let handle = tokio::spawn(async move {
         info!("Starting REST API server...");
-        // For axum 0.7 with state, we need to convert properly
-        match axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>())
+        // For axum 0.7 with state
+        match axum::serve(listener, app.into_make_service())
             .with_graceful_shutdown(cancel_token.cancelled_owned())
             .await
         {

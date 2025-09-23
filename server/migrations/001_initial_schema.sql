@@ -7,7 +7,7 @@
 PRAGMA foreign_keys = ON;
 
 -- Songs table: Canonical titles and metadata
-CREATE TABLE songs (
+CREATE TABLE IF NOT EXISTS songs (
     id TEXT PRIMARY KEY,  -- UUID as string for simplicity
     canonical_title TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -23,7 +23,7 @@ CREATE TABLE songs (
 );
 
 -- Version types enum (DRY principle)
-CREATE TABLE version_types (
+CREATE TABLE IF NOT EXISTS version_types (
     id INTEGER PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
     description TEXT,
@@ -31,7 +31,7 @@ CREATE TABLE version_types (
 );
 
 -- Insert standard version types
-INSERT INTO version_types (name, description, color_code) VALUES
+INSERT OR IGNORE INTO version_types (name, description, color_code) VALUES
     ('demo', 'Early recordings and rough cuts', '#f6c744'),
     ('studio', 'Official album releases', '#00d4ff'),
     ('live', 'Concert performances', '#00ff88'),
@@ -40,7 +40,7 @@ INSERT INTO version_types (name, description, color_code) VALUES
     ('acoustic', 'Stripped-down versions', '#b8c5d6');
 
 -- Versions table: Individual recordings of songs
-CREATE TABLE versions (
+CREATE TABLE IF NOT EXISTS versions (
     id TEXT PRIMARY KEY,  -- UUID as string
     song_id TEXT NOT NULL,
     version_type_id INTEGER NOT NULL,
@@ -80,15 +80,16 @@ CREATE TABLE versions (
 );
 
 -- Indexes for performance (PERFORMANT principle)
-CREATE INDEX idx_versions_song_id ON versions(song_id);
-CREATE INDEX idx_versions_type ON versions(version_type_id);
-CREATE INDEX idx_versions_play_count ON versions(play_count DESC);
-CREATE INDEX idx_versions_vote_score ON versions(vote_score DESC);
-CREATE INDEX idx_versions_upload_date ON versions(upload_date DESC);
-CREATE INDEX idx_songs_canonical_title ON songs(canonical_title);
+CREATE INDEX IF NOT EXISTS idx_versions_song_id ON versions(song_id);
+CREATE INDEX IF NOT EXISTS idx_versions_type ON versions(version_type_id);
+CREATE INDEX IF NOT EXISTS idx_versions_play_count ON versions(play_count DESC);
+CREATE INDEX IF NOT EXISTS idx_versions_vote_score ON versions(vote_score DESC);
+CREATE INDEX IF NOT EXISTS idx_versions_upload_date ON versions(upload_date DESC);
+CREATE INDEX IF NOT EXISTS idx_songs_canonical_title ON songs(canonical_title);
 
 -- Triggers to maintain aggregate data (DRY principle)
 -- Update song stats when version stats change
+DROP TRIGGER IF EXISTS update_song_stats_on_version_insert;
 CREATE TRIGGER update_song_stats_on_version_insert
     AFTER INSERT ON versions
 BEGIN
@@ -101,6 +102,7 @@ BEGIN
     WHERE id = NEW.song_id;
 END;
 
+DROP TRIGGER IF EXISTS update_song_stats_on_version_update;
 CREATE TRIGGER update_song_stats_on_version_update
     AFTER UPDATE ON versions
 BEGIN
@@ -113,6 +115,7 @@ BEGIN
     WHERE id = NEW.song_id;
 END;
 
+DROP TRIGGER IF EXISTS update_song_stats_on_version_delete;
 CREATE TRIGGER update_song_stats_on_version_delete
     AFTER DELETE ON versions
 BEGIN
@@ -126,12 +129,14 @@ BEGIN
 END;
 
 -- Update timestamps automatically
+DROP TRIGGER IF EXISTS update_songs_timestamp;
 CREATE TRIGGER update_songs_timestamp
     BEFORE UPDATE ON songs
 BEGIN
     UPDATE songs SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
 
+DROP TRIGGER IF EXISTS update_versions_timestamp;
 CREATE TRIGGER update_versions_timestamp
     BEFORE UPDATE ON versions
 BEGIN

@@ -321,6 +321,142 @@
             animation: pulse 2s infinite;
         }
         
+        /* AUDIO UPLOAD: File upload interface */
+        .upload-interface {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            width: 400px;
+            max-width: 90vw;
+            background: linear-gradient(135deg, rgba(16, 20, 33, 0.98), rgba(26, 35, 50, 0.98));
+            backdrop-filter: blur(15px);
+            border: 2px solid var(--color-blue);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            z-index: 1001;
+            padding: 0;
+        }
+        
+        .upload-interface.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        
+        .upload-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 25px 15px;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+        }
+        
+        .upload-content {
+            padding: 25px;
+        }
+        
+        .upload-dropzone {
+            border: 2px dashed var(--color-blue);
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(0, 212, 255, 0.05);
+        }
+        
+        .upload-dropzone:hover {
+            border-color: var(--color-cyan);
+            background: rgba(0, 212, 255, 0.1);
+        }
+        
+        .upload-dropzone.dragover {
+            border-color: var(--color-green);
+            background: rgba(0, 255, 136, 0.1);
+        }
+        
+        .dropzone-content {
+            pointer-events: none;
+        }
+        
+        .dropzone-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        .dropzone-text {
+            color: var(--fg-primary);
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+        
+        .dropzone-formats {
+            color: var(--color-cyan);
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+        
+        .upload-progress {
+            margin-top: 20px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--color-blue), var(--color-cyan));
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            text-align: center;
+            color: var(--color-blue);
+            font-size: 0.9rem;
+        }
+        
+        .upload-result {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .result-header {
+            color: var(--color-green);
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .result-metadata {
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 6px;
+            padding: 15px;
+            text-align: left;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+        
+        .metadata-item {
+            margin-bottom: 5px;
+        }
+        
+        .metadata-label {
+            color: var(--color-cyan);
+            font-weight: bold;
+        }
+        
         /* AUDIO PREVIEW: Mini player for version comparison */
         .audio-preview-bar {
             position: fixed;
@@ -528,6 +664,7 @@
             <button class="control-btn" onclick="runCommand('help')">📖 Help</button>
             <button class="control-btn" onclick="runCommand('status')">📊 Status</button>
             <button class="control-btn" onclick="runCommand('clear')">🧹 Clear</button>
+            <button class="control-btn" onclick="toggleUploadInterface()" title="Upload audio files">⬆️ Upload</button>
         </div>
         
         <div class="info-display">
@@ -537,6 +674,7 @@
         <div class="control-group">
             <button class="control-btn" onclick="toggleVersionDiscovery()" title="Open version discovery sidebar (Cmd+D)">🎵 Discover Versions</button>
             <button class="control-btn" onclick="toggleAudioPreview()" title="Open audio comparison bar (Cmd+M)">🎧 Compare Audio</button>
+            <button class="control-btn" onclick="farcasterSignIn()" id="farcaster-btn" title="Sign in with Farcaster">🎭 Sign In</button>
             <button class="control-btn" onclick="focusTerminal()" title="Focus terminal for typing">🎯 Focus</button>
             <button class="control-btn" onclick="toggleFullscreen()" id="fullscreen-btn" title="Toggle fullscreen mode">⛶ Fullscreen</button>
         </div>
@@ -619,6 +757,38 @@
         </div>
     </div>
     
+    <!-- AUDIO UPLOAD: File upload interface -->
+    <div class="upload-interface" id="upload-interface">
+        <div class="upload-header">
+            <h3 style="color: var(--color-blue); margin: 0;">⬆️ Upload Audio File</h3>
+            <button class="sidebar-close" onclick="closeUploadInterface()" title="Close">✕</button>
+        </div>
+        
+        <div class="upload-content">
+            <div class="upload-dropzone" id="upload-dropzone">
+                <div class="dropzone-content">
+                    <div class="dropzone-icon">🎥</div>
+                    <div class="dropzone-text">Drop audio file here or click to browse</div>
+                    <div class="dropzone-formats">Supports: MP3, FLAC, WAV, M4A, OGG, AIFF</div>
+                </div>
+                <input type="file" id="file-input" accept=".mp3,.flac,.wav,.m4a,.ogg,.aiff" style="display: none;">
+            </div>
+            
+            <div class="upload-progress" id="upload-progress" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="progress-text" id="progress-text">Uploading...</div>
+            </div>
+            
+            <div class="upload-result" id="upload-result" style="display: none;">
+                <div class="result-header">Upload Complete!</div>
+                <div class="result-metadata" id="result-metadata"></div>
+                <button class="control-btn" onclick="clearUploadResult()" style="margin-top: 10px;">Upload Another</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- AUDIO PREVIEW: Version comparison bar -->
     <div class="audio-preview-bar" id="audio-preview">
         <div class="version-comparison">
@@ -641,6 +811,9 @@
         </div>
     </div>
 
+    <!-- Load Farcaster Mini App SDK integration -->
+    <script src="./farcaster-miniapp.js"></script>
+    
     <script type="module">
         // MODULAR: Import WASM terminal and theme
         import init, { VersionsTerminalPOC } from './pkg/versions_wasm_poc.js';
@@ -946,14 +1119,273 @@
                     break;
                     
                 case 'social':
-                    // Highlight social indicator
+                    // Highlight social indicator and fetch Farcaster recommendations
                     const socialIndicator = document.querySelector('.social-indicator');
                     socialIndicator.style.background = 'rgba(126, 92, 177, 0.3)';
                     setTimeout(() => {
                         socialIndicator.style.background = 'rgba(126, 92, 177, 0.1)';
                     }, 2000);
+                    
+                    // Fetch and show social recommendations
+                    if (window.farcasterApp && window.farcasterApp.user) {
+                        window.farcasterApp.getSocialRecommendations().then(recommendations => {
+                            updateInfo(`Found ${recommendations.length} social recommendations`);
+                        });
+                    }
                     break;
             }
+        }
+        
+        // FARCASTER INTEGRATION: Sign in with Farcaster
+        window.farcasterSignIn = async function() {
+            if (!window.farcasterApp) {
+                updateInfo('Farcaster integration not loaded');
+                return;
+            }
+            
+            if (window.farcasterApp.user) {
+                // Already signed in - show options
+                await showFarcasterMenu();
+            } else {
+                // Sign in
+                const user = await window.farcasterApp.signIn();
+                if (user) {
+                    updateFarcasterButton(user);
+                }
+            }
+        };
+        
+        // FARCASTER: Show menu for authenticated users
+        async function showFarcasterMenu() {
+            const user = window.farcasterApp.user;
+            const options = [
+                'Share Discovery',
+                'Add to Collection', 
+                'View Profile',
+                'Sign Out'
+            ];
+            
+            // Simple prompt for now - could be enhanced with modal
+            const choice = prompt(`Signed in as @${user.username}\n\nChoose action:\n1. ${options[0]}\n2. ${options[1]}\n3. ${options[2]}\n4. ${options[3]}`);
+            
+            switch(choice) {
+                case '1':
+                    await window.farcasterApp.shareCurrentDiscovery();
+                    break;
+                case '2':
+                    await window.farcasterApp.addToCollection();
+                    break;
+                case '3':
+                    await window.farcasterApp.viewProfile(user.fid);
+                    break;
+                case '4':
+                    signOutFarcaster();
+                    break;
+            }
+        }
+        
+        // FARCASTER: Update button state when signed in
+        function updateFarcasterButton(user) {
+            const button = document.getElementById('farcaster-btn');
+            if (button) {
+                button.innerHTML = `🎭 @${user.username}`;
+                button.title = 'Farcaster options';
+            }
+        }
+        
+        // FARCASTER: Sign out
+        function signOutFarcaster() {
+            if (window.farcasterApp) {
+                window.farcasterApp.user = null;
+                window.farcasterApp.isReady = false;
+                
+                const button = document.getElementById('farcaster-btn');
+                if (button) {
+                    button.innerHTML = '🎭 Sign In';
+                    button.title = 'Sign in with Farcaster';
+                }
+                
+                updateInfo('Signed out from Farcaster');
+            }
+        }
+        
+        // AUDIO UPLOAD: Toggle upload interface
+        window.toggleUploadInterface = function() {
+            const uploadInterface = document.getElementById('upload-interface');
+            uploadInterface.classList.toggle('show');
+            
+            if (uploadInterface.classList.contains('show')) {
+                updateInfo('Upload interface opened - drag & drop audio files');
+                initializeUploadHandlers();
+                // Prevent body scroll
+                document.body.style.overflow = 'hidden';
+            } else {
+                updateInfo('Upload interface closed');
+                document.body.style.overflow = 'auto';
+            }
+        };
+        
+        // AUDIO UPLOAD: Close upload interface
+        window.closeUploadInterface = function() {
+            const uploadInterface = document.getElementById('upload-interface');
+            uploadInterface.classList.remove('show');
+            document.body.style.overflow = 'auto';
+            updateInfo('Upload interface closed');
+        };
+        
+        // AUDIO UPLOAD: Initialize drag & drop and file handlers
+        function initializeUploadHandlers() {
+            const dropzone = document.getElementById('upload-dropzone');
+            const fileInput = document.getElementById('file-input');
+            
+            // Click to browse files
+            dropzone.addEventListener('click', () => {
+                fileInput.click();
+            });
+            
+            // Handle file selection
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFileUpload(e.target.files[0]);
+                }
+            });
+            
+            // Drag & drop handlers
+            dropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropzone.classList.add('dragover');
+            });
+            
+            dropzone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('dragover');
+            });
+            
+            dropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('dragover');
+                
+                if (e.dataTransfer.files.length > 0) {
+                    handleFileUpload(e.dataTransfer.files[0]);
+                }
+            });
+        }
+        
+        // AUDIO UPLOAD: Handle file upload
+        async function handleFileUpload(file) {
+            // Validate file type
+            const validTypes = ['audio/mpeg', 'audio/flac', 'audio/wav', 'audio/mp4', 'audio/ogg', 'audio/aiff'];
+            const validExtensions = ['.mp3', '.flac', '.wav', '.m4a', '.ogg', '.aiff'];
+            
+            const hasValidType = validTypes.includes(file.type);
+            const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+            
+            if (!hasValidType && !hasValidExtension) {
+                updateInfo('❌ Invalid file type. Please select an audio file.');
+                return;
+            }
+            
+            // Show upload progress
+            document.getElementById('upload-dropzone').style.display = 'none';
+            document.getElementById('upload-progress').style.display = 'block';
+            document.getElementById('upload-result').style.display = 'none';
+            
+            updateInfo(`📤 Uploading ${file.name} (${formatFileSize(file.size)})...`);
+            
+            try {
+                // Create FormData for multipart upload
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const config = window.getConfig ? window.getConfig() : { apiBase: 'http://localhost:8080' };
+                
+                // Upload with progress tracking
+                const response = await fetch(`${config.apiBase}/api/v1/audio/upload`, {
+                    method: 'POST',
+                    body: formData,
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Upload failed: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showUploadSuccess(result.data, file.name);
+                    updateInfo(`✅ Upload successful: ${result.data.title || file.name}`);
+                } else {
+                    throw new Error(result.error || 'Upload failed');
+                }
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                showUploadError(error.message);
+                updateInfo(`❌ Upload failed: ${error.message}`);
+            }
+        }
+        
+        // AUDIO UPLOAD: Show upload success
+        function showUploadSuccess(metadata, filename) {
+            document.getElementById('upload-progress').style.display = 'none';
+            document.getElementById('upload-result').style.display = 'block';
+            
+            const metadataDiv = document.getElementById('result-metadata');
+            metadataDiv.innerHTML = `
+                <div class="metadata-item"><span class="metadata-label">File:</span> ${filename}</div>
+                <div class="metadata-item"><span class="metadata-label">Title:</span> ${metadata.title || 'Unknown'}</div>
+                <div class="metadata-item"><span class="metadata-label">Artist:</span> ${metadata.artist || 'Unknown'}</div>
+                <div class="metadata-item"><span class="metadata-label">Album:</span> ${metadata.album || 'Unknown'}</div>
+                <div class="metadata-item"><span class="metadata-label">Duration:</span> ${formatDuration(metadata.duration_seconds)}</div>
+                <div class="metadata-item"><span class="metadata-label">Format:</span> ${metadata.format.toUpperCase()}</div>
+                <div class="metadata-item"><span class="metadata-label">Size:</span> ${formatFileSize(metadata.file_size)}</div>
+                ${metadata.bitrate ? `<div class="metadata-item"><span class="metadata-label">Bitrate:</span> ${metadata.bitrate} kbps</div>` : ''}
+                ${metadata.sample_rate ? `<div class="metadata-item"><span class="metadata-label">Sample Rate:</span> ${metadata.sample_rate} Hz</div>` : ''}
+            `;
+        }
+        
+        // AUDIO UPLOAD: Show upload error
+        function showUploadError(errorMessage) {
+            document.getElementById('upload-progress').style.display = 'none';
+            document.getElementById('upload-result').style.display = 'block';
+            
+            const resultDiv = document.getElementById('upload-result');
+            resultDiv.innerHTML = `
+                <div class="result-header" style="color: var(--color-red);">Upload Failed</div>
+                <div style="background: rgba(255, 85, 85, 0.1); border: 1px solid var(--color-red); border-radius: 6px; padding: 15px; margin-bottom: 10px;">
+                    ${errorMessage}
+                </div>
+                <button class="control-btn" onclick="clearUploadResult()" style="margin-top: 10px;">Try Again</button>
+            `;
+        }
+        
+        // AUDIO UPLOAD: Clear upload result and reset interface
+        window.clearUploadResult = function() {
+            document.getElementById('upload-dropzone').style.display = 'block';
+            document.getElementById('upload-progress').style.display = 'none';
+            document.getElementById('upload-result').style.display = 'none';
+            
+            // Reset file input
+            document.getElementById('file-input').value = '';
+            
+            updateInfo('Ready for another upload');
+        };
+        
+        // UTILITY: Format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // UTILITY: Format duration
+        function formatDuration(seconds) {
+            if (!seconds) return 'Unknown';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
         // ENHANCEMENT: Handle fullscreen changes

@@ -70,8 +70,11 @@ impl AudioService {
         Ok(metadata)
     }
 
-    /// MODULAR: Extract audio metadata from file
+    /// MODULAR: Extract audio metadata from file using lofty
     async fn extract_metadata(&self, file_path: &Path) -> Result<AudioMetadata> {
+        use lofty::prelude::*;
+        use lofty::probe::Probe;
+        
         let file_metadata = fs::metadata(file_path).await?;
         let file_size = file_metadata.len();
         
@@ -82,19 +85,57 @@ impl AudioService {
             .unwrap_or("unknown")
             .to_lowercase();
 
-        // TODO: Use Symphonia for detailed audio analysis
-        // For now, return basic metadata
+        // ENHANCEMENT: Use lofty for real metadata extraction
+        let tagged_file = match Probe::open(file_path)?.read() {
+            Ok(file) => file,
+            Err(e) => {
+                log::warn!("Failed to read audio metadata from {}: {}. Using basic metadata.", 
+                          file_path.display(), e);
+                // Fallback to basic metadata if lofty fails
+                return Ok(AudioMetadata {
+                    file_path: file_path.to_string_lossy().to_string(),
+                    title: self.extract_title_from_filename(file_path),
+                    artist: None,
+                    album: None,
+                    duration_seconds: None,
+                    file_size,
+                    format,
+                    sample_rate: None,
+                    channels: None,
+                    bitrate: None,
+                });
+            }
+        };
+
+        // CLEAN: Extract metadata from tags
+        let tag = tagged_file.primary_tag();
+        let properties = tagged_file.properties();
+        
+        let title = tag.and_then(|t| t.title().map(|s| s.to_string()))
+            .or_else(|| self.extract_title_from_filename(file_path));
+        let artist = tag.and_then(|t| t.artist().map(|s| s.to_string()));
+        let album = tag.and_then(|t| t.album().map(|s| s.to_string()));
+        
+        // PERFORMANT: Extract technical properties
+        let duration_seconds = Some(properties.duration().as_secs());
+        let sample_rate = properties.sample_rate();
+        let channels = properties.channels().map(|c| c as u16);
+        let bitrate = properties.overall_bitrate();
+
+        log::info!("Extracted metadata from {}: title={:?}, artist={:?}, duration={:?}s",
+                   file_path.display(), title, artist, duration_seconds);
+
         Ok(AudioMetadata {
             file_path: file_path.to_string_lossy().to_string(),
-            title: self.extract_title_from_filename(file_path),
-            artist: None, // TODO: Extract from ID3 tags
-            album: None,  // TODO: Extract from ID3 tags
-            duration_seconds: None, // TODO: Calculate from audio data
+            title,
+            artist,
+            album,
+            duration_seconds,
             file_size,
             format,
-            sample_rate: None, // TODO: Extract from audio data
-            channels: None,    // TODO: Extract from audio data
-            bitrate: None,     // TODO: Calculate from audio data
+            sample_rate,
+            channels,
+            bitrate,
         })
     }
 

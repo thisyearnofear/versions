@@ -31,6 +31,9 @@ curl -s http://127.0.0.1:8080/api/v1/versions/song1/discussions | jq '.' || echo
 echo -e "\nTesting social recommendations endpoint..."
 curl -s "http://127.0.0.1:8080/api/v1/farcaster/recommendations?fid=1" | jq '.' || echo "Social recommendations endpoint failed"
 
+echo -e "\nTesting Farcaster manifest endpoint..."
+curl -s "http://127.0.0.1:8080/.well-known/farcaster.json" | jq '.' || echo "Farcaster manifest endpoint failed"
+
 echo -e "\nTesting audio files list endpoint..."
 curl -s http://127.0.0.1:8080/api/v1/audio/files | jq '.' || echo "Audio files endpoint failed"
 
