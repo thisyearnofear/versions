@@ -2,6 +2,7 @@
 
 # Rust
 /target
+**/target/
 **/*.rs.bk
 
 # Build artifacts
@@ -47,9 +48,13 @@ yarn-error.log*
 
 # Web build artifacts
 web/dist/
+web/src/
+web/node_modules/
+web/package*.json
+web/tsconfig.json
+web/vercel.json
 *.js.map
 *.d.ts
-web/src/**/*.js.map
 
 # TypeScript build cache
 *.tsbuildinfo

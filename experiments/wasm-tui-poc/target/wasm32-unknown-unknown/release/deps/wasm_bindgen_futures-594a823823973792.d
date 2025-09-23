@@ -1,9 +1,0 @@
-/Users/udingethe/Dev/VERSIONS/experiments/wasm-tui-poc/target/wasm32-unknown-unknown/release/deps/libwasm_bindgen_futures-594a823823973792.rmeta: /Users/udingethe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.53/src/lib.rs /Users/udingethe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.53/src/queue.rs /Users/udingethe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.53/src/task/singlethread.rs
-
-/Users/udingethe/Dev/VERSIONS/experiments/wasm-tui-poc/target/wasm32-unknown-unknown/release/deps/libwasm_bindgen_futures-594a823823973792.rlib: /Users/udingethe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.53/src/lib.rs /Users/udingethe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.53/src/queue.rs /Users/udingethe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.53/src/task/singlethread.rs
-
-/Users/udingethe/Dev/VERSIONS/experiments/wasm-tui-poc/target/wasm32-unknown-unknown/release/deps/wasm_bindgen_futures-594a823823973792.d: /Users/udingethe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.53/src/lib.rs /Users/udingethe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.53/src/queue.rs /Users/udingethe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.53/src/task/singlethread.rs
-
-/Users/udingethe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.53/src/lib.rs:
-/Users/udingethe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.53/src/queue.rs:
-/Users/udingethe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasm-bindgen-futures-0.4.53/src/task/singlethread.rs:

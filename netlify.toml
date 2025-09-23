@@ -2,7 +2,7 @@
 [build]
   base = "web"
   publish = "web"
-  command = "npm ci && npm run build"
+  command = "echo 'Static deployment - no build needed'"
 
 # Redirect all API calls to the backend
 [[redirects]]
