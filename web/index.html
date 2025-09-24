@@ -1,20 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name=\"viewport\" content="width=device-width, initial-scale=1.0">
     <title>🎭 VERSIONS - Where Rare Recordings Come Alive</title>
-    
+
     <!-- Farcaster Mini App Embed Metadata -->
     <meta name="fc:miniapp"
         content='{"version":"1","imageUrl":"https://versions.app/og-image.png","button":{"title":"🎭 Discover Rare Recordings","action":{"type":"launch_frame","name":"VERSIONS","url":"https://versions.app","splashImageUrl":"https://versions.app/splash.png","splashBackgroundColor":"#101421"}}}' />
-    
+
     <!-- Open Graph for social sharing -->
     <meta property="og:title" content="VERSIONS - Where Rare Recordings Come Alive" />
-    <meta property="og:description" content="Every song has a story - discover the demos, live recordings, and alternate versions that shaped its history" />
+    <meta property="og:description"
+        content="Every song has a story - discover the demos, live recordings, and alternate versions that shaped its history" />
     <meta property="og:image" content="https://versions.app/og-image.png" />
     <meta property="og:url" content="https://versions.app" />
-    
+
     <style>
         /* CLEAN: Terminal-inspired styling following Core Principles */
         :root {
@@ -26,13 +28,13 @@
             --color-red: #ff5555;
             --color-cyan: #64dbed;
         }
-        
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
             background: var(--bg-primary);
@@ -42,7 +44,7 @@
             flex-direction: column;
             overflow: hidden;
         }
-        
+
         /* CLEAN: Header with status indicators */
         .header {
             background: #2a3441;
@@ -53,25 +55,25 @@
             align-items: center;
             flex-shrink: 0;
         }
-        
+
         .title {
             color: var(--color-blue);
             font-weight: bold;
             font-size: 1.2rem;
         }
-        
+
         .status {
             display: flex;
             gap: 15px;
             font-size: 0.9rem;
         }
-        
+
         .status-item {
             display: flex;
             align-items: center;
             gap: 5px;
         }
-        
+
         .status-dot {
             width: 8px;
             height: 8px;
@@ -79,17 +81,24 @@
             background: var(--color-red);
             animation: pulse 2s infinite;
         }
-        
+
         .status-dot.ok {
             background: var(--color-green);
             animation: none;
         }
-        
+
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
         }
-        
+
         /* MODULAR: Terminal container */
         .terminal-container {
             flex: 1;
@@ -99,7 +108,7 @@
             padding: 20px;
             min-height: 0;
         }
-        
+
         #terminal-canvas {
             border: 1px solid #2a3441;
             border-radius: 8px;
@@ -108,7 +117,7 @@
             max-width: 100%;
             max-height: 100%;
         }
-        
+
         /* CLEAN: Footer controls */
         .controls {
             background: #1a2332;
@@ -121,13 +130,13 @@
             flex-wrap: wrap;
             gap: 10px;
         }
-        
+
         .control-group {
             display: flex;
             gap: 10px;
             align-items: center;
         }
-        
+
         .control-btn {
             background: rgba(0, 212, 255, 0.2);
             color: var(--color-blue);
@@ -139,19 +148,19 @@
             font-size: 0.85rem;
             transition: all 0.2s ease;
         }
-        
+
         .control-btn:hover {
             background: rgba(0, 212, 255, 0.4);
             color: var(--fg-primary);
             box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
         }
-        
+
         .info-display {
             color: var(--color-yellow);
             font-size: 0.85rem;
             text-align: center;
         }
-        
+
         /* PERFORMANT: Loading and error states */
         .loading-message {
             text-align: center;
@@ -159,7 +168,7 @@
             font-size: 1.1rem;
             padding: 40px;
         }
-        
+
         .error-message {
             text-align: center;
             color: var(--color-red);
@@ -170,11 +179,11 @@
             border-radius: 8px;
             margin: 20px;
         }
-        
+
         .hidden {
             display: none;
         }
-        
+
         /* VERSION DISCOVERY: Visual elements for version-centric interface */
         .discovery-overlay {
             position: fixed;
@@ -188,12 +197,12 @@
             transition: all 0.3s ease;
             z-index: 999;
         }
-        
+
         .discovery-overlay.active {
             opacity: 1;
             visibility: visible;
         }
-        
+
         .version-discovery-sidebar {
             position: fixed;
             right: 0;
@@ -210,11 +219,11 @@
             padding: 25px;
             overflow-y: auto;
         }
-        
+
         .version-discovery-sidebar.open {
             transform: translateX(0);
         }
-        
+
         .sidebar-header {
             display: flex;
             justify-content: space-between;
@@ -223,7 +232,7 @@
             padding-bottom: 15px;
             border-bottom: 1px solid rgba(0, 212, 255, 0.2);
         }
-        
+
         .sidebar-close {
             background: none;
             border: none;
@@ -234,12 +243,12 @@
             border-radius: 4px;
             transition: all 0.2s ease;
         }
-        
+
         .sidebar-close:hover {
             background: rgba(0, 212, 255, 0.1);
             color: var(--fg-primary);
         }
-        
+
         .version-type-indicator {
             display: inline-block;
             padding: 2px 8px;
@@ -248,14 +257,37 @@
             font-weight: bold;
             margin-right: 8px;
         }
-        
-        .version-type-demo { background: rgba(246, 199, 68, 0.2); color: var(--color-yellow); }
-        .version-type-studio { background: rgba(0, 212, 255, 0.2); color: var(--color-blue); }
-        .version-type-live { background: rgba(0, 255, 136, 0.2); color: var(--color-green); }
-        .version-type-remix { background: rgba(100, 219, 237, 0.2); color: var(--color-cyan); }
-        .version-type-remaster { background: rgba(255, 85, 85, 0.2); color: var(--color-red); }
-        .version-type-acoustic { background: rgba(184, 197, 214, 0.2); color: #B8C5D6; }
-        
+
+        .version-type-demo {
+            background: rgba(246, 199, 68, 0.2);
+            color: var(--color-yellow);
+        }
+
+        .version-type-studio {
+            background: rgba(0, 212, 255, 0.2);
+            color: var(--color-blue);
+        }
+
+        .version-type-live {
+            background: rgba(0, 255, 136, 0.2);
+            color: var(--color-green);
+        }
+
+        .version-type-remix {
+            background: rgba(100, 219, 237, 0.2);
+            color: var(--color-cyan);
+        }
+
+        .version-type-remaster {
+            background: rgba(255, 85, 85, 0.2);
+            color: var(--color-red);
+        }
+
+        .version-type-acoustic {
+            background: rgba(184, 197, 214, 0.2);
+            color: #B8C5D6;
+        }
+
         .quick-commands {
             position: fixed;
             top: 70px;
@@ -270,33 +302,33 @@
             opacity: 0.7;
             transition: opacity 0.2s ease;
         }
-        
+
         .quick-commands:hover {
             opacity: 1;
         }
-        
+
         .quick-commands h4 {
             color: var(--color-blue);
             margin-bottom: 5px;
             font-size: 0.75rem;
         }
-        
+
         .quick-commands ul {
             list-style: none;
             margin: 0;
             padding: 0;
         }
-        
+
         .quick-commands li {
             padding: 2px 0;
             color: var(--color-cyan);
             cursor: pointer;
         }
-        
+
         .quick-commands li:hover {
             color: var(--fg-primary);
         }
-        
+
         /* SOCIAL DISCOVERY: Farcaster integration visuals */
         .social-indicator {
             position: fixed;
@@ -312,7 +344,7 @@
             align-items: center;
             gap: 8px;
         }
-        
+
         .social-pulse {
             width: 6px;
             height: 6px;
@@ -320,7 +352,7 @@
             border-radius: 50%;
             animation: pulse 2s infinite;
         }
-        
+
         /* AUDIO UPLOAD: File upload interface */
         .upload-interface {
             position: fixed;
@@ -340,13 +372,13 @@
             z-index: 1001;
             padding: 0;
         }
-        
+
         .upload-interface.show {
             opacity: 1;
             visibility: visible;
             transform: translate(-50%, -50%) scale(1);
         }
-        
+
         .upload-header {
             display: flex;
             justify-content: space-between;
@@ -354,11 +386,11 @@
             padding: 20px 25px 15px;
             border-bottom: 1px solid rgba(0, 212, 255, 0.2);
         }
-        
+
         .upload-content {
             padding: 25px;
         }
-        
+
         .upload-dropzone {
             border: 2px dashed var(--color-blue);
             border-radius: 8px;
@@ -368,42 +400,42 @@
             transition: all 0.3s ease;
             background: rgba(0, 212, 255, 0.05);
         }
-        
+
         .upload-dropzone:hover {
             border-color: var(--color-cyan);
             background: rgba(0, 212, 255, 0.1);
         }
-        
+
         .upload-dropzone.dragover {
             border-color: var(--color-green);
             background: rgba(0, 255, 136, 0.1);
         }
-        
+
         .dropzone-content {
             pointer-events: none;
         }
-        
+
         .dropzone-icon {
             font-size: 2rem;
             margin-bottom: 10px;
         }
-        
+
         .dropzone-text {
             color: var(--fg-primary);
             font-size: 1rem;
             margin-bottom: 8px;
         }
-        
+
         .dropzone-formats {
             color: var(--color-cyan);
             font-size: 0.8rem;
             opacity: 0.8;
         }
-        
+
         .upload-progress {
             margin-top: 20px;
         }
-        
+
         .progress-bar {
             width: 100%;
             height: 6px;
@@ -412,32 +444,32 @@
             overflow: hidden;
             margin-bottom: 10px;
         }
-        
+
         .progress-fill {
             height: 100%;
             background: linear-gradient(90deg, var(--color-blue), var(--color-cyan));
             width: 0%;
             transition: width 0.3s ease;
         }
-        
+
         .progress-text {
             text-align: center;
             color: var(--color-blue);
             font-size: 0.9rem;
         }
-        
+
         .upload-result {
             margin-top: 20px;
             text-align: center;
         }
-        
+
         .result-header {
             color: var(--color-green);
             font-size: 1.1rem;
             font-weight: bold;
             margin-bottom: 15px;
         }
-        
+
         .result-metadata {
             background: rgba(0, 255, 136, 0.1);
             border: 1px solid rgba(0, 255, 136, 0.3);
@@ -447,16 +479,16 @@
             font-size: 0.85rem;
             line-height: 1.4;
         }
-        
+
         .metadata-item {
             margin-bottom: 5px;
         }
-        
+
         .metadata-label {
             color: var(--color-cyan);
             font-weight: bold;
         }
-        
+
         /* AUDIO PREVIEW: Mini player for version comparison */
         .audio-preview-bar {
             position: fixed;
@@ -475,24 +507,24 @@
             transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
             z-index: 1001;
         }
-        
+
         .audio-preview-bar.show {
             transform: translateY(0);
         }
-        
+
         /* ADJUST CONTROLS: Move controls up when audio bar is showing */
         .controls.with-audio-bar {
             transform: translateY(-70px);
             transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
-        
+
         .version-comparison {
             display: flex;
             align-items: center;
             gap: 15px;
             flex: 1;
         }
-        
+
         .version-slot {
             flex: 1;
             padding: 8px 12px;
@@ -504,19 +536,19 @@
             color: rgba(255, 255, 255, 0.6);
             cursor: pointer;
         }
-        
+
         .version-slot.loaded {
             background: rgba(0, 212, 255, 0.1);
             border: 1px solid var(--color-blue);
             color: var(--color-blue);
         }
-        
+
         .play-controls {
             display: flex;
             gap: 10px;
             align-items: center;
         }
-        
+
         .play-btn {
             width: 40px;
             height: 40px;
@@ -530,48 +562,48 @@
             justify-content: center;
             transition: all 0.2s ease;
         }
-        
+
         .play-btn:hover {
             background: var(--color-cyan);
             transform: scale(1.05);
         }
-        
+
         /* ORGANIZED: Responsive design with discovery elements */
         @media (max-width: 768px) {
             .header {
                 padding: 8px 15px;
             }
-            
+
             .title {
                 font-size: 1rem;
             }
-            
+
             .status {
                 gap: 10px;
                 font-size: 0.8rem;
             }
-            
+
             .controls {
                 padding: 10px 15px;
                 flex-direction: column;
                 gap: 8px;
             }
-            
+
             .control-group {
                 gap: 8px;
                 justify-content: center;
             }
-            
+
             .control-btn {
                 padding: 5px 10px;
                 font-size: 0.7rem;
                 min-width: 80px;
             }
-            
+
             .terminal-container {
                 padding: 10px;
             }
-            
+
             /* VERSION DISCOVERY: Mobile adjustments */
             .version-discovery-sidebar {
                 width: 100%;
@@ -579,39 +611,39 @@
                 border-left: none;
                 border-top: 2px solid var(--color-blue);
             }
-            
+
             .sidebar-header h3 {
                 font-size: 1.1rem;
             }
-            
+
             .quick-commands {
                 top: 60px;
                 right: 10px;
                 font-size: 0.7rem;
                 padding: 8px;
             }
-            
+
             .social-indicator {
                 bottom: 80px;
                 right: 10px;
                 padding: 6px 10px;
                 font-size: 0.7rem;
             }
-            
+
             .audio-preview-bar {
                 padding: 0 15px;
                 height: 70px;
             }
-            
+
             .version-comparison {
                 gap: 10px;
             }
-            
+
             .version-slot {
                 padding: 6px 8px;
                 font-size: 0.7rem;
             }
-            
+
             .play-btn {
                 width: 35px;
                 height: 35px;
@@ -619,6 +651,7 @@
         }
     </style>
 </head>
+
 <body>
     <!-- CLEAN: Simple header with essential status -->
     <div class="header">
@@ -638,26 +671,22 @@
             </div>
         </div>
     </div>
-    
+
     <!-- MODULAR: Terminal container -->
     <div class="terminal-container">
         <div id="loading-message" class="loading-message">
             🔄 Loading VERSIONS interface...
         </div>
-        
+
         <div id="error-message" class="error-message hidden">
             ❌ Failed to load interface
         </div>
-        
-        <canvas id="terminal-canvas" 
-                width="1200" 
-                height="700" 
-                class="hidden"
-                tabindex="0">
+
+        <canvas id="terminal-canvas" width="1200" height="700" class="hidden" tabindex="0">
             Your browser doesn't support this interface. Please update your browser.
         </canvas>
     </div>
-    
+
     <!-- CLEAN: Essential controls only -->
     <div class="controls">
         <div class="control-group">
@@ -666,20 +695,30 @@
             <button class="control-btn" onclick="runCommand('clear')">🧹 Clear</button>
             <button class="control-btn" onclick="toggleUploadInterface()" title="Upload audio files">⬆️ Upload</button>
         </div>
-        
+
         <div class="info-display">
-            <span id="info-text">Initializing terminal...</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <input type="text" id="search-input" placeholder="Search songs, artists, versions..."
+                    style="background: rgba(0, 212, 255, 0.1); border: 1px solid var(--color-blue); color: var(--fg-primary); padding: 4px 8px; border-radius: 4px; font-family: inherit; font-size: 0.8rem; width: 200px;"
+                    onkeydown="handleSearchKeydown(event)">
+                <button class="control-btn" onclick="performSearch()" title="Search">🔍</button>
+            </div>
+            <div id="info-text">Initializing terminal...</div>
         </div>
-        
+
         <div class="control-group">
-            <button class="control-btn" onclick="toggleVersionDiscovery()" title="Open version discovery sidebar (Cmd+D)">🎵 Discover Versions</button>
-            <button class="control-btn" onclick="toggleAudioPreview()" title="Open audio comparison bar (Cmd+M)">🎧 Compare Audio</button>
-            <button class="control-btn" onclick="farcasterSignIn()" id="farcaster-btn" title="Sign in with Farcaster">🎭 Sign In</button>
+            <button class="control-btn" onclick="toggleVersionDiscovery()"
+                title="Open version discovery sidebar (Cmd+D)">🎵 Discover Versions</button>
+            <button class="control-btn" onclick="toggleAudioPreview()" title="Open audio comparison bar (Cmd+M)">🎧
+                Compare Audio</button>
+            <button class="control-btn" onclick="farcasterSignIn()" id="farcaster-btn" title="Sign in with Farcaster">🎭
+                Sign In</button>
             <button class="control-btn" onclick="focusTerminal()" title="Focus terminal for typing">🎯 Focus</button>
-            <button class="control-btn" onclick="toggleFullscreen()" id="fullscreen-btn" title="Toggle fullscreen mode">⛶ Fullscreen</button>
+            <button class="control-btn" onclick="toggleFullscreen()" id="fullscreen-btn"
+                title="Toggle fullscreen mode">⛶ Fullscreen</button>
         </div>
     </div>
-    
+
     <!-- VERSION DISCOVERY: Command hints overlay -->
     <div class="quick-commands">
         <h4>Quick Commands</h4>
@@ -690,43 +729,46 @@
             <li onclick="runCommand('help')">📖 help</li>
         </ul>
     </div>
-    
+
     <!-- SOCIAL DISCOVERY: Farcaster activity indicator -->
     <div class="social-indicator">
         <div class="social-pulse"></div>
         <span>3 friends active</span>
     </div>
-    
+
     <!-- VERSION DISCOVERY: Overlay background -->
     <div class="discovery-overlay" id="discovery-overlay" onclick="closeVersionDiscovery()"></div>
-    
+
     <!-- VERSION DISCOVERY: Sliding sidebar -->
     <div class="version-discovery-sidebar" id="version-sidebar">
         <div class="sidebar-header">
             <h3 style="color: var(--color-blue); margin: 0;">🎭 Version Discovery</h3>
             <button class="sidebar-close" onclick="closeVersionDiscovery()" title="Close">✕</button>
         </div>
-        
+
         <div style="margin-bottom: 20px;">
             <h4 style="color: var(--color-green); font-size: 0.9rem; margin-bottom: 8px;">Trending Versions</h4>
-            
-            <div style="padding: 10px; background: rgba(0, 255, 136, 0.05); border-left: 3px solid var(--color-green); margin-bottom: 10px;">
+
+            <div
+                style="padding: 10px; background: rgba(0, 255, 136, 0.05); border-left: 3px solid var(--color-green); margin-bottom: 10px;">
                 <div style="display: flex; align-items: center; margin-bottom: 5px;">
                     <span class="version-type-indicator version-type-live">LIVE</span>
                     <span style="font-size: 0.8rem;">Bohemian Rhapsody</span>
                 </div>
                 <div style="font-size: 0.7rem; color: #B8C5D6;">Live Aid 1985 • 1.2k plays today</div>
             </div>
-            
-            <div style="padding: 10px; background: rgba(0, 212, 255, 0.05); border-left: 3px solid var(--color-blue); margin-bottom: 10px;">
+
+            <div
+                style="padding: 10px; background: rgba(0, 212, 255, 0.05); border-left: 3px solid var(--color-blue); margin-bottom: 10px;">
                 <div style="display: flex; align-items: center; margin-bottom: 5px;">
                     <span class="version-type-indicator version-type-studio">STUDIO</span>
                     <span style="font-size: 0.8rem;">Imagine</span>
                 </div>
                 <div style="font-size: 0.7rem; color: #B8C5D6;">Original 1971 • 856 plays today</div>
             </div>
-            
-            <div style="padding: 10px; background: rgba(246, 199, 68, 0.05); border-left: 3px solid var(--color-yellow);">
+
+            <div
+                style="padding: 10px; background: rgba(246, 199, 68, 0.05); border-left: 3px solid var(--color-yellow);">
                 <div style="display: flex; align-items: center; margin-bottom: 5px;">
                     <span class="version-type-indicator version-type-demo">DEMO</span>
                     <span style="font-size: 0.8rem;">Yesterday</span>
@@ -734,7 +776,7 @@
                 <div style="font-size: 0.7rem; color: #B8C5D6;">Home recording • 634 plays today</div>
             </div>
         </div>
-        
+
         <div style="margin-bottom: 20px;">
             <h4 style="color: var(--color-cyan); font-size: 0.9rem; margin-bottom: 8px;">🤝 Social Recommendations</h4>
             <div style="font-size: 0.75rem; line-height: 1.4; color: #B8C5D6;">
@@ -743,7 +785,7 @@
                 <div>📈 @audiophile voted for 2011 remaster</div>
             </div>
         </div>
-        
+
         <div>
             <h4 style="color: var(--color-yellow); font-size: 0.9rem; margin-bottom: 8px;">🎵 Version Types</h4>
             <div style="display: flex; flex-wrap: wrap; gap: 5px;">
@@ -756,14 +798,14 @@
             </div>
         </div>
     </div>
-    
+
     <!-- AUDIO UPLOAD: File upload interface -->
     <div class="upload-interface" id="upload-interface">
         <div class="upload-header">
             <h3 style="color: var(--color-blue); margin: 0;">⬆️ Upload Audio File</h3>
             <button class="sidebar-close" onclick="closeUploadInterface()" title="Close">✕</button>
         </div>
-        
+
         <div class="upload-content">
             <div class="upload-dropzone" id="upload-dropzone">
                 <div class="dropzone-content">
@@ -773,22 +815,23 @@
                 </div>
                 <input type="file" id="file-input" accept=".mp3,.flac,.wav,.m4a,.ogg,.aiff" style="display: none;">
             </div>
-            
+
             <div class="upload-progress" id="upload-progress" style="display: none;">
                 <div class="progress-bar">
                     <div class="progress-fill" id="progress-fill"></div>
                 </div>
                 <div class="progress-text" id="progress-text">Uploading...</div>
             </div>
-            
+
             <div class="upload-result" id="upload-result" style="display: none;">
                 <div class="result-header">Upload Complete!</div>
                 <div class="result-metadata" id="result-metadata"></div>
-                <button class="control-btn" onclick="clearUploadResult()" style="margin-top: 10px;">Upload Another</button>
+                <button class="control-btn" onclick="clearUploadResult()" style="margin-top: 10px;">Upload
+                    Another</button>
             </div>
         </div>
     </div>
-    
+
     <!-- AUDIO PREVIEW: Version comparison bar -->
     <div class="audio-preview-bar" id="audio-preview">
         <div class="version-comparison">
@@ -800,7 +843,7 @@
                 Click to load Version B
             </div>
         </div>
-        
+
         <div class="play-controls">
             <button class="play-btn" onclick="playComparison()" title="Play comparison">
                 ▶
@@ -813,16 +856,16 @@
 
     <!-- Load Farcaster Mini App SDK integration -->
     <script src="./farcaster-miniapp.js"></script>
-    
+
     <script type="module">
         // MODULAR: Import WASM terminal and theme
         import init, { VersionsTerminalPOC } from './pkg/versions_wasm_poc.js';
         import { applyTheme, ThemeUtils } from './theme-bridge.js';
-        
+
         // CLEAN: Inline configuration for browser compatibility
         function getConfig() {
             const hostname = window.location.hostname;
-            
+
             if (hostname === 'localhost' || hostname === '127.0.0.1') {
                 return {
                     environment: 'development',
@@ -847,9 +890,14 @@
             }
         }
 
+        // Make getConfig available globally
+        window.getConfig = getConfig;
+
         let terminal = null;
         let animationId = null;
         let config = null;
+        let currentComparisonSession = null;
+        let currentVersionModal = null;
 
         // CLEAN: Status management
         function updateStatus(elementId, isOk) {
@@ -883,80 +931,80 @@
             try {
                 updateInfo('Loading WASM module...');
                 console.log('🎭 Initializing VERSIONS Unified Terminal...');
-                
+
                 // ENHANCEMENT: Apply theme and load config
                 applyTheme();
                 config = getConfig();
                 console.log(`🔧 Configuration loaded for ${config.environment}`);
-                
+
                 // CLEAN: Load application
                 await init();
                 updateStatus('app-status', true);
                 updateInfo('App loaded, setting up interface...');
-                
+
                 // MODULAR: Get canvas element
                 const canvas = document.getElementById('terminal-canvas');
                 if (!canvas) {
                     throw new Error('Interface element not found');
                 }
-                
+
                 // CLEAN: Create interface instance
                 terminal = new VersionsTerminalPOC(canvas);
                 updateStatus('audio-status', true);
                 updateInfo('Interface ready, connecting to services...');
-                
+
                 // ENHANCEMENT: Enhanced keyboard handling
                 canvas.addEventListener('keydown', (event) => {
                     // Allow some browser shortcuts
                     if (event.ctrlKey && ['t', 'w', 'r', 'l'].includes(event.key)) {
                         return; // Let browser handle these
                     }
-                    
+
                     event.preventDefault();
-                    
+
                     try {
                         terminal.handle_keypress(event);
                     } catch (error) {
                         console.error('Key handling error:', error);
                     }
                 });
-                
+
                 // CLEAN: Handle focus management
                 canvas.addEventListener('blur', () => {
                     updateInfo('Click terminal to focus and start typing');
                 });
-                
+
                 canvas.addEventListener('focus', () => {
                     updateInfo('Terminal focused - type commands or "help"');
                 });
-                
+
                 // PERFORMANT: Start render loop
                 renderLoop();
-                
+
                 // CLEAN: Show terminal, hide loading
                 document.getElementById('loading-message').classList.add('hidden');
                 canvas.classList.remove('hidden');
-                
+
                 // ENHANCEMENT: Focus terminal for immediate use
                 canvas.focus();
-                
+
                 // CLEAN: Check server connection
                 checkServerConnection();
-                
+
                 console.log('✅ VERSIONS interface loaded successfully');
                 updateInfo('Ready to discover versions - type "help" for commands');
-                
+
                 return true;
-                
+
             } catch (error) {
                 console.error('❌ Terminal initialization failed:', error);
-                
+
                 // CLEAN: Show error message
                 document.getElementById('loading-message').classList.add('hidden');
                 document.getElementById('error-message').classList.remove('hidden');
-                document.getElementById('error-message').innerHTML = 
+                document.getElementById('error-message').innerHTML =
                     `❌ Failed to load interface<br><small>Please refresh the page</small>`;
-                
+
                 updateInfo('Interface failed to load');
                 return false;
             }
@@ -971,25 +1019,25 @@
                 const response = await fetch(`${config.apiBase}/api/v1/health`);
                 const isOk = response.ok;
                 updateStatus('social-status', isOk);
-                
+
                 if (isOk) {
-                    updateInfo('All services connected - ready to discover versions!');
+                    updateInfo('🎭 Welcome to VERSIONS - Your version-centric music journey begins!');
                 } else {
-                    updateInfo('Some features offline - basic functions available');
+                    updateInfo('🎵 Local discovery mode active - exploring offline versions!');
                 }
             } catch (error) {
                 updateStatus('social-status', false);
-                updateInfo('Services connecting... basic features available');
+                updateInfo('🎧 Offline mode - Local versions ready to explore! Community features connecting...');
             }
         }
 
         // CLEAN: Control functions with discovery integration
-        window.runCommand = function(command) {
+        window.runCommand = function (command) {
             if (!terminal) return;
-            
+
             // Simulate typing the command
             const canvas = document.getElementById('terminal-canvas');
-            
+
             // Clear any existing command and type new one
             for (const char of command) {
                 const keyEvent = new KeyboardEvent('keydown', {
@@ -998,27 +1046,27 @@
                 });
                 canvas.dispatchEvent(keyEvent);
             }
-            
+
             // Press Enter
             const enterEvent = new KeyboardEvent('keydown', {
                 key: 'Enter',
                 bubbles: true
             });
             canvas.dispatchEvent(enterEvent);
-            
+
             // ENHANCEMENT: Trigger discovery UI for relevant commands
             showDiscoveryForCommand(command);
         };
 
-        window.focusTerminal = function() {
+        window.focusTerminal = function () {
             const canvas = document.getElementById('terminal-canvas');
             canvas.focus();
             updateInfo('Terminal focused - type away!');
         };
 
-        window.toggleFullscreen = function() {
+        window.toggleFullscreen = function () {
             const button = document.getElementById('fullscreen-btn');
-            
+
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen();
                 button.textContent = '⥤ Exit Fullscreen';
@@ -1029,15 +1077,15 @@
                 updateInfo('Exited fullscreen mode');
             }
         };
-        
+
         // VERSION DISCOVERY: Toggle discovery sidebar with overlay
-        window.toggleVersionDiscovery = function() {
+        window.toggleVersionDiscovery = function () {
             const sidebar = document.getElementById('version-sidebar');
             const overlay = document.getElementById('discovery-overlay');
-            
+
             sidebar.classList.toggle('open');
             overlay.classList.toggle('active');
-            
+
             if (sidebar.classList.contains('open')) {
                 updateInfo('Version discovery opened - explore trending versions');
                 // Prevent body scroll
@@ -1047,25 +1095,25 @@
                 document.body.style.overflow = 'auto';
             }
         };
-        
+
         // VERSION DISCOVERY: Close discovery sidebar
-        window.closeVersionDiscovery = function() {
+        window.closeVersionDiscovery = function () {
             const sidebar = document.getElementById('version-sidebar');
             const overlay = document.getElementById('discovery-overlay');
-            
+
             sidebar.classList.remove('open');
             overlay.classList.remove('active');
             document.body.style.overflow = 'auto';
             updateInfo('Version discovery closed');
         };
-        
+
         // AUDIO PREVIEW: Toggle comparison bar and adjust controls
-        window.toggleAudioPreview = function() {
+        window.toggleAudioPreview = function () {
             const previewBar = document.getElementById('audio-preview');
             const controls = document.querySelector('.controls');
-            
+
             previewBar.classList.toggle('show');
-            
+
             if (previewBar.classList.contains('show')) {
                 controls.classList.add('with-audio-bar');
                 updateInfo('Audio comparison ready - select two versions to compare');
@@ -1074,27 +1122,258 @@
                 updateInfo('Audio comparison closed');
             }
         };
-        
+
         // VERSION COMPARISON: Select version for comparison
-        window.selectVersionForComparison = function(slot) {
-            updateInfo(`Please select a version for slot ${slot} (coming soon)`);
-            // TODO: Open version selector modal
+        window.selectVersionForComparison = async function (slot) {
+            try {
+                // Get available versions from the database
+                const config = window.getConfig ? window.getConfig() : { apiBase: 'http://localhost:8080' };
+                const response = await fetch(`${config.apiBase}/api/v1/songs`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    updateInfo('Failed to load versions for comparison');
+                    return;
+                }
+
+                // Create version selector modal
+                showVersionSelectorModal(slot, result.data);
+
+            } catch (error) {
+                console.error('Error loading versions:', error);
+                updateInfo('Error loading versions for comparison');
+            }
         };
-        
+
+        // VERSION COMPARISON: Show version selector modal
+        function showVersionSelectorModal(slot, songs) {
+            // Create modal overlay
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 2000;
+                padding: 20px;
+            `;
+
+            // Create modal content
+            const content = document.createElement('div');
+            content.style.cssText = `
+                background: linear-gradient(135deg, rgba(16, 20, 33, 0.98), rgba(26, 35, 50, 0.98));
+                border: 2px solid var(--color-blue);
+                border-radius: 12px;
+                padding: 25px;
+                max-width: 600px;
+                max-height: 80vh;
+                overflow-y: auto;
+                color: var(--fg-primary);
+            `;
+
+            content.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="color: var(--color-blue); margin: 0;">Select Version for Slot ${slot}</h3>
+                    <button onclick="closeVersionSelector()" style="background: none; border: none; color: var(--color-blue); font-size: 1.2rem; cursor: pointer;">✕</button>
+                </div>
+                <div id="version-list" style="max-height: 400px; overflow-y: auto;">
+                    ${generateVersionList(songs)}
+                </div>
+            `;
+
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+
+            // Store modal reference for cleanup
+            window.currentVersionModal = modal;
+
+            // Prevent body scroll
+            document.body.style.overflow = 'hidden';
+        }
+
+        // VERSION COMPARISON: Generate version list HTML
+        function generateVersionList(songs) {
+            if (!songs || songs.length === 0) {
+                return '<div style="text-align: center; color: var(--color-yellow); padding: 20px;">No versions available</div>';
+            }
+
+            return songs.map(song => `
+                <div style="margin-bottom: 15px;">
+                    <div style="color: var(--color-blue); font-weight: bold; margin-bottom: 8px;">${song.canonical_title}</div>
+                    ${song.versions.map(version => `
+                        <div style="display: flex; align-items: center; padding: 8px 12px; margin: 4px 0; background: rgba(255, 255, 255, 0.05); border-radius: 6px; cursor: pointer; transition: all 0.2s ease;"
+                             onclick="selectVersion('${version.id}', '${slot}', '${version.title}', '${version.version_type}')">
+                            <span class="version-type-indicator version-type-${version.version_type.toLowerCase()}">${version.version_type.toUpperCase()}</span>
+                            <span style="margin-left: 10px; flex: 1;">${version.title}</span>
+                            <span style="color: var(--color-cyan); font-size: 0.8rem;">${version.artist || 'Unknown Artist'}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `).join('');
+        }
+
+        // VERSION COMPARISON: Select a specific version
+        window.selectVersion = function (versionId, slot, title, versionType) {
+            const slotElement = document.getElementById(`version-slot-${slot.toLowerCase()}`);
+            if (slotElement) {
+                slotElement.textContent = title;
+                slotElement.classList.add('loaded');
+                slotElement.dataset.versionId = versionId;
+                slotElement.dataset.versionType = versionType;
+            }
+
+            closeVersionSelector();
+            updateInfo(`Version loaded in slot ${slot}: ${title}`);
+        };
+
+        // VERSION COMPARISON: Close version selector modal
+        window.closeVersionSelector = function () {
+            if (window.currentVersionModal) {
+                document.body.removeChild(window.currentVersionModal);
+                window.currentVersionModal = null;
+            }
+            document.body.style.overflow = 'auto';
+        };
+
         // AUDIO PLAYBACK: Play version comparison
-        window.playComparison = function() {
+        window.playComparison = async function () {
             const slots = document.querySelectorAll('.version-slot');
             const loadedSlots = Array.from(slots).filter(slot => slot.classList.contains('loaded'));
-            
+
             if (loadedSlots.length < 2) {
                 updateInfo('Load two versions first to start comparison');
                 return;
             }
-            
-            updateInfo('Playing version comparison (audio engine integration coming)');
-            // TODO: Implement actual audio comparison playback
+
+            // Get version IDs
+            const versionIds = loadedSlots.map(slot => slot.dataset.versionId);
+
+            try {
+                const config = window.getConfig ? window.getConfig() : { apiBase: 'http://localhost:8080' };
+
+                // Create comparison session
+                const response = await fetch(`${config.apiBase}/api/v1/compare/versions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ version_ids: versionIds })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    updateInfo('Comparison session created - starting playback...');
+                    window.currentComparisonSession = result.data.session_id;
+
+                    // Update play button to show playing state
+                    const playBtn = document.getElementById('play-comparison-btn');
+                    if (playBtn) {
+                        playBtn.innerHTML = '⏸';
+                        playBtn.title = 'Pause comparison';
+                    }
+
+                    // TODO: Implement actual audio playback synchronization
+                    // For now, just show the comparison is active
+                    setTimeout(() => {
+                        updateInfo('Version comparison active - use controls to switch between versions');
+                    }, 1000);
+
+                } else {
+                    updateInfo(`Failed to create comparison: ${result.error}`);
+                }
+
+            } catch (error) {
+                console.error('Error creating comparison:', error);
+                updateInfo('Error creating version comparison');
+            }
         };
-        
+
+        // SEARCH: Handle search input keydown
+        window.handleSearchKeydown = function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                performSearch();
+            }
+        };
+
+        // SEARCH: Perform search
+        window.performSearch = async function () {
+            const searchInput = document.getElementById('search-input');
+            const query = searchInput.value.trim();
+
+            if (!query) {
+                updateInfo('Please enter a search term');
+                return;
+            }
+
+            try {
+                const config = window.getConfig ? window.getConfig() : { apiBase: 'http://localhost:8080' };
+
+                updateInfo(`🔍 Searching for "${query}"...`);
+
+                const response = await fetch(`${config.apiBase}/api/v1/search?search=${encodeURIComponent(query)}`);
+                const result = await response.json();
+
+                if (result.success && result.data && result.data.length > 0) {
+                    updateInfo(`Found ${result.data.length} results for "${query}"`);
+                    showSearchResults(query, result.data);
+                } else {
+                    updateInfo(`No results found for "${query}"`);
+                    showSearchResults(query, []);
+                }
+
+            } catch (error) {
+                console.error('Search error:', error);
+                updateInfo('Search failed - please try again');
+            }
+        };
+
+        // SEARCH: Show search results in version discovery sidebar
+        function showSearchResults(query, songs) {
+            const sidebar = document.getElementById('version-sidebar');
+            const overlay = document.getElementById('discovery-overlay');
+
+            // Update sidebar content with search results
+            const trendingSection = sidebar.querySelector('div[style*="margin-bottom: 20px"]');
+            if (trendingSection) {
+                trendingSection.innerHTML = `
+                    <h4 style="color: var(--color-green); font-size: 0.9rem; margin-bottom: 8px;">
+                        🔍 Search Results for "${query}"
+                    </h4>
+                    ${generateSearchResults(songs)}
+                `;
+            }
+
+            // Open sidebar if not already open
+            if (!sidebar.classList.contains('open')) {
+                sidebar.classList.add('open');
+                overlay.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        // SEARCH: Generate search results HTML
+        function generateSearchResults(songs) {
+            if (!songs || songs.length === 0) {
+                return '<div style="text-align: center; color: var(--color-yellow); padding: 20px;">No results found</div>';
+            }
+
+            return songs.map(song => `
+                <div style="padding: 10px; background: rgba(0, 212, 255, 0.05); border-left: 3px solid var(--color-blue); margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                        <span style="font-size: 0.8rem; font-weight: bold; color: var(--color-blue);">${song.canonical_title}</span>
+                    </div>
+                    <div style="font-size: 0.7rem; color: #B8C5D6;">${song.total_versions} versions • ${song.total_play_count} plays</div>
+                </div>
+            `).join('');
+        }
+
         // SOCIAL DISCOVERY: Update social indicator with real data
         function updateSocialActivity() {
             // TODO: Fetch real social data from Farcaster API
@@ -1104,10 +1383,10 @@
                 socialIndicator.textContent = `${friendCount} friends active`;
             }
         }
-        
+
         // AUTO-DISCOVERY: Show relevant UI based on terminal commands
         function showDiscoveryForCommand(command) {
-            switch(command) {
+            switch (command) {
                 case 'songs':
                     // Auto-open version discovery when songs command is used
                     setTimeout(() => {
@@ -1117,7 +1396,7 @@
                         }
                     }, 1000);
                     break;
-                    
+
                 case 'social':
                     // Highlight social indicator and fetch Farcaster recommendations
                     const socialIndicator = document.querySelector('.social-indicator');
@@ -1125,7 +1404,7 @@
                     setTimeout(() => {
                         socialIndicator.style.background = 'rgba(126, 92, 177, 0.1)';
                     }, 2000);
-                    
+
                     // Fetch and show social recommendations
                     if (window.farcasterApp && window.farcasterApp.user) {
                         window.farcasterApp.getSocialRecommendations().then(recommendations => {
@@ -1135,14 +1414,14 @@
                     break;
             }
         }
-        
+
         // FARCASTER INTEGRATION: Sign in with Farcaster
-        window.farcasterSignIn = async function() {
+        window.farcasterSignIn = async function () {
             if (!window.farcasterApp) {
                 updateInfo('Farcaster integration not loaded');
                 return;
             }
-            
+
             if (window.farcasterApp.user) {
                 // Already signed in - show options
                 await showFarcasterMenu();
@@ -1154,21 +1433,21 @@
                 }
             }
         };
-        
+
         // FARCASTER: Show menu for authenticated users
         async function showFarcasterMenu() {
             const user = window.farcasterApp.user;
             const options = [
                 'Share Discovery',
-                'Add to Collection', 
+                'Add to Collection',
                 'View Profile',
                 'Sign Out'
             ];
-            
+
             // Simple prompt for now - could be enhanced with modal
             const choice = prompt(`Signed in as @${user.username}\n\nChoose action:\n1. ${options[0]}\n2. ${options[1]}\n3. ${options[2]}\n4. ${options[3]}`);
-            
-            switch(choice) {
+
+            switch (choice) {
                 case '1':
                     await window.farcasterApp.shareCurrentDiscovery();
                     break;
@@ -1183,7 +1462,7 @@
                     break;
             }
         }
-        
+
         // FARCASTER: Update button state when signed in
         function updateFarcasterButton(user) {
             const button = document.getElementById('farcaster-btn');
@@ -1192,28 +1471,28 @@
                 button.title = 'Farcaster options';
             }
         }
-        
+
         // FARCASTER: Sign out
         function signOutFarcaster() {
             if (window.farcasterApp) {
                 window.farcasterApp.user = null;
                 window.farcasterApp.isReady = false;
-                
+
                 const button = document.getElementById('farcaster-btn');
                 if (button) {
                     button.innerHTML = '🎭 Sign In';
                     button.title = 'Sign in with Farcaster';
                 }
-                
+
                 updateInfo('Signed out from Farcaster');
             }
         }
-        
+
         // AUDIO UPLOAD: Toggle upload interface
-        window.toggleUploadInterface = function() {
+        window.toggleUploadInterface = function () {
             const uploadInterface = document.getElementById('upload-interface');
             uploadInterface.classList.toggle('show');
-            
+
             if (uploadInterface.classList.contains('show')) {
                 updateInfo('Upload interface opened - drag & drop audio files');
                 initializeUploadHandlers();
@@ -1224,112 +1503,112 @@
                 document.body.style.overflow = 'auto';
             }
         };
-        
+
         // AUDIO UPLOAD: Close upload interface
-        window.closeUploadInterface = function() {
+        window.closeUploadInterface = function () {
             const uploadInterface = document.getElementById('upload-interface');
             uploadInterface.classList.remove('show');
             document.body.style.overflow = 'auto';
             updateInfo('Upload interface closed');
         };
-        
+
         // AUDIO UPLOAD: Initialize drag & drop and file handlers
         function initializeUploadHandlers() {
             const dropzone = document.getElementById('upload-dropzone');
             const fileInput = document.getElementById('file-input');
-            
+
             // Click to browse files
             dropzone.addEventListener('click', () => {
                 fileInput.click();
             });
-            
+
             // Handle file selection
             fileInput.addEventListener('change', (e) => {
                 if (e.target.files.length > 0) {
                     handleFileUpload(e.target.files[0]);
                 }
             });
-            
+
             // Drag & drop handlers
             dropzone.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 dropzone.classList.add('dragover');
             });
-            
+
             dropzone.addEventListener('dragleave', (e) => {
                 e.preventDefault();
                 dropzone.classList.remove('dragover');
             });
-            
+
             dropzone.addEventListener('drop', (e) => {
                 e.preventDefault();
                 dropzone.classList.remove('dragover');
-                
+
                 if (e.dataTransfer.files.length > 0) {
                     handleFileUpload(e.dataTransfer.files[0]);
                 }
             });
         }
-        
+
         // AUDIO UPLOAD: Handle file upload
         async function handleFileUpload(file) {
             // Validate file type
             const validTypes = ['audio/mpeg', 'audio/flac', 'audio/wav', 'audio/mp4', 'audio/ogg', 'audio/aiff'];
             const validExtensions = ['.mp3', '.flac', '.wav', '.m4a', '.ogg', '.aiff'];
-            
+
             const hasValidType = validTypes.includes(file.type);
             const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
-            
+
             if (!hasValidType && !hasValidExtension) {
                 updateInfo('❌ Invalid file type. Please select an audio file.');
                 return;
             }
-            
+
             // Show upload progress
             document.getElementById('upload-dropzone').style.display = 'none';
             document.getElementById('upload-progress').style.display = 'block';
             document.getElementById('upload-result').style.display = 'none';
-            
+
             updateInfo(`📤 Uploading ${file.name} (${formatFileSize(file.size)})...`);
-            
+
             try {
                 // Create FormData for multipart upload
                 const formData = new FormData();
                 formData.append('file', file);
-                
+
                 const config = window.getConfig ? window.getConfig() : { apiBase: 'http://localhost:8080' };
-                
+
                 // Upload with progress tracking
                 const response = await fetch(`${config.apiBase}/api/v1/audio/upload`, {
                     method: 'POST',
                     body: formData,
                 });
-                
+
                 if (!response.ok) {
                     throw new Error(`Upload failed: ${response.statusText}`);
                 }
-                
+
                 const result = await response.json();
-                
+
                 if (result.success) {
                     showUploadSuccess(result.data, file.name);
                     updateInfo(`✅ Upload successful: ${result.data.title || file.name}`);
                 } else {
                     throw new Error(result.error || 'Upload failed');
                 }
-                
+
             } catch (error) {
                 console.error('Upload error:', error);
                 showUploadError(error.message);
                 updateInfo(`❌ Upload failed: ${error.message}`);
             }
         }
-        
+
         // AUDIO UPLOAD: Show upload success
         function showUploadSuccess(metadata, filename) {
             document.getElementById('upload-progress').style.display = 'none';
             document.getElementById('upload-result').style.display = 'block';
-            
+
             const metadataDiv = document.getElementById('result-metadata');
             metadataDiv.innerHTML = `
                 <div class="metadata-item"><span class="metadata-label">File:</span> ${filename}</div>
@@ -1343,12 +1622,12 @@
                 ${metadata.sample_rate ? `<div class="metadata-item"><span class="metadata-label">Sample Rate:</span> ${metadata.sample_rate} Hz</div>` : ''}
             `;
         }
-        
+
         // AUDIO UPLOAD: Show upload error
         function showUploadError(errorMessage) {
             document.getElementById('upload-progress').style.display = 'none';
             document.getElementById('upload-result').style.display = 'block';
-            
+
             const resultDiv = document.getElementById('upload-result');
             resultDiv.innerHTML = `
                 <div class="result-header" style="color: var(--color-red);">Upload Failed</div>
@@ -1358,19 +1637,19 @@
                 <button class="control-btn" onclick="clearUploadResult()" style="margin-top: 10px;">Try Again</button>
             `;
         }
-        
+
         // AUDIO UPLOAD: Clear upload result and reset interface
-        window.clearUploadResult = function() {
+        window.clearUploadResult = function () {
             document.getElementById('upload-dropzone').style.display = 'block';
             document.getElementById('upload-progress').style.display = 'none';
             document.getElementById('upload-result').style.display = 'none';
-            
+
             // Reset file input
             document.getElementById('file-input').value = '';
-            
+
             updateInfo('Ready for another upload');
         };
-        
+
         // UTILITY: Format file size
         function formatFileSize(bytes) {
             if (bytes === 0) return '0 Bytes';
@@ -1379,7 +1658,7 @@
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
-        
+
         // UTILITY: Format duration
         function formatDuration(seconds) {
             if (!seconds) return 'Unknown';
@@ -1410,39 +1689,39 @@
             if (e.key === 'Escape') {
                 const sidebar = document.getElementById('version-sidebar');
                 const audioBar = document.getElementById('audio-preview');
-                
+
                 if (sidebar.classList.contains('open')) {
                     closeVersionDiscovery();
                 } else if (audioBar.classList.contains('show')) {
                     toggleAudioPreview();
                 }
             }
-            
+
             // Ctrl/Cmd + D for discovery
             if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
                 e.preventDefault();
                 toggleVersionDiscovery();
             }
-            
+
             // Ctrl/Cmd + M for audio comparison
             if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
                 e.preventDefault();
                 toggleAudioPreview();
             }
         });
-        
+
         // ORGANIZED: Start initialization with discovery enhancements
         document.addEventListener('DOMContentLoaded', () => {
             console.log('🎭 VERSIONS starting...');
             initializeTerminal();
-            
+
             // CLEAN: Periodic server status check
             setInterval(checkServerConnection, 10000);
-            
+
             // SOCIAL DISCOVERY: Update social activity periodically
             updateSocialActivity();
             setInterval(updateSocialActivity, 30000);
-            
+
             // VERSION DISCOVERY: Show quick intro after interface loads
             setTimeout(() => {
                 updateInfo('Type "songs" to explore music or click "Discover Versions"');
@@ -1450,4 +1729,5 @@
         });
     </script>
 </body>
+
 </html>

@@ -290,7 +290,14 @@ async fn start_rest_api(
     let db = Database::new(database_path).await
         .context("Failed to initialize database")?;
     
-    // ORGANIZED: Seed example data for development
+    // ORGANIZED: Run database migration and seed example data
+    if let Err(e) = db.migrate_existing_data().await {
+        warn!("Failed to migrate database: {}", e);
+    } else {
+        info!("Database migration completed");
+    }
+
+    // Seed example data for development
     if let Err(e) = db.seed_example_data().await {
         warn!("Failed to seed example data: {}", e);
     } else {

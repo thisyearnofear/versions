@@ -135,6 +135,13 @@ pub fn create_router(database: Database) -> Router {
         .route("/api/v1/audio/:file_id/metadata", get(get_audio_metadata))
         .route("/api/v1/audio/:file_id/stream", get(stream_audio))
         .route("/api/v1/audio/upload", post(upload_audio_file))
+        // ENHANCEMENT: Add version comparison endpoints
+        .route("/api/v1/compare/versions", post(compare_versions))
+        .route("/api/v1/compare/:session_id/metadata", get(get_comparison_metadata))
+        .route("/api/v1/compare/:session_id/stream/:version_id", get(stream_comparison_audio))
+        // ENHANCEMENT: Add database management endpoints
+        .route("/api/v1/database/stats", get(get_database_stats))
+        .route("/api/v1/database/cleanup", post(cleanup_database))
         // ENHANCEMENT: Add Filecoin endpoints for global storage and creator economy
         .route("/api/v1/filecoin/upload", post(upload_to_filecoin))
         .route("/api/v1/filecoin/stream/:piece_cid", get(stream_from_filecoin))
@@ -294,11 +301,43 @@ async fn upload_version() -> Json<ApiResponse<String>> {
     Json(ApiResponse::success("Upload endpoint coming soon".to_string()))
 }
 
-/// Search endpoint (placeholder)
-async fn search(_query: Query<ListQuery>) -> Json<ApiResponse<Vec<String>>> {
-    Json(ApiResponse::success(vec![
-        "Search functionality coming soon".to_string(),
-    ]))
+/// Search endpoint with full-text search across songs and versions
+async fn search(
+    State(db): State<Database>,
+    Query(params): Query<ListQuery>
+) -> Json<ApiResponse<Vec<crate::database::SimpleDbSong>>> {
+    match params.search {
+        Some(query) if !query.trim().is_empty() => {
+            // Perform full-text search
+            match db.search_songs_and_versions(&query, params.limit, params.page.map(|p| p * params.limit.unwrap_or(50))).await {
+                Ok(results) => {
+                    Json(ApiResponse::success(results))
+                }
+                Err(e) => {
+                    log::error!("Search failed: {}", e);
+                    Json(ApiResponse {
+                        success: false,
+                        data: None,
+                        error: Some("Search failed".to_string()),
+                    })
+                }
+            }
+        }
+        _ => {
+            // No search query - return recent songs
+            match db.list_songs(params.limit, params.page.map(|p| p * params.limit.unwrap_or(50))).await {
+                Ok(songs) => Json(ApiResponse::success(songs)),
+                Err(e) => {
+                    log::error!("Failed to list songs: {}", e);
+                    Json(ApiResponse {
+                        success: false,
+                        data: None,
+                        error: Some("Failed to retrieve songs".to_string()),
+                    })
+                }
+            }
+        }
+    }
 }
 
 // ENHANCEMENT: Farcaster endpoints added to existing API
@@ -764,6 +803,225 @@ fn parse_range_header(headers: &HeaderMap) -> Option<crate::audio_service::Range
             }
             None
         })
+}
+
+/// CLEAN: Version comparison request structure
+#[derive(Deserialize)]
+struct VersionComparisonRequest {
+    version_ids: Vec<String>,
+}
+
+/// CLEAN: Version comparison session structure
+#[derive(Debug, Serialize)]
+struct VersionComparisonSession {
+    session_id: String,
+    versions: Vec<VersionComparisonData>,
+    created_at: String,
+}
+
+/// CLEAN: Version comparison data structure
+#[derive(Debug, Serialize)]
+struct VersionComparisonData {
+    version_id: String,
+    title: String,
+    artist: Option<String>,
+    version_type: String,
+    duration_seconds: Option<u64>,
+    file_size: Option<u64>,
+    format: String,
+}
+
+/// CLEAN: Comparison metadata response
+#[derive(Debug, Serialize)]
+struct ComparisonMetadata {
+    session_id: String,
+    versions: Vec<ComparisonVersionInfo>,
+}
+
+/// CLEAN: Version info for comparison
+#[derive(Debug, Serialize)]
+struct ComparisonVersionInfo {
+    version_id: String,
+    title: String,
+    artist: Option<String>,
+    version_type: String,
+    duration_seconds: Option<u64>,
+    file_size: Option<u64>,
+    format: String,
+    waveform_data: Option<Vec<f32>>, // Placeholder for waveform analysis
+}
+
+// ENHANCEMENT: Version comparison endpoints
+
+/// Create a version comparison session
+async fn compare_versions(
+    State(db): State<Database>,
+    Json(request): Json<VersionComparisonRequest>
+) -> Json<ApiResponse<VersionComparisonSession>> {
+    // Validate request
+    if request.version_ids.len() < 2 {
+        return Json(ApiResponse {
+            success: false,
+            data: None,
+            error: Some("At least 2 versions required for comparison".to_string()),
+        });
+    }
+
+    if request.version_ids.len() > 4 {
+        return Json(ApiResponse {
+            success: false,
+            data: None,
+            error: Some("Maximum 4 versions allowed for comparison".to_string()),
+        });
+    }
+
+    // Generate session ID
+    let session_id = format!("comp_{}", chrono::Utc::now().timestamp_millis());
+
+    // Get version data from database
+    let mut versions = Vec::new();
+    for version_id in &request.version_ids {
+        match db.get_version_data(version_id).await {
+            Ok(Some(version_data)) => {
+                versions.push(VersionComparisonData {
+                    version_id: version_data.id,
+                    title: version_data.title,
+                    artist: version_data.artist,
+                    version_type: version_data.version_type,
+                    duration_seconds: version_data.duration_seconds.map(|d| d as u64),
+                    file_size: version_data.file_size.map(|s| s as u64),
+                    format: version_data.format,
+                });
+            }
+            Ok(None) => {
+                return Json(ApiResponse {
+                    success: false,
+                    data: None,
+                    error: Some(format!("Version not found: {}", version_id)),
+                });
+            }
+            Err(e) => {
+                log::error!("Failed to get version {}: {}", version_id, e);
+                return Json(ApiResponse {
+                    success: false,
+                    data: None,
+                    error: Some("Failed to retrieve version data".to_string()),
+                });
+            }
+        }
+    }
+
+    let session = VersionComparisonSession {
+        session_id: session_id.clone(),
+        versions,
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
+
+    log::info!("Created comparison session: {} with {} versions", session_id, request.version_ids.len());
+
+    Json(ApiResponse::success(session))
+}
+
+/// Get comparison metadata for a session
+async fn get_comparison_metadata(
+    State(db): State<Database>,
+    Path(session_id): Path<String>
+) -> Json<ApiResponse<ComparisonMetadata>> {
+    // For now, return basic metadata - in future this could be cached
+    // This is a placeholder implementation that would be enhanced with actual session management
+
+    match db.get_comparison_metadata(&session_id).await {
+        Ok(metadata) => Json(ApiResponse::success(metadata)),
+        Err(e) => {
+            log::error!("Failed to get comparison metadata for {}: {}", session_id, e);
+            Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some("Failed to retrieve comparison metadata".to_string()),
+            })
+        }
+    }
+}
+
+/// Stream audio for version comparison
+async fn stream_comparison_audio(
+    State(db): State<Database>,
+    Path((session_id, version_id)): Path<(String, String)>,
+    headers: HeaderMap
+) -> Result<Response<Body>, StatusCode> {
+    // Validate session and version
+    match db.validate_comparison_session(&session_id, &version_id).await {
+        Ok(true) => {
+            // Get audio service instance
+            let audio_service = crate::audio_service::AudioService::default();
+
+            // Parse range header for efficient streaming
+            let range_request = parse_range_header(&headers);
+            let has_range = range_request.is_some();
+
+            match audio_service.stream_audio(&version_id, range_request).await {
+                Ok(audio_stream) => {
+                    let mut response = Response::builder()
+                        .header(header::CONTENT_TYPE, audio_stream.content_type)
+                        .header(header::CONTENT_LENGTH, audio_stream.content_length.to_string())
+                        .header(header::ACCEPT_RANGES, "bytes");
+
+                    // Add range headers for partial content
+                    if has_range {
+                        response = response.status(StatusCode::PARTIAL_CONTENT);
+                    }
+
+                    response
+                        .body(Body::from(audio_stream.content))
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+                }
+                Err(_) => Err(StatusCode::NOT_FOUND),
+            }
+        }
+        Ok(false) => Err(StatusCode::NOT_FOUND),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+// ENHANCEMENT: Database management endpoints
+
+/// Get database statistics
+async fn get_database_stats(
+    State(db): State<Database>
+) -> Json<ApiResponse<crate::database::DatabaseStats>> {
+    match db.get_database_stats().await {
+        Ok(stats) => Json(ApiResponse::success(stats)),
+        Err(e) => {
+            log::error!("Failed to get database stats: {}", e);
+            Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some("Failed to retrieve database statistics".to_string()),
+            })
+        }
+    }
+}
+
+/// Clean up orphaned database data
+async fn cleanup_database(
+    State(db): State<Database>
+) -> Json<ApiResponse<HashMap<String, String>>> {
+    match db.cleanup_orphaned_data().await {
+        Ok(_) => {
+            let mut response = HashMap::new();
+            response.insert("status".to_string(), "success".to_string());
+            response.insert("message".to_string(), "Database cleanup completed".to_string());
+            Json(ApiResponse::success(response))
+        }
+        Err(e) => {
+            log::error!("Database cleanup failed: {}", e);
+            Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some("Database cleanup failed".to_string()),
+            })
+        }
+    }
 }
 
 // ENHANCEMENT: Filecoin endpoints for global storage and creator economy
