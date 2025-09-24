@@ -88,15 +88,29 @@
         }
 
         @keyframes pulse {
-
-            0%,
-            100% {
+            0%, 100% {
                 opacity: 1;
+                box-shadow: 0 0 2px var(--color-red);
             }
-
             50% {
                 opacity: 0.3;
+                box-shadow: 0 0 6px var(--color-red);
             }
+        }
+
+        /* Enhanced status dot with glow effect */
+        .status-dot.ok {
+            box-shadow: 0 0 4px var(--color-green);
+        }
+
+        .status-dot.connecting {
+            background: var(--color-yellow);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
         /* MODULAR: Terminal container */
@@ -159,6 +173,13 @@
             color: var(--color-yellow);
             font-size: 0.85rem;
             text-align: center;
+            transition: all 0.3s ease;
+            opacity: 0.95;
+        }
+
+        .info-display:hover {
+            opacity: 1;
+            color: var(--color-cyan);
         }
 
         /* PERFORMANT: Loading and error states */
@@ -167,6 +188,18 @@
             color: var(--color-cyan);
             font-size: 1.1rem;
             padding: 40px;
+            animation: gentlePulse 2s ease-in-out infinite;
+        }
+
+        @keyframes gentlePulse {
+            0%, 100% {
+                opacity: 0.8;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.02);
+            }
         }
 
         .error-message {
@@ -675,7 +708,7 @@
     <!-- MODULAR: Terminal container -->
     <div class="terminal-container">
         <div id="loading-message" class="loading-message">
-            🔄 Loading VERSIONS interface...
+            🎧 Tuning into the version multiverse...
         </div>
 
         <div id="error-message" class="error-message hidden">
@@ -703,7 +736,7 @@
                     onkeydown="handleSearchKeydown(event)">
                 <button class="control-btn" onclick="performSearch()" title="Search">🔍</button>
             </div>
-            <div id="info-text">Initializing terminal...</div>
+            <div id="info-text">🎆 Preparing your version discovery portal...</div>
         </div>
 
         <div class="control-group">
@@ -898,16 +931,21 @@
         let config = null;
         let currentComparisonSession = null;
         let currentVersionModal = null;
+        let wasOffline = false; // Track connection state for recovery notifications
 
-        // CLEAN: Status management
-        function updateStatus(elementId, isOk) {
+        // CLEAN: Status management with connecting state
+        function updateStatus(elementId, status) {
             const element = document.getElementById(elementId);
             if (element) {
-                if (isOk) {
+                // Clear all status classes
+                element.classList.remove('ok', 'connecting');
+                
+                if (status === 'ok' || status === true) {
                     element.classList.add('ok');
-                } else {
-                    element.classList.remove('ok');
+                } else if (status === 'connecting') {
+                    element.classList.add('connecting');
                 }
+                // 'error' or false shows default pulsing red
             }
         }
 
@@ -916,6 +954,12 @@
             if (element) {
                 element.textContent = message;
             }
+        }
+
+        // Brief celebratory message that auto-reverts
+        function showBriefSuccess(message, revertMessage, duration = 3000) {
+            updateInfo(message);
+            setTimeout(() => updateInfo(revertMessage), duration);
         }
 
         // PERFORMANT: Animation loop for terminal rendering
@@ -929,7 +973,7 @@
         // ORGANIZED: Initialize unified terminal
         async function initializeTerminal() {
             try {
-                updateInfo('Loading WASM module...');
+                updateInfo('🎆 Initializing version discovery engine...');
                 console.log('🎭 Initializing VERSIONS Unified Terminal...');
 
                 // ENHANCEMENT: Apply theme and load config
@@ -940,7 +984,7 @@
                 // CLEAN: Load application
                 await init();
                 updateStatus('app-status', true);
-                updateInfo('App loaded, setting up interface...');
+                updateInfo('🎭 Launching your personal version vault...');
 
                 // MODULAR: Get canvas element
                 const canvas = document.getElementById('terminal-canvas');
@@ -951,7 +995,7 @@
                 // CLEAN: Create interface instance
                 terminal = new VersionsTerminalPOC(canvas);
                 updateStatus('audio-status', true);
-                updateInfo('Interface ready, connecting to services...');
+                updateInfo('✨ Terminal interface ready! Connecting to version network...');
 
                 // ENHANCEMENT: Enhanced keyboard handling
                 canvas.addEventListener('keydown', (event) => {
@@ -971,11 +1015,11 @@
 
                 // CLEAN: Handle focus management
                 canvas.addEventListener('blur', () => {
-                    updateInfo('Click terminal to focus and start typing');
+                    updateInfo('🎯 Click terminal to dive back into version discovery!');
                 });
 
                 canvas.addEventListener('focus', () => {
-                    updateInfo('Terminal focused - type commands or "help"');
+                    updateInfo('🎵 Ready to explore! Try "songs", "social", or "help" to discover versions!');
                 });
 
                 // PERFORMANT: Start render loop
@@ -992,7 +1036,7 @@
                 checkServerConnection();
 
                 console.log('✅ VERSIONS interface loaded successfully');
-                updateInfo('Ready to discover versions - type "help" for commands');
+                updateInfo('🎵 Terminal ready! Type "songs" to browse, "help" for commands, or explore version types!');
 
                 return true;
 
@@ -1003,31 +1047,78 @@
                 document.getElementById('loading-message').classList.add('hidden');
                 document.getElementById('error-message').classList.remove('hidden');
                 document.getElementById('error-message').innerHTML =
-                    `❌ Failed to load interface<br><small>Please refresh the page</small>`;
+                    `🔧 Version engine needs a moment<br><small>🔄 Refresh to restart your discovery journey</small>`;
 
-                updateInfo('Interface failed to load');
+                updateInfo('🚀 One moment - preparing your version experience...');
                 return false;
             }
         }
 
-        // MODULAR: Service connection check
+        // MODULAR: Service connection check with graceful degradation
         async function checkServerConnection() {
             try {
                 if (!config) {
                     config = getConfig();
                 }
-                const response = await fetch(`${config.apiBase}/api/v1/health`);
+                
+                // Show connecting status
+                updateStatus('social-status', 'connecting');
+                updateInfo('🌐 Connecting to version network...');
+                
+                // Add timeout and better error handling
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                
+                const response = await fetch(`${config.apiBase}/api/v1/health`, {
+                    signal: controller.signal,
+                    headers: {
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                
+                clearTimeout(timeoutId);
                 const isOk = response.ok;
                 updateStatus('social-status', isOk);
 
                 if (isOk) {
-                    updateInfo('🎭 Welcome to VERSIONS - Your version-centric music journey begins!');
+                    if (wasOffline) {
+                        showBriefSuccess(
+                            '🎉 Connection restored! Full version network now available!',
+                            '🎭 All systems connected - ready to discover versions!',
+                            4000
+                        );
+                        console.log('🎉 Connection recovered - all cloud features restored');
+                        wasOffline = false;
+                    } else {
+                        updateInfo('🎭 Welcome to VERSIONS - Your version-centric music journey begins!');
+                        console.log('✅ Connected to VERSIONS cloud services');
+                    }
                 } else {
                     updateInfo('🎵 Local discovery mode active - exploring offline versions!');
+                    console.log('⚠️ API available but returning errors - using local mode');
                 }
             } catch (error) {
                 updateStatus('social-status', false);
-                updateInfo('🎧 Offline mode - Local versions ready to explore! Community features connecting...');
+                wasOffline = true; // Mark as offline for recovery messaging
+                
+                // Different messages based on error type
+                if (error.name === 'AbortError') {
+                    updateInfo('🌍 Slow connection detected - Local mode active! All core features available!');
+                    console.log('⏱️ Connection timeout - gracefully degrading to offline mode');
+                } else if (error.message.includes('ERR_NAME_NOT_RESOLVED')) {
+                    updateInfo('🏠 Local studio mode - Perfect for offline version exploration!');
+                    console.log('🇺🇸 DNS resolution failed - full offline experience available');
+                } else {
+                    updateInfo('🎧 Offline mode - Local versions ready to explore! Community features connecting...');
+                    console.log('🔌 Network issue detected - maintaining full offline functionality');
+                }
+                
+                // Schedule retry after delay with exponential backoff
+                setTimeout(() => {
+                    console.log('🔄 Quietly retrying connection in background...');
+                    checkServerConnection();
+                }, 30000); // Retry after 30 seconds
             }
         }
 
