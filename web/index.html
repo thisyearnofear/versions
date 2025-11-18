@@ -113,14 +113,371 @@
             to { transform: rotate(360deg); }
         }
 
-        /* MODULAR: Terminal container */
+        /* VERSION-FIRST: Main dashboard layout */
+        .versions-dashboard {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            gap: 20px;
+            min-height: 0;
+        }
+        
+        .version-discovery-main {
+            display: flex;
+            gap: 20px;
+            flex: 1;
+            min-height: 0;
+        }
+        
+        .song-browser {
+            width: 300px;
+            background: rgba(42, 52, 65, 0.5);
+            border-radius: 8px;
+            border: 1px solid #2a3441;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .version-story-panel {
+            flex: 1;
+            background: rgba(42, 52, 65, 0.3);
+            border-radius: 8px;
+            border: 1px solid #2a3441;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        
+        .comparison-studio {
+            background: rgba(26, 35, 50, 0.8);
+            border-radius: 8px;
+            border: 1px solid #2a3441;
+            padding: 15px;
+            min-height: 120px;
+        }
+        
+        /* MODULAR: Terminal container (now hidden by default) */
         .terminal-container {
             flex: 1;
             display: flex;
-            justify-content: center;
-            align-items: center;
+            flex-direction: column;
             padding: 20px;
             min-height: 0;
+        }
+        
+        .professional-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #2a3441;
+        }
+        
+        /* SONG BROWSER: Enhanced song list styling */
+        .browser-header {
+            padding: 15px;
+            border-bottom: 1px solid #2a3441;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .browser-controls {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .filter-btn {
+            background: transparent;
+            color: var(--color-blue);
+            border: 1px solid var(--color-blue);
+            padding: 4px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s ease;
+        }
+        
+        .filter-btn:hover,
+        .filter-btn.active {
+            background: var(--color-blue);
+            color: var(--bg-primary);
+        }
+        
+        .song-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        .song-item {
+            background: rgba(0, 212, 255, 0.05);
+            border-left: 3px solid transparent;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .song-item:hover {
+            background: rgba(0, 212, 255, 0.1);
+            border-left-color: var(--color-blue);
+            transform: translateX(2px);
+        }
+        
+        .song-item.featured {
+            background: rgba(0, 255, 136, 0.1);
+            border-left-color: var(--color-green);
+        }
+        
+        .song-item.active {
+            background: rgba(0, 212, 255, 0.2);
+            border-left-color: var(--color-blue);
+            box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+        }
+        
+        .song-title {
+            font-weight: bold;
+            color: var(--fg-primary);
+            font-size: 0.9rem;
+            margin-bottom: 2px;
+        }
+        
+        .song-artist {
+            color: var(--color-cyan);
+            font-size: 0.8rem;
+            margin-bottom: 4px;
+        }
+        
+        .version-count {
+            color: var(--color-yellow);
+            font-size: 0.7rem;
+            margin-bottom: 8px;
+        }
+        
+        .version-preview {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        
+        .version-type-mini {
+            background: var(--version-color);
+            color: var(--bg-primary);
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 0.6rem;
+            font-weight: bold;
+        }
+        
+        .version-type-mini.demo { background: var(--color-yellow); }
+        .version-type-mini.studio { background: var(--color-blue); }
+        .version-type-mini.live { background: var(--color-green); }
+        .version-type-mini.remix { background: var(--color-red); }
+        .version-type-mini.remaster { background: var(--color-cyan); }
+        .version-type-mini.acoustic { background: #b19cd9; }
+        
+        .version-dots {
+            color: var(--color-cyan);
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+        
+        .browser-footer {
+            padding: 15px;
+            border-top: 1px solid #2a3441;
+        }
+        
+        /* VERSION STORY PANEL: USP showcase */
+        .story-header {
+            padding: 15px;
+            border-bottom: 1px solid #2a3441;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .professional-toggle .toggle-btn {
+            background: rgba(246, 199, 68, 0.2);
+            color: var(--color-yellow);
+            border: 1px solid var(--color-yellow);
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+        }
+        
+        .professional-toggle .toggle-btn:hover {
+            background: var(--color-yellow);
+            color: var(--bg-primary);
+        }
+        
+        .story-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .welcome-message {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .welcome-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+        
+        .welcome-message h4 {
+            color: var(--color-green);
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+        
+        .welcome-message p {
+            color: var(--fg-primary);
+            line-height: 1.6;
+            margin-bottom: 25px;
+            opacity: 0.9;
+        }
+        
+        .version-types-showcase {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 25px 0;
+            flex-wrap: wrap;
+        }
+        
+        .showcase-arrow {
+            color: var(--color-cyan);
+            font-size: 1.2rem;
+            opacity: 0.7;
+        }
+        
+        .showcase-subtitle {
+            color: var(--color-cyan);
+            font-style: italic;
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-top: 20px;
+        }
+        
+        /* COMPARISON STUDIO: Enhanced version comparison */
+        .studio-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .studio-expand {
+            background: transparent;
+            color: var(--color-cyan);
+            border: 1px solid var(--color-cyan);
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s ease;
+        }
+        
+        .studio-expand:hover {
+            background: var(--color-cyan);
+            color: var(--bg-primary);
+        }
+        
+        .comparison-slots {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .version-slot.enhanced {
+            flex: 1;
+            background: rgba(0, 212, 255, 0.1);
+            border: 2px dashed var(--color-blue);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .version-slot.enhanced:hover {
+            background: rgba(0, 212, 255, 0.2);
+            border-color: var(--color-cyan);
+            transform: scale(1.02);
+        }
+        
+        .version-slot.enhanced.loaded {
+            border-style: solid;
+            background: rgba(0, 255, 136, 0.1);
+            border-color: var(--color-green);
+        }
+        
+        .slot-icon {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+        
+        .slot-text {
+            color: var(--fg-primary);
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        
+        .slot-subtitle {
+            color: var(--color-cyan);
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+        
+        .comparison-vs {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: var(--color-yellow);
+        }
+        
+        .vs-icon {
+            font-size: 1.5rem;
+            margin-bottom: 4px;
+        }
+        
+        .vs-text {
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        .comparison-controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #2a3441;
+        }
+        
+        .play-btn.enhanced {
+            background: linear-gradient(45deg, var(--color-green), var(--color-cyan));
+            color: var(--bg-primary);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .play-btn.enhanced:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 255, 136, 0.4);
         }
 
         #terminal-canvas {
@@ -211,6 +568,120 @@
             border: 1px solid var(--color-red);
             border-radius: 8px;
             margin: 20px;
+        }
+        
+        /* DELIGHTFUL LOADING: Enhanced loading experience */
+        .loading-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .loading-icon {
+            font-size: 3rem;
+            animation: gentlePulse 2s infinite;
+        }
+        
+        .loading-text {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--color-green);
+        }
+        
+        .loading-subtitle {
+            font-size: 0.9rem;
+            color: var(--color-cyan);
+            opacity: 0.8;
+            font-style: italic;
+        }
+        
+        /* DELIGHTFUL ERRORS: Enhanced error experience */
+        .error-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .error-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .error-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: var(--color-yellow);
+            margin-bottom: 5px;
+        }
+        
+        .error-description {
+            font-size: 1rem;
+            color: var(--fg-primary);
+            line-height: 1.5;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+        
+        .error-actions {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .error-btn {
+            background: linear-gradient(45deg, var(--color-blue), var(--color-cyan));
+            color: var(--bg-primary);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+        
+        .error-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.4);
+        }
+        
+        .error-tip {
+            font-size: 0.8rem;
+            color: var(--color-cyan);
+            opacity: 0.7;
+            font-style: italic;
+        }
+        
+        /* OFFLINE MODE: Encouraging offline experience */
+        .offline-mode-banner {
+            position: fixed;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, rgba(246, 199, 68, 0.2), rgba(0, 212, 255, 0.2));
+            border: 1px solid var(--color-yellow);
+            border-radius: 25px;
+            padding: 12px 20px;
+            color: var(--color-yellow);
+            font-size: 0.9rem;
+            font-weight: bold;
+            backdrop-filter: blur(10px);
+            animation: slideDown 0.4s ease-out;
+            z-index: 1002;
+            transition: opacity 0.3s ease;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
         }
 
         .hidden {
@@ -705,14 +1176,169 @@
         </div>
     </div>
 
-    <!-- MODULAR: Terminal container -->
-    <div class="terminal-container">
+    <!-- VERSION-FIRST: Main dashboard showcasing USP -->
+    <div class="versions-dashboard" id="versions-dashboard">
+        <!-- VERSION DISCOVERY: Primary interface -->
+        <div class="version-discovery-main" id="version-discovery-main">
+            <div class="song-browser">
+                <div class="browser-header">
+                    <h3 style="color: var(--color-blue); margin: 0;">🎵 Song Collection</h3>
+                    <div class="browser-controls">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="trending">📈 Trending</button>
+                        <button class="filter-btn" data-filter="recent">🆕 Recent</button>
+                    </div>
+                </div>
+                
+                <div class="song-list" id="song-list">
+                    <!-- Dynamic song list will be populated here -->
+                    <div class="song-item featured" onclick="showSongVersions('bohemian-rhapsody')">
+                        <div class="song-info">
+                            <div class="song-title">Bohemian Rhapsody</div>
+                            <div class="song-artist">Queen</div>
+                            <div class="version-count">6 versions available</div>
+                        </div>
+                        <div class="version-preview">
+                            <span class="version-type-mini demo">DEMO</span>
+                            <span class="version-type-mini studio">STUDIO</span>
+                            <span class="version-type-mini live">LIVE</span>
+                            <span class="version-dots">+3</span>
+                        </div>
+                    </div>
+                    
+                    <div class="song-item" onclick="showSongVersions('imagine')">
+                        <div class="song-info">
+                            <div class="song-title">Imagine</div>
+                            <div class="song-artist">John Lennon</div>
+                            <div class="version-count">4 versions available</div>
+                        </div>
+                        <div class="version-preview">
+                            <span class="version-type-mini demo">DEMO</span>
+                            <span class="version-type-mini studio">STUDIO</span>
+                            <span class="version-type-mini acoustic">ACOUSTIC</span>
+                        </div>
+                    </div>
+                    
+                    <div class="song-item" onclick="showSongVersions('yesterday')">
+                        <div class="song-info">
+                            <div class="song-title">Yesterday</div>
+                            <div class="song-artist">The Beatles</div>
+                            <div class="version-count">5 versions available</div>
+                        </div>
+                        <div class="version-preview">
+                            <span class="version-type-mini demo">DEMO</span>
+                            <span class="version-type-mini studio">STUDIO</span>
+                            <span class="version-type-mini live">LIVE</span>
+                            <span class="version-dots">+2</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="browser-footer">
+                    <button class="control-btn" onclick="toggleUploadInterface()">⬆️ Add Version</button>
+                </div>
+            </div>
+            
+            <div class="version-story-panel" id="version-story-panel">
+                <div class="story-header">
+                    <h3 style="color: var(--color-green); margin: 0;">🎭 Version Story</h3>
+                    <div class="professional-toggle">
+                        <button class="toggle-btn" onclick="toggleProfessionalMode()" title="Switch to Professional Terminal Mode">
+                            🖥️ Pro Mode
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="story-content" id="story-content">
+                    <div class="welcome-message">
+                        <div class="welcome-icon">🎵</div>
+                        <h4>Welcome to Version Discovery</h4>
+                        <p>Select a song to explore its evolution through demos, studio recordings, live performances, and more.</p>
+                        <div class="version-types-showcase">
+                            <span class="version-type-indicator version-type-demo">DEMO</span>
+                            <span class="showcase-arrow">→</span>
+                            <span class="version-type-indicator version-type-studio">STUDIO</span>
+                            <span class="showcase-arrow">→</span>
+                            <span class="version-type-indicator version-type-live">LIVE</span>
+                            <span class="showcase-arrow">→</span>
+                            <span class="version-type-indicator version-type-remix">REMIX</span>
+                        </div>
+                        <p class="showcase-subtitle">Every song tells a story through its versions</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- VERSION COMPARISON STUDIO -->
+        <div class="comparison-studio" id="comparison-studio">
+            <div class="studio-header">
+                <h4 style="color: var(--color-cyan); margin: 0;">🎚️ Version Comparison Studio</h4>
+                <button class="studio-expand" onclick="expandComparisonStudio()" title="Expand for detailed analysis">
+                    ⛶ Expand
+                </button>
+            </div>
+            
+            <div class="comparison-slots">
+                <div class="version-slot enhanced" id="comparison-slot-a" onclick="selectVersionForComparison('A')">
+                    <div class="slot-icon">🎵</div>
+                    <div class="slot-text">Select Version A</div>
+                    <div class="slot-subtitle">Click to choose a version</div>
+                </div>
+                
+                <div class="comparison-vs">
+                    <div class="vs-icon">⚡</div>
+                    <div class="vs-text">VS</div>
+                </div>
+                
+                <div class="version-slot enhanced" id="comparison-slot-b" onclick="selectVersionForComparison('B')">
+                    <div class="slot-icon">🎵</div>
+                    <div class="slot-text">Select Version B</div>
+                    <div class="slot-subtitle">Click to choose a version</div>
+                </div>
+            </div>
+            
+            <div class="comparison-controls" id="comparison-controls" style="display: none;">
+                <button class="play-btn enhanced" onclick="playComparison()" title="Play both versions">
+                    ▶️ Play Comparison
+                </button>
+                <button class="control-btn" onclick="analyzeVersions()" title="Show detailed analysis">
+                    📊 Analyze
+                </button>
+                <button class="control-btn" onclick="shareComparison()" title="Share this comparison">
+                    🔗 Share
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- PROFESSIONAL MODE: Terminal interface (hidden by default) -->
+    <div class="terminal-container professional-mode" id="terminal-container" style="display: none;">
+        <div class="professional-header">
+            <h3 style="color: var(--color-yellow); margin: 0;">🖥️ Professional Terminal Mode</h3>
+            <button class="toggle-btn" onclick="toggleProfessionalMode()" title="Switch to Version Discovery Mode">
+                🎭 Discovery Mode
+            </button>
+        </div>
+        
         <div id="loading-message" class="loading-message">
-            🎧 Tuning into the version multiverse...
+            <div class="loading-content">
+                <div class="loading-icon">🎧</div>
+                <div class="loading-text">Tuning into the version multiverse...</div>
+                <div class="loading-subtitle">Connecting your personalized music experience</div>
+            </div>
         </div>
 
         <div id="error-message" class="error-message hidden">
-            ❌ Failed to load interface
+            <div class="error-content">
+                <div class="error-icon">🎭</div>
+                <div class="error-title">Version engine taking a breather</div>
+                <div class="error-description">Our music discovery engine is catching up with all the amazing versions out there!</div>
+                <div class="error-actions">
+                    <button class="error-btn" onclick="location.reload()">🔄 Restart Discovery</button>
+                    <button class="error-btn" onclick="switchToOfflineMode()">📱 Offline Mode</button>
+                </div>
+                <div class="error-tip">💡 Pro tip: Try refreshing or exploring in offline mode while we reconnect</div>
+            </div>
         </div>
 
         <canvas id="terminal-canvas" width="1200" height="700" class="hidden" tabindex="0">
@@ -736,7 +1362,7 @@
                     onkeydown="handleSearchKeydown(event)">
                 <button class="control-btn" onclick="performSearch()" title="Search">🔍</button>
             </div>
-            <div id="info-text">🎆 Preparing your version discovery portal...</div>
+            <div id="info-text">🎆 Your version discovery experience is loading... Get ready to explore music like never before!</div>
         </div>
 
         <div class="control-group">
@@ -1740,6 +2366,41 @@
 
             updateInfo('Ready for another upload');
         };
+        
+        // OFFLINE MODE: Switch to encouraging offline experience
+        window.switchToOfflineMode = function() {
+            // Hide loading/error messages
+            document.getElementById('loading-message').classList.add('hidden');
+            document.getElementById('error-message').classList.add('hidden');
+            
+            // Show version discovery dashboard
+            document.getElementById('versions-dashboard').style.display = 'block';
+            document.getElementById('terminal-container').style.display = 'none';
+            
+            // Show encouraging offline banner
+            showOfflineBanner();
+            
+            // Update status indicators
+            updateStatus('app-status', true);
+            updateStatus('audio-status', true);
+            updateStatus('social-status', false);
+            
+            updateInfo('🏠 Local studio mode activated! Explore all features offline - sync when ready!');
+        };
+        
+        // Show encouraging offline mode banner
+        function showOfflineBanner() {
+            const banner = document.createElement('div');
+            banner.className = 'offline-mode-banner';
+            banner.innerHTML = '🌟 Local Mode Active - Full features available offline!';
+            document.body.appendChild(banner);
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                banner.style.opacity = '0';
+                setTimeout(() => banner.remove(), 300);
+            }, 5000);
+        }
 
         // UTILITY: Format file size
         function formatFileSize(bytes) {

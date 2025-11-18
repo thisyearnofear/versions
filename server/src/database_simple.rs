@@ -1,4 +1,5 @@
 use rusqlite::{Connection, params};
+use serde::Serialize;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use anyhow::{Result, Context};
@@ -82,6 +83,8 @@ impl Database {
             ]),
         ];
 
+        let songs_count = songs_data.len();
+        
         for (song_title, artist, versions) in songs_data {
             let song_id = Uuid::new_v4().to_string();
 
@@ -102,7 +105,7 @@ impl Database {
             }
         }
 
-        log::info!("Example data seeded successfully with {} songs", songs_data.len());
+        log::info!("Example data seeded successfully with {} songs", songs_count);
         Ok(())
     }
 
@@ -203,7 +206,6 @@ pub struct DatabaseStats {
     pub total_play_count: u64,
     pub average_vote_score: f64,
 }
-}
 
 /// ENHANCEMENT FIRST: Simplified data structures for API conversion
 #[derive(Debug)]
@@ -260,7 +262,7 @@ impl Database {
         // Get versions
         let mut version_stmt = conn.prepare(
             "SELECT v.id, v.title, v.artist, vt.name, v.duration_seconds, v.file_size, 
-             v.upload_date, v.play_count, v.vote_score
+             v.upload_date, v.play_count, v.vote_score, COALESCE(v.format, 'mp3')
              FROM versions v 
              JOIN version_types vt ON v.version_type_id = vt.id 
              WHERE v.song_id = ? 
@@ -278,6 +280,7 @@ impl Database {
                 upload_date: row.get::<_, String>(6)?,
                 play_count: row.get(7)?,
                 vote_score: row.get(8)?,
+                format: row.get::<_, String>(9)?,
             })
         })?;
         
