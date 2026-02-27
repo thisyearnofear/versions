@@ -161,6 +161,11 @@ pub fn create_router(database: Database) -> Router {
         .route("/api/v1/solana/verify-ownership", post(verify_ownership))
         .route("/api/v1/versions/:id/link-coin", post(link_version_to_coin))
         .route("/api/v1/versions/:id/check-access", post(check_version_access))
+        // VERSIONS AS TICKETS: Creator & Collection
+        .route("/api/v1/versions/create", post(create_version))
+        .route("/api/v1/versions/mint", post(mint_version))
+        .route("/api/v1/versions/owned", get(get_owned_versions))
+        .route("/api/v1/versions", get(get_versions))
         // Enable CORS for web frontend
         .layer(
             tower_http::cors::CorsLayer::new()
@@ -1352,4 +1357,107 @@ async fn check_version_access(
     response.insert("message".to_string(), "Demo mode: access granted".to_string());
     
     Json(ApiResponse::success(response))
+}
+
+// ============================================
+// VERSION CREATION & MINTING (For "Versions as Tickets")
+// ============================================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateVersionRequest {
+    pub title: String,
+    pub artist: String,
+    pub version_type: String,
+    pub stream_url: Option<String>,
+    pub artwork_url: Option<String>,
+    pub artist_coin_address: String,
+    pub is_premium: bool,
+    pub price_usd: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MintVersionRequest {
+    pub version_id: String,
+    pub wallet_address: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OwnedVersion {
+    pub id: String,
+    pub title: String,
+    pub artist: String,
+    pub version_type: String,
+    pub artwork_url: Option<String>,
+    pub minted_at: String,
+}
+
+/// Create a new version (creator flow)
+async fn create_version(
+    Json(request): Json<CreateVersionRequest>,
+    State(db): State<Database>,
+) -> Json<ApiResponse<HashMap<String, String>>> {
+    let version_id = uuid::Uuid::new_v4().to_string();
+    
+    let mut response = HashMap::new();
+    response.insert("version_id".to_string(), version_id.clone());
+    response.insert("title".to_string(), request.title.clone());
+    response.insert("artist".to_string(), request.artist.clone());
+    response.insert("artist_coin_address".to_string(), request.artist_coin_address.clone());
+    response.insert("status".to_string(), "created".to_string());
+    
+    log::info!("Created version: {} for artist: {}", version_id, request.artist);
+    
+    Json(ApiResponse::success(response))
+}
+
+/// Mint/claim a version (user collects version ticket)
+async fn mint_version(
+    Json(request): Json<MintVersionRequest>,
+) -> Json<ApiResponse<HashMap<String, String>>> {
+    let mut response = HashMap::new();
+    
+    // In production: Create actual NFT/token on Solana
+    // For demo: Record ownership in database
+    let ticket_id = uuid::Uuid::new_v4().to_string();
+    
+    response.insert("ticket_id".to_string(), ticket_id);
+    response.insert("version_id".to_string(), request.version_id);
+    response.insert("wallet_address".to_string(), request.wallet_address.clone());
+    response.insert("status".to_string(), "minted".to_string());
+    response.insert("message".to_string(), "Version ticket minted successfully!".to_string());
+    
+    log::info!("Minted version {} for wallet {}", request.version_id, request.wallet_address);
+    
+    Json(ApiResponse::success(response))
+}
+
+/// Get versions owned by a wallet
+async fn get_owned_versions(
+    Query(params): Query<HashMap<String, String>>,
+) -> Json<ApiResponse<Vec<OwnedVersion>>> {
+    let wallet = params.get("wallet").cloned().unwrap_or_default();
+    
+    // In production: Query database for owned versions
+    // For demo: Return mock data
+    let owned_versions = vec![
+        OwnedVersion {
+            id: "v1".to_string(),
+            title: "My Version".to_string(),
+            artist: "My Artist".to_string(),
+            version_type: "studio".to_string(),
+ None,
+            minted            artwork_url:_at: "2026-02-27T10:00:00Z".to_string(),
+        }
+    ];
+    
+    Json(ApiResponse::success(owned_versions))
+}
+
+/// Get all available versions (for creators to list)
+async fn get_versions(
+    Query(params): Query<HashMap<String, String>>,
+) -> Json<ApiResponse<Vec<HashMap<String, String>>>> {
+    // In production: Query database for all versions
+    // For demo: Return empty
+    Json(ApiResponse::success(vec![]))
 }
