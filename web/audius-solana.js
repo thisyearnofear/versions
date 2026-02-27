@@ -144,20 +144,16 @@ window.AudiusSolanaIntegration = {
             return { owned: false, message: 'Connect wallet first' };
         }
 
-        // Try to verify via Solana RPC
-        try {
-            const result = await this.checkSolanaTokenBalance(artistCoinAddress);
-            return result;
-        } catch (error) {
-            console.error('Ownership check failed:', error);
-            // Fallback to mock for demo
-            return this._mockOwnershipCheck(artistCoinAddress);
-        }
+        // For hackathon demo: Use mock ownership to avoid RPC rate limits
+        // In production, this would check real Solana token balances
+        console.log('🎫 Checking ownership for:', artistCoinAddress);
+        return this._mockOwnershipCheck(artistCoinAddress);
     },
 
     // CLEAN: Query Solana RPC for token balance
     async checkSolanaTokenBalance(tokenMintAddress) {
-        const SOLANA_RPC = 'https://api.mainnet-beta.solana.com';
+        // Use public RPC with better rate limits
+        const SOLANA_RPC = 'https://solana-mainnet.g.alchemy.com/v2/demo';
         
         // Get token accounts for the wallet
         const response = await fetch(SOLANA_RPC, {
@@ -200,16 +196,14 @@ window.AudiusSolanaIntegration = {
 
     // Fallback mock check for demo purposes
     _mockOwnershipCheck(artistCoinAddress) {
-        const mockOwnedCoins = this.getMockOwnedCoins();
+        // For demo: wallet connection = access granted
+        // This shows the concept without hitting RPC rate limits
+        const owned = true; // Connected wallet gets access
         
-        const owned = mockOwnedCoins.some(coin => 
-            coin.address.toLowerCase() === artistCoinAddress.toLowerCase()
-        );
-
         return {
             owned,
             wallet: this.wallet.address,
-            message: owned ? 'Access granted (demo)' : 'No ownership found (demo)'
+            message: owned ? '✅ Access granted (Demo mode - wallet connected)' : 'No ownership found'
         };
     },
 
