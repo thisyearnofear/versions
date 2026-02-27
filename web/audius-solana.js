@@ -177,9 +177,14 @@ window.AudiusSolanaIntegration = {
             try {
                 console.log(`🔍 Checking token balance via ${rpcUrl.split('/')[2]}...`);
                 
+                // Add timeout to prevent hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                
                 const response = await fetch(rpcUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    signal: controller.signal,
                     body: JSON.stringify({
                         jsonrpc: '2.0',
                         id: 1,
@@ -191,6 +196,8 @@ window.AudiusSolanaIntegration = {
                         ]
                     })
                 });
+                
+                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     console.warn(`❌ ${rpcUrl.split('/')[2]} returned ${response.status}`);

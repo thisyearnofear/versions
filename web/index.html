@@ -470,20 +470,38 @@
         async function verifyPremiumAccess() {
             showLoading('Verifying Ownership', 'Checking your token holdings...');
             
+            // Get unique coin addresses to avoid duplicate checks
+            const uniqueCoins = new Set();
+            allVersions.forEach(v => {
+                if (v.premium && v.coinAddress) {
+                    uniqueCoins.add(v.coinAddress);
+                }
+            });
+            
+            console.log(`🔍 Checking ${uniqueCoins.size} unique artist coins...`);
+            
+            // Check each unique coin once
+            const coinOwnership = {};
+            for (const coinAddress of uniqueCoins) {
+                try {
+                    const result = await window.AudiusSolanaIntegration.verifyOwnership(coinAddress);
+                    coinOwnership[coinAddress] = result.owned;
+                    console.log(`${result.owned ? '✅' : '❌'} ${coinAddress}: ${result.message}`);
+                } catch (e) {
+                    console.error(`❌ Failed to check ${coinAddress}:`, e);
+                    coinOwnership[coinAddress] = false;
+                }
+            }
+            
+            // Map results to versions
             for (const version of allVersions) {
                 if (version.premium && version.coinAddress) {
-                    try {
-                        const result = await window.AudiusSolanaIntegration.verifyOwnership(version.coinAddress);
-                        verifiedOwnership[version.id] = result.owned;
-                    } catch (e) {
-                        console.error('Ownership check failed:', e);
-                        verifiedOwnership[version.id] = false;
-                    }
+                    verifiedOwnership[version.id] = coinOwnership[version.coinAddress] || false;
                 }
             }
             
             hideLoading();
-            console.log('Verified ownership:', verifiedOwnership);
+            console.log('✅ Ownership verification complete:', verifiedOwnership);
         }
 
         // DATA
