@@ -10,7 +10,7 @@ use serde_json::json;
 use crate::farcaster_service::{FarcasterService, FarcasterUser, SocialRecommendation};
 use crate::audio_service::{AudioService, AudioMetadata};
 use crate::filecoin_service::{FilecoinService, FilecoinUploadRequest, CreatorPaymentRequest};
-use crate::database::{Database, SimpleDbSong, SimpleDbVersion};
+use crate::database::{self as database, Database, SimpleDbSong, SimpleDbVersion};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
@@ -157,6 +157,8 @@ pub fn create_router(database: Database) -> Router {
         .route("/api/v1/audius/track/:track_id", get(get_audius_track))
         .route("/api/v1/audius/search", get(search_audius))
         .route("/api/v1/audius/trending", get(get_audius_trending))
+        .route("/api/v1/audius/user/:user_id/coins", get(get_user_coins))
+        .route("/api/v1/solana/rpc", post(solana_rpc_proxy))
         .route("/api/v1/solana/connect", post(connect_wallet))
         .route("/api/v1/solana/verify-ownership", post(verify_ownership))
         .route("/api/v1/versions/:id/link-coin", post(link_version_to_coin))
@@ -317,8 +319,8 @@ async fn upload_version() -> Json<ApiResponse<String>> {
 /// Search endpoint with full-text search across songs and versions
 async fn search(
     State(db): State<Database>,
-    Query(params): Query<ListQuery>
-) -> Json<ApiResponse<Vec<crate::database::SimpleDbSong>>> {
+    Query(params): Query<ListQuery>,
+) -> Json<ApiResponse<Vec<database::SimpleDbSong>>> {
     match params.search {
         Some(query) if !query.trim().is_empty() => {
             // Perform full-text search
@@ -844,26 +846,6 @@ struct VersionComparisonData {
     format: String,
 }
 
-/// CLEAN: Comparison metadata response
-#[derive(Debug, Serialize)]
-struct ComparisonMetadata {
-    session_id: String,
-    versions: Vec<ComparisonVersionInfo>,
-}
-
-/// CLEAN: Version info for comparison
-#[derive(Debug, Serialize)]
-struct ComparisonVersionInfo {
-    version_id: String,
-    title: String,
-    artist: Option<String>,
-    version_type: String,
-    duration_seconds: Option<u64>,
-    file_size: Option<u64>,
-    format: String,
-    waveform_data: Option<Vec<f32>>, // Placeholder for waveform analysis
-}
-
 // ENHANCEMENT: Version comparison endpoints
 
 /// Create a version comparison session
@@ -938,8 +920,8 @@ async fn compare_versions(
 /// Get comparison metadata for a session
 async fn get_comparison_metadata(
     State(db): State<Database>,
-    Path(session_id): Path<String>
-) -> Json<ApiResponse<ComparisonMetadata>> {
+    Path(session_id): Path<String>,
+) -> Json<ApiResponse<database::ComparisonMetadata>> {
     // For now, return basic metadata - in future this could be cached
     // This is a placeholder implementation that would be enhanced with actual session management
 
@@ -1140,6 +1122,15 @@ async fn create_payment_rail(Json(request): Json<HashMap<String, String>>) -> Js
 
 const AUDIUS_API_HOST: &str = "https://api.audius.co";
 
+// Load API keys from environment
+fn get_audius_api_key() -> String {
+    env::var("AUDIUS_API_KEY").unwrap_or_else(|_| "".to_string())
+}
+
+fn get_helius_api_key() -> String {
+    env::var("HELIUS_API_KEY").unwrap_or_else(|_| "".to_string())
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AudiusTrack {
     pub id: String,
@@ -1177,9 +1168,15 @@ async fn get_audius_track(
     Path(track_id): Path<String>,
 ) -> Json<ApiResponse<AudiusTrack>> {
     let client = reqwest::Client::new();
+    let api_key = get_audius_api_key();
+    let url = if api_key.is_empty() {
+        format!("{}/v1/tracks/{}?app_name=VersionsHack", AUDIUS_API_HOST, track_id)
+    } else {
+        format!("{}/v1/tracks/{}?api_key={}", AUDIUS_API_HOST, track_id, api_key)
+    };
     
     match client
-        .get(format!("{}/v1/tracks/{}?app_name=VersionsHack", AUDIUS_API_HOST, track_id))
+        .get(&url)
         .send()
         .await
     {
@@ -1217,9 +1214,15 @@ async fn search_audius(
 ) -> Json<ApiResponse<Vec<AudiusTrack>>> {
     let query = params.get("q").cloned().unwrap_or_default();
     let client = reqwest::Client::new();
+    let api_key = get_audius_api_key();
+    let url = if api_key.is_empty() {
+        format!("{}/v1/tracks/search?query={}&app_name=VersionsHack", AUDIUS_API_HOST, urlencoding::encode(&query))
+    } else {
+        format!("{}/v1/tracks/search?query={}&api_key={}", AUDIUS_API_HOST, urlencoding::encode(&query), api_key)
+    };
     
     match client
-        .get(format!("{}/v1/tracks/search?query={}&app_name=VersionsHack", AUDIUS_API_HOST, urlencoding::encode(&query)))
+        .get(&url)
         .send()
         .await
     {
@@ -1257,9 +1260,15 @@ async fn search_audius(
 /// Get trending tracks from Audius
 async fn get_audius_trending() -> Json<ApiResponse<Vec<AudiusTrack>>> {
     let client = reqwest::Client::new();
+    let api_key = get_audius_api_key();
+    let url = if api_key.is_empty() {
+        format!("{}/v1/tracks/trending?app_name=VersionsHack", AUDIUS_API_HOST)
+    } else {
+        format!("{}/v1/tracks/trending?api_key={}", AUDIUS_API_HOST, api_key)
+    };
     
     match client
-        .get(format!("{}/v1/tracks/trending?app_name=VersionsHack", AUDIUS_API_HOST))
+        .get(&url)
         .send()
         .await
     {
@@ -1291,6 +1300,79 @@ async fn get_audius_trending() -> Json<ApiResponse<Vec<AudiusTrack>>> {
             }
         }
         Err(e) => Json(ApiResponse::error(format!("Failed to fetch trending: {}", e))),
+    }
+}
+
+/// Get user's artist coins from Audius
+async fn get_user_coins(
+    Path(user_id): Path<String>,
+) -> Json<ApiResponse<serde_json::Value>> {
+    let client = reqwest::Client::new();
+    let api_key = get_audius_api_key();
+    let url = if api_key.is_empty() {
+        format!("{}/v1/users/{}/coins?app_name=VersionsHack", AUDIUS_API_HOST, user_id)
+    } else {
+        format!("{}/v1/users/{}/coins?api_key={}", AUDIUS_API_HOST, user_id, api_key)
+    };
+    
+    match client.get(&url).send().await {
+        Ok(response) => {
+            match response.json::<serde_json::Value>().await {
+                Ok(data) => Json(ApiResponse::success(data)),
+                Err(e) => Json(ApiResponse::error(format!("Failed to parse coins: {}", e))),
+            }
+        }
+        Err(e) => Json(ApiResponse::error(format!("Failed to fetch coins: {}", e))),
+    }
+}
+
+/// Proxy Solana RPC requests through Helius
+async fn solana_rpc_proxy(
+    Json(rpc_request): Json<serde_json::Value>,
+) -> Json<serde_json::Value> {
+    let client = reqwest::Client::new();
+    let api_key = get_helius_api_key();
+    
+    if api_key.is_empty() {
+        return Json(json!({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32000,
+                "message": "Helius API key not configured"
+            },
+            "id": rpc_request.get("id")
+        }));
+    }
+    
+    let url = format!("https://mainnet.helius-rpc.com/?api-key={}", api_key);
+    
+    match client
+        .post(&url)
+        .json(&rpc_request)
+        .send()
+        .await
+    {
+        Ok(response) => {
+            match response.json::<serde_json::Value>().await {
+                Ok(data) => Json(data),
+                Err(e) => Json(json!({
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32603,
+                        "message": format!("Failed to parse RPC response: {}", e)
+                    },
+                    "id": rpc_request.get("id")
+                })),
+            }
+        }
+        Err(e) => Json(json!({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32603,
+                "message": format!("Failed to call Helius RPC: {}", e)
+            },
+            "id": rpc_request.get("id")
+        })),
     }
 }
 
@@ -1326,9 +1408,9 @@ async fn verify_ownership(
 
 /// Link a version to an Audius track/artist coin
 async fn link_version_to_coin(
+    State(_db): State<Database>,
     Path(version_id): Path<String>,
     Json(request): Json<LinkCoinRequest>,
-    State(db): State<Database>,
 ) -> Json<ApiResponse<HashMap<String, String>>> {
     // In production: Update database with coin mapping
     let mut response = HashMap::new();
@@ -1393,8 +1475,8 @@ pub struct OwnedVersion {
 
 /// Create a new version (creator flow)
 async fn create_version(
+    State(_db): State<Database>,
     Json(request): Json<CreateVersionRequest>,
-    State(db): State<Database>,
 ) -> Json<ApiResponse<HashMap<String, String>>> {
     let version_id = uuid::Uuid::new_v4().to_string();
     
@@ -1419,14 +1501,16 @@ async fn mint_version(
     // In production: Create actual NFT/token on Solana
     // For demo: Record ownership in database
     let ticket_id = uuid::Uuid::new_v4().to_string();
+    let version_id = request.version_id.clone();
+    let wallet_address = request.wallet_address.clone();
     
     response.insert("ticket_id".to_string(), ticket_id);
     response.insert("version_id".to_string(), request.version_id);
-    response.insert("wallet_address".to_string(), request.wallet_address.clone());
+    response.insert("wallet_address".to_string(), request.wallet_address);
     response.insert("status".to_string(), "minted".to_string());
     response.insert("message".to_string(), "Version ticket minted successfully!".to_string());
     
-    log::info!("Minted version {} for wallet {}", request.version_id, request.wallet_address);
+    log::info!("Minted version {} for wallet {}", version_id, wallet_address);
     
     Json(ApiResponse::success(response))
 }
@@ -1445,8 +1529,8 @@ async fn get_owned_versions(
             title: "My Version".to_string(),
             artist: "My Artist".to_string(),
             version_type: "studio".to_string(),
- None,
-            minted            artwork_url:_at: "2026-02-27T10:00:00Z".to_string(),
+            artwork_url: None,
+            minted_at: "2026-02-27T10:00:00Z".to_string(),
         }
     ];
     

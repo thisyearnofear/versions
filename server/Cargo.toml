@@ -56,6 +56,10 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 # ENHANCEMENT: Audio metadata extraction
 lofty.workspace = true
+# CLEAN: Load environment variables from .env file
+dotenvy = "0.15"
+# CLEAN: URL encoding for API requests
+urlencoding = "2.1"
 
 
 [features]

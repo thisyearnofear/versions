@@ -399,6 +399,18 @@
         let currentVersion = null;
         let isPlaying = false;
 
+        // Helper function to call backend proxy
+        async function proxyFetch(endpoint) {
+            const API_PROXY = window.location.hostname === 'localhost' 
+                ? 'http://localhost:8080'
+                : 'https://versions.thisyearnofear.com';
+            const response = await fetch(`${API_PROXY}${endpoint}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        }
+
         const onboardingData = [
             { icon: '🎵', title: 'Collect Song Versions', desc: 'Like rare vinyl, but digital. Each version of a song - demo, live, studio - becomes a collectible.' },
             { icon: '🪙', title: 'Own the Artist Coin', desc: 'Audius Artist Coins represent ownership in an artist. Hold the coin to unlock their exclusive versions.' },
@@ -510,20 +522,67 @@
             renderVersions();
 
             try {
+                // STRATEGY: Fetch coins first, then prioritize tracks from artists with coins
+                console.log('🪙 Fetching Artist Coins list...');
+                const coinsData = await proxyFetch('/api/v1/audius/coins?limit=50');
+                const coins = coinsData.data || [];
+                
+                // Filter to get unique artists with coins (excluding $AUDIO)
+                const AUDIO_MINT = '9LzCMqDgTKYz9Drzqnpgee3SGa89up3a247ypMj2xrqM';
+                const artistsWithCoins = coins
+                    .filter(coin => coin.mint !== AUDIO_MINT && coin.owner_id)
+                    .reduce((acc, coin) => {
+                        if (!acc[coin.owner_id]) {
+                            acc[coin.owner_id] = {
+                                artistId: coin.owner_id,
+                                coinMint: coin.mint,
+                                coinTicker: coin.ticker,
+                                coinName: coin.name
+                            };
+                        }
+                        return acc;
+                    }, {});
+                
+                const artistIds = Object.keys(artistsWithCoins);
+                console.log(`✅ Found ${artistIds.length} artists with coins`);
+                
+                // Now fetch trending tracks
                 const tracks = await window.AudiusSolanaIntegration.initAudius();
                 if (tracks && tracks.length > 0) {
-                    allVersions = tracks.slice(0, 18).map((track, index) => ({
-                        id: `audius-${track.id}`,
-                        title: track.title || 'Unknown Track',
-                        artist: track.user?.name || 'Unknown Artist',
-                        artistId: track.user?.id || '',
-                        type: ['demo', 'studio', 'live', 'remix', 'acoustic'][index % 5],
-                        artwork: track.artwork?.['480x480'] || track.artwork?.['150x150'],
-                        duration: track.duration,
-                        streamUrl: track.stream_url,
-                        coinAddress: track.user?.id ? `artist_${track.user.id}` : `mock_${index}`,
-                        premium: index % 3 === 0
-                    }));
+                    // Separate tracks: artists with coins first, then others
+                    const tracksWithCoins = tracks.filter(t => artistsWithCoins[t.user?.id]);
+                    const tracksWithoutCoins = tracks.filter(t => !artistsWithCoins[t.user?.id]);
+                    
+                    console.log(`🎵 ${tracksWithCoins.length} tracks from artists with coins`);
+                    console.log(`🎵 ${tracksWithoutCoins.length} tracks from other artists`);
+                    
+                    // Combine: coin artists first
+                    const prioritizedTracks = [...tracksWithCoins, ...tracksWithoutCoins];
+                    
+                    allVersions = prioritizedTracks.slice(0, 18).map((track, index) => {
+                        const isPremium = !!artistsWithCoins[track.user?.id];
+                        // For non-premium tracks, use Audius streaming URL
+                        // For premium tracks, they need to verify ownership first
+                        const streamUrl = isPremium 
+                            ? null // Will be set after ownership verification
+                            : `https://discoveryprovider.audius.co/v1/tracks/${track.id}/stream`;
+                        
+                        return {
+                            id: `audius-${track.id}`,
+                            title: track.title || 'Unknown Track',
+                            artist: track.user?.name || 'Unknown Artist',
+                            artistId: track.user?.id || '',
+                            type: ['demo', 'studio', 'live', 'remix', 'acoustic'][index % 5],
+                            artwork: track.artwork?.['480x480'] || track.artwork?.['150x150'],
+                            duration: track.duration,
+                            streamUrl: streamUrl,
+                            coinAddress: artistsWithCoins[track.user?.id]?.coinMint || null,
+                            coinTicker: artistsWithCoins[track.user?.id]?.coinTicker || null,
+                            premium: isPremium
+                        };
+                    });
+                    
+                    console.log(`✅ Loaded ${allVersions.length} versions (${allVersions.filter(v => v.premium).length} premium)`);
                 } else {
                     allVersions = getDemoVersions();
                 }

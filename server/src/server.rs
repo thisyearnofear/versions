@@ -106,6 +106,10 @@ fn main() -> Result<()> {
 
 #[tokio::main]
 async fn actual_main() -> Result<()> {
+    // CLEAN: Load environment variables from .env file
+    // Ignore error if .env doesn't exist (production may use system env vars)
+    let _ = dotenvy::dotenv();
+    
     let args = cli::Args::parse();
     let _ = logger::setup(&args);
     let config = get_config(&args)?;

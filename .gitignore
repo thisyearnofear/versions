@@ -35,7 +35,14 @@ audio_files/*.aiff
 *.log
 /tmp/
 
-# Environment files
+# Environment
+.env
+.env.local
+.env.*.local
+
+# API Keys
+config.js
+secrets.js files
 .env
 .env.local
 .env.*.local

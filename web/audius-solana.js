@@ -8,7 +8,19 @@
 // - PERFORMANT: Lazy-loads Audius data, caches wallet state
 // - PREVENT BLOAT: Separate file prevents main app bloat
 
-const AUDIUS_API_HOST = 'https://api.audius.co';
+// API Configuration
+const API_PROXY = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8080'
+  : 'https://versions.thisyearnofear.com';
+
+// Helper to call backend proxy
+async function proxyFetch(endpoint) {
+    const response = await fetch(`${API_PROXY}${endpoint}`);
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
+    return response.json();
+}
 
 // Make globally available
 window.AudiusSolanaIntegration = {
@@ -17,6 +29,7 @@ window.AudiusSolanaIntegration = {
     audiusUser: null,
     ownedCoins: [],
     _cachedTracks: null,
+    _cachedArtistCoins: {}, // Cache artist coin lookups
 
     // Initialize Audius SDK (read-only mode)
     // PERFORMANT: Caches results to avoid repeated calls
@@ -29,17 +42,12 @@ window.AudiusSolanaIntegration = {
         console.log('🎵 Loading tracks from Audius...');
         
         try {
-            const response = await fetch(`${AUDIUS_API_HOST}/v1/tracks/trending?app_name=VersionsHack&limit=20`);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            const data = await response.json();
+            const data = await proxyFetch('/api/v1/audius/trending');
             this._cachedTracks = data.data || [];
             console.log('✅ Audius trending tracks loaded:', this._cachedTracks.length);
             return this._cachedTracks;
         } catch (error) {
             console.error('❌ Audius init failed:', error);
-            // Return empty array - UI will show demo fallback
             return [];
         }
     },
@@ -47,7 +55,8 @@ window.AudiusSolanaIntegration = {
     // Fetch track from Audius by ID
     async getTrack(trackId) {
         try {
-            const response = await fetch(`${AUDIUS_API_HOST}/v1/tracks/${trackId}?app_name=VersionsHack`);
+            const url = getAudiusUrl(`/v1/tracks/${trackId}`);
+            const response = await fetch(url, { headers: getAudiusHeaders() });
             if (!response.ok) return null;
             const data = await response.json();
             return data.data;
@@ -64,9 +73,8 @@ window.AudiusSolanaIntegration = {
         }
         
         try {
-            const response = await fetch(
-                `${AUDIUS_API_HOST}/v1/tracks/search?query=${encodeURIComponent(query)}&app_name=VersionsHack&limit=20`
-            );
+            const url = getAudiusUrl(`/v1/tracks/search?query=${encodeURIComponent(query)}&limit=20`);
+            const response = await fetch(url, { headers: getAudiusHeaders() });
             if (!response.ok) return [];
             const data = await response.json();
             return data.data || [];
@@ -76,15 +84,28 @@ window.AudiusSolanaIntegration = {
         }
     },
 
-    // Get artist info
-    async getArtist(artistId) {
+    // Get artist's coin mint address
+    async getArtistCoin(artistId) {
+        // Check cache first
+        if (this._cachedArtistCoins[artistId] !== undefined) {
+            return this._cachedArtistCoins[artistId];
+        }
+        
         try {
-            const response = await fetch(`${AUDIUS_API_HOST}/v1/users/${artistId}?app_name=VersionsHack`);
-            if (!response.ok) return null;
-            const data = await response.json();
-            return data.data;
+            const data = await proxyFetch(`/api/v1/audius/user/${artistId}/coins`);
+            
+            // Find artist's own coin (where owner_id matches artistId)
+            // Filter out $AUDIO token (9LzCMqDgTKYz9Drzqnpgee3SGa89up3a247ypMj2xrqM)
+            const artistCoin = data.data?.data?.find(coin => 
+                coin.owner_id === artistId && 
+                coin.mint !== '9LzCMqDgTKYz9Drzqnpgee3SGa89up3a247ypMj2xrqM'
+            );
+            
+            this._cachedArtistCoins[artistId] = artistCoin || null;
+            return artistCoin;
         } catch (error) {
-            console.error('Error fetching artist:', error);
+            console.error('Error fetching artist coin:', error);
+            this._cachedArtistCoins[artistId] = null;
             return null;
         }
     },
@@ -161,93 +182,73 @@ window.AudiusSolanaIntegration = {
 
     // CLEAN: Query Solana RPC for token balance with fallback endpoints
     async checkSolanaTokenBalance(tokenMintAddress) {
-        // Multiple RPC endpoints to avoid rate limiting
-        const RPC_ENDPOINTS = [
-            'https://api.mainnet-beta.solana.com',
-            'https://solana-api.projectserum.com',
-            'https://rpc.ankr.com/solana',
-            'https://solana-mainnet.rpc.extrnode.com',
-            'https://solana.public-rpc.com'
-        ];
-        
-        let lastError = null;
-        
-        // Try each RPC endpoint until one works
-        for (const rpcUrl of RPC_ENDPOINTS) {
-            try {
-                console.log(`🔍 Checking token balance via ${rpcUrl.split('/')[2]}...`);
-                
-                // Add timeout to prevent hanging
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-                
-                const response = await fetch(rpcUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: controller.signal,
-                    body: JSON.stringify({
-                        jsonrpc: '2.0',
-                        id: 1,
-                        method: 'getTokenAccountsByOwner',
-                        params: [
-                            this.wallet.address,
-                            { mint: tokenMintAddress },
-                            { encoding: 'jsonParsed' }
-                        ]
-                    })
-                });
-                
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    console.warn(`❌ ${rpcUrl.split('/')[2]} returned ${response.status}`);
-                    lastError = new Error(`HTTP ${response.status}`);
-                    continue;
-                }
-
-                const data = await response.json();
-                
-                if (data.error) {
-                    console.warn(`❌ ${rpcUrl.split('/')[2]} error:`, data.error.message);
-                    lastError = new Error(data.error.message);
-                    continue;
-                }
-                
-                if (data.result && data.result.value && data.result.value.length > 0) {
-                    // Found token account with balance
-                    const tokenInfo = data.result.value[0];
-                    const balance = tokenInfo.account.data.parsed.info.tokenAmount?.uiAmount || 0;
-                    
-                    console.log(`✅ Token balance found: ${balance}`);
-                    return {
-                        owned: balance > 0,
-                        balance: balance,
-                        wallet: this.wallet.address,
-                        message: balance > 0 ? `Owned ${balance} tokens` : 'No tokens found',
-                        rpcUsed: rpcUrl.split('/')[2]
-                    };
-                }
-
-                // No token account found, but RPC worked
-                console.log(`ℹ️ No token account found via ${rpcUrl.split('/')[2]}`);
-                return {
-                    owned: false,
-                    balance: 0,
-                    wallet: this.wallet.address,
-                    message: 'No token account found',
-                    rpcUsed: rpcUrl.split('/')[2]
-                };
-                
-            } catch (error) {
-                console.warn(`❌ ${rpcUrl.split('/')[2]} failed:`, error.message);
-                lastError = error;
-                continue;
-            }
+        // Validate that this looks like a real Solana address (base58, 32-44 chars)
+        if (!tokenMintAddress || tokenMintAddress.length < 32 || tokenMintAddress.includes('_')) {
+            console.log(`ℹ️ ${tokenMintAddress} is not a valid Solana mint address (Artist Coins not yet deployed)`);
+            return {
+                owned: false,
+                balance: 0,
+                wallet: this.wallet.address,
+                message: 'Artist Coin not yet deployed as SPL token'
+            };
         }
         
-        // All RPCs failed
-        console.error('❌ All RPC endpoints failed:', lastError);
-        throw lastError;
+        try {
+            console.log(`🔍 Checking token balance via proxy...`);
+            
+            const response = await fetch(`${API_PROXY}/api/v1/solana/rpc`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'getTokenAccountsByOwner',
+                    params: [
+                        this.wallet.address,
+                        { mint: tokenMintAddress },
+                        { encoding: 'jsonParsed' }
+                    ]
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.error) {
+                console.warn(`❌ RPC error:`, data.error.message);
+                throw new Error(data.error.message);
+            }
+            
+            if (data.result && data.result.value && data.result.value.length > 0) {
+                // Found token account with balance
+                const tokenInfo = data.result.value[0];
+                const balance = tokenInfo.account.data.parsed.info.tokenAmount?.uiAmount || 0;
+                
+                console.log(`✅ Token balance found: ${balance}`);
+                return {
+                    owned: balance > 0,
+                    balance: balance,
+                    wallet: this.wallet.address,
+                    message: balance > 0 ? `Owned ${balance} tokens` : 'No tokens found'
+                };
+            }
+
+            // No token account found
+            console.log(`ℹ️ No token account found`);
+            return {
+                owned: false,
+                balance: 0,
+                wallet: this.wallet.address,
+                message: 'No token account found'
+            };
+            
+        } catch (error) {
+            console.error('❌ RPC check failed:', error);
+            throw error;
+        }
     },
 
     // Fallback mock check for demo purposes

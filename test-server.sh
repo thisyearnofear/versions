@@ -1,0 +1,21 @@
+#!/bin/bash
+# Simple test script to verify environment variables and API endpoints
+
+echo "🚀 VERSIONS Test Server"
+echo "======================="
+echo ""
+echo "📋 Environment Variables:"
+echo "  AUDIUS_API_KEY: ${AUDIUS_API_KEY:0:10}..."
+echo "  HELIUS_API_KEY: ${HELIUS_API_KEY:0:10}..."
+echo ""
+echo "⚠️  Note: The Rust server requires a playback backend (mpv/gst) to be installed."
+echo "   For now, you can test the frontend with mock data or install libmpv:"
+echo ""
+echo "   brew install mpv"
+echo ""
+echo "🌐 Frontend is running at: http://localhost:3000"
+echo "🔧 Backend should run at: http://localhost:8080"
+echo ""
+echo "📝 To test API endpoints manually:"
+echo "   curl http://localhost:8080/api/v1/health"
+echo "   curl http://localhost:8080/api/v1/audius/trending"

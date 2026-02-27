@@ -38,9 +38,11 @@ pub struct OnchainConfig {
 impl Default for OnchainConfig {
     fn default() -> Self {
         Self {
-            arbitrum_rpc_url: "https://arb1.arbitrum.io/rpc".to_string(),
+            arbitrum_rpc_url: std::env::var("ARBITRUM_RPC_URL")
+                .unwrap_or_else(|_| "https://arb1.arbitrum.io/rpc".to_string()),
             contract_address: String::new(),
-            ipfs_gateway: "https://ipfs.io/ipfs/".to_string(),
+            ipfs_gateway: std::env::var("IPFS_GATEWAY_URL")
+                .unwrap_or_else(|_| "https://ipfs.io/ipfs/".to_string()),
         }
     }
 }

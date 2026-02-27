@@ -13,8 +13,10 @@ pub struct IpfsConfig {
 impl Default for IpfsConfig {
     fn default() -> Self {
         Self {
-            gateway_url: "https://ipfs.io/ipfs/".to_string(),
-            api_url: "http://localhost:5001".to_string(),
+            gateway_url: std::env::var("IPFS_GATEWAY_URL")
+                .unwrap_or_else(|_| "https://ipfs.io/ipfs/".to_string()),
+            api_url: std::env::var("IPFS_API_URL")
+                .unwrap_or_else(|_| "http://localhost:5001".to_string()),
             pin_remote: true,
             local_node: false,
         }

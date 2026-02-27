@@ -208,7 +208,7 @@ pub struct DatabaseStats {
 }
 
 /// ENHANCEMENT FIRST: Simplified data structures for API conversion
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct SimpleDbSong {
     pub id: String,
     pub canonical_title: String,
@@ -522,13 +522,13 @@ impl Database {
 }
 
 /// CLEAN: Comparison metadata structures for database operations
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct ComparisonMetadata {
     pub session_id: String,
     pub versions: Vec<ComparisonVersionInfo>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct ComparisonVersionInfo {
     pub version_id: String,
     pub title: String,
