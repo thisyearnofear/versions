@@ -14,9 +14,15 @@ VERSIONS follows a **dual-interface architecture** with shared backend services,
                                 │                        │
 ┌─────────────────┐             │               ┌─────────────────┐
 │  Web Frontend   │◄────────────┘               │   Farcaster     │
-│ + Farcaster     │                             │ Social Layer    │
-│ Mini App        │◄────────────────────────────┤                 │
-└─────────────────┘                             └─────────────────┘
+│ + Solana        │                             │ Social Layer    │
+ │ Wallet          │◄────────────────────────────┤                 │
+ └─────────────────┘                             └─────────────────┘
+                                │
+                    ┌───────────────────────────┐
+                    │      Audius               │
+                    │  + Solana Artist Coins   │
+                    │ (Ticket Validation)      │
+                    └───────────────────────────┘
 ```
 
 ### **Core Components**
@@ -25,6 +31,8 @@ VERSIONS follows a **dual-interface architecture** with shared backend services,
 - **REST API**: Web interface and external integrations
 - **gRPC Server**: Terminal interface and professional tools
 - **Web Interface**: Community platform with audio player
+- **Audius Service**: Track fetching, artist data, Artist Coin integration
+- **Solana Service**: Wallet connection, coin ownership validation
 
 ## **Core Principles**
 
@@ -32,27 +40,67 @@ VERSIONS follows **8 Core Principles** that guide all development decisions:
 
 ### **1. ENHANCEMENT FIRST**
 Always prioritize enhancing existing components over creating new ones.
+- **Application**: New features extend current services, not replace them
+- **Hackathon**: Audius integration extends audio service, not replaces it
 
 ### **2. AGGRESSIVE CONSOLIDATION**
 Delete unnecessary code rather than deprecating it.
+- **Application**: Remove dead code, merge duplicate endpoints
+- **Hackathon**: Demo uses existing infrastructure, no new services created
 
 ### **3. PREVENT BLOAT**
 Systematically audit and consolidate before adding new features.
+- **Application**: Each feature must justify its existence
+- **Hackathon**: Separate demo file prevents main app bloat
 
 ### **4. DRY (Don't Repeat Yourself)**
 Single source of truth for all shared logic.
+- **Application**: Shared types in `lib/`, services in `server/src/`
+- **Hackathon**: Uses existing audio service, REST API patterns
 
 ### **5. CLEAN**
 Clear separation of concerns with explicit dependencies.
+- **Application**: Service modules have single responsibility
+- **Hackathon**: `audius-solana.js` handles only wallet/coin logic
 
 ### **6. MODULAR**
 Composable, testable, independent modules.
+- **Application**: Each service can be tested independently
+- **Hackathon**: Demo imports integration, can be removed entirely
 
 ### **7. PERFORMANT**
 Adaptive loading, caching, and resource optimization.
+- **Application**: Range requests, metadata caching, async throughout
+- **Hackathon**: Lazy-loads Audius data, caches wallet state
 
 ### **8. ORGANIZED**
 Predictable file structure with domain-driven design.
+- **Application**: Clear directory structure, consistent naming
+- **Hackathon**: Follows existing `web/` patterns, uses `.js` not `.ts`
+
+## **How to Apply Principles**
+
+When contributing or adding features:
+
+1. **ENHANCEMENT FIRST**: Can this be an extension?
+2. **AGGRESSIVE CONSOLIDATION**: What's being removed?
+3. **PREVENT BLOAT**: Is this feature necessary?
+4. **DRY**: Where's the single source of truth?
+5. **CLEAN**: What does this module own?
+6. **MODULAR**: Can it be tested in isolation?
+7. **PERFORMANT**: What's being cached/optimized?
+8. **ORGANIZED**: Where does this file belong?
+
+### **Code Review Checklist**
+
+```rust
+/// MODULAR: Clear function purpose
+/// PERFORMANT: Caching strategy explained
+/// CLEAN: Explicit dependency injection
+fn example() {
+    // PRINCIPLE: Tag code with which principle it follows
+}
+```
 
 ## **Development Workflow**
 
@@ -97,7 +145,7 @@ cargo build --release --all       # Optimized builds
 
 ### **Base URL**: `http://localhost:8080/api/v1`
 
-### **🎵 Audio Streaming**
+### **🔊 Audio Streaming**
 - `GET /audio/files` - List audio files
 - `GET /audio/{file_id}/metadata` - Get audio metadata
 - `GET /audio/{file_id}/stream` - Stream audio (supports range requests)
@@ -131,24 +179,30 @@ cargo build --release --all       # Optimized builds
 - **500 Internal Server Error**: Server error
 
 ## **Code Organization**
+
+**ORGANIZED**: Predictable file structure following domain-driven design
+
 ```
 versions/
-├── lib/                    # Shared library code
+├── lib/                         # DRY: Shared types and logic
+│   └── src/
+│       ├── track.rs            # Core music data structures
+│       ├── onchain.rs         # Blockchain integration (stub)
+│       └── distributed.rs     # IPFS and P2P features
+├── server/                     # MODULAR: Independent services
 │   ├── src/
-│   │   ├── track.rs       # Core music data structures
-│   │   ├── onchain.rs     # Blockchain integration
-│   │   └── distributed.rs # IPFS and P2P features
-├── server/                 # Backend server
-│   ├── src/
-│   │   ├── audio_service.rs      # Audio streaming
-│   │   ├── farcaster_service.rs  # Social integration
-│   │   ├── rest_api.rs          # REST endpoints
-│   │   └── server.rs            # Main server
-├── web/                    # Web interface + Farcaster Mini App
-│   ├── audio-player.js    # Audio player component
-│   ├── farcaster.js       # Farcaster integration
-│   └── config.js          # Environment configuration
-└── docs/                   # Documentation
+│   │   ├── audio_service.rs   # CLEAN: Single responsibility
+│   │   ├── farcaster_service.rs
+│   │   ├── rest_api.rs        # PERFORMANT: Async endpoints
+│   │   └── server.rs
+│   └── migrations/             # ORGANIZED: Schema versioning
+├── web/                        # CONSOLIDATED: Single frontend
+│   ├── index.html             # ENHANCEMENT FIRST: Main app
+│   ├── hackathon-demo.html    # PREVENT BLOAT: Separate demo
+│   ├── audius-solana.js       # MODULAR: Pluggable integration
+│   ├── farcaster-miniapp.js
+│   └── theme-bridge.js
+└── docs/                       # DRY: Single source of truth
 ```
 
 ## **Contributing Guidelines**
@@ -204,6 +258,21 @@ DRY: Single source of truth for response formatting
 
 ## **Current Status & Roadmap**
 
+### **🎯 Active: Solana Graveyard Hackathon (Feb 12-27, 2026)**
+
+**Track:** Music (Audius) - "Versions of a song as tickets"
+
+**Concept:** Each song version is tied to an Audius Artist Coin. Ownership of the coin grants access to stream that version - creating a "ticket" system where song versions are collectible assets.
+
+**Submission Requirements:**
+- Built on Solana ✓ (existing Rust/Solana compatibility)
+- Working demo/prototype
+- 3-min video walkthrough
+- GitHub repo with source code
+- Team size: 1-5 members
+
+**Prize:** $2,000 (1st) / $1,000 (2nd) in Audius track
+
 ### **✅ Completed (Functional Platform)**
 - **Audio Streaming Foundation**: Complete with range requests
 - **Farcaster Mini App Integration**: Social features operational
@@ -216,17 +285,18 @@ DRY: Single source of truth for response formatting
 - **Database Integration**: Replace mock data with PostgreSQL
 - **Enhanced Search**: Full-text search and filtering
 
-### **📋 Planned Features**
-- **Advanced Audio Analysis**: Waveform visualization, sync playback
-- **Enhanced TUI**: Professional terminal tools for creators
-- **Blockchain Integration**: Arbitrum L2 for version ownership
-- **Creator Economy**: Direct fan funding and royalty distribution
+### **📋 Planned Features (Hackathon Priority)**
+- **Audius Integration**: SDK integration for track fetching and Artist Coins
+- **Solana Ticket Validation**: Verify coin ownership for version access
+- **Version-Coin Mapping**: Link song versions to specific artist coins
+- **Creator Dashboard**: Simple UI for linking versions to Audius tracks
 
-### **🎯 Next Milestones**
-1. **Version Comparison** (2 weeks): Core feature for comparing versions
-2. **Database Layer** (3 weeks): Persistent storage and real data
-3. **Enhanced Search** (2 weeks): Advanced discovery features
-4. **Mobile Optimization** (2 weeks): Better responsive design
+### **🎯 Next Milestones (Hackathon Sprint)**
+1. **Audius SDK Integration** (1 week): Fetch tracks, authenticate users
+2. **Solana Wallet Connection** (1 week): Connect wallet, verify coin ownership
+3. **Version-Ticket Mapping** (1 week): Link versions to artist coins
+4. **Demo & Video** (3 days): Working prototype + 3-min walkthrough
+5. **Submit** (Feb 27, 2026): Deadline for submissions
 
 ## **Technical Decisions**
 
@@ -236,6 +306,8 @@ DRY: Single source of truth for response formatting
 - **Symphonia**: Comprehensive audio format support
 - **Farcaster**: Web3-native social layer, growing ecosystem
 - **PostgreSQL**: Robust relational database for version relationships
+- **Solana**: Blockchain for Artist Coin ticket validation
+- **Audius SDK**: Music protocol integration for track/artist data
 
 ### **Architecture Decisions**
 - **Dual Interface**: Serves both professional and community users

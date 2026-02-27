@@ -114,14 +114,16 @@ cp your-music.mp3 audio_files/
 
 The codebase follows **8 Core Principles** that guide all development:
 
-1. **ENHANCEMENT FIRST** - Improve existing code before adding new features
-2. **AGGRESSIVE CONSOLIDATION** - Delete unnecessary code rather than deprecating
-3. **PREVENT BLOAT** - Audit before adding features; minimal dependencies
-4. **DRY** - Single source of truth for shared logic
-5. **CLEAN** - Clear separation of concerns with explicit dependencies
-6. **MODULAR** - Composable, testable, independent modules
-7. **PERFORMANT** - Async throughout, caching, efficient operations
-8. **ORGANIZED** - Predictable structure with domain-driven design
+| # | Principle | Definition |
+|---|-----------|------------|
+| 1 | **ENHANCEMENT FIRST** | Always prioritize enhancing existing components over creating new ones |
+| 2 | **AGGRESSIVE CONSOLIDATION** | Delete unnecessary code rather than deprecating it |
+| 3 | **PREVENT BLOAT** | Systematically audit and consolidate before adding new features |
+| 4 | **DRY** | Single source of truth for all shared logic |
+| 5 | **CLEAN** | Clear separation of concerns with explicit dependencies |
+| 6 | **MODULAR** | Composable, testable, independent modules |
+| 7 | **PERFORMANT** | Adaptive loading, caching, and resource optimization |
+| 8 | **ORGANIZED** | Predictable file structure with domain-driven design |
 
 ## API Structure
 

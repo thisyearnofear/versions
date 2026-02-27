@@ -153,6 +153,14 @@ pub fn create_router(database: Database) -> Router {
         .route("/api/v1/filecoin/creator/earnings", get(get_creator_earnings))
         .route("/api/v1/filecoin/creator/withdraw", post(withdraw_creator_earnings))
         .route("/api/v1/filecoin/creator/analytics", get(get_creator_analytics))
+        // HACKATHON: Audius + Solana Integration
+        .route("/api/v1/audius/track/:track_id", get(get_audius_track))
+        .route("/api/v1/audius/search", get(search_audius))
+        .route("/api/v1/audius/trending", get(get_audius_trending))
+        .route("/api/v1/solana/connect", post(connect_wallet))
+        .route("/api/v1/solana/verify-ownership", post(verify_ownership))
+        .route("/api/v1/versions/:id/link-coin", post(link_version_to_coin))
+        .route("/api/v1/versions/:id/check-access", post(check_version_access))
         // Enable CORS for web frontend
         .layer(
             tower_http::cors::CorsLayer::new()
@@ -1119,4 +1127,229 @@ async fn create_payment_rail(Json(request): Json<HashMap<String, String>>) -> Js
             error: Some(format!("Failed to create payment rail: {}", e)),
         }),
     }
+}
+
+// ============================================
+// HACKATHON: Audius + Solana Integration
+// ============================================
+
+const AUDIUS_API_HOST: &str = "https://api.audius.co";
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AudiusTrack {
+    pub id: String,
+    pub title: String,
+    pub artist_id: String,
+    pub duration: Option<u64>,
+    pub stream_url: Option<String>,
+    pub artwork: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WalletConnectionRequest {
+    pub wallet_address: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OwnershipVerificationRequest {
+    pub wallet_address: String,
+    pub coin_address: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LinkCoinRequest {
+    pub audius_track_id: Option<String>,
+    pub artist_coin_address: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AccessCheckRequest {
+    pub wallet_address: String,
+}
+
+/// Get track from Audius by ID
+async fn get_audius_track(
+    Path(track_id): Path<String>,
+) -> Json<ApiResponse<AudiusTrack>> {
+    let client = reqwest::Client::new();
+    
+    match client
+        .get(format!("{}/v1/tracks/{}?app_name=VersionsHack", AUDIUS_API_HOST, track_id))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            match response.json::<serde_json::Value>().await {
+                Ok(data) => {
+                    if let Some(track) = data.get("data") {
+                        let audius_track = AudiusTrack {
+                            id: track.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            title: track.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            artist_id: track.get("user").and_then(|u| u.get("id")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            duration: track.get("duration").and_then(|v| v.as_u64()),
+                            stream_url: track.get("stream_url").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                            artwork: track.get("artwork").and_then(|a| a.as_object()).map(|obj| {
+                                obj.iter()
+                                    .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string()))
+                                    .collect()
+                            }),
+                        };
+                        Json(ApiResponse::success(audius_track))
+                    } else {
+                        Json(ApiResponse::error("Track not found".to_string()))
+                    }
+                }
+                Err(e) => Json(ApiResponse::error(format!("Failed to parse track: {}", e))),
+            }
+        }
+        Err(e) => Json(ApiResponse::error(format!("Failed to fetch track: {}", e))),
+    }
+}
+
+/// Search Audius tracks
+async fn search_audius(
+    Query(params): Query<HashMap<String, String>>,
+) -> Json<ApiResponse<Vec<AudiusTrack>>> {
+    let query = params.get("q").cloned().unwrap_or_default();
+    let client = reqwest::Client::new();
+    
+    match client
+        .get(format!("{}/v1/tracks/search?query={}&app_name=VersionsHack", AUDIUS_API_HOST, urlencoding::encode(&query)))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            match response.json::<serde_json::Value>().await {
+                Ok(data) => {
+                    let tracks: Vec<AudiusTrack> = data.get("data")
+                        .and_then(|d| d.as_array())
+                        .map(|arr| {
+                            arr.iter().filter_map(|track| {
+                                Some(AudiusTrack {
+                                    id: track.get("id")?.as_str()?.to_string(),
+                                    title: track.get("title")?.as_str()?.to_string(),
+                                    artist_id: track.get("user")?.get("id")?.as_str()?.to_string(),
+                                    duration: track.get("duration")?.as_u64(),
+                                    stream_url: track.get("stream_url")?.as_str().map(|s| s.to_string()),
+                                    artwork: track.get("artwork")?.as_object().map(|obj| {
+                                        obj.iter()
+                                            .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string()))
+                                            .collect()
+                                    }),
+                                })
+                            }).collect()
+                        })
+                        .unwrap_or_default();
+                    Json(ApiResponse::success(tracks))
+                }
+                Err(e) => Json(ApiResponse::error(format!("Failed to parse results: {}", e))),
+            }
+        }
+        Err(e) => Json(ApiResponse::error(format!("Search failed: {}", e))),
+    }
+}
+
+/// Get trending tracks from Audius
+async fn get_audius_trending() -> Json<ApiResponse<Vec<AudiusTrack>>> {
+    let client = reqwest::Client::new();
+    
+    match client
+        .get(format!("{}/v1/tracks/trending?app_name=VersionsHack", AUDIUS_API_HOST))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            match response.json::<serde_json::Value>().await {
+                Ok(data) => {
+                    let tracks: Vec<AudiusTrack> = data.get("data")
+                        .and_then(|d| d.as_array())
+                        .map(|arr| {
+                            arr.iter().filter_map(|track| {
+                                Some(AudiusTrack {
+                                    id: track.get("id")?.as_str()?.to_string(),
+                                    title: track.get("title")?.as_str()?.to_string(),
+                                    artist_id: track.get("user")?.get("id")?.as_str()?.to_string(),
+                                    duration: track.get("duration")?.as_u64(),
+                                    stream_url: track.get("stream_url")?.as_str().map(|s| s.to_string()),
+                                    artwork: track.get("artwork")?.as_object().map(|obj| {
+                                        obj.iter()
+                                            .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string()))
+                                            .collect()
+                                    }),
+                                })
+                            }).collect()
+                        })
+                        .unwrap_or_default();
+                    Json(ApiResponse::success(tracks))
+                }
+                Err(e) => Json(ApiResponse::error(format!("Failed to parse trending: {}", e))),
+            }
+        }
+        Err(e) => Json(ApiResponse::error(format!("Failed to fetch trending: {}", e))),
+    }
+}
+
+/// Connect wallet (mock for demo - in production verify signature)
+async fn connect_wallet(
+    Json(request): Json<WalletConnectionRequest>,
+) -> Json<ApiResponse<HashMap<String, String>>> {
+    let mut response = HashMap::new();
+    response.insert("wallet_address".to_string(), request.wallet_address.clone());
+    response.insert("status".to_string(), "connected".to_string());
+    response.insert("message".to_string(), "Wallet connected (demo mode)".to_string());
+    
+    log::info!("Wallet connected: {}", request.wallet_address);
+    
+    Json(ApiResponse::success(response))
+}
+
+/// Verify ownership of artist coin (mock for demo)
+async fn verify_ownership(
+    Json(request): Json<OwnershipVerificationRequest>,
+) -> Json<ApiResponse<HashMap<String, String>>> {
+    let mut response = HashMap::new();
+    
+    // DEMO: Always return owned for demo purposes
+    // In production: Query Solana blockchain for token ownership
+    response.insert("owned".to_string(), "true".to_string());
+    response.insert("wallet".to_string(), request.wallet_address);
+    response.insert("coin_address".to_string(), request.coin_address);
+    response.insert("message".to_string(), "Demo mode: access granted".to_string());
+    
+    Json(ApiResponse::success(response))
+}
+
+/// Link a version to an Audius track/artist coin
+async fn link_version_to_coin(
+    Path(version_id): Path<String>,
+    Json(request): Json<LinkCoinRequest>,
+    State(db): State<Database>,
+) -> Json<ApiResponse<HashMap<String, String>>> {
+    // In production: Update database with coin mapping
+    let mut response = HashMap::new();
+    response.insert("version_id".to_string(), version_id);
+    response.insert("artist_coin_address".to_string(), request.artist_coin_address);
+    response.insert("audius_track_id".to_string(), request.audius_track_id.unwrap_or_default());
+    response.insert("status".to_string(), "linked".to_string());
+    
+    log::info!("Version linked to artist coin");
+    
+    Json(ApiResponse::success(response))
+}
+
+/// Check if wallet has access to a version
+async fn check_version_access(
+    Path(version_id): Path<String>,
+    Json(request): Json<AccessCheckRequest>,
+) -> Json<ApiResponse<HashMap<String, String>>> {
+    let mut response = HashMap::new();
+    
+    // DEMO: Allow access if wallet connected
+    // In production: Check version_tickets table for ownership
+    response.insert("access".to_string(), "true".to_string());
+    response.insert("version_id".to_string(), version_id);
+    response.insert("wallet".to_string(), request.wallet_address);
+    response.insert("message".to_string(), "Demo mode: access granted".to_string());
+    
+    Json(ApiResponse::success(response))
 }

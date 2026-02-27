@@ -3,2483 +3,722 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name=\"viewport\" content="width=device-width, initial-scale=1.0">
-    <title>🎭 VERSIONS - Where Rare Recordings Come Alive</title>
-
-    <!-- Farcaster Mini App Embed Metadata -->
-    <meta name="fc:miniapp"
-        content='{"version":"1","imageUrl":"https://versions.app/og-image.png","button":{"title":"🎭 Discover Rare Recordings","action":{"type":"launch_frame","name":"VERSIONS","url":"https://versions.app","splashImageUrl":"https://versions.app/splash.png","splashBackgroundColor":"#101421"}}}' />
-
-    <!-- Open Graph for social sharing -->
-    <meta property="og:title" content="VERSIONS - Where Rare Recordings Come Alive" />
-    <meta property="og:description"
-        content="Every song has a story - discover the demos, live recordings, and alternate versions that shaped its history" />
-    <meta property="og:image" content="https://versions.app/og-image.png" />
-    <meta property="og:url" content="https://versions.app" />
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VERSIONS - Song Versions as Tickets</title>
+    <meta name="description" content="Collect song versions like rare vinyl. Own Audius Artist Coins to unlock exclusive versions." />
+    
     <style>
-        /* CLEAN: Terminal-inspired styling following Core Principles */
         :root {
             --bg-primary: #101421;
+            --bg-secondary: #1a2332;
+            --bg-tertiary: #252f3f;
             --fg-primary: #fffbf6;
-            --color-green: #00ff88;
+            --fg-secondary: #8b9dc3;
+            --color-purple: #9945FF;
+            --color-green: #14F195;
             --color-blue: #00d4ff;
             --color-yellow: #f6c744;
             --color-red: #ff5555;
-            --color-cyan: #64dbed;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--bg-primary);
             color: var(--fg-primary);
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        /* CLEAN: Header with status indicators */
-        .header {
-            background: #2a3441;
-            padding: 12px 20px;
-            border-bottom: 2px solid var(--color-blue);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-shrink: 0;
-        }
-
-        .title {
-            color: var(--color-blue);
-            font-weight: bold;
-            font-size: 1.2rem;
-        }
-
-        .status {
-            display: flex;
-            gap: 15px;
-            font-size: 0.9rem;
-        }
-
-        .status-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--color-red);
-            animation: pulse 2s infinite;
-        }
-
-        .status-dot.ok {
-            background: var(--color-green);
-            animation: none;
-        }
-
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-                box-shadow: 0 0 2px var(--color-red);
-            }
-            50% {
-                opacity: 0.3;
-                box-shadow: 0 0 6px var(--color-red);
-            }
-        }
-
-        /* Enhanced status dot with glow effect */
-        .status-dot.ok {
-            box-shadow: 0 0 4px var(--color-green);
-        }
-
-        .status-dot.connecting {
-            background: var(--color-yellow);
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        /* VERSION-FIRST: Main dashboard layout */
-        .versions-dashboard {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-            gap: 20px;
-            min-height: 0;
-        }
-        
-        .version-discovery-main {
-            display: flex;
-            gap: 20px;
-            flex: 1;
-            min-height: 0;
-        }
-        
-        .song-browser {
-            width: 300px;
-            background: rgba(42, 52, 65, 0.5);
-            border-radius: 8px;
-            border: 1px solid #2a3441;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .version-story-panel {
-            flex: 1;
-            background: rgba(42, 52, 65, 0.3);
-            border-radius: 8px;
-            border: 1px solid #2a3441;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-        }
-        
-        .comparison-studio {
-            background: rgba(26, 35, 50, 0.8);
-            border-radius: 8px;
-            border: 1px solid #2a3441;
-            padding: 15px;
-            min-height: 120px;
-        }
-        
-        /* MODULAR: Terminal container (now hidden by default) */
-        .terminal-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-            min-height: 0;
-        }
-        
-        .professional-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #2a3441;
-        }
-        
-        /* SONG BROWSER: Enhanced song list styling */
-        .browser-header {
-            padding: 15px;
-            border-bottom: 1px solid #2a3441;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .browser-controls {
-            display: flex;
-            gap: 8px;
-        }
-        
-        .filter-btn {
-            background: transparent;
-            color: var(--color-blue);
-            border: 1px solid var(--color-blue);
-            padding: 4px 12px;
-            border-radius: 12px;
-            cursor: pointer;
-            font-size: 0.75rem;
-            transition: all 0.2s ease;
-        }
-        
-        .filter-btn:hover,
-        .filter-btn.active {
-            background: var(--color-blue);
-            color: var(--bg-primary);
-        }
-        
-        .song-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px;
-        }
-        
-        .song-item {
-            background: rgba(0, 212, 255, 0.05);
-            border-left: 3px solid transparent;
-            padding: 12px;
-            margin-bottom: 8px;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .song-item:hover {
-            background: rgba(0, 212, 255, 0.1);
-            border-left-color: var(--color-blue);
-            transform: translateX(2px);
-        }
-        
-        .song-item.featured {
-            background: rgba(0, 255, 136, 0.1);
-            border-left-color: var(--color-green);
-        }
-        
-        .song-item.active {
-            background: rgba(0, 212, 255, 0.2);
-            border-left-color: var(--color-blue);
-            box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
-        }
-        
-        .song-title {
-            font-weight: bold;
-            color: var(--fg-primary);
-            font-size: 0.9rem;
-            margin-bottom: 2px;
-        }
-        
-        .song-artist {
-            color: var(--color-cyan);
-            font-size: 0.8rem;
-            margin-bottom: 4px;
-        }
-        
-        .version-count {
-            color: var(--color-yellow);
-            font-size: 0.7rem;
-            margin-bottom: 8px;
-        }
-        
-        .version-preview {
-            display: flex;
-            gap: 4px;
-            align-items: center;
-        }
-        
-        .version-type-mini {
-            background: var(--version-color);
-            color: var(--bg-primary);
-            padding: 2px 6px;
-            border-radius: 8px;
-            font-size: 0.6rem;
-            font-weight: bold;
-        }
-        
-        .version-type-mini.demo { background: var(--color-yellow); }
-        .version-type-mini.studio { background: var(--color-blue); }
-        .version-type-mini.live { background: var(--color-green); }
-        .version-type-mini.remix { background: var(--color-red); }
-        .version-type-mini.remaster { background: var(--color-cyan); }
-        .version-type-mini.acoustic { background: #b19cd9; }
-        
-        .version-dots {
-            color: var(--color-cyan);
-            font-size: 0.7rem;
-            font-weight: bold;
-        }
-        
-        .browser-footer {
-            padding: 15px;
-            border-top: 1px solid #2a3441;
-        }
-        
-        /* VERSION STORY PANEL: USP showcase */
-        .story-header {
-            padding: 15px;
-            border-bottom: 1px solid #2a3441;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .professional-toggle .toggle-btn {
-            background: rgba(246, 199, 68, 0.2);
-            color: var(--color-yellow);
-            border: 1px solid var(--color-yellow);
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            transition: all 0.2s ease;
-        }
-        
-        .professional-toggle .toggle-btn:hover {
-            background: var(--color-yellow);
-            color: var(--bg-primary);
-        }
-        
-        .story-content {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-        }
-        
-        .welcome-message {
-            text-align: center;
-            padding: 40px 20px;
-        }
-        
-        .welcome-icon {
-            font-size: 3rem;
-            margin-bottom: 20px;
-        }
-        
-        .welcome-message h4 {
-            color: var(--color-green);
-            margin-bottom: 15px;
-            font-size: 1.2rem;
-        }
-        
-        .welcome-message p {
-            color: var(--fg-primary);
-            line-height: 1.6;
-            margin-bottom: 25px;
-            opacity: 0.9;
-        }
-        
-        .version-types-showcase {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin: 25px 0;
-            flex-wrap: wrap;
-        }
-        
-        .showcase-arrow {
-            color: var(--color-cyan);
-            font-size: 1.2rem;
-            opacity: 0.7;
-        }
-        
-        .showcase-subtitle {
-            color: var(--color-cyan);
-            font-style: italic;
-            font-size: 0.9rem;
-            opacity: 0.8;
-            margin-top: 20px;
-        }
-        
-        /* COMPARISON STUDIO: Enhanced version comparison */
-        .studio-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        
-        .studio-expand {
-            background: transparent;
-            color: var(--color-cyan);
-            border: 1px solid var(--color-cyan);
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.75rem;
-            transition: all 0.2s ease;
-        }
-        
-        .studio-expand:hover {
-            background: var(--color-cyan);
-            color: var(--bg-primary);
-        }
-        
-        .comparison-slots {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .version-slot.enhanced {
-            flex: 1;
-            background: rgba(0, 212, 255, 0.1);
-            border: 2px dashed var(--color-blue);
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .version-slot.enhanced:hover {
-            background: rgba(0, 212, 255, 0.2);
-            border-color: var(--color-cyan);
-            transform: scale(1.02);
-        }
-        
-        .version-slot.enhanced.loaded {
-            border-style: solid;
-            background: rgba(0, 255, 136, 0.1);
-            border-color: var(--color-green);
-        }
-        
-        .slot-icon {
-            font-size: 1.5rem;
-            margin-bottom: 8px;
-        }
-        
-        .slot-text {
-            color: var(--fg-primary);
-            font-weight: bold;
-            margin-bottom: 4px;
-        }
-        
-        .slot-subtitle {
-            color: var(--color-cyan);
-            font-size: 0.8rem;
-            opacity: 0.8;
-        }
-        
-        .comparison-vs {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            color: var(--color-yellow);
-        }
-        
-        .vs-icon {
-            font-size: 1.5rem;
-            margin-bottom: 4px;
-        }
-        
-        .vs-text {
-            font-weight: bold;
-            font-size: 0.9rem;
-        }
-        
-        .comparison-controls {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            padding-top: 10px;
-            border-top: 1px solid #2a3441;
-        }
-        
-        .play-btn.enhanced {
-            background: linear-gradient(45deg, var(--color-green), var(--color-cyan));
-            color: var(--bg-primary);
-            border: none;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .play-btn.enhanced:hover {
-            transform: scale(1.05);
-            box-shadow: 0 4px 12px rgba(0, 255, 136, 0.4);
-        }
-
-        #terminal-canvas {
-            border: 1px solid #2a3441;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-            background: var(--bg-primary);
-            max-width: 100%;
-            max-height: 100%;
-        }
-
-        /* CLEAN: Footer controls */
-        .controls {
-            background: #1a2332;
-            padding: 15px 20px;
-            border-top: 1px solid #2a3441;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-shrink: 0;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .control-group {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .control-btn {
-            background: rgba(0, 212, 255, 0.2);
-            color: var(--color-blue);
-            border: 1px solid var(--color-blue);
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.85rem;
-            transition: all 0.2s ease;
-        }
-
-        .control-btn:hover {
-            background: rgba(0, 212, 255, 0.4);
-            color: var(--fg-primary);
-            box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
-        }
-
-        .info-display {
-            color: var(--color-yellow);
-            font-size: 0.85rem;
-            text-align: center;
-            transition: all 0.3s ease;
-            opacity: 0.95;
-        }
-
-        .info-display:hover {
-            opacity: 1;
-            color: var(--color-cyan);
-        }
-
-        /* PERFORMANT: Loading and error states */
-        .loading-message {
-            text-align: center;
-            color: var(--color-cyan);
-            font-size: 1.1rem;
-            padding: 40px;
-            animation: gentlePulse 2s ease-in-out infinite;
-        }
-
-        @keyframes gentlePulse {
-            0%, 100% {
-                opacity: 0.8;
-                transform: scale(1);
-            }
-            50% {
-                opacity: 1;
-                transform: scale(1.02);
-            }
-        }
-
-        .error-message {
-            text-align: center;
-            color: var(--color-red);
-            font-size: 1.1rem;
-            padding: 40px;
-            background: rgba(255, 85, 85, 0.1);
-            border: 1px solid var(--color-red);
-            border-radius: 8px;
-            margin: 20px;
-        }
-        
-        /* DELIGHTFUL LOADING: Enhanced loading experience */
-        .loading-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .loading-icon {
-            font-size: 3rem;
-            animation: gentlePulse 2s infinite;
-        }
-        
-        .loading-text {
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: var(--color-green);
-        }
-        
-        .loading-subtitle {
-            font-size: 0.9rem;
-            color: var(--color-cyan);
-            opacity: 0.8;
-            font-style: italic;
-        }
-        
-        /* DELIGHTFUL ERRORS: Enhanced error experience */
-        .error-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .error-icon {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
-        
-        .error-title {
-            font-size: 1.3rem;
-            font-weight: bold;
-            color: var(--color-yellow);
-            margin-bottom: 5px;
-        }
-        
-        .error-description {
-            font-size: 1rem;
-            color: var(--fg-primary);
+            min-height: 100vh;
             line-height: 1.5;
-            opacity: 0.9;
-            margin-bottom: 20px;
-        }
-        
-        .error-actions {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .error-btn {
-            background: linear-gradient(45deg, var(--color-blue), var(--color-cyan));
-            color: var(--bg-primary);
-            border: none;
-            padding: 10px 20px;
-            border-radius: 25px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 0.9rem;
-        }
-        
-        .error-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.4);
-        }
-        
-        .error-tip {
-            font-size: 0.8rem;
-            color: var(--color-cyan);
-            opacity: 0.7;
-            font-style: italic;
-        }
-        
-        /* OFFLINE MODE: Encouraging offline experience */
-        .offline-mode-banner {
-            position: fixed;
-            top: 50px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: linear-gradient(135deg, rgba(246, 199, 68, 0.2), rgba(0, 212, 255, 0.2));
-            border: 1px solid var(--color-yellow);
-            border-radius: 25px;
-            padding: 12px 20px;
-            color: var(--color-yellow);
-            font-size: 0.9rem;
-            font-weight: bold;
-            backdrop-filter: blur(10px);
-            animation: slideDown 0.4s ease-out;
-            z-index: 1002;
-            transition: opacity 0.3s ease;
-        }
-        
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateX(-50%) translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
         }
 
-        .hidden {
-            display: none;
-        }
+        .container { max-width: 900px; margin: 0 auto; padding: 16px; }
 
-        /* VERSION DISCOVERY: Visual elements for version-centric interface */
-        .discovery-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
-            z-index: 999;
-        }
-
-        .discovery-overlay.active {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        .version-discovery-sidebar {
-            position: fixed;
-            right: 0;
-            top: 0;
-            width: 350px;
-            height: 100vh;
-            background: linear-gradient(135deg, rgba(16, 20, 33, 0.98), rgba(26, 35, 50, 0.98));
-            backdrop-filter: blur(15px);
-            border-left: 2px solid var(--color-blue);
-            box-shadow: -5px 0 20px rgba(0, 0, 0, 0.3);
-            transform: translateX(100%);
-            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            z-index: 1000;
-            padding: 25px;
-            overflow-y: auto;
-        }
-
-        .version-discovery-sidebar.open {
-            transform: translateX(0);
-        }
-
-        .sidebar-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
-        }
-
-        .sidebar-close {
-            background: none;
-            border: none;
-            color: var(--color-blue);
-            font-size: 1.2rem;
-            cursor: pointer;
-            padding: 5px;
-            border-radius: 4px;
-            transition: all 0.2s ease;
-        }
-
-        .sidebar-close:hover {
-            background: rgba(0, 212, 255, 0.1);
-            color: var(--fg-primary);
-        }
-
-        .version-type-indicator {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            font-weight: bold;
-            margin-right: 8px;
-        }
-
-        .version-type-demo {
-            background: rgba(246, 199, 68, 0.2);
-            color: var(--color-yellow);
-        }
-
-        .version-type-studio {
-            background: rgba(0, 212, 255, 0.2);
-            color: var(--color-blue);
-        }
-
-        .version-type-live {
-            background: rgba(0, 255, 136, 0.2);
-            color: var(--color-green);
-        }
-
-        .version-type-remix {
-            background: rgba(100, 219, 237, 0.2);
-            color: var(--color-cyan);
-        }
-
-        .version-type-remaster {
-            background: rgba(255, 85, 85, 0.2);
-            color: var(--color-red);
-        }
-
-        .version-type-acoustic {
-            background: rgba(184, 197, 214, 0.2);
-            color: #B8C5D6;
-        }
-
-        .quick-commands {
-            position: fixed;
-            top: 70px;
-            right: 20px;
-            background: rgba(16, 20, 33, 0.9);
-            border: 1px solid var(--color-blue);
-            border-radius: 8px;
-            padding: 10px;
-            backdrop-filter: blur(5px);
-            font-size: 0.8rem;
-            max-width: 200px;
-            opacity: 0.7;
-            transition: opacity 0.2s ease;
-        }
-
-        .quick-commands:hover {
-            opacity: 1;
-        }
-
-        .quick-commands h4 {
-            color: var(--color-blue);
-            margin-bottom: 5px;
-            font-size: 0.75rem;
-        }
-
-        .quick-commands ul {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-        }
-
-        .quick-commands li {
-            padding: 2px 0;
-            color: var(--color-cyan);
-            cursor: pointer;
-        }
-
-        .quick-commands li:hover {
-            color: var(--fg-primary);
-        }
-
-        /* SOCIAL DISCOVERY: Farcaster integration visuals */
-        .social-indicator {
-            position: fixed;
-            bottom: 100px;
-            right: 20px;
-            background: rgba(126, 92, 177, 0.1);
-            border: 1px solid #7E5CB1;
-            border-radius: 50px;
-            padding: 8px 15px;
-            font-size: 0.75rem;
-            color: #C0A7E9;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .social-pulse {
-            width: 6px;
-            height: 6px;
-            background: #C0A7E9;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-
-        /* AUDIO UPLOAD: File upload interface */
-        .upload-interface {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0.9);
-            width: 400px;
-            max-width: 90vw;
-            background: linear-gradient(135deg, rgba(16, 20, 33, 0.98), rgba(26, 35, 50, 0.98));
-            backdrop-filter: blur(15px);
-            border: 2px solid var(--color-blue);
-            border-radius: 12px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            z-index: 1001;
-            padding: 0;
-        }
-
-        .upload-interface.show {
-            opacity: 1;
-            visibility: visible;
-            transform: translate(-50%, -50%) scale(1);
-        }
-
-        .upload-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 25px 15px;
-            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
-        }
-
-        .upload-content {
-            padding: 25px;
-        }
-
-        .upload-dropzone {
-            border: 2px dashed var(--color-blue);
-            border-radius: 8px;
-            padding: 40px 20px;
+        /* HEADER */
+        .header {
             text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: rgba(0, 212, 255, 0.05);
+            padding: 24px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 24px;
         }
 
-        .upload-dropzone:hover {
-            border-color: var(--color-cyan);
-            background: rgba(0, 212, 255, 0.1);
-        }
-
-        .upload-dropzone.dragover {
-            border-color: var(--color-green);
-            background: rgba(0, 255, 136, 0.1);
-        }
-
-        .dropzone-content {
-            pointer-events: none;
-        }
-
-        .dropzone-icon {
-            font-size: 2rem;
-            margin-bottom: 10px;
-        }
-
-        .dropzone-text {
-            color: var(--fg-primary);
-            font-size: 1rem;
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: 8px;
         }
 
-        .dropzone-formats {
-            color: var(--color-cyan);
-            font-size: 0.8rem;
-            opacity: 0.8;
-        }
+        .tagline { color: var(--fg-secondary); font-size: 0.9rem; }
 
-        .upload-progress {
-            margin-top: 20px;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 6px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--color-blue), var(--color-cyan));
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-
-        .progress-text {
-            text-align: center;
-            color: var(--color-blue);
-            font-size: 0.9rem;
-        }
-
-        .upload-result {
-            margin-top: 20px;
-            text-align: center;
-        }
-
-        .result-header {
-            color: var(--color-green);
-            font-size: 1.1rem;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
-
-        .result-metadata {
-            background: rgba(0, 255, 136, 0.1);
-            border: 1px solid rgba(0, 255, 136, 0.3);
-            border-radius: 6px;
-            padding: 15px;
-            text-align: left;
-            font-size: 0.85rem;
-            line-height: 1.4;
-        }
-
-        .metadata-item {
-            margin-bottom: 5px;
-        }
-
-        .metadata-label {
-            color: var(--color-cyan);
-            font-weight: bold;
-        }
-
-        /* AUDIO PREVIEW: Mini player for version comparison */
-        .audio-preview-bar {
+        /* ONBOARDING */
+        .onboarding {
             position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 70px;
-            background: linear-gradient(135deg, rgba(16, 20, 33, 0.95), rgba(26, 35, 50, 0.95));
-            backdrop-filter: blur(10px);
-            border-top: 2px solid var(--color-blue);
-            box-shadow: 0 -3px 15px rgba(0, 0, 0, 0.3);
+            inset: 0;
+            background: rgba(0,0,0,0.95);
             display: flex;
             align-items: center;
-            padding: 0 20px;
-            transform: translateY(100%);
-            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            z-index: 1001;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+            transition: opacity 0.3s;
         }
 
-        .audio-preview-bar.show {
-            transform: translateY(0);
-        }
+        .onboarding.hidden { opacity: 0; pointer-events: none; }
 
-        /* ADJUST CONTROLS: Move controls up when audio bar is showing */
-        .controls.with-audio-bar {
-            transform: translateY(-70px);
-            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-
-        .version-comparison {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            flex: 1;
-        }
-
-        .version-slot {
-            flex: 1;
-            padding: 8px 12px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px dashed rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
+        .onboarding-card {
+            background: var(--bg-secondary);
+            border-radius: 20px;
+            padding: 40px 28px;
+            max-width: 380px;
+            width: 100%;
             text-align: center;
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.6);
-            cursor: pointer;
+            border: 2px solid var(--color-purple);
         }
 
-        .version-slot.loaded {
-            background: rgba(0, 212, 255, 0.1);
-            border: 1px solid var(--color-blue);
-            color: var(--color-blue);
+        .onboarding-icon { font-size: 3.5rem; margin-bottom: 16px; }
+        .onboarding-title { font-size: 1.4rem; margin-bottom: 10px; color: var(--color-purple); }
+        .onboarding-desc { color: var(--fg-secondary); margin-bottom: 24px; font-size: 0.9rem; }
+
+        .onboarding-dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 20px; }
+        .onboarding-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fg-secondary); transition: all 0.3s; }
+        .onboarding-dot.active { background: var(--color-purple); width: 24px; border-radius: 4px; }
+
+        .onboarding-btn {
+            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
+            border: none; color: white; padding: 13px 28px; font-size: 0.95rem;
+            font-weight: 600; border-radius: 30px; cursor: pointer;
+            transition: transform 0.2s; width: 100%; max-width: 240px;
         }
 
-        .play-controls {
+        .onboarding-btn:hover { transform: scale(1.02); }
+        .onboarding-btn.secondary { background: transparent; border: 2px solid var(--fg-secondary); margin-top: 10px; }
+
+        /* WALLET */
+        .wallet-section {
             display: flex;
-            gap: 10px;
+            flex-direction: column;
             align-items: center;
+            gap: 10px;
+            margin-bottom: 24px;
         }
+
+        .connect-btn {
+            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
+            border: none; color: white; padding: 13px 26px; font-size: 0.9rem;
+            font-weight: 600; border-radius: 30px; cursor: pointer;
+            display: flex; align-items: center; gap: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .connect-btn:hover { transform: scale(1.03); box-shadow: 0 6px 20px rgba(153,69,255,0.35); }
+        .connect-btn.connected { background: var(--color-green); }
+
+        .wallet-address { color: var(--color-blue); font-size: 0.85rem; font-family: monospace; }
+        .wallet-error { color: var(--color-red); font-size: 0.85rem; padding: 8px 14px; background: rgba(255,85,85,0.1); border-radius: 8px; display: none; }
+        .wallet-error.show { display: block; }
+
+        /* SEARCH */
+        .search-section { margin-bottom: 20px; }
+        .search-input {
+            width: 100%; padding: 12px 16px; border-radius: 12px;
+            border: 2px solid rgba(255,255,255,0.1); background: var(--bg-secondary);
+            color: var(--fg-primary); font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus { outline: none; border-color: var(--color-purple); }
+        .search-input::placeholder { color: var(--fg-secondary); }
+
+        /* VERSION GRID */
+        .versions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 14px;
+        }
+
+        .version-card {
+            background: var(--bg-secondary); border-radius: 14px; padding: 14px;
+            border: 1px solid rgba(255,255,255,0.06);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .version-card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0,0,0,0.25); }
+        .version-card.locked { opacity: 0.6; border-color: rgba(255,85,85,0.15); }
+        .version-card.premium { border-color: rgba(246,199,68,0.35); }
+
+        .track-artwork {
+            width: 100%; aspect-ratio: 1; max-height: 160px;
+            background: linear-gradient(135deg, var(--bg-tertiary), #3d4a5c);
+            border-radius: 10px; margin-bottom: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2.2rem; overflow: hidden;
+        }
+
+        .track-artwork img { width: 100%; height: 100%; object-fit: cover; }
+        .track-artwork img.error { display: none; }
+        .track-artwork.error::after { content: '🎵'; }
+
+        .track-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track-artist { color: var(--color-blue); font-size: 0.8rem; margin-bottom: 8px; }
+
+        .version-type {
+            display: inline-block; padding: 3px 9px; border-radius: 20px;
+            font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+
+        .version-type.demo { background: rgba(246,199,68,0.2); color: var(--color-yellow); }
+        .version-type.studio { background: rgba(0,212,255,0.2); color: var(--color-blue); }
+        .version-type.live { background: rgba(0,255,136,0.2); color: var(--color-green); }
+        .version-type.remix { background: rgba(153,69,255,0.2); color: var(--color-purple); }
+        .version-type.acoustic { background: rgba(184,197,214,0.2); color: #b8c5d6; }
+
+        .coin-info { margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 6px; font-size: 0.7rem; }
+        .coin-label { color: var(--fg-secondary); margin-bottom: 2px; }
+        .coin-address { font-family: monospace; color: var(--color-purple); word-break: break-all; }
+
+        .access-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 5px 10px; border-radius: 20px;
+            font-size: 0.75rem; font-weight: 600; margin-top: 8px;
+        }
+
+        .access-badge.unlocked { background: rgba(0,255,136,0.15); color: var(--color-green); }
+        .access-badge.locked { background: rgba(255,85,85,0.15); color: var(--color-red); }
 
         .play-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--color-blue);
-            border: none;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
+            width: 100%; padding: 10px; border-radius: 8px; border: none;
+            cursor: pointer; margin-top: 10px; font-weight: 600; font-size: 0.85rem;
+            transition: all 0.2s;
         }
 
-        .play-btn:hover {
-            background: var(--color-cyan);
-            transform: scale(1.05);
+        .play-btn.primary { background: var(--color-purple); color: white; }
+        .play-btn.primary:hover { background: #b366ff; }
+        .play-btn.secondary { background: transparent; border: 2px solid var(--color-purple); color: var(--color-purple); }
+        .play-btn:disabled { background: #333; color: #666; cursor: not-allowed; border-color: #333; }
+
+        /* LOADING */
+        .loading-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+        .loading-skeleton {
+            height: 280px; border-radius: 14px;
+            background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
+            background-size: 200% 100%; animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        /* EMPTY/ERROR */
+        .empty-state { text-align: center; padding: 50px 20px; color: var(--fg-secondary); }
+        .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+
+        /* AUDIO PLAYER */
+        .audio-player {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: var(--bg-secondary);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding: 12px 16px;
+            display: none; z-index: 100;
+        }
+        .audio-player.active { display: block; }
+
+        .player-content {
+            max-width: 900px; margin: 0 auto;
+            display: flex; align-items: center; gap: 12px;
         }
 
-        /* ORGANIZED: Responsive design with discovery elements */
-        @media (max-width: 768px) {
-            .header {
-                padding: 8px 15px;
-            }
+        .player-artwork {
+            width: 48px; height: 48px; border-radius: 8px;
+            background: var(--bg-tertiary);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; overflow: hidden; flex-shrink: 0;
+        }
+        .player-artwork img { width: 100%; height: 100%; object-fit: cover; }
 
-            .title {
-                font-size: 1rem;
-            }
+        .player-info { flex: 1; min-width: 0; }
+        .player-title { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .player-artist { color: var(--color-blue); font-size: 0.8rem; }
 
-            .status {
-                gap: 10px;
-                font-size: 0.8rem;
-            }
+        .player-controls { display: flex; align-items: center; gap: 8px; }
+        .player-btn {
+            background: none; border: none; color: var(--fg-primary);
+            font-size: 1.5rem; cursor: pointer; padding: 8px;
+            border-radius: 50%; transition: background 0.2s;
+        }
+        .player-btn:hover { background: rgba(255,255,255,0.1); }
 
-            .controls {
-                padding: 10px 15px;
-                flex-direction: column;
-                gap: 8px;
-            }
+        .player-progress { flex: 1; max-width: 200px; display: flex; align-items: center; gap: 8px; }
+        .progress-bar {
+            flex: 1; height: 4px; background: var(--bg-tertiary);
+            border-radius: 2px; cursor: pointer;
+        }
+        .progress-fill {
+            height: 100%; background: var(--color-purple);
+            border-radius: 2px; width: 0%; transition: width 0.1s;
+        }
 
-            .control-group {
-                gap: 8px;
-                justify-content: center;
-            }
+        .progress-time { font-size: 0.7rem; color: var(--fg-secondary); font-family: monospace; min-width: 40px; }
+        .player-close { background: none; border: none; color: var(--fg-secondary); font-size: 1.2rem; cursor: pointer; padding: 4px; }
 
-            .control-btn {
-                padding: 5px 10px;
-                font-size: 0.7rem;
-                min-width: 80px;
-            }
+        /* FOOTER */
+        .footer {
+            text-align: center; padding: 30px 16px; color: var(--fg-secondary);
+            font-size: 0.75rem; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 40px;
+            padding-bottom: 80px;
+        }
+        .footer a { color: var(--color-purple); text-decoration: none; }
 
-            .terminal-container {
-                padding: 10px;
-            }
+        /* MODALS */
+        .error-modal {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--bg-secondary); border-radius: 16px; padding: 20px;
+            border: 2px solid var(--color-red); z-index: 1001;
+            display: none; max-width: 400px; width: 90%;
+        }
+        .error-modal.show { display: block; }
+        .error-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .error-modal-title { font-weight: 600; font-size: 1.1rem; }
+        .error-modal-close { background: none; border: none; color: var(--fg-secondary); font-size: 1.2rem; cursor: pointer; }
+        .error-modal-content { color: var(--fg-secondary); font-size: 0.9rem; margin-bottom: 16px; }
+        .error-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+        .error-modal-btn {
+            padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;
+        }
+        .error-modal-btn.primary { background: var(--color-purple); color: white; }
+        .error-modal-btn.secondary { background: transparent; border: 2px solid var(--fg-secondary); color: var(--fg-secondary); }
 
-            /* VERSION DISCOVERY: Mobile adjustments */
-            .version-discovery-sidebar {
-                width: 100%;
-                padding: 20px;
-                border-left: none;
-                border-top: 2px solid var(--color-blue);
-            }
-
-            .sidebar-header h3 {
-                font-size: 1.1rem;
-            }
-
-            .quick-commands {
-                top: 60px;
-                right: 10px;
-                font-size: 0.7rem;
-                padding: 8px;
-            }
-
-            .social-indicator {
-                bottom: 80px;
-                right: 10px;
-                padding: 6px 10px;
-                font-size: 0.7rem;
-            }
-
-            .audio-preview-bar {
-                padding: 0 15px;
-                height: 70px;
-            }
-
-            .version-comparison {
-                gap: 10px;
-            }
-
-            .version-slot {
-                padding: 6px 8px;
-                font-size: 0.7rem;
-            }
-
-            .play-btn {
-                width: 35px;
-                height: 35px;
-            }
+        /* MOBILE */
+        @media (max-width: 480px) {
+            .container { padding: 12px; }
+            .header { padding: 18px 12px; }
+            .logo { font-size: 1.5rem; }
+            .versions-grid { grid-template-columns: 1fr; gap: 12px; }
+            .onboarding-card { padding: 28px 20px; }
+            .onboarding-title { font-size: 1.2rem; }
+            .connect-btn { width: 100%; justify-content: center; }
+            .player-progress { display: none; }
         }
     </style>
 </head>
 
 <body>
-    <!-- CLEAN: Simple header with essential status -->
-    <div class="header">
-        <div class="title">🎭 VERSIONS</div>
-        <div class="status">
-            <div class="status-item">
-                <div class="status-dot" id="app-status"></div>
-                <span>App</span>
+    <!-- ONBOARDING -->
+    <div class="onboarding" id="onboarding">
+        <div class="onboarding-card">
+            <div class="onboarding-icon" id="onboardingIcon">🎵</div>
+            <h2 class="onboarding-title" id="onboardingTitle">Collect Song Versions</h2>
+            <p class="onboarding-desc" id="onboardingDesc">Like rare vinyl, but digital. Each version of a song becomes a collectible.</p>
+            <div class="onboarding-dots">
+                <div class="onboarding-dot active" data-step="0"></div>
+                <div class="onboarding-dot" data-step="1"></div>
+                <div class="onboarding-dot" data-step="2"></div>
             </div>
-            <div class="status-item">
-                <div class="status-dot" id="audio-status"></div>
-                <span>Audio</span>
-            </div>
-            <div class="status-item">
-                <div class="status-dot" id="social-status"></div>
-                <span>Social</span>
-            </div>
+            <button class="onboarding-btn" id="onboardingBtn" onclick="nextOnboardingStep()">Next</button>
+            <button class="onboarding-btn secondary" onclick="skipOnboarding()">Skip</button>
         </div>
     </div>
 
-    <!-- VERSION-FIRST: Main dashboard showcasing USP -->
-    <div class="versions-dashboard" id="versions-dashboard">
-        <!-- VERSION DISCOVERY: Primary interface -->
-        <div class="version-discovery-main" id="version-discovery-main">
-            <div class="song-browser">
-                <div class="browser-header">
-                    <h3 style="color: var(--color-blue); margin: 0;">🎵 Song Collection</h3>
-                    <div class="browser-controls">
-                        <button class="filter-btn active" data-filter="all">All</button>
-                        <button class="filter-btn" data-filter="trending">📈 Trending</button>
-                        <button class="filter-btn" data-filter="recent">🆕 Recent</button>
-                    </div>
-                </div>
-                
-                <div class="song-list" id="song-list">
-                    <!-- Dynamic song list will be populated here -->
-                    <div class="song-item featured" onclick="showSongVersions('bohemian-rhapsody')">
-                        <div class="song-info">
-                            <div class="song-title">Bohemian Rhapsody</div>
-                            <div class="song-artist">Queen</div>
-                            <div class="version-count">6 versions available</div>
-                        </div>
-                        <div class="version-preview">
-                            <span class="version-type-mini demo">DEMO</span>
-                            <span class="version-type-mini studio">STUDIO</span>
-                            <span class="version-type-mini live">LIVE</span>
-                            <span class="version-dots">+3</span>
-                        </div>
-                    </div>
-                    
-                    <div class="song-item" onclick="showSongVersions('imagine')">
-                        <div class="song-info">
-                            <div class="song-title">Imagine</div>
-                            <div class="song-artist">John Lennon</div>
-                            <div class="version-count">4 versions available</div>
-                        </div>
-                        <div class="version-preview">
-                            <span class="version-type-mini demo">DEMO</span>
-                            <span class="version-type-mini studio">STUDIO</span>
-                            <span class="version-type-mini acoustic">ACOUSTIC</span>
-                        </div>
-                    </div>
-                    
-                    <div class="song-item" onclick="showSongVersions('yesterday')">
-                        <div class="song-info">
-                            <div class="song-title">Yesterday</div>
-                            <div class="song-artist">The Beatles</div>
-                            <div class="version-count">5 versions available</div>
-                        </div>
-                        <div class="version-preview">
-                            <span class="version-type-mini demo">DEMO</span>
-                            <span class="version-type-mini studio">STUDIO</span>
-                            <span class="version-type-mini live">LIVE</span>
-                            <span class="version-dots">+2</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="browser-footer">
-                    <button class="control-btn" onclick="toggleUploadInterface()">⬆️ Add Version</button>
-                </div>
-            </div>
-            
-            <div class="version-story-panel" id="version-story-panel">
-                <div class="story-header">
-                    <h3 style="color: var(--color-green); margin: 0;">🎭 Version Story</h3>
-                    <div class="professional-toggle">
-                        <button class="toggle-btn" onclick="toggleProfessionalMode()" title="Switch to Professional Terminal Mode">
-                            🖥️ Pro Mode
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="story-content" id="story-content">
-                    <div class="welcome-message">
-                        <div class="welcome-icon">🎵</div>
-                        <h4>Welcome to Version Discovery</h4>
-                        <p>Select a song to explore its evolution through demos, studio recordings, live performances, and more.</p>
-                        <div class="version-types-showcase">
-                            <span class="version-type-indicator version-type-demo">DEMO</span>
-                            <span class="showcase-arrow">→</span>
-                            <span class="version-type-indicator version-type-studio">STUDIO</span>
-                            <span class="showcase-arrow">→</span>
-                            <span class="version-type-indicator version-type-live">LIVE</span>
-                            <span class="showcase-arrow">→</span>
-                            <span class="version-type-indicator version-type-remix">REMIX</span>
-                        </div>
-                        <p class="showcase-subtitle">Every song tells a story through its versions</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- VERSION COMPARISON STUDIO -->
-        <div class="comparison-studio" id="comparison-studio">
-            <div class="studio-header">
-                <h4 style="color: var(--color-cyan); margin: 0;">🎚️ Version Comparison Studio</h4>
-                <button class="studio-expand" onclick="expandComparisonStudio()" title="Expand for detailed analysis">
-                    ⛶ Expand
-                </button>
-            </div>
-            
-            <div class="comparison-slots">
-                <div class="version-slot enhanced" id="comparison-slot-a" onclick="selectVersionForComparison('A')">
-                    <div class="slot-icon">🎵</div>
-                    <div class="slot-text">Select Version A</div>
-                    <div class="slot-subtitle">Click to choose a version</div>
-                </div>
-                
-                <div class="comparison-vs">
-                    <div class="vs-icon">⚡</div>
-                    <div class="vs-text">VS</div>
-                </div>
-                
-                <div class="version-slot enhanced" id="comparison-slot-b" onclick="selectVersionForComparison('B')">
-                    <div class="slot-icon">🎵</div>
-                    <div class="slot-text">Select Version B</div>
-                    <div class="slot-subtitle">Click to choose a version</div>
-                </div>
-            </div>
-            
-            <div class="comparison-controls" id="comparison-controls" style="display: none;">
-                <button class="play-btn enhanced" onclick="playComparison()" title="Play both versions">
-                    ▶️ Play Comparison
-                </button>
-                <button class="control-btn" onclick="analyzeVersions()" title="Show detailed analysis">
-                    📊 Analyze
-                </button>
-                <button class="control-btn" onclick="shareComparison()" title="Share this comparison">
-                    🔗 Share
-                </button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- PROFESSIONAL MODE: Terminal interface (hidden by default) -->
-    <div class="terminal-container professional-mode" id="terminal-container" style="display: none;">
-        <div class="professional-header">
-            <h3 style="color: var(--color-yellow); margin: 0;">🖥️ Professional Terminal Mode</h3>
-            <button class="toggle-btn" onclick="toggleProfessionalMode()" title="Switch to Version Discovery Mode">
-                🎭 Discovery Mode
+    <!-- MAIN APP -->
+    <div class="container">
+        <header class="header">
+            <div class="logo">VERSIONS</div>
+            <p class="tagline">Song versions as tickets — own the artist coin, unlock the version</p>
+        </header>
+
+        <section class="wallet-section">
+            <button id="connectBtn" class="connect-btn" onclick="handleWalletConnect()">
+                <span>🔗</span><span>Connect Wallet</span>
             </button>
-        </div>
-        
-        <div id="loading-message" class="loading-message">
-            <div class="loading-content">
-                <div class="loading-icon">🎧</div>
-                <div class="loading-text">Tuning into the version multiverse...</div>
-                <div class="loading-subtitle">Connecting your personalized music experience</div>
+            <div id="walletAddress" class="wallet-address"></div>
+            <div id="walletError" class="wallet-error"></div>
+        </section>
+
+        <section class="search-section">
+            <input type="text" class="search-input" id="searchInput" placeholder="🔍 Search songs or artists..." oninput="handleSearch(this.value)">
+        </section>
+
+        <div id="versionsContainer">
+            <div class="loading-grid">
+                <div class="loading-skeleton"></div>
+                <div class="loading-skeleton"></div>
+                <div class="loading-skeleton"></div>
             </div>
         </div>
 
-        <div id="error-message" class="error-message hidden">
-            <div class="error-content">
-                <div class="error-icon">🎭</div>
-                <div class="error-title">Version engine taking a breather</div>
-                <div class="error-description">Our music discovery engine is catching up with all the amazing versions out there!</div>
-                <div class="error-actions">
-                    <button class="error-btn" onclick="location.reload()">🔄 Restart Discovery</button>
-                    <button class="error-btn" onclick="switchToOfflineMode()">📱 Offline Mode</button>
+        <footer class="footer">
+            Built for <a href="https://solana.com/graveyard-hack" target="_blank">Solana Graveyard Hackathon</a><br>
+            Audius Track — "Versions as Tickets"
+        </footer>
+    </div>
+
+    <!-- AUDIO PLAYER -->
+    <div class="audio-player" id="audioPlayer">
+        <div class="player-content">
+            <div class="player-artwork" id="playerArtwork">🎵</div>
+            <div class="player-info">
+                <div class="player-title" id="playerTitle">-</div>
+                <div class="player-artist" id="playerArtist">-</div>
+            </div>
+            <div class="player-controls">
+                <button class="player-btn" id="playPauseBtn" onclick="togglePlayPause()">▶</button>
+            </div>
+            <div class="player-progress">
+                <span class="progress-time" id="currentTime">0:00</span>
+                <div class="progress-bar" id="progressBar" onclick="seekAudio(event)">
+                    <div class="progress-fill" id="progressFill"></div>
                 </div>
-                <div class="error-tip">💡 Pro tip: Try refreshing or exploring in offline mode while we reconnect</div>
+                <span class="progress-time" id="totalTime">0:00</span>
             </div>
-        </div>
-
-        <canvas id="terminal-canvas" width="1200" height="700" class="hidden" tabindex="0">
-            Your browser doesn't support this interface. Please update your browser.
-        </canvas>
-    </div>
-
-    <!-- CLEAN: Essential controls only -->
-    <div class="controls">
-        <div class="control-group">
-            <button class="control-btn" onclick="runCommand('help')">📖 Help</button>
-            <button class="control-btn" onclick="runCommand('status')">📊 Status</button>
-            <button class="control-btn" onclick="runCommand('clear')">🧹 Clear</button>
-            <button class="control-btn" onclick="toggleUploadInterface()" title="Upload audio files">⬆️ Upload</button>
-        </div>
-
-        <div class="info-display">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <input type="text" id="search-input" placeholder="Search songs, artists, versions..."
-                    style="background: rgba(0, 212, 255, 0.1); border: 1px solid var(--color-blue); color: var(--fg-primary); padding: 4px 8px; border-radius: 4px; font-family: inherit; font-size: 0.8rem; width: 200px;"
-                    onkeydown="handleSearchKeydown(event)">
-                <button class="control-btn" onclick="performSearch()" title="Search">🔍</button>
-            </div>
-            <div id="info-text">🎆 Your version discovery experience is loading... Get ready to explore music like never before!</div>
-        </div>
-
-        <div class="control-group">
-            <button class="control-btn" onclick="toggleVersionDiscovery()"
-                title="Open version discovery sidebar (Cmd+D)">🎵 Discover Versions</button>
-            <button class="control-btn" onclick="toggleAudioPreview()" title="Open audio comparison bar (Cmd+M)">🎧
-                Compare Audio</button>
-            <button class="control-btn" onclick="farcasterSignIn()" id="farcaster-btn" title="Sign in with Farcaster">🎭
-                Sign In</button>
-            <button class="control-btn" onclick="focusTerminal()" title="Focus terminal for typing">🎯 Focus</button>
-            <button class="control-btn" onclick="toggleFullscreen()" id="fullscreen-btn"
-                title="Toggle fullscreen mode">⛶ Fullscreen</button>
+            <button class="player-close" onclick="closePlayer()">✕</button>
         </div>
     </div>
 
-    <!-- VERSION DISCOVERY: Command hints overlay -->
-    <div class="quick-commands">
-        <h4>Quick Commands</h4>
-        <ul>
-            <li onclick="runCommand('songs')">🎵 songs</li>
-            <li onclick="runCommand('social')">🤝 social</li>
-            <li onclick="runCommand('status')">📊 status</li>
-            <li onclick="runCommand('help')">📖 help</li>
-        </ul>
+    <!-- ERROR MODAL -->
+    <div class="error-modal" id="errorModal">
+        <div class="error-modal-header">
+            <div class="error-modal-title" id="errorModalTitle">Error</div>
+            <button class="error-modal-close" onclick="closeErrorModal()">✕</button>
+        </div>
+        <div class="error-modal-content" id="errorModalContent"></div>
+        <div class="error-modal-actions" id="errorModalActions"></div>
     </div>
 
-    <!-- SOCIAL DISCOVERY: Farcaster activity indicator -->
-    <div class="social-indicator">
-        <div class="social-pulse"></div>
-        <span>3 friends active</span>
-    </div>
+    <script src="./audius-solana.js"></script>
+    <script>
+        // STATE
+        let walletConnected = false;
+        let walletAddress = '';
+        let allVersions = [];
+        let filteredVersions = [];
+        let onboardingStep = 0;
+        let isLoading = true;
+        let verifiedOwnership = {};
 
-    <!-- VERSION DISCOVERY: Overlay background -->
-    <div class="discovery-overlay" id="discovery-overlay" onclick="closeVersionDiscovery()"></div>
+        // AUDIO PLAYER STATE
+        let currentAudio = null;
+        let currentVersion = null;
+        let isPlaying = false;
 
-    <!-- VERSION DISCOVERY: Sliding sidebar -->
-    <div class="version-discovery-sidebar" id="version-sidebar">
-        <div class="sidebar-header">
-            <h3 style="color: var(--color-blue); margin: 0;">🎭 Version Discovery</h3>
-            <button class="sidebar-close" onclick="closeVersionDiscovery()" title="Close">✕</button>
-        </div>
+        const onboardingData = [
+            { icon: '🎵', title: 'Collect Song Versions', desc: 'Like rare vinyl, but digital. Each version of a song - demo, live, studio - becomes a collectible.' },
+            { icon: '🪙', title: 'Own the Artist Coin', desc: 'Audius Artist Coins represent ownership in an artist. Hold the coin to unlock their exclusive versions.' },
+            { icon: '🔓', title: 'Connect & Unlock', desc: 'Connect your Solana wallet. If you own the artist coin, the version unlocks instantly!' }
+        ];
 
-        <div style="margin-bottom: 20px;">
-            <h4 style="color: var(--color-green); font-size: 0.9rem; margin-bottom: 8px;">Trending Versions</h4>
+        // ONBOARDING
+        function nextOnboardingStep() {
+            if (onboardingStep < 2) { onboardingStep++; updateOnboarding(); }
+            else { skipOnboarding(); }
+        }
 
-            <div
-                style="padding: 10px; background: rgba(0, 255, 136, 0.05); border-left: 3px solid var(--color-green); margin-bottom: 10px;">
-                <div style="display: flex; align-items: center; margin-bottom: 5px;">
-                    <span class="version-type-indicator version-type-live">LIVE</span>
-                    <span style="font-size: 0.8rem;">Bohemian Rhapsody</span>
-                </div>
-                <div style="font-size: 0.7rem; color: #B8C5D6;">Live Aid 1985 • 1.2k plays today</div>
-            </div>
+        function updateOnboarding() {
+            const data = onboardingData[onboardingStep];
+            document.getElementById('onboardingIcon').textContent = data.icon;
+            document.getElementById('onboardingTitle').textContent = data.title;
+            document.getElementById('onboardingDesc').textContent = data.desc;
+            document.querySelectorAll('.onboarding-dot').forEach((dot, i) => dot.classList.toggle('active', i === onboardingStep));
+            document.getElementById('onboardingBtn').textContent = onboardingStep === 2 ? 'Get Started' : 'Next';
+        }
 
-            <div
-                style="padding: 10px; background: rgba(0, 212, 255, 0.05); border-left: 3px solid var(--color-blue); margin-bottom: 10px;">
-                <div style="display: flex; align-items: center; margin-bottom: 5px;">
-                    <span class="version-type-indicator version-type-studio">STUDIO</span>
-                    <span style="font-size: 0.8rem;">Imagine</span>
-                </div>
-                <div style="font-size: 0.7rem; color: #B8C5D6;">Original 1971 • 856 plays today</div>
-            </div>
+        function skipOnboarding() {
+            document.getElementById('onboarding').classList.add('hidden');
+            localStorage.setItem('onboarding_complete', 'true');
+        }
 
-            <div
-                style="padding: 10px; background: rgba(246, 199, 68, 0.05); border-left: 3px solid var(--color-yellow);">
-                <div style="display: flex; align-items: center; margin-bottom: 5px;">
-                    <span class="version-type-indicator version-type-demo">DEMO</span>
-                    <span style="font-size: 0.8rem;">Yesterday</span>
-                </div>
-                <div style="font-size: 0.7rem; color: #B8C5D6;">Home recording • 634 plays today</div>
-            </div>
-        </div>
+        if (localStorage.getItem('onboarding_complete') === 'true') {
+            document.getElementById('onboarding').classList.add('hidden');
+        }
 
-        <div style="margin-bottom: 20px;">
-            <h4 style="color: var(--color-cyan); font-size: 0.9rem; margin-bottom: 8px;">🤝 Social Recommendations</h4>
-            <div style="font-size: 0.75rem; line-height: 1.4; color: #B8C5D6;">
-                <div style="margin-bottom: 8px;">🎭 @musiclover shared a rare demo version</div>
-                <div style="margin-bottom: 8px;">🎯 @producer recommended studio take #3</div>
-                <div>📈 @audiophile voted for 2011 remaster</div>
-            </div>
-        </div>
-
-        <div>
-            <h4 style="color: var(--color-yellow); font-size: 0.9rem; margin-bottom: 8px;">🎵 Version Types</h4>
-            <div style="display: flex; flex-wrap: wrap; gap: 5px;">
-                <span class="version-type-indicator version-type-demo">DEMO</span>
-                <span class="version-type-indicator version-type-studio">STUDIO</span>
-                <span class="version-type-indicator version-type-live">LIVE</span>
-                <span class="version-type-indicator version-type-remix">REMIX</span>
-                <span class="version-type-indicator version-type-remaster">REMASTER</span>
-                <span class="version-type-indicator version-type-acoustic">ACOUSTIC</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- AUDIO UPLOAD: File upload interface -->
-    <div class="upload-interface" id="upload-interface">
-        <div class="upload-header">
-            <h3 style="color: var(--color-blue); margin: 0;">⬆️ Upload Audio File</h3>
-            <button class="sidebar-close" onclick="closeUploadInterface()" title="Close">✕</button>
-        </div>
-
-        <div class="upload-content">
-            <div class="upload-dropzone" id="upload-dropzone">
-                <div class="dropzone-content">
-                    <div class="dropzone-icon">🎥</div>
-                    <div class="dropzone-text">Drop audio file here or click to browse</div>
-                    <div class="dropzone-formats">Supports: MP3, FLAC, WAV, M4A, OGG, AIFF</div>
-                </div>
-                <input type="file" id="file-input" accept=".mp3,.flac,.wav,.m4a,.ogg,.aiff" style="display: none;">
-            </div>
-
-            <div class="upload-progress" id="upload-progress" style="display: none;">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progress-fill"></div>
-                </div>
-                <div class="progress-text" id="progress-text">Uploading...</div>
-            </div>
-
-            <div class="upload-result" id="upload-result" style="display: none;">
-                <div class="result-header">Upload Complete!</div>
-                <div class="result-metadata" id="result-metadata"></div>
-                <button class="control-btn" onclick="clearUploadResult()" style="margin-top: 10px;">Upload
-                    Another</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- AUDIO PREVIEW: Version comparison bar -->
-    <div class="audio-preview-bar" id="audio-preview">
-        <div class="version-comparison">
-            <div class="version-slot" onclick="selectVersionForComparison('A')">
-                Click to load Version A
-            </div>
-            <div style="color: var(--color-blue); font-weight: bold;">VS</div>
-            <div class="version-slot" onclick="selectVersionForComparison('B')">
-                Click to load Version B
-            </div>
-        </div>
-
-        <div class="play-controls">
-            <button class="play-btn" onclick="playComparison()" title="Play comparison">
-                ▶
-            </button>
-            <button class="control-btn" onclick="toggleAudioPreview()" style="background: transparent; padding: 4px;">
-                ✕
-            </button>
-        </div>
-    </div>
-
-    <!-- Load Farcaster Mini App SDK integration -->
-    <script src="./farcaster-miniapp.js"></script>
-
-    <script type="module">
-        // MODULAR: Import WASM terminal and theme
-        import init, { VersionsTerminalPOC } from './pkg/versions_wasm_poc.js';
-        import { applyTheme, ThemeUtils } from './theme-bridge.js';
-
-        // CLEAN: Inline configuration for browser compatibility
-        function getConfig() {
-            const hostname = window.location.hostname;
-
-            if (hostname === 'localhost' || hostname === '127.0.0.1') {
-                return {
-                    environment: 'development',
-                    domain: 'localhost:3000',
-                    apiBase: 'http://localhost:8080',
-                    manifestUrl: 'http://localhost:3000/.well-known/farcaster.json'
-                };
-            } else if (hostname.includes('netlify.app')) {
-                return {
-                    environment: 'netlify',
-                    domain: 'versions-app.netlify.app',
-                    apiBase: 'https://versions-api.herokuapp.com',
-                    manifestUrl: 'https://versions-app.netlify.app/.well-known/farcaster.json'
-                };
-            } else {
-                return {
-                    environment: 'production',
-                    domain: 'versions.app',
-                    apiBase: 'https://api.versions.app',
-                    manifestUrl: 'https://versions.app/.well-known/farcaster.json'
-                };
+        // WALLET
+        async function handleWalletConnect() {
+            const errorEl = document.getElementById('walletError');
+            errorEl.classList.remove('show');
+            const hasWallet = window.phantom?.solana || window.solana;
+            
+            if (!hasWallet) {
+                errorEl.innerHTML = 'No wallet found. <a href="https://phantom.app" target="_blank" style="color:var(--color-purple)">Install Phantom</a>';
+                errorEl.classList.add('show');
+                return;
             }
-        }
 
-        // Make getConfig available globally
-        window.getConfig = getConfig;
-
-        let terminal = null;
-        let animationId = null;
-        let config = null;
-        let currentComparisonSession = null;
-        let currentVersionModal = null;
-        let wasOffline = false; // Track connection state for recovery notifications
-
-        // CLEAN: Status management with connecting state
-        function updateStatus(elementId, status) {
-            const element = document.getElementById(elementId);
-            if (element) {
-                // Clear all status classes
-                element.classList.remove('ok', 'connecting');
-                
-                if (status === 'ok' || status === true) {
-                    element.classList.add('ok');
-                } else if (status === 'connecting') {
-                    element.classList.add('connecting');
-                }
-                // 'error' or false shows default pulsing red
-            }
-        }
-
-        function updateInfo(message) {
-            const element = document.getElementById('info-text');
-            if (element) {
-                element.textContent = message;
-            }
-        }
-
-        // Brief celebratory message that auto-reverts
-        function showBriefSuccess(message, revertMessage, duration = 3000) {
-            updateInfo(message);
-            setTimeout(() => updateInfo(revertMessage), duration);
-        }
-
-        // PERFORMANT: Animation loop for terminal rendering
-        function renderLoop() {
-            if (terminal) {
-                terminal.render();
-                animationId = requestAnimationFrame(renderLoop);
-            }
-        }
-
-        // ORGANIZED: Initialize unified terminal
-        async function initializeTerminal() {
             try {
-                updateInfo('🎆 Initializing version discovery engine...');
-                console.log('🎭 Initializing VERSIONS Unified Terminal...');
-
-                // ENHANCEMENT: Apply theme and load config
-                applyTheme();
-                config = getConfig();
-                console.log(`🔧 Configuration loaded for ${config.environment}`);
-
-                // CLEAN: Load application
-                await init();
-                updateStatus('app-status', true);
-                updateInfo('🎭 Launching your personal version vault...');
-
-                // MODULAR: Get canvas element
-                const canvas = document.getElementById('terminal-canvas');
-                if (!canvas) {
-                    throw new Error('Interface element not found');
+                const result = await window.AudiusSolanaIntegration.connectWallet();
+                if (result) {
+                    walletConnected = true;
+                    walletAddress = result.address;
+                    updateWalletUI();
+                    await verifyPremiumAccess();
+                    renderVersions();
                 }
+            } catch (error) {
+                errorEl.textContent = 'Connection failed. Try again.';
+                errorEl.classList.add('show');
+            }
+        }
 
-                // CLEAN: Create interface instance
-                terminal = new VersionsTerminalPOC(canvas);
-                updateStatus('audio-status', true);
-                updateInfo('✨ Terminal interface ready! Connecting to version network...');
+        function updateWalletUI() {
+            const btn = document.getElementById('connectBtn');
+            const addrEl = document.getElementById('walletAddress');
+            if (walletConnected) {
+                btn.classList.add('connected');
+                btn.innerHTML = '<span>✓</span><span>Connected</span>';
+                addrEl.textContent = walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4);
+            }
+        }
 
-                // ENHANCEMENT: Enhanced keyboard handling
-                canvas.addEventListener('keydown', (event) => {
-                    // Allow some browser shortcuts
-                    if (event.ctrlKey && ['t', 'w', 'r', 'l'].includes(event.key)) {
-                        return; // Let browser handle these
-                    }
-
-                    event.preventDefault();
-
+        // OWNERSHIP VERIFICATION
+        async function verifyPremiumAccess() {
+            showLoading('Verifying Ownership', 'Checking your token holdings...');
+            
+            for (const version of allVersions) {
+                if (version.premium && version.coinAddress) {
                     try {
-                        terminal.handle_keypress(event);
-                    } catch (error) {
-                        console.error('Key handling error:', error);
+                        const result = await window.AudiusSolanaIntegration.verifyOwnership(version.coinAddress);
+                        verifiedOwnership[version.id] = result.owned;
+                    } catch (e) {
+                        console.error('Ownership check failed:', e);
+                        verifiedOwnership[version.id] = false;
                     }
-                });
-
-                // CLEAN: Handle focus management
-                canvas.addEventListener('blur', () => {
-                    updateInfo('🎯 Click terminal to dive back into version discovery!');
-                });
-
-                canvas.addEventListener('focus', () => {
-                    updateInfo('🎵 Ready to explore! Try "songs", "social", or "help" to discover versions!');
-                });
-
-                // PERFORMANT: Start render loop
-                renderLoop();
-
-                // CLEAN: Show terminal, hide loading
-                document.getElementById('loading-message').classList.add('hidden');
-                canvas.classList.remove('hidden');
-
-                // ENHANCEMENT: Focus terminal for immediate use
-                canvas.focus();
-
-                // CLEAN: Check server connection
-                checkServerConnection();
-
-                console.log('✅ VERSIONS interface loaded successfully');
-                updateInfo('🎵 Terminal ready! Type "songs" to browse, "help" for commands, or explore version types!');
-
-                return true;
-
-            } catch (error) {
-                console.error('❌ Terminal initialization failed:', error);
-
-                // CLEAN: Show error message
-                document.getElementById('loading-message').classList.add('hidden');
-                document.getElementById('error-message').classList.remove('hidden');
-                document.getElementById('error-message').innerHTML =
-                    `🔧 Version engine needs a moment<br><small>🔄 Refresh to restart your discovery journey</small>`;
-
-                updateInfo('🚀 One moment - preparing your version experience...');
-                return false;
+                }
             }
+            
+            hideLoading();
+            console.log('Verified ownership:', verifiedOwnership);
         }
 
-        // MODULAR: Service connection check with graceful degradation
-        async function checkServerConnection() {
-            try {
-                if (!config) {
-                    config = getConfig();
-                }
-                
-                // Show connecting status
-                updateStatus('social-status', 'connecting');
-                updateInfo('🌐 Connecting to version network...');
-                
-                // Add timeout and better error handling
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-                
-                const response = await fetch(`${config.apiBase}/api/v1/health`, {
-                    signal: controller.signal,
-                    headers: {
-                        'Accept': 'application/json',
-                        'Cache-Control': 'no-cache'
-                    }
-                });
-                
-                clearTimeout(timeoutId);
-                const isOk = response.ok;
-                updateStatus('social-status', isOk);
-
-                if (isOk) {
-                    if (wasOffline) {
-                        showBriefSuccess(
-                            '🎉 Connection restored! Full version network now available!',
-                            '🎭 All systems connected - ready to discover versions!',
-                            4000
-                        );
-                        console.log('🎉 Connection recovered - all cloud features restored');
-                        wasOffline = false;
-                    } else {
-                        updateInfo('🎭 Welcome to VERSIONS - Your version-centric music journey begins!');
-                        console.log('✅ Connected to VERSIONS cloud services');
-                    }
-                } else {
-                    updateInfo('🎵 Local discovery mode active - exploring offline versions!');
-                    console.log('⚠️ API available but returning errors - using local mode');
-                }
-            } catch (error) {
-                updateStatus('social-status', false);
-                wasOffline = true; // Mark as offline for recovery messaging
-                
-                // Different messages based on error type
-                if (error.name === 'AbortError') {
-                    updateInfo('🌍 Slow connection detected - Local mode active! All core features available!');
-                    console.log('⏱️ Connection timeout - gracefully degrading to offline mode');
-                } else if (error.message.includes('ERR_NAME_NOT_RESOLVED')) {
-                    updateInfo('🏠 Local studio mode - Perfect for offline version exploration!');
-                    console.log('🇺🇸 DNS resolution failed - full offline experience available');
-                } else {
-                    updateInfo('🎧 Offline mode - Local versions ready to explore! Community features connecting...');
-                    console.log('🔌 Network issue detected - maintaining full offline functionality');
-                }
-                
-                // Schedule retry after delay with exponential backoff
-                setTimeout(() => {
-                    console.log('🔄 Quietly retrying connection in background...');
-                    checkServerConnection();
-                }, 30000); // Retry after 30 seconds
-            }
-        }
-
-        // CLEAN: Control functions with discovery integration
-        window.runCommand = function (command) {
-            if (!terminal) return;
-
-            // Simulate typing the command
-            const canvas = document.getElementById('terminal-canvas');
-
-            // Clear any existing command and type new one
-            for (const char of command) {
-                const keyEvent = new KeyboardEvent('keydown', {
-                    key: char,
-                    bubbles: true
-                });
-                canvas.dispatchEvent(keyEvent);
-            }
-
-            // Press Enter
-            const enterEvent = new KeyboardEvent('keydown', {
-                key: 'Enter',
-                bubbles: true
-            });
-            canvas.dispatchEvent(enterEvent);
-
-            // ENHANCEMENT: Trigger discovery UI for relevant commands
-            showDiscoveryForCommand(command);
-        };
-
-        window.focusTerminal = function () {
-            const canvas = document.getElementById('terminal-canvas');
-            canvas.focus();
-            updateInfo('Terminal focused - type away!');
-        };
-
-        window.toggleFullscreen = function () {
-            const button = document.getElementById('fullscreen-btn');
-
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen();
-                button.textContent = '⥤ Exit Fullscreen';
-                updateInfo('Fullscreen mode - press Escape to exit');
-            } else {
-                document.exitFullscreen();
-                button.textContent = '⛶ Fullscreen';
-                updateInfo('Exited fullscreen mode');
-            }
-        };
-
-        // VERSION DISCOVERY: Toggle discovery sidebar with overlay
-        window.toggleVersionDiscovery = function () {
-            const sidebar = document.getElementById('version-sidebar');
-            const overlay = document.getElementById('discovery-overlay');
-
-            sidebar.classList.toggle('open');
-            overlay.classList.toggle('active');
-
-            if (sidebar.classList.contains('open')) {
-                updateInfo('Version discovery opened - explore trending versions');
-                // Prevent body scroll
-                document.body.style.overflow = 'hidden';
-            } else {
-                updateInfo('Version discovery closed');
-                document.body.style.overflow = 'auto';
-            }
-        };
-
-        // VERSION DISCOVERY: Close discovery sidebar
-        window.closeVersionDiscovery = function () {
-            const sidebar = document.getElementById('version-sidebar');
-            const overlay = document.getElementById('discovery-overlay');
-
-            sidebar.classList.remove('open');
-            overlay.classList.remove('active');
-            document.body.style.overflow = 'auto';
-            updateInfo('Version discovery closed');
-        };
-
-        // AUDIO PREVIEW: Toggle comparison bar and adjust controls
-        window.toggleAudioPreview = function () {
-            const previewBar = document.getElementById('audio-preview');
-            const controls = document.querySelector('.controls');
-
-            previewBar.classList.toggle('show');
-
-            if (previewBar.classList.contains('show')) {
-                controls.classList.add('with-audio-bar');
-                updateInfo('Audio comparison ready - select two versions to compare');
-            } else {
-                controls.classList.remove('with-audio-bar');
-                updateInfo('Audio comparison closed');
-            }
-        };
-
-        // VERSION COMPARISON: Select version for comparison
-        window.selectVersionForComparison = async function (slot) {
-            try {
-                // Get available versions from the database
-                const config = window.getConfig ? window.getConfig() : { apiBase: 'http://localhost:8080' };
-                const response = await fetch(`${config.apiBase}/api/v1/songs`);
-                const result = await response.json();
-
-                if (!result.success) {
-                    updateInfo('Failed to load versions for comparison');
-                    return;
-                }
-
-                // Create version selector modal
-                showVersionSelectorModal(slot, result.data);
-
-            } catch (error) {
-                console.error('Error loading versions:', error);
-                updateInfo('Error loading versions for comparison');
-            }
-        };
-
-        // VERSION COMPARISON: Show version selector modal
-        function showVersionSelectorModal(slot, songs) {
-            // Create modal overlay
-            const modal = document.createElement('div');
-            modal.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.8);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 2000;
-                padding: 20px;
-            `;
-
-            // Create modal content
-            const content = document.createElement('div');
-            content.style.cssText = `
-                background: linear-gradient(135deg, rgba(16, 20, 33, 0.98), rgba(26, 35, 50, 0.98));
-                border: 2px solid var(--color-blue);
-                border-radius: 12px;
-                padding: 25px;
-                max-width: 600px;
-                max-height: 80vh;
-                overflow-y: auto;
-                color: var(--fg-primary);
-            `;
-
-            content.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3 style="color: var(--color-blue); margin: 0;">Select Version for Slot ${slot}</h3>
-                    <button onclick="closeVersionSelector()" style="background: none; border: none; color: var(--color-blue); font-size: 1.2rem; cursor: pointer;">✕</button>
-                </div>
-                <div id="version-list" style="max-height: 400px; overflow-y: auto;">
-                    ${generateVersionList(songs)}
-                </div>
-            `;
-
-            modal.appendChild(content);
-            document.body.appendChild(modal);
-
-            // Store modal reference for cleanup
-            window.currentVersionModal = modal;
-
-            // Prevent body scroll
-            document.body.style.overflow = 'hidden';
-        }
-
-        // VERSION COMPARISON: Generate version list HTML
-        function generateVersionList(songs) {
-            if (!songs || songs.length === 0) {
-                return '<div style="text-align: center; color: var(--color-yellow); padding: 20px;">No versions available</div>';
-            }
-
-            return songs.map(song => `
-                <div style="margin-bottom: 15px;">
-                    <div style="color: var(--color-blue); font-weight: bold; margin-bottom: 8px;">${song.canonical_title}</div>
-                    ${song.versions.map(version => `
-                        <div style="display: flex; align-items: center; padding: 8px 12px; margin: 4px 0; background: rgba(255, 255, 255, 0.05); border-radius: 6px; cursor: pointer; transition: all 0.2s ease;"
-                             onclick="selectVersion('${version.id}', '${slot}', '${version.title}', '${version.version_type}')">
-                            <span class="version-type-indicator version-type-${version.version_type.toLowerCase()}">${version.version_type.toUpperCase()}</span>
-                            <span style="margin-left: 10px; flex: 1;">${version.title}</span>
-                            <span style="color: var(--color-cyan); font-size: 0.8rem;">${version.artist || 'Unknown Artist'}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            `).join('');
-        }
-
-        // VERSION COMPARISON: Select a specific version
-        window.selectVersion = function (versionId, slot, title, versionType) {
-            const slotElement = document.getElementById(`version-slot-${slot.toLowerCase()}`);
-            if (slotElement) {
-                slotElement.textContent = title;
-                slotElement.classList.add('loaded');
-                slotElement.dataset.versionId = versionId;
-                slotElement.dataset.versionType = versionType;
-            }
-
-            closeVersionSelector();
-            updateInfo(`Version loaded in slot ${slot}: ${title}`);
-        };
-
-        // VERSION COMPARISON: Close version selector modal
-        window.closeVersionSelector = function () {
-            if (window.currentVersionModal) {
-                document.body.removeChild(window.currentVersionModal);
-                window.currentVersionModal = null;
-            }
-            document.body.style.overflow = 'auto';
-        };
-
-        // AUDIO PLAYBACK: Play version comparison
-        window.playComparison = async function () {
-            const slots = document.querySelectorAll('.version-slot');
-            const loadedSlots = Array.from(slots).filter(slot => slot.classList.contains('loaded'));
-
-            if (loadedSlots.length < 2) {
-                updateInfo('Load two versions first to start comparison');
-                return;
-            }
-
-            // Get version IDs
-            const versionIds = loadedSlots.map(slot => slot.dataset.versionId);
+        // DATA
+        async function loadAudiusTracks() {
+            isLoading = true;
+            renderVersions();
 
             try {
-                const config = window.getConfig ? window.getConfig() : { apiBase: 'http://localhost:8080' };
-
-                // Create comparison session
-                const response = await fetch(`${config.apiBase}/api/v1/compare/versions`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ version_ids: versionIds })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    updateInfo('Comparison session created - starting playback...');
-                    window.currentComparisonSession = result.data.session_id;
-
-                    // Update play button to show playing state
-                    const playBtn = document.getElementById('play-comparison-btn');
-                    if (playBtn) {
-                        playBtn.innerHTML = '⏸';
-                        playBtn.title = 'Pause comparison';
-                    }
-
-                    // TODO: Implement actual audio playback synchronization
-                    // For now, just show the comparison is active
-                    setTimeout(() => {
-                        updateInfo('Version comparison active - use controls to switch between versions');
-                    }, 1000);
-
+                const tracks = await window.AudiusSolanaIntegration.initAudius();
+                if (tracks && tracks.length > 0) {
+                    allVersions = tracks.slice(0, 18).map((track, index) => ({
+                        id: `audius-${track.id}`,
+                        title: track.title || 'Unknown Track',
+                        artist: track.user?.name || 'Unknown Artist',
+                        artistId: track.user?.id || '',
+                        type: ['demo', 'studio', 'live', 'remix', 'acoustic'][index % 5],
+                        artwork: track.artwork?.['480x480'] || track.artwork?.['150x150'],
+                        duration: track.duration,
+                        streamUrl: track.stream_url,
+                        coinAddress: track.user?.id ? `artist_${track.user.id}` : `mock_${index}`,
+                        premium: index % 3 === 0
+                    }));
                 } else {
-                    updateInfo(`Failed to create comparison: ${result.error}`);
+                    allVersions = getDemoVersions();
                 }
-
             } catch (error) {
-                console.error('Error creating comparison:', error);
-                updateInfo('Error creating version comparison');
-            }
-        };
-
-        // SEARCH: Handle search input keydown
-        window.handleSearchKeydown = function (event) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                performSearch();
-            }
-        };
-
-        // SEARCH: Perform search
-        window.performSearch = async function () {
-            const searchInput = document.getElementById('search-input');
-            const query = searchInput.value.trim();
-
-            if (!query) {
-                updateInfo('Please enter a search term');
-                return;
+                console.error('Failed to load Audius tracks:', error);
+                allVersions = getDemoVersions();
             }
 
-            try {
-                const config = window.getConfig ? window.getConfig() : { apiBase: 'http://localhost:8080' };
-
-                updateInfo(`🔍 Searching for "${query}"...`);
-
-                const response = await fetch(`${config.apiBase}/api/v1/search?search=${encodeURIComponent(query)}`);
-                const result = await response.json();
-
-                if (result.success && result.data && result.data.length > 0) {
-                    updateInfo(`Found ${result.data.length} results for "${query}"`);
-                    showSearchResults(query, result.data);
-                } else {
-                    updateInfo(`No results found for "${query}"`);
-                    showSearchResults(query, []);
-                }
-
-            } catch (error) {
-                console.error('Search error:', error);
-                updateInfo('Search failed - please try again');
-            }
-        };
-
-        // SEARCH: Show search results in version discovery sidebar
-        function showSearchResults(query, songs) {
-            const sidebar = document.getElementById('version-sidebar');
-            const overlay = document.getElementById('discovery-overlay');
-
-            // Update sidebar content with search results
-            const trendingSection = sidebar.querySelector('div[style*="margin-bottom: 20px"]');
-            if (trendingSection) {
-                trendingSection.innerHTML = `
-                    <h4 style="color: var(--color-green); font-size: 0.9rem; margin-bottom: 8px;">
-                        🔍 Search Results for "${query}"
-                    </h4>
-                    ${generateSearchResults(songs)}
-                `;
-            }
-
-            // Open sidebar if not already open
-            if (!sidebar.classList.contains('open')) {
-                sidebar.classList.add('open');
-                overlay.classList.add('active');
-                document.body.style.overflow = 'hidden';
-            }
+            isLoading = false;
+            filteredVersions = [...allVersions];
+            renderVersions();
         }
 
-        // SEARCH: Generate search results HTML
-        function generateSearchResults(songs) {
-            if (!songs || songs.length === 0) {
-                return '<div style="text-align: center; color: var(--color-yellow); padding: 20px;">No results found</div>';
-            }
-
-            return songs.map(song => `
-                <div style="padding: 10px; background: rgba(0, 212, 255, 0.05); border-left: 3px solid var(--color-blue); margin-bottom: 10px;">
-                    <div style="display: flex; align-items: center; margin-bottom: 5px;">
-                        <span style="font-size: 0.8rem; font-weight: bold; color: var(--color-blue);">${song.canonical_title}</span>
-                    </div>
-                    <div style="font-size: 0.7rem; color: #B8C5D6;">${song.total_versions} versions • ${song.total_play_count} plays</div>
-                </div>
-            `).join('');
-        }
-
-        // SOCIAL DISCOVERY: Update social indicator with real data
-        function updateSocialActivity() {
-            // TODO: Fetch real social data from Farcaster API
-            const socialIndicator = document.querySelector('.social-indicator span');
-            if (socialIndicator) {
-                const friendCount = Math.floor(Math.random() * 10) + 1;
-                socialIndicator.textContent = `${friendCount} friends active`;
-            }
-        }
-
-        // AUTO-DISCOVERY: Show relevant UI based on terminal commands
-        function showDiscoveryForCommand(command) {
-            switch (command) {
-                case 'songs':
-                    // Auto-open version discovery when songs command is used
-                    setTimeout(() => {
-                        const sidebar = document.getElementById('version-sidebar');
-                        if (!sidebar.classList.contains('open')) {
-                            toggleVersionDiscovery();
-                        }
-                    }, 1000);
-                    break;
-
-                case 'social':
-                    // Highlight social indicator and fetch Farcaster recommendations
-                    const socialIndicator = document.querySelector('.social-indicator');
-                    socialIndicator.style.background = 'rgba(126, 92, 177, 0.3)';
-                    setTimeout(() => {
-                        socialIndicator.style.background = 'rgba(126, 92, 177, 0.1)';
-                    }, 2000);
-
-                    // Fetch and show social recommendations
-                    if (window.farcasterApp && window.farcasterApp.user) {
-                        window.farcasterApp.getSocialRecommendations().then(recommendations => {
-                            updateInfo(`Found ${recommendations.length} social recommendations`);
-                        });
-                    }
-                    break;
-            }
-        }
-
-        // FARCASTER INTEGRATION: Sign in with Farcaster
-        window.farcasterSignIn = async function () {
-            if (!window.farcasterApp) {
-                updateInfo('Farcaster integration not loaded');
-                return;
-            }
-
-            if (window.farcasterApp.user) {
-                // Already signed in - show options
-                await showFarcasterMenu();
-            } else {
-                // Sign in
-                const user = await window.farcasterApp.signIn();
-                if (user) {
-                    updateFarcasterButton(user);
-                }
-            }
-        };
-
-        // FARCASTER: Show menu for authenticated users
-        async function showFarcasterMenu() {
-            const user = window.farcasterApp.user;
-            const options = [
-                'Share Discovery',
-                'Add to Collection',
-                'View Profile',
-                'Sign Out'
+        function getDemoVersions() {
+            return [
+                { id: 'v1', title: 'Bohemian Rhapsody', artist: 'Queen', type: 'studio', coinAddress: 'queen_coin', premium: true },
+                { id: 'v2', title: 'Bohemian Rhapsody', artist: 'Queen', type: 'live', coinAddress: 'queen_coin', premium: false },
+                { id: 'v3', title: 'Imagine', artist: 'John Lennon', type: 'studio', coinAddress: 'lennon_coin', premium: true },
+                { id: 'v4', title: 'Imagine', artist: 'John Lennon', type: 'acoustic', coinAddress: 'lennon_coin', premium: false },
+                { id: 'v5', title: 'Hotel California', artist: 'Eagles', type: 'live', coinAddress: 'eagles_coin', premium: true },
+                { id: 'v6', title: 'Hotel California', artist: 'Eagles', type: 'demo', coinAddress: 'eagles_coin', premium: false },
             ];
-
-            // Simple prompt for now - could be enhanced with modal
-            const choice = prompt(`Signed in as @${user.username}\n\nChoose action:\n1. ${options[0]}\n2. ${options[1]}\n3. ${options[2]}\n4. ${options[3]}`);
-
-            switch (choice) {
-                case '1':
-                    await window.farcasterApp.shareCurrentDiscovery();
-                    break;
-                case '2':
-                    await window.farcasterApp.addToCollection();
-                    break;
-                case '3':
-                    await window.farcasterApp.viewProfile(user.fid);
-                    break;
-                case '4':
-                    signOutFarcaster();
-                    break;
-            }
         }
 
-        // FARCASTER: Update button state when signed in
-        function updateFarcasterButton(user) {
-            const button = document.getElementById('farcaster-btn');
-            if (button) {
-                button.innerHTML = `🎭 @${user.username}`;
-                button.title = 'Farcaster options';
+        // SEARCH
+        function handleSearch(query) {
+            if (!query.trim()) { filteredVersions = [...allVersions]; }
+            else {
+                const q = query.toLowerCase();
+                filteredVersions = allVersions.filter(v => v.title.toLowerCase().includes(q) || v.artist.toLowerCase().includes(q));
             }
+            renderVersions();
         }
 
-        // FARCASTER: Sign out
-        function signOutFarcaster() {
-            if (window.farcasterApp) {
-                window.farcasterApp.user = null;
-                window.farcasterApp.isReady = false;
+        // RENDER
+        function renderVersions() {
+            const container = document.getElementById('versionsContainer');
 
-                const button = document.getElementById('farcaster-btn');
-                if (button) {
-                    button.innerHTML = '🎭 Sign In';
-                    button.title = 'Sign in with Farcaster';
-                }
-
-                updateInfo('Signed out from Farcaster');
-            }
-        }
-
-        // AUDIO UPLOAD: Toggle upload interface
-        window.toggleUploadInterface = function () {
-            const uploadInterface = document.getElementById('upload-interface');
-            uploadInterface.classList.toggle('show');
-
-            if (uploadInterface.classList.contains('show')) {
-                updateInfo('Upload interface opened - drag & drop audio files');
-                initializeUploadHandlers();
-                // Prevent body scroll
-                document.body.style.overflow = 'hidden';
-            } else {
-                updateInfo('Upload interface closed');
-                document.body.style.overflow = 'auto';
-            }
-        };
-
-        // AUDIO UPLOAD: Close upload interface
-        window.closeUploadInterface = function () {
-            const uploadInterface = document.getElementById('upload-interface');
-            uploadInterface.classList.remove('show');
-            document.body.style.overflow = 'auto';
-            updateInfo('Upload interface closed');
-        };
-
-        // AUDIO UPLOAD: Initialize drag & drop and file handlers
-        function initializeUploadHandlers() {
-            const dropzone = document.getElementById('upload-dropzone');
-            const fileInput = document.getElementById('file-input');
-
-            // Click to browse files
-            dropzone.addEventListener('click', () => {
-                fileInput.click();
-            });
-
-            // Handle file selection
-            fileInput.addEventListener('change', (e) => {
-                if (e.target.files.length > 0) {
-                    handleFileUpload(e.target.files[0]);
-                }
-            });
-
-            // Drag & drop handlers
-            dropzone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropzone.classList.add('dragover');
-            });
-
-            dropzone.addEventListener('dragleave', (e) => {
-                e.preventDefault();
-                dropzone.classList.remove('dragover');
-            });
-
-            dropzone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dropzone.classList.remove('dragover');
-
-                if (e.dataTransfer.files.length > 0) {
-                    handleFileUpload(e.dataTransfer.files[0]);
-                }
-            });
-        }
-
-        // AUDIO UPLOAD: Handle file upload
-        async function handleFileUpload(file) {
-            // Validate file type
-            const validTypes = ['audio/mpeg', 'audio/flac', 'audio/wav', 'audio/mp4', 'audio/ogg', 'audio/aiff'];
-            const validExtensions = ['.mp3', '.flac', '.wav', '.m4a', '.ogg', '.aiff'];
-
-            const hasValidType = validTypes.includes(file.type);
-            const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
-
-            if (!hasValidType && !hasValidExtension) {
-                updateInfo('❌ Invalid file type. Please select an audio file.');
+            if (isLoading) {
+                container.innerHTML = '<div class="loading-grid"><div class="loading-skeleton"></div><div class="loading-skeleton"></div><div class="loading-skeleton"></div></div>';
                 return;
             }
 
-            // Show upload progress
-            document.getElementById('upload-dropzone').style.display = 'none';
-            document.getElementById('upload-progress').style.display = 'block';
-            document.getElementById('upload-result').style.display = 'none';
+            if (filteredVersions.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>No versions found</p></div>';
+                return;
+            }
 
-            updateInfo(`📤 Uploading ${file.name} (${formatFileSize(file.size)})...`);
+            container.innerHTML = `<div class="versions-grid">${filteredVersions.map(renderVersionCard).join('')}</div>`;
+        }
 
-            try {
-                // Create FormData for multipart upload
-                const formData = new FormData();
-                formData.append('file', file);
+        function renderVersionCard(version) {
+            const isUnlocked = !version.premium || verifiedOwnership[version.id] === true;
+            return `
+                <div class="version-card ${isUnlocked ? '' : 'locked'} ${version.premium ? 'premium' : ''}">
+                    <div class="track-artwork ${version.artwork ? '' : 'error'}">
+                        ${version.artwork ? `<img src="${version.artwork}" alt="${version.title}" onerror="this.classList.add('error')">` : ''}
+                    </div>
+                    <div class="track-title">${version.title}</div>
+                    <div class="track-artist">${version.artist}</div>
+                    <span class="version-type ${version.type}">${version.type}</span>
+                    ${version.premium ? `<div class="coin-info"><div class="coin-label">🎫 Required: Artist Coin</div><div class="coin-address">${version.coinAddress.slice(0, 16)}...</div></div>` : ''}
+                    <div class="access-badge ${isUnlocked ? 'unlocked' : 'locked'}">${isUnlocked ? '✓ Unlocked' : '🔒 Locked'}</div>
+                    <button class="play-btn ${isUnlocked ? 'primary' : 'secondary'}" onclick="playVersion('${version.id}')">${isUnlocked ? '▶ Play' : '🔗 Connect to Unlock'}</button>
+                </div>
+            `;
+        }
 
-                const config = window.getConfig ? window.getConfig() : { apiBase: 'http://localhost:8080' };
+        // PLAYBACK
+        function playVersion(versionId) {
+            const version = allVersions.find(v => v.id === versionId);
+            if (!version) return;
+            
+            const isUnlocked = !version.premium || verifiedOwnership[version.id] === true;
+            
+            if (version.premium && !isUnlocked) {
+                handleWalletConnect();
+                return;
+            }
 
-                // Upload with progress tracking
-                const response = await fetch(`${config.apiBase}/api/v1/audio/upload`, {
-                    method: 'POST',
-                    body: formData,
-                });
+            if (!version.streamUrl) {
+                showErrorModal('Playback Error', 'This version is not available for streaming. Connect your wallet to verify ownership.', [
+                    { text: 'Connect Wallet', action: handleWalletConnect, primary: true },
+                    { text: 'Close', action: closeErrorModal }
+                ]);
+                return;
+            }
 
-                if (!response.ok) {
-                    throw new Error(`Upload failed: ${response.statusText}`);
-                }
+            playAudio(version);
+        }
 
-                const result = await response.json();
+        function playAudio(version) {
+            currentVersion = version;
+            
+            document.getElementById('playerTitle').textContent = version.title;
+            document.getElementById('playerArtist').textContent = version.artist;
+            
+            const artworkEl = document.getElementById('playerArtwork');
+            if (version.artwork) {
+                artworkEl.innerHTML = `<img src="${version.artwork}" alt="${version.title}">`;
+            } else {
+                artworkEl.textContent = '🎵';
+            }
+            
+            document.getElementById('progressFill').style.width = '0%';
+            document.getElementById('currentTime').textContent = '0:00';
+            document.getElementById('totalTime').textContent = '0:00';
+            document.getElementById('audioPlayer').classList.add('active');
+            
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            
+            currentAudio = new Audio(version.streamUrl);
+            
+            currentAudio.addEventListener('loadedmetadata', () => {
+                document.getElementById('totalTime').textContent = formatTime(currentAudio.duration);
+            });
+            
+            currentAudio.addEventListener('timeupdate', () => {
+                const progress = (currentAudio.currentTime / currentAudio.duration) * 100;
+                document.getElementById('progressFill').style.width = progress + '%';
+                document.getElementById('currentTime').textContent = formatTime(currentAudio.currentTime);
+            });
+            
+            currentAudio.addEventListener('ended', () => {
+                isPlaying = false;
+                document.getElementById('playPauseBtn').textContent = '▶';
+            });
+            
+            currentAudio.play().then(() => {
+                isPlaying = true;
+                document.getElementById('playPauseBtn').textContent = '⏸';
+            }).catch(err => {
+                console.error('Playback error:', err);
+                showErrorModal('Playback Error', 'Could not play audio stream.');
+            });
+        }
 
-                if (result.success) {
-                    showUploadSuccess(result.data, file.name);
-                    updateInfo(`✅ Upload successful: ${result.data.title || file.name}`);
-                } else {
-                    throw new Error(result.error || 'Upload failed');
-                }
-
-            } catch (error) {
-                console.error('Upload error:', error);
-                showUploadError(error.message);
-                updateInfo(`❌ Upload failed: ${error.message}`);
+        function togglePlayPause() {
+            if (!currentAudio) return;
+            if (isPlaying) {
+                currentAudio.pause();
+                document.getElementById('playPauseBtn').textContent = '▶';
+                isPlaying = false;
+            } else {
+                currentAudio.play();
+                document.getElementById('playPauseBtn').textContent = '⏸';
+                isPlaying = true;
             }
         }
 
-        // AUDIO UPLOAD: Show upload success
-        function showUploadSuccess(metadata, filename) {
-            document.getElementById('upload-progress').style.display = 'none';
-            document.getElementById('upload-result').style.display = 'block';
-
-            const metadataDiv = document.getElementById('result-metadata');
-            metadataDiv.innerHTML = `
-                <div class="metadata-item"><span class="metadata-label">File:</span> ${filename}</div>
-                <div class="metadata-item"><span class="metadata-label">Title:</span> ${metadata.title || 'Unknown'}</div>
-                <div class="metadata-item"><span class="metadata-label">Artist:</span> ${metadata.artist || 'Unknown'}</div>
-                <div class="metadata-item"><span class="metadata-label">Album:</span> ${metadata.album || 'Unknown'}</div>
-                <div class="metadata-item"><span class="metadata-label">Duration:</span> ${formatDuration(metadata.duration_seconds)}</div>
-                <div class="metadata-item"><span class="metadata-label">Format:</span> ${metadata.format.toUpperCase()}</div>
-                <div class="metadata-item"><span class="metadata-label">Size:</span> ${formatFileSize(metadata.file_size)}</div>
-                ${metadata.bitrate ? `<div class="metadata-item"><span class="metadata-label">Bitrate:</span> ${metadata.bitrate} kbps</div>` : ''}
-                ${metadata.sample_rate ? `<div class="metadata-item"><span class="metadata-label">Sample Rate:</span> ${metadata.sample_rate} Hz</div>` : ''}
-            `;
+        function seekAudio(event) {
+            if (!currentAudio) return;
+            const bar = document.getElementById('progressBar');
+            const rect = bar.getBoundingClientRect();
+            const percent = (event.clientX - rect.left) / rect.width;
+            currentAudio.currentTime = percent * currentAudio.duration;
         }
 
-        // AUDIO UPLOAD: Show upload error
-        function showUploadError(errorMessage) {
-            document.getElementById('upload-progress').style.display = 'none';
-            document.getElementById('upload-result').style.display = 'block';
-
-            const resultDiv = document.getElementById('upload-result');
-            resultDiv.innerHTML = `
-                <div class="result-header" style="color: var(--color-red);">Upload Failed</div>
-                <div style="background: rgba(255, 85, 85, 0.1); border: 1px solid var(--color-red); border-radius: 6px; padding: 15px; margin-bottom: 10px;">
-                    ${errorMessage}
-                </div>
-                <button class="control-btn" onclick="clearUploadResult()" style="margin-top: 10px;">Try Again</button>
-            `;
+        function closePlayer() {
+            if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+            isPlaying = false;
+            currentVersion = null;
+            document.getElementById('audioPlayer').classList.remove('active');
         }
 
-        // AUDIO UPLOAD: Clear upload result and reset interface
-        window.clearUploadResult = function () {
-            document.getElementById('upload-dropzone').style.display = 'block';
-            document.getElementById('upload-progress').style.display = 'none';
-            document.getElementById('upload-result').style.display = 'none';
-
-            // Reset file input
-            document.getElementById('file-input').value = '';
-
-            updateInfo('Ready for another upload');
-        };
-        
-        // OFFLINE MODE: Switch to encouraging offline experience
-        window.switchToOfflineMode = function() {
-            // Hide loading/error messages
-            document.getElementById('loading-message').classList.add('hidden');
-            document.getElementById('error-message').classList.add('hidden');
-            
-            // Show version discovery dashboard
-            document.getElementById('versions-dashboard').style.display = 'block';
-            document.getElementById('terminal-container').style.display = 'none';
-            
-            // Show encouraging offline banner
-            showOfflineBanner();
-            
-            // Update status indicators
-            updateStatus('app-status', true);
-            updateStatus('audio-status', true);
-            updateStatus('social-status', false);
-            
-            updateInfo('🏠 Local studio mode activated! Explore all features offline - sync when ready!');
-        };
-        
-        // Show encouraging offline mode banner
-        function showOfflineBanner() {
-            const banner = document.createElement('div');
-            banner.className = 'offline-mode-banner';
-            banner.innerHTML = '🌟 Local Mode Active - Full features available offline!';
-            document.body.appendChild(banner);
-            
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                banner.style.opacity = '0';
-                setTimeout(() => banner.remove(), 300);
-            }, 5000);
-        }
-
-        // UTILITY: Format file size
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-
-        // UTILITY: Format duration
-        function formatDuration(seconds) {
-            if (!seconds) return 'Unknown';
+        function formatTime(seconds) {
+            if (!seconds || isNaN(seconds)) return '0:00';
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
-        // ENHANCEMENT: Handle fullscreen changes
-        document.addEventListener('fullscreenchange', () => {
-            const button = document.getElementById('fullscreen-btn');
-            if (!document.fullscreenElement) {
-                button.textContent = '⛶ Fullscreen';
-                updateInfo('Exited fullscreen mode');
-            }
-        });
+        // MODALS
+        function showErrorModal(title, message, actions = []) {
+            document.getElementById('errorModalTitle').textContent = title;
+            document.getElementById('errorModalContent').textContent = message;
+            
+            const actionsEl = document.getElementById('errorModalActions');
+            actionsEl.innerHTML = actions.map((a, i) => 
+                `<button class="error-modal-btn ${a.primary ? 'primary' : 'secondary'}" onclick="${a.action.toString().replace(/function\s*\(\)\s*{/, '').replace(/}$/, '')}">${a.text}</button>`
+            ).join('');
+            
+            document.getElementById('errorModal').classList.add('show');
+        }
 
-        // PERFORMANT: Handle page lifecycle
-        window.addEventListener('beforeunload', () => {
-            if (animationId) {
-                cancelAnimationFrame(animationId);
-            }
-        });
+        function closeErrorModal() {
+            document.getElementById('errorModal').classList.remove('show');
+        }
 
-        // KEYBOARD SHORTCUTS: Add keyboard accessibility
-        document.addEventListener('keydown', (e) => {
-            // ESC to close sidebar or audio bar
-            if (e.key === 'Escape') {
-                const sidebar = document.getElementById('version-sidebar');
-                const audioBar = document.getElementById('audio-preview');
+        function showLoading(title, message) {
+            const overlay = document.createElement('div');
+            overlay.className = 'onboarding';
+            overlay.id = 'loadingOverlay';
+            overlay.innerHTML = `
+                <div class="onboarding-card">
+                    <div class="onboarding-icon">🔄</div>
+                    <h2 class="onboarding-title">${title}</h2>
+                    <p class="onboarding-desc">${message}</p>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
 
-                if (sidebar.classList.contains('open')) {
-                    closeVersionDiscovery();
-                } else if (audioBar.classList.contains('show')) {
-                    toggleAudioPreview();
-                }
-            }
+        function hideLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) overlay.remove();
+        }
 
-            // Ctrl/Cmd + D for discovery
-            if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
-                e.preventDefault();
-                toggleVersionDiscovery();
-            }
-
-            // Ctrl/Cmd + M for audio comparison
-            if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
-                e.preventDefault();
-                toggleAudioPreview();
-            }
-        });
-
-        // ORGANIZED: Start initialization with discovery enhancements
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('🎭 VERSIONS starting...');
-            initializeTerminal();
-
-            // CLEAN: Periodic server status check
-            setInterval(checkServerConnection, 10000);
-
-            // SOCIAL DISCOVERY: Update social activity periodically
-            updateSocialActivity();
-            setInterval(updateSocialActivity, 30000);
-
-            // VERSION DISCOVERY: Show quick intro after interface loads
-            setTimeout(() => {
-                updateInfo('Type "songs" to explore music or click "Discover Versions"');
-            }, 3000);
-        });
+        // INIT
+        document.addEventListener('DOMContentLoaded', loadAudiusTracks);
     </script>
 </body>
-
 </html>

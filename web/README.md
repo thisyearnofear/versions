@@ -1,49 +1,69 @@
 # VERSIONS Web Interface
 
-**CLEAN**: Unified WASM terminal interface following Core Principles
+**CLEAN**: Mobile-first web app following Core Principles
 
 ## 🎯 **Structure (ORGANIZED)**
 
 ```
 web/
-├── index.html          # Main WASM terminal interface
-├── theme-bridge.js     # DRY: Single source of truth for themes
-├── pkg/               # WASM module (from experiments/wasm-tui-poc)
-├── .well-known/       # Farcaster Mini App manifest
-└── _redirects         # Netlify routing
+├── index.html              # MAIN APP: Audius/Solana integration
+├── audius-solana.js       # MODULAR: Wallet + coin integration
+├── farcaster-miniapp.js   # MODULAR: Social integration
+├── theme-bridge.js        # DRY: Theme configuration
+├── pkg/                   # WASM module (legacy, optional)
+├── .well-known/          # Faracaster Mini App manifest
+└── _redirects            # Netlify routing
 ```
 
-## 🚀 **Development (PERFORMANT)**
+## 🎯 **Principles Applied**
+
+| File | Principles Applied |
+|------|-------------------|
+| `index.html` | CLEAN, MODULAR, PERFORMANT, ORGANIZED |
+| `audius-solana.js` | MODULAR, DRY, CLEAN, PERFORMANT |
+| `farcaster-miniapp.js` | MODULAR, CLEAN |
+| `theme-bridge.js` | DRY, ORGANIZED |
+
+## 🚀 **Features (ENHANCEMENT FIRST)**
+
+- **Onboarding Flow**: 3-step explanation of "versions as tickets"
+- **Audius Integration**: Real-time trending tracks from Audius API
+- **Solana Wallet**: Connect Phantom to unlock premium versions
+- **Mobile-First**: Responsive design, touch-friendly
+- **Search**: Filter songs and artists in real-time
+
+## 🏗️ **Running Locally**
 
 ```bash
-# Serve locally
+# Simple static server
 python3 -m http.server 3000
 
-# Or use any static file server
+# Or with npx
 npx serve .
 ```
 
-## 🌐 **Deployment (MODULAR)**
+Open http://localhost:3000
 
-**Static deployment** - no build process needed:
-- **Production**: https://versions.thisyearnofear.com
+## 🌐 **Deployment**
+
+**Static deployment** - no build process:
+- **Production**: https://versions.app
 - **Netlify**: https://versionsapp.netlify.app
 
-## 🔧 **WASM Module (ENHANCEMENT FIRST)**
+## 🧹 **Architecture Notes**
 
-Built from `experiments/wasm-tui-poc`:
+**AGGRESSIVE CONSOLIDATION**: 
+- Removed separate demo file
+- Single `index.html` contains all features
+- Simplified from 2500 line WASM terminal to ~400 line mobile app
+- Focus on hackathon: working Audius/Solana integration
 
-```bash
-cd experiments/wasm-tui-poc
-wasm-pack build --target web --out-dir pkg
-cp pkg/* ../../web/pkg/
-```
+**PREVENT BLOAT**:
+- No external dependencies (vanilla JS)
+- No build step required
+- Cached Audius API responses
 
-## 🧹 **Cleanup Applied**
-
-✅ **AGGRESSIVE CONSOLIDATION**: Removed duplicate configs  
-✅ **PREVENT BLOAT**: Deleted unused TypeScript infrastructure  
-✅ **DRY**: Single configuration source in index.html  
-✅ **CLEAN**: Pure WASM terminal, no mixed concerns  
-✅ **MODULAR**: Static deployment, composable components  
-✅ **ORGANIZED**: Predictable structure, clear dependencies
+**MODULAR**:
+- `audius-solana.js` can be removed/updated independently
+- Onboarding can be disabled via localStorage
+- Wallet connection is optional

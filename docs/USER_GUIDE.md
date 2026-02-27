@@ -1,8 +1,10 @@
 # 🚀 VERSIONS - User Guide
 
+**ORGANIZED**: Version-centric music platform with dual interfaces
+
 ## **Quick Start**
 
-VERSIONS is a version-centric music platform with dual interfaces: professional terminal tools and community web platform, enhanced with Farcaster social features.
+VERSIONS is a version-centric music platform with dual interfaces: professional terminal tools and community web platform, enhanced with social features.
 
 ### **Requirements**
 - **Rust 1.85.0+** - [Install Rust](https://rustup.rs/)
