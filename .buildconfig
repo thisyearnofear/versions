@@ -1,0 +1,4 @@
+[build]
+base = "web"
+publish = "web"
+command = "echo 'Static deployment'"

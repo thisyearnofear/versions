@@ -1,0 +1,10 @@
+{
+  "build": {
+    "command": "echo 'No build needed - static site'",
+    "directory": "web"
+  },
+  "serve": {
+    "directory": "web",
+    "spa": true
+  }
+}
