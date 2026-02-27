@@ -144,54 +144,103 @@ window.AudiusSolanaIntegration = {
             return { owned: false, message: 'Connect wallet first' };
         }
 
-        // For hackathon demo: Use mock ownership to avoid RPC rate limits
-        // In production, this would check real Solana token balances
-        console.log('🎫 Checking ownership for:', artistCoinAddress);
-        return this._mockOwnershipCheck(artistCoinAddress);
-    },
-
-    // CLEAN: Query Solana RPC for token balance
-    async checkSolanaTokenBalance(tokenMintAddress) {
-        // Use public RPC with better rate limits
-        const SOLANA_RPC = 'https://solana-mainnet.g.alchemy.com/v2/demo';
-        
-        // Get token accounts for the wallet
-        const response = await fetch(SOLANA_RPC, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'getTokenAccountsByOwner',
-                params: [
-                    this.wallet.address,
-                    { mint: tokenMintAddress },
-                    { encoding: 'jsonParsed' }
-                ]
-            })
-        });
-
-        const data = await response.json();
-        
-        if (data.result && data.result.value && data.result.value.length > 0) {
-            // Found token account with balance
-            const tokenInfo = data.result.value[0];
-            const balance = tokenInfo.account.data.parsed.info.tokenAmount?.uiAmount || 0;
-            
+        // Try to verify via Solana RPC with multiple fallback endpoints
+        try {
+            const result = await this.checkSolanaTokenBalance(artistCoinAddress);
+            return result;
+        } catch (error) {
+            console.error('❌ All RPC endpoints failed:', error);
+            // Return error state instead of mock
             return {
-                owned: balance > 0,
-                balance: balance,
-                wallet: this.wallet.address,
-                message: balance > 0 ? `Owned ${balance} tokens` : 'No tokens found'
+                owned: false,
+                message: 'Unable to verify ownership - RPC unavailable',
+                error: error.message
             };
         }
+    },
 
-        return {
-            owned: false,
-            balance: 0,
-            wallet: this.wallet.address,
-            message: 'No token account found'
-        };
+    // CLEAN: Query Solana RPC for token balance with fallback endpoints
+    async checkSolanaTokenBalance(tokenMintAddress) {
+        // Multiple RPC endpoints to avoid rate limiting
+        const RPC_ENDPOINTS = [
+            'https://api.mainnet-beta.solana.com',
+            'https://solana-api.projectserum.com',
+            'https://rpc.ankr.com/solana',
+            'https://solana-mainnet.rpc.extrnode.com',
+            'https://solana.public-rpc.com'
+        ];
+        
+        let lastError = null;
+        
+        // Try each RPC endpoint until one works
+        for (const rpcUrl of RPC_ENDPOINTS) {
+            try {
+                console.log(`🔍 Checking token balance via ${rpcUrl.split('/')[2]}...`);
+                
+                const response = await fetch(rpcUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        id: 1,
+                        method: 'getTokenAccountsByOwner',
+                        params: [
+                            this.wallet.address,
+                            { mint: tokenMintAddress },
+                            { encoding: 'jsonParsed' }
+                        ]
+                    })
+                });
+
+                if (!response.ok) {
+                    console.warn(`❌ ${rpcUrl.split('/')[2]} returned ${response.status}`);
+                    lastError = new Error(`HTTP ${response.status}`);
+                    continue;
+                }
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.warn(`❌ ${rpcUrl.split('/')[2]} error:`, data.error.message);
+                    lastError = new Error(data.error.message);
+                    continue;
+                }
+                
+                if (data.result && data.result.value && data.result.value.length > 0) {
+                    // Found token account with balance
+                    const tokenInfo = data.result.value[0];
+                    const balance = tokenInfo.account.data.parsed.info.tokenAmount?.uiAmount || 0;
+                    
+                    console.log(`✅ Token balance found: ${balance}`);
+                    return {
+                        owned: balance > 0,
+                        balance: balance,
+                        wallet: this.wallet.address,
+                        message: balance > 0 ? `Owned ${balance} tokens` : 'No tokens found',
+                        rpcUsed: rpcUrl.split('/')[2]
+                    };
+                }
+
+                // No token account found, but RPC worked
+                console.log(`ℹ️ No token account found via ${rpcUrl.split('/')[2]}`);
+                return {
+                    owned: false,
+                    balance: 0,
+                    wallet: this.wallet.address,
+                    message: 'No token account found',
+                    rpcUsed: rpcUrl.split('/')[2]
+                };
+                
+            } catch (error) {
+                console.warn(`❌ ${rpcUrl.split('/')[2]} failed:`, error.message);
+                lastError = error;
+                continue;
+            }
+        }
+        
+        // All RPCs failed
+        console.error('❌ All RPC endpoints failed:', lastError);
+        throw lastError;
     },
 
     // Fallback mock check for demo purposes
