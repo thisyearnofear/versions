@@ -28,12 +28,12 @@ VERSIONS creates a **version-centric music platform** where:
 
 ## 🚀 Live Demo
 
-**Try it now:** Open `web/hackathon-demo.html` in your browser
+**Try it now:** Open `web/index.html` in your browser
 
 ```bash
 cd web
 python3 -m http.server 3000
-# Open http://localhost:3000/hackathon-demo.html
+# Open http://localhost:3000
 ```
 
 ## 🎥 Video Walkthrough
@@ -103,7 +103,7 @@ python3 -m http.server 3000
 ```
 versions/
 ├── web/
-│   ├── hackathon-demo.html      # Main demo (THIS IS THE SUBMISSION)
+│   ├── index.html               # Main demo (THIS IS THE SUBMISSION)
 │   ├── audius-solana.js         # Audius + Solana integration
 │   └── README.md                # Web interface docs
 ├── lib/                         # Rust library (future backend)
@@ -218,7 +218,7 @@ cd versions/web
 python3 -m http.server 3000
 
 # Open in browser
-open http://localhost:3000/hackathon-demo.html
+open http://localhost:3000
 ```
 
 ### Testing Wallet Connection

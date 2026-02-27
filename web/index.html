@@ -298,120 +298,427 @@
             .connect-btn { width: 100%; justify-content: center; }
             .player-progress { display: none; }
         }
+    </style>
+</head>
 
-        /* ENHANCED MOBILE EXPERIENCE */
-        @media (max-width: 480px) {
-            /* Improved touch targets */
-            .connect-btn, .play-btn, .error-modal-btn {
-                min-height: 44px;
-                min-width: 44px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
+<body>
+    <!-- ONBOARDING -->
+    <div class="onboarding" id="onboarding">
+        <div class="onboarding-card">
+            <div class="onboarding-icon" id="onboardingIcon">🎵</div>
+            <h2 class="onboarding-title" id="onboardingTitle">Collect Song Versions</h2>
+            <p class="onboarding-desc" id="onboardingDesc">Like rare vinyl, but digital. Each version of a song becomes a collectible.</p>
+            <div class="onboarding-dots">
+                <div class="onboarding-dot active" data-step="0"></div>
+                <div class="onboarding-dot" data-step="1"></div>
+                <div class="onboarding-dot" data-step="2"></div>
+            </div>
+            <button class="onboarding-btn" id="onboardingBtn" onclick="nextOnboardingStep()">Next</button>
+            <button class="onboarding-btn secondary" onclick="skipOnboarding()">Skip</button>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div class="container">
+        <header class="header">
+            <div class="logo">VERSIONS</div>
+            <p class="tagline">Song versions as tickets — own the artist coin, unlock the version</p>
+        </header>
+
+        <section class="wallet-section">
+            <button id="connectBtn" class="connect-btn" onclick="handleWalletConnect()">
+                <span>🔗</span><span>Connect Wallet</span>
+            </button>
+            <div id="walletAddress" class="wallet-address"></div>
+            <div id="walletError" class="wallet-error"></div>
+        </section>
+
+        <section class="search-section">
+            <input type="text" class="search-input" id="searchInput" placeholder="🔍 Search songs or artists..." oninput="handleSearch(this.value)">
+        </section>
+
+        <div id="versionsContainer">
+            <div class="loading-grid">
+                <div class="loading-skeleton"></div>
+                <div class="loading-skeleton"></div>
+                <div class="loading-skeleton"></div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            Built for <a href="https://solana.com/graveyard-hack" target="_blank">Solana Graveyard Hackathon</a><br>
+            Audius Track — "Versions as Tickets"
+        </footer>
+    </div>
+
+    <!-- AUDIO PLAYER -->
+    <div class="audio-player" id="audioPlayer">
+        <div class="player-content">
+            <div class="player-artwork" id="playerArtwork">🎵</div>
+            <div class="player-info">
+                <div class="player-title" id="playerTitle">-</div>
+                <div class="player-artist" id="playerArtist">-</div>
+            </div>
+            <div class="player-controls">
+                <button class="player-btn" id="playPauseBtn" onclick="togglePlayPause()">▶</button>
+            </div>
+            <div class="player-progress">
+                <span class="progress-time" id="currentTime">0:00</span>
+                <div class="progress-bar" id="progressBar" onclick="seekAudio(event)">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <span class="progress-time" id="totalTime">0:00</span>
+            </div>
+            <button class="player-close" onclick="closePlayer()">✕</button>
+        </div>
+    </div>
+
+    <!-- ERROR MODAL -->
+    <div class="error-modal" id="errorModal">
+        <div class="error-modal-header">
+            <div class="error-modal-title" id="errorModalTitle">Error</div>
+            <button class="error-modal-close" onclick="closeErrorModal()">✕</button>
+        </div>
+        <div class="error-modal-content" id="errorModalContent"></div>
+        <div class="error-modal-actions" id="errorModalActions"></div>
+    </div>
+
+    <script src="./audius-solana.js"></script>
+    <script>
+        // STATE
+        let walletConnected = false;
+        let walletAddress = '';
+        let allVersions = [];
+        let filteredVersions = [];
+        let onboardingStep = 0;
+        let isLoading = true;
+        let verifiedOwnership = {};
+
+        // AUDIO PLAYER STATE
+        let currentAudio = null;
+        let currentVersion = null;
+        let isPlaying = false;
+
+        const onboardingData = [
+            { icon: '🎵', title: 'Collect Song Versions', desc: 'Like rare vinyl, but digital. Each version of a song - demo, live, studio - becomes a collectible.' },
+            { icon: '🪙', title: 'Own the Artist Coin', desc: 'Audius Artist Coins represent ownership in an artist. Hold the coin to unlock their exclusive versions.' },
+            { icon: '🔓', title: 'Connect & Unlock', desc: 'Connect your Solana wallet. If you own the artist coin, the version unlocks instantly!' }
+        ];
+
+        // ONBOARDING
+        function nextOnboardingStep() {
+            if (onboardingStep < 2) { onboardingStep++; updateOnboarding(); }
+            else { skipOnboarding(); }
+        }
+
+        function updateOnboarding() {
+            const data = onboardingData[onboardingStep];
+            document.getElementById('onboardingIcon').textContent = data.icon;
+            document.getElementById('onboardingTitle').textContent = data.title;
+            document.getElementById('onboardingDesc').textContent = data.desc;
+            document.querySelectorAll('.onboarding-dot').forEach((dot, i) => dot.classList.toggle('active', i === onboardingStep));
+            document.getElementById('onboardingBtn').textContent = onboardingStep === 2 ? 'Get Started' : 'Next';
+        }
+
+        function skipOnboarding() {
+            document.getElementById('onboarding').classList.add('hidden');
+            localStorage.setItem('onboarding_complete', 'true');
+        }
+
+        if (localStorage.getItem('onboarding_complete') === 'true') {
+            document.getElementById('onboarding').classList.add('hidden');
+        }
+
+        // WALLET
+        async function handleWalletConnect() {
+            const errorEl = document.getElementById('walletError');
+            errorEl.classList.remove('show');
+            const hasWallet = window.phantom?.solana || window.solana;
+            
+            if (!hasWallet) {
+                errorEl.innerHTML = 'No wallet found. <a href="https://phantom.app" target="_blank" style="color:var(--color-purple)">Install Phantom</a>';
+                errorEl.classList.add('show');
+                return;
             }
 
-            /* Better spacing for mobile */
-            .wallet-section { gap: 8px; margin-bottom: 16px; }
-            .wallet-address { font-size: 0.75rem; text-align: center; }
-            .search-section { margin-bottom: 16px; }
-            .search-input { padding: 10px 12px; font-size: 0.85rem; }
-            .version-card { padding: 12px; border-radius: 12px; }
-            .track-artwork { max-height: 120px; margin-bottom: 8px; }
-            .track-title { font-size: 0.85rem; margin-bottom: 2px; }
-            .track-artist { font-size: 0.7rem; margin-bottom: 6px; }
-            .version-type { font-size: 0.55rem; padding: 2px 6px; }
-            .coin-info { padding: 6px; font-size: 0.6rem; }
-            .coin-label { margin-bottom: 1px; }
-            .coin-address { font-size: 0.55rem; }
-            .access-badge { font-size: 0.65rem; padding: 3px 8px; margin-top: 6px; }
-            .play-btn { padding: 8px; font-size: 0.75rem; margin-top: 6px; }
-
-            /* Enhanced empty states */
-            .empty-state { padding: 40px 16px; margin: 16px; }
-            .empty-icon { font-size: 2rem; margin-bottom: 10px; }
-            .empty-title { font-size: 1rem; margin-bottom: 6px; }
-            .empty-desc { margin-bottom: 16px; font-size: 0.85rem; }
-            .empty-actions { flex-direction: column; gap: 8px; }
-
-            /* Enhanced error states */
-            .error-state { padding: 40px 16px; margin: 16px; }
-            .error-state .error-title { font-size: 1rem; }
-            .error-state .error-desc { font-size: 0.85rem; margin-bottom: 16px; }
-            .error-state .error-actions { flex-direction: column; gap: 8px; }
-
-            /* Better footer */
-            .footer { padding: 20px 16px; font-size: 0.65rem; }
-            .footer br { display: none; }
-
-            /* Improved audio player */
-            .audio-player { padding: 10px 12px; }
-            .player-content { gap: 8px; }
-            .player-artwork { width: 40px; height: 40px; font-size: 1.2rem; }
-            .player-info { flex: 1; }
-            .player-title { font-size: 0.8rem; }
-            .player-artist { font-size: 0.65rem; }
-            .player-controls { gap: 6px; }
-            .player-btn { font-size: 1.2rem; padding: 6px; }
-            .player-close { font-size: 1rem; padding: 3px; }
+            try {
+                const result = await window.AudiusSolanaIntegration.connectWallet();
+                if (result) {
+                    walletConnected = true;
+                    walletAddress = result.address;
+                    updateWalletUI();
+                    await verifyPremiumAccess();
+                    renderVersions();
+                }
+            } catch (error) {
+                errorEl.textContent = 'Connection failed. Try again.';
+                errorEl.classList.add('show');
+            }
         }
 
-        /* SMALL TABLETS */
-        @media (min-width: 481px) and (max-width: 768px) {
-            .container { padding: 16px; }
-            .header { padding: 20px 16px; }
-            .logo { font-size: 1.7rem; }
-            .versions-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
-            .onboarding-card { padding: 28px 20px; max-width: 420px; }
-            .onboarding-title { font-size: 1.3rem; }
-            .connect-btn { width: 100%; justify-content: center; padding: 11px 24px; font-size: 0.9rem; }
-            .wallet-section { gap: 10px; margin-bottom: 20px; }
-            .wallet-address { font-size: 0.8rem; text-align: center; }
-            .search-section { margin-bottom: 18px; }
-            .search-input { padding: 11px 16px; font-size: 0.9rem; }
-            .version-card { padding: 14px; border-radius: 14px; }
-            .track-artwork { max-height: 140px; margin-bottom: 10px; }
-            .track-title { font-size: 0.9rem; margin-bottom: 2px; }
-            .track-artist { font-size: 0.75rem; margin-bottom: 8px; }
-            .version-type { font-size: 0.6rem; padding: 3px 8px; }
-            .coin-info { padding: 7px; font-size: 0.65rem; }
-            .coin-label { margin-bottom: 2px; }
-            .coin-address { font-size: 0.6rem; }
-            .access-badge { font-size: 0.7rem; padding: 4px 9px; margin-top: 8px; }
-            .play-btn { padding: 9px; font-size: 0.8rem; margin-top: 8px; }
-            .empty-state { padding: 45px 20px; margin: 20px; }
-            .empty-icon { font-size: 2.2rem; margin-bottom: 12px; }
-            .empty-title { font-size: 1.1rem; margin-bottom: 8px; }
-            .empty-desc { margin-bottom: 18px; font-size: 0.9rem; }
-            .empty-actions { flex-direction: column; gap: 10px; }
-            .error-state { padding: 45px 20px; margin: 20px; }
-            .error-state .error-title { font-size: 1.1rem; }
-            .error-state .error-desc { font-size: 0.9rem; margin-bottom: 18px; }
-            .error-state .error-actions { flex-direction: column; gap: 10px; }
-            .footer { padding: 25px 16px; font-size: 0.7rem; }
+        function updateWalletUI() {
+            const btn = document.getElementById('connectBtn');
+            const addrEl = document.getElementById('walletAddress');
+            if (walletConnected) {
+                btn.classList.add('connected');
+                btn.innerHTML = '<span>✓</span><span>Connected</span>';
+                addrEl.textContent = walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4);
+            }
         }
 
-        /* LARGE TABLETS */
-        @media (min-width: 769px) and (max-width: 1024px) {
-            .container { padding: 20px; }
-            .header { padding: 22px 16px; }
-            .logo { font-size: 1.75rem; }
-            .versions-grid { grid-template-columns: repeat(2, 1fr); gap: 18px; }
-            .onboarding-card { padding: 30px 22px; max-width: 440px; }
-            .onboarding-title { font-size: 1.35rem; }
-            .connect-btn { width: 100%; justify-content: center; padding: 12px 26px; font-size: 0.95rem; }
-            .wallet-section { gap: 12px; margin-bottom: 22px; }
-            .wallet-address { font-size: 0.85rem; text-align: center; }
-            .search-section { margin-bottom: 20px; }
-            .search-input { padding: 12px 18px; font-size: 0.95rem; }
-            .version-card { padding: 15px; border-radius: 15px; }
-            .track-artwork { max-height: 150px; margin-bottom: 12px; }
-            .track-title { font-size: 0.95rem; margin-bottom: 3px; }
-            .track-artist { font-size: 0.8rem; margin-bottom: 9px; }
-            .version-type { font-size: 0.65rem; padding: 3px 9px; }
-            .coin-info { padding: 8px; font-size: 0.7rem; }
-            .coin-label { margin-bottom: 2px; }
-            .coin-address { font-size: 0.65rem; }
-            .access-badge { font-size: 0.75rem; padding: 4px 10px; margin-top: 9px; }
-            .play-btn { padding: 10px; font-size: 0.85rem; margin-top: 9px; }
-            .empty-state { padding: 50px 22px; margin: 22px; }
-            .empty-icon { font-size: 2.3rem; margin-bottom: 13
+        // OWNERSHIP VERIFICATION
+        async function verifyPremiumAccess() {
+            showLoading('Verifying Ownership', 'Checking your token holdings...');
+            
+            for (const version of allVersions) {
+                if (version.premium && version.coinAddress) {
+                    try {
+                        const result = await window.AudiusSolanaIntegration.verifyOwnership(version.coinAddress);
+                        verifiedOwnership[version.id] = result.owned;
+                    } catch (e) {
+                        console.error('Ownership check failed:', e);
+                        verifiedOwnership[version.id] = false;
+                    }
+                }
+            }
+            
+            hideLoading();
+            console.log('Verified ownership:', verifiedOwnership);
+        }
+
+        // DATA
+        async function loadAudiusTracks() {
+            isLoading = true;
+            renderVersions();
+
+            try {
+                const tracks = await window.AudiusSolanaIntegration.initAudius();
+                if (tracks && tracks.length > 0) {
+                    allVersions = tracks.slice(0, 18).map((track, index) => ({
+                        id: `audius-${track.id}`,
+                        title: track.title || 'Unknown Track',
+                        artist: track.user?.name || 'Unknown Artist',
+                        artistId: track.user?.id || '',
+                        type: ['demo', 'studio', 'live', 'remix', 'acoustic'][index % 5],
+                        artwork: track.artwork?.['480x480'] || track.artwork?.['150x150'],
+                        duration: track.duration,
+                        streamUrl: track.stream_url,
+                        coinAddress: track.user?.id ? `artist_${track.user.id}` : `mock_${index}`,
+                        premium: index % 3 === 0
+                    }));
+                } else {
+                    allVersions = getDemoVersions();
+                }
+            } catch (error) {
+                console.error('Failed to load Audius tracks:', error);
+                allVersions = getDemoVersions();
+            }
+
+            isLoading = false;
+            filteredVersions = [...allVersions];
+            renderVersions();
+        }
+
+        function getDemoVersions() {
+            return [
+                { id: 'v1', title: 'Bohemian Rhapsody', artist: 'Queen', type: 'studio', coinAddress: 'queen_coin', premium: true },
+                { id: 'v2', title: 'Bohemian Rhapsody', artist: 'Queen', type: 'live', coinAddress: 'queen_coin', premium: false },
+                { id: 'v3', title: 'Imagine', artist: 'John Lennon', type: 'studio', coinAddress: 'lennon_coin', premium: true },
+                { id: 'v4', title: 'Imagine', artist: 'John Lennon', type: 'acoustic', coinAddress: 'lennon_coin', premium: false },
+                { id: 'v5', title: 'Hotel California', artist: 'Eagles', type: 'live', coinAddress: 'eagles_coin', premium: true },
+                { id: 'v6', title: 'Hotel California', artist: 'Eagles', type: 'demo', coinAddress: 'eagles_coin', premium: false },
+            ];
+        }
+
+        // SEARCH
+        function handleSearch(query) {
+            if (!query.trim()) { filteredVersions = [...allVersions]; }
+            else {
+                const q = query.toLowerCase();
+                filteredVersions = allVersions.filter(v => v.title.toLowerCase().includes(q) || v.artist.toLowerCase().includes(q));
+            }
+            renderVersions();
+        }
+
+        // RENDER
+        function renderVersions() {
+            const container = document.getElementById('versionsContainer');
+
+            if (isLoading) {
+                container.innerHTML = '<div class="loading-grid"><div class="loading-skeleton"></div><div class="loading-skeleton"></div><div class="loading-skeleton"></div></div>';
+                return;
+            }
+
+            if (filteredVersions.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>No versions found</p></div>';
+                return;
+            }
+
+            container.innerHTML = `<div class="versions-grid">${filteredVersions.map(renderVersionCard).join('')}</div>`;
+        }
+
+        function renderVersionCard(version) {
+            const isUnlocked = !version.premium || verifiedOwnership[version.id] === true;
+            return `
+                <div class="version-card ${isUnlocked ? '' : 'locked'} ${version.premium ? 'premium' : ''}">
+                    <div class="track-artwork ${version.artwork ? '' : 'error'}">
+                        ${version.artwork ? `<img src="${version.artwork}" alt="${version.title}" onerror="this.classList.add('error')">` : ''}
+                    </div>
+                    <div class="track-title">${version.title}</div>
+                    <div class="track-artist">${version.artist}</div>
+                    <span class="version-type ${version.type}">${version.type}</span>
+                    ${version.premium ? `<div class="coin-info"><div class="coin-label">🎫 Required: Artist Coin</div><div class="coin-address">${version.coinAddress.slice(0, 16)}...</div></div>` : ''}
+                    <div class="access-badge ${isUnlocked ? 'unlocked' : 'locked'}">${isUnlocked ? '✓ Unlocked' : '🔒 Locked'}</div>
+                    <button class="play-btn ${isUnlocked ? 'primary' : 'secondary'}" onclick="playVersion('${version.id}')">${isUnlocked ? '▶ Play' : '🔗 Connect to Unlock'}</button>
+                </div>
+            `;
+        }
+
+        // PLAYBACK
+        function playVersion(versionId) {
+            const version = allVersions.find(v => v.id === versionId);
+            if (!version) return;
+            
+            const isUnlocked = !version.premium || verifiedOwnership[version.id] === true;
+            
+            if (version.premium && !isUnlocked) {
+                handleWalletConnect();
+                return;
+            }
+
+            if (!version.streamUrl) {
+                showErrorModal('Playback Error', 'This version is not available for streaming. Connect your wallet to verify ownership.', [
+                    { text: 'Connect Wallet', action: handleWalletConnect, primary: true },
+                    { text: 'Close', action: closeErrorModal }
+                ]);
+                return;
+            }
+
+            playAudio(version);
+        }
+
+        function playAudio(version) {
+            currentVersion = version;
+            
+            document.getElementById('playerTitle').textContent = version.title;
+            document.getElementById('playerArtist').textContent = version.artist;
+            
+            const artworkEl = document.getElementById('playerArtwork');
+            if (version.artwork) {
+                artworkEl.innerHTML = `<img src="${version.artwork}" alt="${version.title}">`;
+            } else {
+                artworkEl.textContent = '🎵';
+            }
+            
+            document.getElementById('progressFill').style.width = '0%';
+            document.getElementById('currentTime').textContent = '0:00';
+            document.getElementById('totalTime').textContent = '0:00';
+            document.getElementById('audioPlayer').classList.add('active');
+            
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            
+            currentAudio = new Audio(version.streamUrl);
+            
+            currentAudio.addEventListener('loadedmetadata', () => {
+                document.getElementById('totalTime').textContent = formatTime(currentAudio.duration);
+            });
+            
+            currentAudio.addEventListener('timeupdate', () => {
+                const progress = (currentAudio.currentTime / currentAudio.duration) * 100;
+                document.getElementById('progressFill').style.width = progress + '%';
+                document.getElementById('currentTime').textContent = formatTime(currentAudio.currentTime);
+            });
+            
+            currentAudio.addEventListener('ended', () => {
+                isPlaying = false;
+                document.getElementById('playPauseBtn').textContent = '▶';
+            });
+            
+            currentAudio.play().then(() => {
+                isPlaying = true;
+                document.getElementById('playPauseBtn').textContent = '⏸';
+            }).catch(err => {
+                console.error('Playback error:', err);
+                showErrorModal('Playback Error', 'Could not play audio stream.');
+            });
+        }
+
+        function togglePlayPause() {
+            if (!currentAudio) return;
+            if (isPlaying) {
+                currentAudio.pause();
+                document.getElementById('playPauseBtn').textContent = '▶';
+                isPlaying = false;
+            } else {
+                currentAudio.play();
+                document.getElementById('playPauseBtn').textContent = '⏸';
+                isPlaying = true;
+            }
+        }
+
+        function seekAudio(event) {
+            if (!currentAudio) return;
+            const bar = document.getElementById('progressBar');
+            const rect = bar.getBoundingClientRect();
+            const percent = (event.clientX - rect.left) / rect.width;
+            currentAudio.currentTime = percent * currentAudio.duration;
+        }
+
+        function closePlayer() {
+            if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+            isPlaying = false;
+            currentVersion = null;
+            document.getElementById('audioPlayer').classList.remove('active');
+        }
+
+        function formatTime(seconds) {
+            if (!seconds || isNaN(seconds)) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // MODALS
+        function showErrorModal(title, message, actions = []) {
+            document.getElementById('errorModalTitle').textContent = title;
+            document.getElementById('errorModalContent').textContent = message;
+            
+            const actionsEl = document.getElementById('errorModalActions');
+            actionsEl.innerHTML = actions.map((a, i) => 
+                `<button class="error-modal-btn ${a.primary ? 'primary' : 'secondary'}" onclick="${a.action.toString().replace(/function\s*\(\)\s*{/, '').replace(/}$/, '')}">${a.text}</button>`
+            ).join('');
+            
+            document.getElementById('errorModal').classList.add('show');
+        }
+
+        function closeErrorModal() {
+            document.getElementById('errorModal').classList.remove('show');
+        }
+
+        function showLoading(title, message) {
+            const overlay = document.createElement('div');
+            overlay.className = 'onboarding';
+            overlay.id = 'loadingOverlay';
+            overlay.innerHTML = `
+                <div class="onboarding-card">
+                    <div class="onboarding-icon">🔄</div>
+                    <h2 class="onboarding-title">${title}</h2>
+                    <p class="onboarding-desc">${message}</p>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
+
+        function hideLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) overlay.remove();
+        }
+
+        // INIT
+        document.addEventListener('DOMContentLoaded', loadAudiusTracks);
+    </script>
+</body>
+</html>

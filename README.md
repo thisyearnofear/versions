@@ -1,8 +1,73 @@
 # 🎭 VERSIONS
 
-<!-- Test webhook deployment - 2025-09-20 -->
+**🪦 Solana Graveyard Hackathon 2026 - Audius Music Track**
 
-**Version-centric music platform with unified web interface: professional terminal-like tools + community features with Farcaster social integration.**
+**Song Versions as Tickets: Own Audius Artist Coins to unlock exclusive versions**
+
+---
+
+## 🏆 Hackathon Submission
+
+**[📺 Watch 3-Minute Demo Video](#)** | **[🚀 Try Live Demo](https://versions.netlify.app/hackathon-demo.html)**
+
+### Quick Start for Judges
+
+```bash
+git clone https://github.com/thisyearnofear/versions.git
+cd versions/web
+python3 -m http.server 3000
+# Open http://localhost:3000/hackathon-demo.html
+```
+
+**No build step required!** Pure vanilla JavaScript.
+
+---
+
+## 💡 The Concept
+
+Every song has multiple versions - demos, studio recordings, live performances, remixes. **VERSIONS** treats each version as a collectible where **Audius Artist Coins act as tickets** to unlock exclusive content.
+
+**Own the coin → Unlock the version → Support the artist**
+
+### The Problem
+- Artists create multiple versions but can't monetize them individually
+- Fans want rare versions (demos, live recordings) but can't access them  
+- Artist Coins exist but lack utility beyond speculation
+
+### The Solution
+- Each song version is tied to an Audius Artist Coin
+- Owning the coin grants access to stream that version
+- Versions become collectible assets (like rare vinyl)
+- Artist Coins gain real utility
+
+---
+
+## ✨ Features
+
+✅ **Audius Integration** - Real trending tracks from Audius API  
+✅ **Phantom Wallet** - Solana wallet connection  
+✅ **Token-Gated Access** - Verify Artist Coin ownership  
+✅ **Version Discovery** - Browse demos, remixes, live versions  
+✅ **Mobile-First UI** - Works on all devices  
+
+---
+
+## 🎯 For the Hackathon
+
+This submission focuses on the **core concept** with a working demo:
+
+1. **Audius API Integration** - Fetches real track data
+2. **Wallet Connection** - Phantom wallet integration
+3. **Access Control** - Token-gated version unlocking
+4. **Clean UX** - Simple, intuitive interface
+
+See [HACKATHON_SUBMISSION.md](HACKATHON_SUBMISSION.md) for full details.
+
+---
+
+## 🏗️ Full Platform Vision
+
+Beyond the hackathon, VERSIONS is building a complete version-centric music platform:
 
 [![Build status](https://github.com/thisyearnofear/versions/actions/workflows/build.yml/badge.svg)](https://github.com/thisyearnofear/versions/actions)
 [![crates.io](https://img.shields.io/crates/v/versions.svg)](https://crates.io/crates/versions)
