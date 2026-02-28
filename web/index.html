@@ -4,14 +4,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>VERSIONS - Song Versions as Tickets</title>
     <meta name="description" content="Collect song versions like rare vinyl. Own Audius Artist Coins to unlock exclusive versions." />
     
     <style>
         :root {
-            --bg-primary: #101421;
-            --bg-secondary: #1a2332;
-            --bg-tertiary: #252f3f;
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #141824;
+            --bg-tertiary: #1e2433;
             --fg-primary: #fffbf6;
             --fg-secondary: #8b9dc3;
             --color-purple: #9945FF;
@@ -23,35 +26,195 @@
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(153, 69, 255, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(153, 69, 255, 0.6); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.9; }
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: var(--bg-primary);
+            background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 50%, #0f1420 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 15s ease infinite;
             color: var(--fg-primary);
             min-height: 100vh;
             line-height: 1.5;
+            position: relative;
+            overflow-x: hidden;
         }
 
-        .container { max-width: 900px; margin: 0 auto; padding: 16px; }
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(153, 69, 255, 0.1) 0%, transparent 50%);
+            animation: float 20s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container { 
+            max-width: 900px; 
+            margin: 0 auto; 
+            padding: 16px;
+            position: relative;
+            z-index: 1;
+        }
 
         /* HEADER */
         .header {
             text-align: center;
-            padding: 24px 16px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            margin-bottom: 24px;
+            padding: 32px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            margin-bottom: 32px;
+            position: relative;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 100px;
+            background: radial-gradient(ellipse, rgba(153, 69, 255, 0.2) 0%, transparent 70%);
+            filter: blur(40px);
+            pointer-events: none;
+        }
+
+        .artist-link {
+            position: absolute;
+            top: 32px;
+            right: 16px;
+            padding: 8px 16px;
+            background: rgba(153, 69, 255, 0.2);
+            border: 1px solid rgba(153, 69, 255, 0.4);
+            border-radius: 8px;
+            color: var(--color-purple);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            z-index: 100;
+        }
+
+        .artist-link:hover {
+            background: rgba(153, 69, 255, 0.3);
+            transform: scale(1.05);
         }
 
         .logo {
-            font-size: 1.8rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
+            font-size: 2.2rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--color-purple) 0%, var(--color-green) 50%, var(--color-blue) 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 8s ease infinite;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
             margin-bottom: 8px;
+            letter-spacing: -0.5px;
+            position: relative;
+            z-index: 1;
         }
 
-        .tagline { color: var(--fg-secondary); font-size: 0.9rem; }
+        .tagline { 
+            color: var(--fg-secondary); 
+            font-size: 0.95rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* INFO BANNER */
+        .info-banner {
+            background: linear-gradient(135deg, rgba(153, 69, 255, 0.1) 0%, rgba(20, 241, 149, 0.1) 100%);
+            border: 1px solid rgba(153, 69, 255, 0.3);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            display: flex;
+            gap: 24px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .info-content {
+            flex: 1;
+            min-width: 280px;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .info-icon {
+            font-size: 2.5rem;
+            flex-shrink: 0;
+        }
+
+        .info-text {
+            flex: 1;
+        }
+
+        .info-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+            color: var(--color-purple);
+        }
+
+        .info-desc {
+            color: var(--fg-secondary);
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .info-stats {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            text-align: center;
+            min-width: 80px;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--fg-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
 
         /* ONBOARDING */
         .onboarding {
@@ -69,13 +232,16 @@
         .onboarding.hidden { opacity: 0; pointer-events: none; }
 
         .onboarding-card {
-            background: var(--bg-secondary);
-            border-radius: 20px;
+            background: linear-gradient(135deg, rgba(20, 24, 36, 0.95) 0%, rgba(30, 36, 51, 0.95) 100%);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
             padding: 40px 28px;
             max-width: 380px;
             width: 100%;
             text-align: center;
             border: 2px solid var(--color-purple);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(153, 69, 255, 0.3);
+            animation: modalFadeIn 0.4s ease;
         }
 
         .onboarding-icon { font-size: 3.5rem; margin-bottom: 16px; }
@@ -106,48 +272,148 @@
         }
 
         .connect-btn {
-            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
-            border: none; color: white; padding: 13px 26px; font-size: 0.9rem;
-            font-weight: 600; border-radius: 30px; cursor: pointer;
-            display: flex; align-items: center; gap: 8px;
-            transition: transform 0.2s, box-shadow 0.2s;
+            background: linear-gradient(135deg, var(--color-purple) 0%, var(--color-green) 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 3s ease infinite;
+            border: none; 
+            color: white; 
+            padding: 14px 28px; 
+            font-size: 0.95rem;
+            font-weight: 600; 
+            border-radius: 30px; 
+            cursor: pointer;
+            display: flex; 
+            align-items: center; 
+            gap: 10px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            z-index: 10;
         }
 
-        .connect-btn:hover { transform: scale(1.03); box-shadow: 0 6px 20px rgba(153,69,255,0.35); }
-        .connect-btn.connected { background: var(--color-green); }
+        .connect-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .connect-btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .connect-btn:hover { 
+            transform: scale(1.05); 
+            box-shadow: 0 10px 30px rgba(153,69,255,0.5);
+        }
+
+        .connect-btn.connected { 
+            background: linear-gradient(135deg, var(--color-green) 0%, var(--color-blue) 100%);
+            animation: none;
+        }
 
         .wallet-address { color: var(--color-blue); font-size: 0.85rem; font-family: monospace; }
         .wallet-error { color: var(--color-red); font-size: 0.85rem; padding: 8px 14px; background: rgba(255,85,85,0.1); border-radius: 8px; display: none; }
         .wallet-error.show { display: block; }
 
         /* SEARCH */
-        .search-section { margin-bottom: 20px; }
+        .search-section { margin-bottom: 20px; z-index: 5; position: relative; }
         .search-input {
             width: 100%; padding: 12px 16px; border-radius: 12px;
-            border: 2px solid rgba(255,255,255,0.1); background: var(--bg-secondary);
+            border: 2px solid rgba(255,255,255,0.1); 
+            background: linear-gradient(135deg, rgba(20, 24, 36, 0.8) 0%, rgba(30, 36, 51, 0.8) 100%);
+            backdrop-filter: blur(10px);
             color: var(--fg-primary); font-size: 0.9rem;
-            transition: border-color 0.2s;
+            transition: all 0.3s;
         }
 
-        .search-input:focus { outline: none; border-color: var(--color-purple); }
+        .search-input:focus { 
+            outline: none; 
+            border-color: var(--color-purple); 
+            box-shadow: 0 0 20px rgba(153, 69, 255, 0.3);
+            background: linear-gradient(135deg, rgba(20, 24, 36, 0.95) 0%, rgba(30, 36, 51, 0.95) 100%);
+        }
         .search-input::placeholder { color: var(--fg-secondary); }
 
         /* VERSION GRID */
         .versions-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-            gap: 14px;
+            gap: 16px;
+            position: relative;
+            z-index: 1;
         }
 
         .version-card {
-            background: var(--bg-secondary); border-radius: 14px; padding: 14px;
-            border: 1px solid rgba(255,255,255,0.06);
-            transition: transform 0.2s, box-shadow 0.2s;
+            background: linear-gradient(135deg, rgba(20, 24, 36, 0.8) 0%, rgba(30, 36, 51, 0.8) 100%);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 16px;
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            z-index: 2;
         }
 
-        .version-card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0,0,0,0.25); }
-        .version-card.locked { opacity: 0.6; border-color: rgba(255,85,85,0.15); }
-        .version-card.premium { border-color: rgba(246,199,68,0.35); }
+        .version-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(153, 69, 255, 0.1) 0%, rgba(20, 241, 149, 0.1) 100%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .version-card:hover {
+            transform: translateY(-6px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(153, 69, 255, 0.3);
+            border-color: rgba(153, 69, 255, 0.5);
+        }
+
+        .version-card:hover::before {
+            opacity: 1;
+        }
+
+        .version-card.locked { 
+            opacity: 0.7; 
+            border-color: rgba(255,85,85,0.2);
+        }
+
+        .version-card.premium {
+            border-color: rgba(246,199,68,0.4);
+            background: linear-gradient(135deg, rgba(246, 199, 68, 0.05) 0%, rgba(30, 36, 51, 0.8) 100%);
+        }
+
+        .version-card.premium::after {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(135deg, var(--color-yellow), var(--color-purple));
+            border-radius: 16px;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .version-card.premium:hover::after {
+            opacity: 0.3;
+            animation: glow 2s ease-in-out infinite;
+        }
 
         .track-artwork {
             width: 100%; aspect-ratio: 1; max-height: 160px;
@@ -169,15 +435,130 @@
             font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
         }
 
+        .version-card.premium .version-type {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
         .version-type.demo { background: rgba(246,199,68,0.2); color: var(--color-yellow); }
         .version-type.studio { background: rgba(0,212,255,0.2); color: var(--color-blue); }
         .version-type.live { background: rgba(0,255,136,0.2); color: var(--color-green); }
         .version-type.remix { background: rgba(153,69,255,0.2); color: var(--color-purple); }
         .version-type.acoustic { background: rgba(184,197,214,0.2); color: #b8c5d6; }
+        .version-type.original { background: rgba(255,255,255,0.1); color: var(--fg-secondary); }
+        .version-type.edit { background: rgba(255,136,0,0.2); color: #ff8800; }
 
         .coin-info { margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 6px; font-size: 0.7rem; }
+        .coin-info.free-version { background: rgba(20, 241, 149, 0.1); border: 1px solid rgba(20, 241, 149, 0.2); }
         .coin-label { color: var(--fg-secondary); margin-bottom: 2px; }
-        .coin-address { font-family: monospace; color: var(--color-purple); word-break: break-all; }
+        .coin-ticker { 
+            font-weight: 600; 
+            color: var(--color-yellow); 
+            font-size: 0.75rem;
+            margin-bottom: 4px;
+        }
+        .coin-info.free-version .coin-ticker { color: var(--color-green); }
+        
+        .coin-address-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        
+        .coin-address { 
+            font-family: monospace; 
+            color: var(--color-purple); 
+            font-size: 0.65rem;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: help;
+            transition: color 0.2s;
+        }
+        
+        .coin-address:hover {
+            color: var(--color-green);
+        }
+        
+        .copy-btn {
+            background: rgba(153, 69, 255, 0.2);
+            border: 1px solid rgba(153, 69, 255, 0.3);
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .copy-btn:hover {
+            background: rgba(153, 69, 255, 0.4);
+            transform: scale(1.05);
+        }
+        
+        .copy-icon {
+            display: block;
+        }
+        
+        .buy-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, var(--color-green), var(--color-blue));
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 6px;
+        }
+        
+        .buy-btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(20, 241, 149, 0.3);
+        }
+        
+        /* TOAST NOTIFICATIONS */
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: rgba(20, 24, 36, 0.95);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            z-index: 10000;
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(20, 241, 149, 0.5);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        
+        .toast.success {
+            border-color: rgba(20, 241, 149, 0.5);
+            background: linear-gradient(135deg, rgba(20, 241, 149, 0.2), rgba(20, 24, 36, 0.95));
+        }
+        
+        .toast.error {
+            border-color: rgba(255, 85, 85, 0.5);
+            background: linear-gradient(135deg, rgba(255, 85, 85, 0.2), rgba(20, 24, 36, 0.95));
+        }
 
         .access-badge {
             display: inline-flex; align-items: center; gap: 5px;
@@ -215,50 +596,139 @@
         /* AUDIO PLAYER */
         .audio-player {
             position: fixed; bottom: 0; left: 0; right: 0;
-            background: var(--bg-secondary);
-            border-top: 1px solid rgba(255,255,255,0.1);
-            padding: 12px 16px;
-            display: none; z-index: 100;
+            background: linear-gradient(180deg, rgba(20, 24, 36, 0.95) 0%, rgba(10, 14, 26, 0.98) 100%);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(153, 69, 255, 0.2);
+            padding: 16px;
+            display: none; 
+            z-index: 100;
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
         }
         .audio-player.active { display: block; }
 
         .player-content {
             max-width: 900px; margin: 0 auto;
-            display: flex; align-items: center; gap: 12px;
+            display: flex; align-items: center; gap: 16px;
         }
 
         .player-artwork {
-            width: 48px; height: 48px; border-radius: 8px;
-            background: var(--bg-tertiary);
+            width: 56px; height: 56px; border-radius: 12px;
+            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.5rem; overflow: hidden; flex-shrink: 0;
+            font-size: 1.8rem; overflow: hidden; flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(153, 69, 255, 0.3);
         }
         .player-artwork img { width: 100%; height: 100%; object-fit: cover; }
 
         .player-info { flex: 1; min-width: 0; }
-        .player-title { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .player-artist { color: var(--color-blue); font-size: 0.8rem; }
+        .player-title { 
+            font-weight: 600; 
+            font-size: 0.95rem; 
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis;
+            margin-bottom: 2px;
+        }
+        .player-artist { 
+            color: var(--color-blue); 
+            font-size: 0.85rem;
+        }
 
-        .player-controls { display: flex; align-items: center; gap: 8px; }
+        .player-controls { display: flex; align-items: center; gap: 10px; }
         .player-btn {
-            background: none; border: none; color: var(--fg-primary);
-            font-size: 1.5rem; cursor: pointer; padding: 8px;
-            border-radius: 50%; transition: background 0.2s;
+            background: rgba(153, 69, 255, 0.1);
+            border: 1px solid rgba(153, 69, 255, 0.3);
+            color: var(--fg-primary);
+            font-size: 1.6rem; 
+            cursor: pointer; 
+            padding: 10px;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%; 
+            transition: all 0.3s;
         }
-        .player-btn:hover { background: rgba(255,255,255,0.1); }
+        .player-btn:hover { 
+            background: rgba(153, 69, 255, 0.3);
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(153, 69, 255, 0.5);
+        }
 
-        .player-progress { flex: 1; max-width: 200px; display: flex; align-items: center; gap: 8px; }
+        .player-progress { flex: 1; max-width: 220px; display: flex; align-items: center; gap: 10px; }
         .progress-bar {
-            flex: 1; height: 4px; background: var(--bg-tertiary);
-            border-radius: 2px; cursor: pointer;
+            flex: 1; 
+            height: 6px; 
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px; 
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
         }
+        
+        .progress-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, 
+                rgba(153, 69, 255, 0.2) 0%, 
+                rgba(20, 241, 149, 0.2) 50%, 
+                rgba(0, 212, 255, 0.2) 100%);
+            opacity: 0.5;
+        }
+        
         .progress-fill {
-            height: 100%; background: var(--color-purple);
-            border-radius: 2px; width: 0%; transition: width 0.1s;
+            height: 100%; 
+            background: linear-gradient(90deg, 
+                var(--color-purple) 0%, 
+                var(--color-green) 50%, 
+                var(--color-blue) 100%);
+            background-size: 200% 100%;
+            animation: gradientShift 3s ease infinite;
+            border-radius: 3px; 
+            width: 0%; 
+            transition: width 0.1s;
+            position: relative;
+            box-shadow: 0 0 10px rgba(153, 69, 255, 0.5);
+        }
+        
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(153, 69, 255, 0.8);
         }
 
-        .progress-time { font-size: 0.7rem; color: var(--fg-secondary); font-family: monospace; min-width: 40px; }
-        .player-close { background: none; border: none; color: var(--fg-secondary); font-size: 1.2rem; cursor: pointer; padding: 4px; }
+        .progress-time { 
+            font-size: 0.75rem; 
+            color: var(--fg-secondary); 
+            font-family: monospace; 
+            min-width: 42px;
+        }
+        
+        .player-close { 
+            background: none; 
+            border: none; 
+            color: var(--fg-secondary); 
+            font-size: 1.3rem; 
+            cursor: pointer; 
+            padding: 6px;
+            transition: color 0.2s;
+        }
+        
+        .player-close:hover {
+            color: var(--color-red);
+        }
 
         /* FOOTER */
         .footer {
@@ -269,29 +739,76 @@
         .footer a { color: var(--color-purple); text-decoration: none; }
 
         /* MODALS */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        .modal-backdrop.show { display: block; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
         .error-modal {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: var(--bg-secondary); border-radius: 16px; padding: 20px;
+            background: linear-gradient(135deg, rgba(20, 24, 36, 0.98) 0%, rgba(30, 36, 51, 0.98) 100%);
+            backdrop-filter: blur(20px);
+            border-radius: 20px; padding: 24px;
             border: 2px solid var(--color-red); z-index: 1001;
             display: none; max-width: 400px; width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 85, 85, 0.2);
         }
-        .error-modal.show { display: block; }
+        .error-modal.show { display: block; animation: modalFadeIn 0.3s ease; }
+        
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: translate(-50%, -45%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+        
         .error-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
         .error-modal-title { font-weight: 600; font-size: 1.1rem; }
-        .error-modal-close { background: none; border: none; color: var(--fg-secondary); font-size: 1.2rem; cursor: pointer; }
-        .error-modal-content { color: var(--fg-secondary); font-size: 0.9rem; margin-bottom: 16px; }
+        .error-modal-close { 
+            background: none; border: none; color: var(--fg-secondary); 
+            font-size: 1.2rem; cursor: pointer; 
+            transition: color 0.2s;
+            padding: 4px;
+        }
+        .error-modal-close:hover { color: var(--color-red); }
+        .error-modal-content { color: var(--fg-secondary); font-size: 0.9rem; margin-bottom: 16px; line-height: 1.6; }
         .error-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
         .error-modal-btn {
-            padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;
+            padding: 10px 20px; border-radius: 10px; border: none; cursor: pointer; font-weight: 600;
+            transition: all 0.2s;
         }
-        .error-modal-btn.primary { background: var(--color-purple); color: white; }
-        .error-modal-btn.secondary { background: transparent; border: 2px solid var(--fg-secondary); color: var(--fg-secondary); }
+        .error-modal-btn.primary { 
+            background: linear-gradient(135deg, var(--color-purple), var(--color-green)); 
+            color: white; 
+        }
+        .error-modal-btn.primary:hover { transform: scale(1.05); }
+        .error-modal-btn.secondary { 
+            background: transparent; 
+            border: 2px solid var(--fg-secondary); 
+            color: var(--fg-secondary); 
+        }
+        .error-modal-btn.secondary:hover { 
+            border-color: var(--color-purple); 
+            color: var(--color-purple); 
+        }
 
         /* MOBILE */
         @media (max-width: 480px) {
             .container { padding: 12px; }
             .header { padding: 18px 12px; }
             .logo { font-size: 1.5rem; }
+            .info-banner { flex-direction: column; padding: 16px; }
+            .info-content { min-width: 100%; }
+            .info-stats { width: 100%; justify-content: space-around; }
             .versions-grid { grid-template-columns: 1fr; gap: 12px; }
             .onboarding-card { padding: 28px 20px; }
             .onboarding-title { font-size: 1.2rem; }
@@ -323,7 +840,33 @@
         <header class="header">
             <div class="logo">VERSIONS</div>
             <p class="tagline">Song versions as tickets — own the artist coin, unlock the version</p>
+            <a href="artist.html" class="artist-link" title="Artist Dashboard">🎨 Artist Dashboard</a>
         </header>
+
+        <!-- INFO BANNER -->
+        <section class="info-banner" id="infoBanner">
+            <div class="info-content">
+                <div class="info-icon">🎫</div>
+                <div class="info-text">
+                    <div class="info-title">How It Works</div>
+                    <div class="info-desc">Each song has multiple versions (demo, live, studio, remix). Premium versions require the artist's Audius Coin to unlock.</div>
+                </div>
+            </div>
+            <div class="info-stats" id="infoStats">
+                <div class="stat">
+                    <div class="stat-value" id="totalVersions">-</div>
+                    <div class="stat-label">Total Versions</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="premiumVersions">-</div>
+                    <div class="stat-label">Premium (Locked)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="unlockedVersions">-</div>
+                    <div class="stat-label">Unlocked</div>
+                </div>
+            </div>
+        </section>
 
         <section class="wallet-section">
             <button id="connectBtn" class="connect-btn" onclick="handleWalletConnect()">
@@ -374,6 +917,7 @@
     </div>
 
     <!-- ERROR MODAL -->
+    <div class="modal-backdrop" id="modalBackdrop" onclick="closeErrorModal()"></div>
     <div class="error-modal" id="errorModal">
         <div class="error-modal-header">
             <div class="error-modal-title" id="errorModalTitle">Error</div>
@@ -383,7 +927,7 @@
         <div class="error-modal-actions" id="errorModalActions"></div>
     </div>
 
-    <script src="./audius-solana.js?v=2"></script>
+    <script src="./audius-solana.js?v=3"></script>
     <script>
         // STATE
         let walletConnected = false;
@@ -401,9 +945,6 @@
 
         // Helper function to call backend proxy
         async function proxyFetch(endpoint) {
-            const API_PROXY = window.location.hostname === 'localhost' 
-                ? 'http://localhost:8080'
-                : 'https://versions.thisyearnofear.com';
             const response = await fetch(`${API_PROXY}${endpoint}`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
@@ -412,9 +953,9 @@
         }
 
         const onboardingData = [
-            { icon: '🎵', title: 'Collect Song Versions', desc: 'Like rare vinyl, but digital. Each version of a song - demo, live, studio - becomes a collectible.' },
-            { icon: '🪙', title: 'Own the Artist Coin', desc: 'Audius Artist Coins represent ownership in an artist. Hold the coin to unlock their exclusive versions.' },
-            { icon: '🔓', title: 'Connect & Unlock', desc: 'Connect your Solana wallet. If you own the artist coin, the version unlocks instantly!' }
+            { icon: '🎫', title: 'Versions as Tickets', desc: 'Each song version (demo, live, studio, remix) is a unique collectible. Premium versions require the artist\'s coin to unlock - like a ticket to exclusive content.' },
+            { icon: '🪙', title: 'Artist Coins = Access', desc: 'Audius Artist Coins are SPL tokens on Solana. Hold an artist\'s coin to unlock all their premium versions. Real blockchain ownership, real utility.' },
+            { icon: '🔓', title: 'Connect & Collect', desc: 'Connect your Solana wallet to verify ownership. Own the coin? The version unlocks instantly. Build your collection of rare versions!' }
         ];
 
         // ONBOARDING
@@ -484,10 +1025,12 @@
             
             // Get unique coin addresses to avoid duplicate checks
             const uniqueCoins = new Set();
-            allVersions.forEach(v => {
-                if (v.premium && v.coinAddress) {
-                    uniqueCoins.add(v.coinAddress);
-                }
+            allVersions.forEach(song => {
+                song.versions.forEach(v => {
+                    if (v.premium && v.coinAddress) {
+                        uniqueCoins.add(v.coinAddress);
+                    }
+                });
             });
             
             console.log(`🔍 Checking ${uniqueCoins.size} unique artist coins...`);
@@ -505,15 +1048,51 @@
                 }
             }
             
-            // Map results to versions
-            for (const version of allVersions) {
-                if (version.premium && version.coinAddress) {
-                    verifiedOwnership[version.id] = coinOwnership[version.coinAddress] || false;
+            // Map results to versions and enable streaming for owned tracks
+            for (const song of allVersions) {
+                for (const version of song.versions) {
+                    if (version.premium && version.coinAddress) {
+                        const owned = coinOwnership[version.coinAddress] || false;
+                        verifiedOwnership[version.id] = owned;
+                        
+                        // Enable streaming for owned premium tracks
+                        if (owned && version.trackId) {
+                            version.streamUrl = `${API_PROXY}/api/v1/audius/stream/${version.trackId}`;
+                        }
+                    }
                 }
             }
             
             hideLoading();
-            console.log('✅ Ownership verification complete:', verifiedOwnership);
+            console.log('✅ Ownership verification complete');
+        }
+
+        // VERSION TYPE DETECTION - uses real Audius metadata
+        function detectVersionType(track) {
+            const title = (track.title || '').toLowerCase();
+            const tags = (track.tags || '').toLowerCase();
+            const haystack = `${title} ${tags}`;
+
+            // Strongest signal: remix_of link to parent track
+            if (track.remix_of?.tracks?.length) return 'remix';
+
+            // Title/tag keyword detection
+            if (/\b(remix|rework|bootleg|flip)\b/.test(haystack)) return 'remix';
+            if (/\b(live|concert|set|performance)\b/.test(haystack)) return 'live';
+            if (/\b(acoustic|stripped|unplugged)\b/.test(haystack)) return 'acoustic';
+            if (/\b(demo|rough|draft|wip)\b/.test(haystack)) return 'demo';
+            if (/\b(edit|vip|instrumental|remaster)\b/.test(haystack)) return 'edit';
+
+            return 'original';
+        }
+
+        // Extract real token gate info from Audius stream_conditions
+        function getTokenGate(track) {
+            const tg = track?.stream_conditions?.token_gate;
+            if (track?.is_stream_gated === true && tg?.token_mint) {
+                return { tokenMint: tg.token_mint, tokenAmount: tg.token_amount ?? 1 };
+            }
+            return null;
         }
 
         // DATA
@@ -522,138 +1101,277 @@
             renderVersions();
 
             try {
-                // STRATEGY: Fetch coins first, then prioritize tracks from artists with coins
+                // 0. Fetch local relationships for grouping (VERSIONS Relational Layer)
+                console.log('🔗 Fetching local version relationships...');
+                const relData = await proxyFetch('/api/v1/relationships').catch(() => ({ data: [] }));
+                const localRelations = relData.data || [];
+                const versionToParentMap = {};
+                localRelations.forEach(rel => {
+                    versionToParentMap[rel.version_id] = rel.parent_id;
+                });
+                console.log(`✅ Loaded ${localRelations.length} local relationships`);
+
+                // 1. Fetch coins list for mint → ticker lookup
                 console.log('🪙 Fetching Artist Coins list...');
                 const coinsData = await proxyFetch('/api/v1/audius/coins?limit=50');
                 const coins = coinsData.data || [];
-                
-                // Filter to get unique artists with coins (excluding $AUDIO)
+
                 const AUDIO_MINT = '9LzCMqDgTKYz9Drzqnpgee3SGa89up3a247ypMj2xrqM';
-                const artistsWithCoins = coins
-                    .filter(coin => coin.mint !== AUDIO_MINT && coin.owner_id)
-                    .reduce((acc, coin) => {
-                        if (!acc[coin.owner_id]) {
-                            acc[coin.owner_id] = {
-                                artistId: coin.owner_id,
-                                coinMint: coin.mint,
-                                coinTicker: coin.ticker,
-                                coinName: coin.name
-                            };
-                        }
-                        return acc;
-                    }, {});
-                
-                const artistIds = Object.keys(artistsWithCoins);
+                const coinsByMint = {};
+                const artistIds = [];
+                coins.filter(c => c.mint !== AUDIO_MINT && c.owner_id).forEach(coin => {
+                    coinsByMint[coin.mint] = { ticker: coin.ticker, name: coin.name };
+                    if (!artistIds.includes(coin.owner_id)) artistIds.push(coin.owner_id);
+                });
                 console.log(`✅ Found ${artistIds.length} artists with coins`);
-                
-                // Now fetch trending tracks
-                const tracks = await window.AudiusSolanaIntegration.initAudius();
-                if (tracks && tracks.length > 0) {
-                    // Separate tracks: artists with coins first, then others
-                    const tracksWithCoins = tracks.filter(t => artistsWithCoins[t.user?.id]);
-                    const tracksWithoutCoins = tracks.filter(t => !artistsWithCoins[t.user?.id]);
-                    
-                    console.log(`🎵 ${tracksWithCoins.length} tracks from artists with coins`);
-                    console.log(`🎵 ${tracksWithoutCoins.length} tracks from other artists`);
-                    
-                    // Combine: coin artists first
-                    const prioritizedTracks = [...tracksWithCoins, ...tracksWithoutCoins];
-                    
-                    allVersions = prioritizedTracks.slice(0, 18).map((track, index) => {
-                        const isPremium = !!artistsWithCoins[track.user?.id];
-                        // For non-premium tracks, use Audius streaming URL
-                        // For premium tracks, they need to verify ownership first
-                        const streamUrl = isPremium 
-                            ? null // Will be set after ownership verification
-                            : `https://discoveryprovider.audius.co/v1/tracks/${track.id}/stream`;
-                        
+
+                // 2. Fetch trending tracks + tracks from coin artists (parallel)
+                const [trendingTracks, ...artistTrackResults] = await Promise.all([
+                    window.AudiusSolanaIntegration.initAudius(),
+                    ...artistIds.slice(0, 8).map(aid =>
+                        proxyFetch(`/api/v1/artist/${aid}/tracks`)
+                            .then(d => d.data || [])
+                            .catch(() => [])
+                    )
+                ]);
+
+                const artistTracks = artistTrackResults.flat();
+
+                // 3. Merge and deduplicate
+                const byId = new Map();
+                for (const t of [...(trendingTracks || []), ...artistTracks]) {
+                    if (t?.id && !byId.has(t.id)) byId.set(t.id, t);
+                }
+                const allTracks = [...byId.values()];
+                console.log(`🎵 ${allTracks.length} unique tracks (${artistTracks.length} from coin artists)`);
+
+                if (allTracks.length > 0) {
+                    // 4. Sort: coin-gated first, then detected versions, then originals
+                    const gated = allTracks.filter(t => t.is_stream_gated);
+                    const versions = allTracks.filter(t => !t.is_stream_gated && detectVersionType(t) !== 'original');
+                    const originals = allTracks.filter(t => !t.is_stream_gated && detectVersionType(t) === 'original');
+                    const sorted = [...gated, ...versions, ...originals];
+
+                    // 5. Build versions from REAL data with grouping logic
+                    const rawVersions = sorted.slice(0, 48).map(track => {
+                        const tokenGate = getTokenGate(track);
+                        const isGated = !!tokenGate;
+                        const coinInfo = tokenGate ? coinsByMint[tokenGate.tokenMint] : null;
+
                         return {
-                            id: `audius-${track.id}`,
+                            id: track.id,
                             title: track.title || 'Unknown Track',
                             artist: track.user?.name || 'Unknown Artist',
                             artistId: track.user?.id || '',
-                            type: ['demo', 'studio', 'live', 'remix', 'acoustic'][index % 5],
+                            type: detectVersionType(track),
                             artwork: track.artwork?.['480x480'] || track.artwork?.['150x150'],
                             duration: track.duration,
-                            streamUrl: streamUrl,
-                            coinAddress: artistsWithCoins[track.user?.id]?.coinMint || null,
-                            coinTicker: artistsWithCoins[track.user?.id]?.coinTicker || null,
-                            premium: isPremium
+                            streamUrl: isGated ? null : `${API_PROXY}/api/v1/audius/stream/${track.id}`,
+                            trackId: track.id,
+                            coinAddress: tokenGate?.tokenMint || null,
+                            coinTicker: coinInfo?.ticker || null,
+                            premium: isGated,
+                            remixOf: track.remix_of?.tracks?.[0]?.parent_track_id || null,
+                            localParent: versionToParentMap[track.id] || null
                         };
                     });
+
+                    // PERFORMANT: Group versions by parent track ID (local override first, then Audius remix_of, then self)
+                    const songGroups = new Map();
                     
-                    console.log(`✅ Loaded ${allVersions.length} versions (${allVersions.filter(v => v.premium).length} premium)`);
+                    rawVersions.forEach(v => {
+                        // LOCAL LAYER PRIORITY: Use manually linked parent if available
+                        const parentId = v.localParent || v.remixOf || v.id;
+                        
+                        if (!songGroups.has(parentId)) {
+                            songGroups.set(parentId, {
+                                id: parentId,
+                                canonical_title: '', 
+                                artist: v.artist,
+                                artwork: v.artwork,
+                                versions: []
+                            });
+                        }
+                        songGroups.get(parentId).versions.push(v);
+                    });
+
+                    // Refine titles and artwork for the groups
+                    allVersions = Array.from(songGroups.values()).map(group => {
+                        // Find the 'original' - prioritize the actual parent if it's in our dataset
+                        const originalCandidate = group.versions.find(v => v.trackId === group.id) 
+                                               || group.versions.find(v => v.type === 'original')
+                                               || group.versions[0];
+                        
+                        group.canonical_title = originalCandidate.title;
+                        group.artwork = originalCandidate.artwork;
+                        return group;
+                    });
+
+                    const gatedCount = rawVersions.filter(v => v.premium).length;
+                    console.log(`✅ Loaded ${allVersions.length} songs (${rawVersions.length} versions total)`);
                 } else {
-                    allVersions = getDemoVersions();
-                }
-            } catch (error) {
-                console.error('Failed to load Audius tracks:', error);
-                allVersions = getDemoVersions();
-            }
-
-            isLoading = false;
-            filteredVersions = [...allVersions];
-            renderVersions();
+                                    allVersions = getDemoVersions();
+                                }
+                            } catch (error) {
+                                console.error('Failed to load Audius tracks:', error);
+                                allVersions = getDemoVersions();
+                            }
+                    
+                            isLoading = false;
+                            filteredVersions = [...allVersions];
+                            renderVersions();
+                        }
+                    
+                        function getDemoVersions() {
+                            return [
+                                { 
+                                    id: 's1', 
+                                    canonical_title: 'Bohemian Rhapsody', 
+                                    artist: 'Queen', 
+                                    artwork: null,
+                                    versions: [
+                                        { id: 'v1', title: 'Bohemian Rhapsody', artist: 'Queen', type: 'studio', coinAddress: 'queen_coin', premium: true, streamUrl: null },
+                                        { id: 'v2', title: 'Bohemian Rhapsody', artist: 'Queen', type: 'live', coinAddress: 'queen_coin', premium: false, streamUrl: 'demo' }
+                                    ]
+                                }
+                            ];
+                        }
+                    
+                        // SEARCH
+                        function handleSearch(query) {
+                            if (!query.trim()) { filteredVersions = [...allVersions]; }
+                            else {
+                                const q = query.toLowerCase();
+                                filteredVersions = allVersions.filter(s => 
+                                    s.canonical_title.toLowerCase().includes(q) || 
+                                    s.artist.toLowerCase().includes(q) ||
+                                    s.versions.some(v => v.title.toLowerCase().includes(q))
+                                );
+                            }
+                            renderVersions();
+                        }
+                    
+                        // RENDER
+                        function renderVersions() {
+                            const container = document.getElementById('versionsContainer');
+                    
+                            if (isLoading) {
+                                container.innerHTML = '<div class="loading-grid"><div class="loading-skeleton"></div><div class="loading-skeleton"></div><div class="loading-skeleton"></div></div>';
+                                return;
+                            }
+                    
+                            if (filteredVersions.length === 0) {
+                                container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>No songs found</p></div>';
+                                return;
+                            }
+                    
+                            // Update stats
+                            const totalSongs = filteredVersions.length;
+                            const totalVersions = filteredVersions.reduce((sum, s) => sum + s.versions.length, 0);
+                            const premiumVersions = filteredVersions.reduce((sum, s) => sum + s.versions.filter(v => v.premium).length, 0);
+                            
+                            document.getElementById('totalVersions').textContent = totalSongs; // Showing song count as primary stat
+                            document.getElementById('premiumVersions').textContent = premiumVersions;
+                            document.getElementById('unlockedVersions').textContent = totalVersions;
+                    
+                            container.innerHTML = `<div class="versions-grid">${filteredVersions.map(renderSongCard).join('')}</div>`;
+                        }
+                    
+                        function renderSongCard(song) {
+                            return `
+                                <div class="version-card">
+                                    <div class="track-artwork ${song.artwork ? '' : 'error'}">
+                                        ${song.artwork ? `<img src="${song.artwork}" alt="${song.canonical_title}" onerror="this.classList.add('error')">` : ''}
+                                    </div>
+                                    <div class="track-title">${song.canonical_title}</div>
+                                    <div class="track-artist">${song.artist}</div>
+                                    
+                                    <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px;">
+                                        <div style="font-size: 0.7rem; color: var(--fg-secondary); text-transform: uppercase; margin-bottom: 8px;">Available Versions</div>
+                                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                                            ${song.versions.map(v => renderVersionListItem(v)).join('')}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    
+                        function renderVersionListItem(version) {
+                            const isUnlocked = !version.premium || verifiedOwnership[version.id] === true;
+                            const jupiterUrl = version.premium ? `https://jup.ag/swap/SOL-${version.coinAddress}` : '';
+                            
+                            return `
+                                <div style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; border: 1px solid ${version.premium ? 'rgba(153,69,255,0.2)' : 'rgba(255,255,255,0.05)'};">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                        <span class="version-type ${version.type}" style="font-size: 0.6rem;">${version.type}</span>
+                                        <span style="font-size: 0.6rem; font-family: monospace; color: var(--fg-secondary);">#${version.id.toString().slice(-4)}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                                        <div style="flex: 1; min-width: 0;">
+                                            <div style="font-size: 0.8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${version.title}</div>
+                                            ${version.premium && !isUnlocked ? `
+                                                <div style="font-size: 0.65rem; color: var(--color-yellow);">$${version.coinTicker || 'COIN'} Required</div>
+                                            ` : `
+                                                <div style="font-size: 0.65rem; color: var(--color-green);">Unlocked</div>
+                                            `}
+                                        </div>
+                                        <button class="play-btn ${isUnlocked ? 'primary' : 'secondary'}" 
+                                            style="padding: 4px 10px; margin-top: 0; font-size: 0.7rem; width: auto;"
+                                            onclick="playVersion('${version.id}')">
+                                            ${isUnlocked ? '▶' : '🔒'}
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    
+                        // PLAYBACK
+                        function copyAddress(address, event) {            event.stopPropagation();
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(address).then(() => {
+                // Show success feedback
+                const btn = event.currentTarget;
+                const originalIcon = btn.querySelector('.copy-icon').textContent;
+                btn.querySelector('.copy-icon').textContent = '✓';
+                btn.style.background = 'rgba(20, 241, 149, 0.3)';
+                
+                setTimeout(() => {
+                    btn.querySelector('.copy-icon').textContent = originalIcon;
+                    btn.style.background = '';
+                }, 1500);
+                
+                // Show toast notification
+                showToast('Address copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showToast('Failed to copy address', true);
+            });
         }
 
-        function getDemoVersions() {
-            return [
-                { id: 'v1', title: 'Bohemian Rhapsody', artist: 'Queen', type: 'studio', coinAddress: 'queen_coin', premium: true },
-                { id: 'v2', title: 'Bohemian Rhapsody', artist: 'Queen', type: 'live', coinAddress: 'queen_coin', premium: false },
-                { id: 'v3', title: 'Imagine', artist: 'John Lennon', type: 'studio', coinAddress: 'lennon_coin', premium: true },
-                { id: 'v4', title: 'Imagine', artist: 'John Lennon', type: 'acoustic', coinAddress: 'lennon_coin', premium: false },
-                { id: 'v5', title: 'Hotel California', artist: 'Eagles', type: 'live', coinAddress: 'eagles_coin', premium: true },
-                { id: 'v6', title: 'Hotel California', artist: 'Eagles', type: 'demo', coinAddress: 'eagles_coin', premium: false },
-            ];
+        function showToast(message, isError = false) {
+            const toast = document.createElement('div');
+            toast.className = `toast ${isError ? 'error' : 'success'}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 2000);
         }
 
-        // SEARCH
-        function handleSearch(query) {
-            if (!query.trim()) { filteredVersions = [...allVersions]; }
-            else {
-                const q = query.toLowerCase();
-                filteredVersions = allVersions.filter(v => v.title.toLowerCase().includes(q) || v.artist.toLowerCase().includes(q));
-            }
-            renderVersions();
-        }
-
-        // RENDER
-        function renderVersions() {
-            const container = document.getElementById('versionsContainer');
-
-            if (isLoading) {
-                container.innerHTML = '<div class="loading-grid"><div class="loading-skeleton"></div><div class="loading-skeleton"></div><div class="loading-skeleton"></div></div>';
-                return;
-            }
-
-            if (filteredVersions.length === 0) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>No versions found</p></div>';
-                return;
-            }
-
-            container.innerHTML = `<div class="versions-grid">${filteredVersions.map(renderVersionCard).join('')}</div>`;
-        }
-
-        function renderVersionCard(version) {
-            const isUnlocked = !version.premium || verifiedOwnership[version.id] === true;
-            return `
-                <div class="version-card ${isUnlocked ? '' : 'locked'} ${version.premium ? 'premium' : ''}">
-                    <div class="track-artwork ${version.artwork ? '' : 'error'}">
-                        ${version.artwork ? `<img src="${version.artwork}" alt="${version.title}" onerror="this.classList.add('error')">` : ''}
-                    </div>
-                    <div class="track-title">${version.title}</div>
-                    <div class="track-artist">${version.artist}</div>
-                    <span class="version-type ${version.type}">${version.type}</span>
-                    ${version.premium ? `<div class="coin-info"><div class="coin-label">🎫 Required: Artist Coin</div><div class="coin-address">${version.coinAddress.slice(0, 16)}...</div></div>` : ''}
-                    <div class="access-badge ${isUnlocked ? 'unlocked' : 'locked'}">${isUnlocked ? '✓ Unlocked' : '🔒 Locked'}</div>
-                    <button class="play-btn ${isUnlocked ? 'primary' : 'secondary'}" onclick="playVersion('${version.id}')">${isUnlocked ? '▶ Play' : '🔗 Connect to Unlock'}</button>
-                </div>
-            `;
-        }
-
-        // PLAYBACK
         function playVersion(versionId) {
-            const version = allVersions.find(v => v.id === versionId);
+            let version = null;
+            for (const song of allVersions) {
+                const found = song.versions.find(v => v.id === versionId);
+                if (found) {
+                    version = found;
+                    break;
+                }
+            }
+            
             if (!version) return;
             
             const isUnlocked = !version.premium || verifiedOwnership[version.id] === true;
@@ -768,10 +1486,12 @@
                 `<button class="error-modal-btn ${a.primary ? 'primary' : 'secondary'}" onclick="${a.action.toString().replace(/function\s*\(\)\s*{/, '').replace(/}$/, '')}">${a.text}</button>`
             ).join('');
             
+            document.getElementById('modalBackdrop').classList.add('show');
             document.getElementById('errorModal').classList.add('show');
         }
 
         function closeErrorModal() {
+            document.getElementById('modalBackdrop').classList.remove('show');
             document.getElementById('errorModal').classList.remove('show');
         }
 
@@ -781,13 +1501,23 @@
             overlay.id = 'loadingOverlay';
             overlay.innerHTML = `
                 <div class="onboarding-card">
-                    <div class="onboarding-icon">🔄</div>
+                    <div class="onboarding-icon" style="animation: spin 1s linear infinite;">🔄</div>
                     <h2 class="onboarding-title">${title}</h2>
                     <p class="onboarding-desc">${message}</p>
                 </div>
             `;
             document.body.appendChild(overlay);
         }
+        
+        // Add spin animation for loading icon
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
 
         function hideLoading() {
             const overlay = document.getElementById('loadingOverlay');

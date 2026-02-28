@@ -46,8 +46,12 @@ Every song has multiple versions - demos, studio recordings, live performances, 
 
 ✅ **Audius Integration** - Real trending tracks from Audius API  
 ✅ **Phantom Wallet** - Solana wallet connection  
-✅ **Token-Gated Access** - Verify Artist Coin ownership  
+✅ **Token-Gated Access** - Verify Artist Coin ownership on-chain  
 ✅ **Version Discovery** - Browse demos, remixes, live versions  
+✅ **One-Click Copy** - Copy coin addresses to clipboard  
+✅ **Jupiter DEX Integration** - Direct buy links for artist coins  
+✅ **Real-Time Stats** - See total/premium/unlocked version counts  
+✅ **Toast Notifications** - Instant feedback for user actions  
 ✅ **Mobile-First UI** - Works on all devices  
 
 ---

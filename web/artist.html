@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>VERSIONS - Artist Dashboard</title>
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #141824;
+            --bg-tertiary: #1e2433;
+            --fg-primary: #fffbf6;
+            --fg-secondary: #8b9dc3;
+            --color-purple: #9945FF;
+            --color-green: #14F195;
+            --color-blue: #00d4ff;
+            --color-yellow: #f6c744;
+            --color-red: #ff5555;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 50%, #0f1420 100%);
+            color: var(--fg-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 16px;
+        }
+
+        /* HEADER */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            margin-bottom: 32px;
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
+            color: white;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid var(--color-purple);
+            color: var(--color-purple);
+        }
+
+        .btn:hover { transform: scale(1.05); }
+
+        /* ARTIST INFO */
+        .artist-info {
+            background: linear-gradient(135deg, rgba(153, 69, 255, 0.1), rgba(20, 241, 149, 0.1));
+            border: 1px solid rgba(153, 69, 255, 0.3);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 32px;
+            display: flex;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .artist-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+        }
+
+        .artist-details { flex: 1; }
+        .artist-name { font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
+        .artist-handle { color: var(--fg-secondary); font-size: 0.9rem; }
+
+        .coin-badge {
+            background: rgba(246, 199, 68, 0.2);
+            border: 1px solid var(--color-yellow);
+            border-radius: 8px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .coin-label { font-size: 0.75rem; color: var(--fg-secondary); }
+        .coin-ticker { font-size: 1.1rem; font-weight: 700; color: var(--color-yellow); }
+
+        /* ARTIST INPUT */
+        .artist-input-section {
+            background: var(--bg-secondary);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 40px 24px;
+            margin-bottom: 32px;
+        }
+
+        /* STATS */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--fg-secondary);
+            margin-top: 4px;
+        }
+
+        /* TABS */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: var(--fg-secondary);
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            color: var(--color-purple);
+            border-bottom-color: var(--color-purple);
+        }
+
+        /* TRACKS TABLE */
+        .tracks-table {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .table-header {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 120px;
+            gap: 16px;
+            padding: 16px 20px;
+            background: var(--bg-tertiary);
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--fg-secondary);
+        }
+
+        .track-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 120px;
+            gap: 16px;
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            align-items: center;
+        }
+
+        .track-info {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .track-artwork {
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .track-title { font-weight: 600; }
+        .track-version { font-size: 0.8rem; color: var(--fg-secondary); }
+
+        .version-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .version-badge.demo { background: rgba(246,199,68,0.2); color: var(--color-yellow); }
+        .version-badge.studio { background: rgba(0,212,255,0.2); color: var(--color-blue); }
+        .version-badge.live { background: rgba(0,255,136,0.2); color: var(--color-green); }
+        .version-badge.remix { background: rgba(153,69,255,0.2); color: var(--color-purple); }
+        .version-badge.original { background: rgba(255,255,255,0.1); color: var(--fg-secondary); }
+        .version-badge.edit { background: rgba(255,136,0,0.2); color: #ff8800; }
+        .version-badge.acoustic { background: rgba(184,197,214,0.2); color: #b8c5d6; }
+
+        .toggle-switch {
+            position: relative;
+            width: 48px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255,255,255,0.1);
+            transition: 0.3s;
+            border-radius: 24px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background: linear-gradient(135deg, var(--color-purple), var(--color-green));
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-badge.premium {
+            background: rgba(246,199,68,0.2);
+            color: var(--color-yellow);
+        }
+
+        .status-badge.free {
+            background: rgba(20,241,149,0.2);
+            color: var(--color-green);
+        }
+
+        /* UPLOAD SECTION */
+        .upload-section {
+            background: var(--bg-secondary);
+            border: 2px dashed rgba(153, 69, 255, 0.3);
+            border-radius: 16px;
+            padding: 48px;
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .upload-icon { font-size: 3rem; margin-bottom: 16px; }
+        .upload-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 8px; }
+        .upload-desc { color: var(--fg-secondary); margin-bottom: 24px; }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        .form-input, .form-select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: var(--bg-tertiary);
+            color: var(--fg-primary);
+            font-size: 0.9rem;
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--color-purple);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: rgba(20, 24, 36, 0.95);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            z-index: 10000;
+            opacity: 0;
+            transition: all 0.3s;
+            border: 1px solid rgba(20, 241, 149, 0.5);
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">VERSIONS</div>
+            <div class="header-actions">
+                <a href="/" class="btn btn-secondary">View Fan Site</a>
+                <button class="btn btn-primary" id="connectBtn">Connect Wallet</button>
+            </div>
+        </header>
+
+        <!-- Artist Info -->
+        <div class="artist-info" id="artistInfo" style="display: none;">
+            <div class="artist-avatar">🎵</div>
+            <div class="artist-details">
+                <div class="artist-name" id="artistName">Artist Name</div>
+                <div class="artist-handle" id="artistHandle">@artist</div>
+            </div>
+            <div class="coin-badge">
+                <div class="coin-label">Your Artist Coin</div>
+                <div class="coin-ticker" id="coinTicker">$ARTIST</div>
+            </div>
+        </div>
+
+        <!-- Artist ID Input (shown when not connected) -->
+        <div class="artist-input-section" id="artistInputSection">
+            <div style="max-width: 600px; margin: 0 auto; text-align: center;">
+                <h2 style="margin-bottom: 16px;">Enter Your Audius Artist ID or Handle</h2>
+                <p style="color: var(--fg-secondary); margin-bottom: 24px;">
+                    Find your artist ID in your Audius profile URL: audius.co/artist/<strong>YOUR_ID</strong>
+                </p>
+                <div style="display: flex; gap: 12px;">
+                    <input 
+                        type="text" 
+                        id="artistIdInput" 
+                        class="form-input" 
+                        placeholder="e.g., nlGNe or @deadmau5"
+                        style="flex: 1;"
+                    >
+                    <button class="btn btn-primary" onclick="loadArtistById()">Load Profile</button>
+                </div>
+                <p style="color: var(--fg-secondary); font-size: 0.85rem; margin-top: 12px;">
+                    Example artists: nlGNe (Brownies & Lemonade), eP9k7 (3LAU)
+                </p>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid" id="statsGrid" style="display: none;">
+            <div class="stat-card">
+                <div class="stat-value" id="totalTracks">0</div>
+                <div class="stat-label">Total Versions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="premiumTracks">0</div>
+                <div class="stat-label">Premium Versions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalPlays">0</div>
+                <div class="stat-label">Total Plays</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="coinHolders">0</div>
+                <div class="stat-label">Coin Holders</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('tracks')">My Versions</button>
+            <button class="tab" onclick="switchTab('upload')">Upload New Version</button>
+        </div>
+
+        <!-- Tracks Tab -->
+        <div id="tracksTab">
+            <div class="tracks-table">
+                <div class="table-header">
+                    <div>Track</div>
+                    <div>Version Type</div>
+                    <div>Plays</div>
+                    <div>Status</div>
+                    <div>Premium</div>
+                </div>
+                <div id="tracksContainer">
+                    <div style="padding: 40px; text-align: center; color: var(--fg-secondary);">
+                        Connect your wallet to view your tracks
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Tab -->
+        <div id="uploadTab" style="display: none;">
+            <div class="upload-section">
+                <div class="upload-icon">📤</div>
+                <div class="upload-title">Upload New Version</div>
+                <div class="upload-desc">Add a new version of your song and choose whether to gate it with your Artist Coin</div>
+                
+                <form id="uploadForm" style="max-width: 600px; margin: 0 auto;">
+                    <div class="form-group">
+                        <label class="form-label">Track Title</label>
+                        <input type="text" class="form-input" placeholder="e.g., Summer Nights - Acoustic Version" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Version Type</label>
+                        <select class="form-select" required>
+                            <option value="">Select version type...</option>
+                            <option value="demo">Demo</option>
+                            <option value="studio">Studio</option>
+                            <option value="live">Live</option>
+                            <option value="remix">Remix</option>
+                            <option value="acoustic">Acoustic</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Audio File</label>
+                        <input type="file" class="form-input" accept="audio/*" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" id="premiumCheckbox" style="margin-right: 8px;">
+                            Make this a Premium Version (requires your Artist Coin)
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Upload Version</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API_PROXY = window.location.hostname === 'localhost' 
+            ? 'http://localhost:8080'
+            : 'https://versions.thisyearnofear.com';
+
+        let connected = false;
+        let artistData = null;
+        let artistTracks = [];
+        let walletAddress = '';
+
+        // Helper to call backend proxy
+        async function proxyFetch(endpoint) {
+            const response = await fetch(`${API_PROXY}${endpoint}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        }
+
+        // Connect wallet and fetch artist data
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            try {
+                // Connect Phantom wallet
+                const provider = window.phantom?.solana || window.solana;
+                if (!provider) {
+                    showToast('Please install Phantom wallet', true);
+                    return;
+                }
+
+                const response = await provider.connect();
+                walletAddress = response.publicKey.toString();
+                connected = true;
+
+                showToast('Wallet connected! Enter your artist ID below.');
+                
+            } catch (error) {
+                console.error('Connection error:', error);
+                showToast('Failed to connect wallet', true);
+            }
+        });
+
+        // Load artist by ID from input
+        async function loadArtistById() {
+            const input = document.getElementById('artistIdInput').value.trim();
+            if (!input) {
+                showToast('Please enter an artist ID or handle', true);
+                return;
+            }
+
+            // Remove @ if present
+            const artistId = input.replace('@', '');
+            
+            showToast('Loading artist profile...');
+            await loadArtistData(artistId);
+        }
+
+        // Allow Enter key to submit
+        document.getElementById('artistIdInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                loadArtistById();
+            }
+        });
+
+        async function loadArtistData(idOrHandle) {
+            try {
+                let artistId = idOrHandle;
+                
+                // PERFORMANCE: Check if this is a handle (handles are typically longer or letters-only)
+                // Audius IDs are base58 encoded, so letters + numbers
+                // If it's short like 'nlGNe', it's likely an ID. If it's a known handle, resolve it.
+                if (idOrHandle.length > 5 || /^[a-zA-Z_]+$/.test(idOrHandle)) {
+                    showToast(`Resolving handle: @${idOrHandle}...`);
+                    try {
+                        const resolveData = await proxyFetch(`/api/v1/audius/resolve?url=https://audius.co/${idOrHandle}`);
+                        if (resolveData.data && resolveData.data.id) {
+                            artistId = resolveData.data.id;
+                            console.log(`✅ Resolved ${idOrHandle} to ID: ${artistId}`);
+                        }
+                    } catch (err) {
+                        console.warn('Handle resolution failed, trying as direct ID', err);
+                    }
+                }
+
+                // Fetch artist info
+                const artistInfo = await proxyFetch(`/api/v1/artist/${artistId}`);
+                const artist = artistInfo.data;
+
+                if (!artist) throw new Error('Artist not found');
+
+                // Fetch artist's coin
+                const coinsData = await proxyFetch(`/api/v1/audius/user/${artistId}/coins`);
+                const coins = coinsData.data?.data || [];
+                const AUDIO_MINT = '9LzCMqDgTKYz9Drzqnpgee3SGa89up3a247ypMj2xrqM';
+                const artistCoin = coins.find(coin => 
+                    coin.owner_id === artistId && 
+                    coin.mint !== AUDIO_MINT
+                );
+
+                // Fetch artist's tracks
+                const tracksData = await proxyFetch(`/api/v1/artist/${artistId}/tracks`);
+                artistTracks = tracksData.data || [];
+
+                // Update UI
+                artistData = {
+                    id: artistId,
+                    name: artist.name,
+                    handle: artist.handle,
+                    coinTicker: artistCoin ? `$${artistCoin.ticker}` : 'No Coin',
+                    coinAddress: artistCoin?.mint || null,
+                    profilePicture: artist.profile_picture?.['150x150']
+                };
+
+                // Hide input section, show artist info
+                document.getElementById('artistInputSection').style.display = 'none';
+                document.getElementById('artistInfo').style.display = 'flex';
+                document.getElementById('statsGrid').style.display = 'grid';
+                document.getElementById('artistName').textContent = artistData.name;
+                document.getElementById('artistHandle').textContent = `@${artistData.handle}`;
+                document.getElementById('coinTicker').textContent = artistData.coinTicker;
+
+                // Update avatar if available
+                if (artistData.profilePicture) {
+                    document.querySelector('.artist-avatar').innerHTML = `<img src="${artistData.profilePicture}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">`;
+                }
+
+                // Calculate stats
+                const totalTracks = artistTracks.length;
+                const totalPlays = artistTracks.reduce((sum, track) => sum + (track.play_count || 0), 0);
+                const premiumTracks = artistTracks.filter(t => t.is_stream_gated === true).length;
+
+                document.getElementById('totalTracks').textContent = totalTracks;
+                document.getElementById('premiumTracks').textContent = premiumTracks;
+                document.getElementById('totalPlays').textContent = formatNumber(totalPlays);
+                document.getElementById('coinHolders').textContent = '-'; 
+
+                document.getElementById('connectBtn').textContent = 'Connected';
+                document.getElementById('connectBtn').style.background = 'linear-gradient(135deg, var(--color-green), var(--color-blue))';
+
+                // Render tracks
+                renderTracks();
+
+                showToast('✅ Artist profile loaded successfully!');
+            } catch (error) {
+                console.error('Failed to load artist data:', error);
+                showToast('❌ Failed to load artist data. Check the ID/Handle.', true);
+            }
+        }
+
+        // Detect version type from real Audius metadata
+        function detectVersionType(track) {
+            const title = (track.title || '').toLowerCase();
+            const tags = (track.tags || '').toLowerCase();
+            const haystack = `${title} ${tags}`;
+            if (track.remix_of?.tracks?.length) return 'remix';
+            if (/\b(remix|rework|bootleg|flip)\b/.test(haystack)) return 'remix';
+            if (/\b(live|concert|set|performance)\b/.test(haystack)) return 'live';
+            if (/\b(acoustic|stripped|unplugged)\b/.test(haystack)) return 'acoustic';
+            if (/\b(demo|rough|draft|wip)\b/.test(haystack)) return 'demo';
+            if (/\b(edit|vip|instrumental|remaster)\b/.test(haystack)) return 'edit';
+            return 'original';
+        }
+
+        function renderTracks() {
+            const container = document.getElementById('tracksContainer');
+            
+            if (artistTracks.length === 0) {
+                container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--fg-secondary);">No tracks found</div>';
+                return;
+            }
+
+            container.innerHTML = artistTracks.map((track, index) => {
+                const versionType = detectVersionType(track);
+                const isPremium = track.is_stream_gated === true;
+                const tokenGate = track.stream_conditions?.token_gate;
+                const gateInfo = tokenGate 
+                    ? `$${artistData.coinTicker || '?'} • ${tokenGate.token_amount || 1} required`
+                    : '';
+                
+                return `
+                    <div class="track-row">
+                        <div class="track-info">
+                            <div class="track-artwork">
+                                ${track.artwork?.['150x150'] 
+                                    ? `<img src="${track.artwork['150x150']}" style="width: 100%; height: 100%; border-radius: 8px; object-fit: cover;">` 
+                                    : '🎵'}
+                            </div>
+                            <div>
+                                <div class="track-title">${track.title}</div>
+                                <div class="track-version">${track.genre || 'Original'}${gateInfo ? ` • ${gateInfo}` : ''}</div>
+                                <div style="font-size: 0.65rem; color: var(--color-blue); margin-top: 4px;">ID: ${track.id}</div>
+                            </div>
+                        </div>
+                        <div><span class="version-badge ${versionType}">${versionType}</span></div>
+                        <div>${formatNumber(track.play_count || 0)}</div>
+                        <div>
+                            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.7rem;" 
+                                onclick="openLinkModal('${track.id}', '${track.title.replace(/'/g, "\\'")}')">
+                                🔗 Link Parent
+                            </button>
+                        </div>
+                        <div>
+                            <label class="toggle-switch" title="${isPremium ? 'Gated via Audius' : 'Gate via Audius SDK (coming soon)'}">
+                                <input type="checkbox" ${isPremium ? 'checked disabled' : ''} 
+                                    onchange="togglePremium(this, '${track.id}')"
+                                    data-track-id="${track.id}">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openLinkModal(trackId, title) {
+            const parentId = prompt(`Enter the Audius Track ID of the "Parent" song (the original/studio version) for: \n"${title}"`, "");
+            if (parentId && parentId.trim()) {
+                linkTrackToParent(trackId, parentId.trim());
+            }
+        }
+
+        async function linkTrackToParent(versionId, parentId) {
+            try {
+                showToast('Linking version to parent...');
+                const response = await fetch(`${API_PROXY}/api/v1/relationships/link`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        parent_id: parentId,
+                        version_id: versionId,
+                        version_type: 'version',
+                        artist_id: artistData.id
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showToast('✅ Successfully linked version! Refreshing grouping...', false);
+                } else {
+                    showToast('❌ Failed to link version: ' + result.error, true);
+                }
+            } catch (error) {
+                console.error('Link error:', error);
+                showToast('❌ Connection failed', true);
+            }
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        // Switch tabs
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            if (tab === 'tracks') {
+                document.getElementById('tracksTab').style.display = 'block';
+                document.getElementById('uploadTab').style.display = 'none';
+            } else {
+                document.getElementById('tracksTab').style.display = 'none';
+                document.getElementById('uploadTab').style.display = 'block';
+            }
+        }
+
+        // Toggle premium status
+        async function togglePremium(checkbox, trackId) {
+            const track = artistTracks.find(t => t.id === trackId);
+            const isActuallyGated = track?.is_stream_gated === true;
+
+            if (isActuallyGated) {
+                // Already gated on Audius - toggle is disabled, but just in case
+                checkbox.checked = true;
+                showToast('This track is already coin-gated on Audius');
+                return;
+            }
+
+            if (!artistData || !artistData.coinAddress) {
+                showToast('You need an Artist Coin to gate tracks', true);
+                checkbox.checked = false;
+                return;
+            }
+
+            // Not yet gated - show what the SDK call would look like
+            checkbox.checked = false; // Revert - we can't actually write
+            showToast(
+                `To gate this track, use Audius SDK:\n` +
+                `audiusSdk.tracks.updateTrack({ isStreamGated: true, ` +
+                `streamConditions: { tokenGate: { tokenMint: "${artistData.coinAddress}", tokenAmount: 1 } } })`,
+                false
+            );
+        }
+
+        // Handle upload form
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!connected || !artistData) {
+                showToast('Please connect your wallet first', true);
+                return;
+            }
+
+            const formData = new FormData(e.target);
+            const isPremium = document.getElementById('premiumCheckbox').checked;
+            
+            showToast('Uploading version... (would use Audius SDK)');
+            
+            // In production, this would:
+            // 1. Upload audio file via audiusSdk.uploads.createAudioUpload()
+            // 2. Get CID from upload
+            // 3. Call audiusSdk.tracks.createTrack() with metadata including:
+            //    - isStreamGated: isPremium
+            //    - streamConditions: { tokenGate: { tokenMint: artistData.coinAddress, tokenAmount: 1 }}
+            
+            setTimeout(() => {
+                showToast('Version uploaded! (In production, would be live on Audius)');
+                e.target.reset();
+            }, 2000);
+        });
+
+        // Toast notification
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.style.borderColor = isError ? 'rgba(255, 85, 85, 0.5)' : 'rgba(20, 241, 149, 0.5)';
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
