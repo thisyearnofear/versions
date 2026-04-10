@@ -248,18 +248,41 @@ impl VersionsTerminalPOC {
             }
         }
 
-        // ENHANCEMENT: Draw cursor
-        let cursor_x = self.terminal.cursor_x as f64 * self.char_width;
-        let cursor_y = self.terminal.cursor_y as f64 * self.char_height;
-        self.context.set_fill_style(&JsValue::from("#FFFFFF"));
-        self.context.fill_rect(cursor_x, cursor_y + 2.0, self.char_width, 2.0);
+        // ENHANCEMENT: Draw blinking cursor
+        let now = js_sys::Date::now();
+        if (now / 500.0) as u64 % 2 == 0 {
+            let cursor_x = self.terminal.cursor_x as f64 * self.char_width;
+            let cursor_y = (self.terminal.cursor_y + 1) as f64 * self.char_height;
+            self.context.set_fill_style(&JsValue::from("#00FF88"));
+            self.context.fill_rect(cursor_x, cursor_y - 2.0, self.char_width, 2.0);
+        }
     }
 
     /// MODULAR: Handle keyboard input
     #[wasm_bindgen]
     pub fn handle_keypress(&mut self, event: &KeyboardEvent) -> Result<(), JsValue> {
         let key = event.key();
+        let ctrl = event.ctrl_key();
         
+        // ENHANCEMENT: Handle Ctrl shortcuts
+        if ctrl {
+            match key.as_str() {
+                "l" | "L" => {
+                    self.terminal.clear();
+                    self.command_buffer.clear();
+                    self.show_prompt();
+                    return Ok(());
+                }
+                "c" | "C" => {
+                    self.terminal.print("^C\n", 0xFF5555, 0x101421);
+                    self.command_buffer.clear();
+                    self.show_prompt();
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
+
         match key.as_str() {
             "Enter" => {
                 // CLEAN: Execute command
