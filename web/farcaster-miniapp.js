@@ -374,7 +374,9 @@ class FarcasterMiniApp {
         }
 
         try {
-            const config = window.getConfig ? window.getConfig() : { apiBase: 'http://localhost:8080' };
+            const config = window.getConfig
+                ? window.getConfig()
+                : { apiBase: (window.VersionsApi && window.VersionsApi.baseUrl) || 'http://localhost:8080' };
             const response = await fetch(`${config.apiBase}/api/v1/farcaster/recommendations?fid=${this.user.fid}`);
             
             if (response.ok) {

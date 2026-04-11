@@ -8,18 +8,10 @@
 // - PERFORMANT: Lazy-loads Audius data, caches wallet state
 // - PREVENT BLOAT: Separate file prevents main app bloat
 
-// API Configuration
-const API_PROXY = window.location.hostname === 'localhost' 
-  ? 'http://localhost:8080'
-  : 'https://versions.thisyearnofear.com';
+const API_PROXY = window.VersionsApi.baseUrl;
 
-// Helper to call backend proxy
 async function proxyFetch(endpoint) {
-    const response = await fetch(`${API_PROXY}${endpoint}`);
-    if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-    }
-    return response.json();
+    return window.VersionsApi.getJson(endpoint);
 }
 
 // Make globally available
@@ -55,10 +47,7 @@ window.AudiusSolanaIntegration = {
     // Fetch track from Audius by ID
     async getTrack(trackId) {
         try {
-            const url = getAudiusUrl(`/v1/tracks/${trackId}`);
-            const response = await fetch(url, { headers: getAudiusHeaders() });
-            if (!response.ok) return null;
-            const data = await response.json();
+            const data = await proxyFetch(`/api/v1/audius/track/${trackId}`);
             return data.data;
         } catch (error) {
             console.error('Error fetching track:', error);
@@ -73,10 +62,7 @@ window.AudiusSolanaIntegration = {
         }
         
         try {
-            const url = getAudiusUrl(`/v1/tracks/search?query=${encodeURIComponent(query)}&limit=20`);
-            const response = await fetch(url, { headers: getAudiusHeaders() });
-            if (!response.ok) return [];
-            const data = await response.json();
+            const data = await proxyFetch(`/api/v1/audius/search?q=${encodeURIComponent(query)}&limit=20`);
             return data.data || [];
         } catch (error) {
             console.error('Search error:', error);
@@ -196,26 +182,16 @@ window.AudiusSolanaIntegration = {
         try {
             console.log(`🔍 Checking token balance via proxy...`);
             
-            const response = await fetch(`${API_PROXY}/api/v1/solana/rpc`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    id: 1,
-                    method: 'getTokenAccountsByOwner',
-                    params: [
-                        this.wallet.address,
-                        { mint: tokenMintAddress },
-                        { encoding: 'jsonParsed' }
-                    ]
-                })
+            const data = await window.VersionsApi.postJson('/api/v1/solana/rpc', {
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'getTokenAccountsByOwner',
+                params: [
+                    this.wallet.address,
+                    { mint: tokenMintAddress },
+                    { encoding: 'jsonParsed' }
+                ]
             });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
             
             if (data.error) {
                 console.warn(`❌ RPC error:`, data.error.message);

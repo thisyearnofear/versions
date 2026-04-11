@@ -450,6 +450,88 @@
         }
         .search-input::placeholder { color: var(--fg-secondary); }
 
+        .audio-lab {
+            margin-bottom: 20px;
+            border: 1px solid rgba(153, 69, 255, 0.25);
+            border-radius: 14px;
+            padding: 14px;
+            background: linear-gradient(135deg, rgba(15, 18, 28, 0.9) 0%, rgba(25, 28, 40, 0.9) 100%);
+        }
+        .audio-lab-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .audio-lab-title { font-size: 0.85rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--color-purple); }
+        .audio-lab-status { display: flex; gap: 8px; flex-wrap: wrap; }
+        .audio-lab-pill { font-size: 0.65rem; border-radius: 999px; padding: 3px 8px; border: 1px solid rgba(255,255,255,0.12); color: var(--fg-secondary); }
+        .audio-lab-controls { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; margin-bottom: 10px; }
+        .audio-lab-input, .audio-lab-select {
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.25);
+            color: var(--fg-primary);
+            padding: 9px 10px;
+            font-size: 0.85rem;
+        }
+        .audio-lab-btn {
+            border: none;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            padding: 9px 12px;
+            background: linear-gradient(135deg, var(--color-purple), var(--color-blue));
+            color: #fff;
+            cursor: pointer;
+        }
+        .audio-lab-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+        .audio-lab-results { border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px; }
+        .audio-lab-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+        .audio-lab-item {
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            padding: 8px;
+            font-size: 0.75rem;
+            background: rgba(255,255,255,0.03);
+        }
+        .audio-lab-pre {
+            margin-top: 8px;
+            font-size: 0.7rem;
+            color: var(--fg-secondary);
+            white-space: pre-wrap;
+            max-height: 130px;
+            overflow: auto;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            padding: 8px;
+            background: rgba(0,0,0,0.25);
+        }
+        .audio-lab-history {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .audio-lab-chip {
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.04);
+            color: var(--fg-secondary);
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: 0.68rem;
+            cursor: pointer;
+            max-width: 220px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .audio-lab-chip:hover {
+            border-color: rgba(153, 69, 255, 0.5);
+            color: var(--fg-primary);
+        }
+        .audio-lab-chip.clear {
+            border-color: rgba(255,85,85,0.4);
+            color: var(--color-red);
+        }
+        .audio-lab-chip.clear:hover {
+            border-color: rgba(255,85,85,0.8);
+        }
+
         /* VERSION GRID */
         .versions-grid {
             display: grid;
@@ -922,6 +1004,7 @@
             .onboarding-title { font-size: 1.2rem; }
             .connect-btn { width: 100%; justify-content: center; }
             .player-progress { display: none; }
+            .audio-lab-controls { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -1093,6 +1176,33 @@
             <input type="text" class="search-input" id="searchInput" placeholder="🔍 Search songs or artists..." oninput="handleSearch(this.value)">
         </section>
 
+        <section class="audio-lab" id="audioLabSection">
+            <div class="audio-lab-header">
+                <div class="audio-lab-title">🎛️ Audio Lab (turbopuffer + ElevenLabs)</div>
+                <div class="audio-lab-status">
+                    <span class="audio-lab-pill" id="tpufStatus">turbopuffer: unknown</span>
+                    <span class="audio-lab-pill" id="elevenStatus">elevenlabs: unknown</span>
+                </div>
+            </div>
+            <div class="audio-lab-controls">
+                <input class="audio-lab-input" id="audioLabPrompt" type="text" placeholder="Describe a vibe (e.g., dreamy synthwave rain at 110 BPM)">
+                <select class="audio-lab-select" id="audioLabMode">
+                    <option value="music">music</option>
+                    <option value="sfx">sfx</option>
+                </select>
+                <select class="audio-lab-select" id="audioLabTopK">
+                    <option value="3">topK: 3</option>
+                    <option value="5" selected>topK: 5</option>
+                    <option value="8">topK: 8</option>
+                </select>
+                <button class="audio-lab-btn" id="audioLabComposeBtn" onclick="runAudioCompose()">Compose</button>
+            </div>
+            <div class="audio-lab-history" id="audioLabHistory"></div>
+            <div class="audio-lab-results" id="audioLabResults">
+                <div style="font-size: 0.75rem; color: var(--fg-secondary);">Run compose to retrieve semantic matches and generate audio.</div>
+            </div>
+        </section>
+
         <!-- SOCIAL RECOMMENDATIONS (Farcaster Integration) -->
         <section id="socialRecommendations" class="social-recommendations" style="display: none; margin-bottom: 24px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
@@ -1154,6 +1264,7 @@
         <div class="error-modal-actions" id="errorModalActions"></div>
     </div>
 
+    <script src="./api-client.js"></script>
     <script src="./audius-solana.js?v=3"></script>
     <script src="./farcaster-miniapp.js"></script>
     <script type="module">
@@ -1169,6 +1280,10 @@
         let onboardingStep = 0;
         let isLoading = true;
         let verifiedOwnership = {};
+        let audioLabBusy = false;
+        let audioLabLastRetrieval = [];
+        let audioLabPromptHistory = [];
+        const AUDIO_LAB_HISTORY_KEY = 'versions_audio_lab_prompt_history';
 
         // AUDIO PLAYER STATE
         let currentAudio = null;
@@ -1439,11 +1554,7 @@
 
         // Helper function to call backend proxy
         async function proxyFetch(endpoint) {
-            const response = await fetch(`${API_PROXY}${endpoint}`);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            return response.json();
+            return window.VersionsApi.getJson(endpoint);
         }
 
         const onboardingData = [
@@ -1744,6 +1855,267 @@
                             }
                             renderVersions();
                         }
+
+                        function escapeHtml(value) {
+                            return String(value || '')
+                                .replace(/&/g, '&amp;')
+                                .replace(/</g, '&lt;')
+                                .replace(/>/g, '&gt;')
+                                .replace(/"/g, '&quot;')
+                                .replace(/'/g, '&#39;');
+                        }
+
+                        function pushPromptHistory(prompt) {
+                            const cleanPrompt = String(prompt || '').trim();
+                            if (!cleanPrompt) return;
+
+                            audioLabPromptHistory = [
+                                cleanPrompt,
+                                ...audioLabPromptHistory.filter((item) => item !== cleanPrompt)
+                            ].slice(0, 5);
+
+                            saveAudioLabHistory();
+                            renderAudioLabHistory();
+                        }
+
+                        function saveAudioLabHistory() {
+                            try {
+                                localStorage.setItem(AUDIO_LAB_HISTORY_KEY, JSON.stringify(audioLabPromptHistory));
+                            } catch (error) {
+                                console.warn('Unable to save audio lab history:', error);
+                            }
+                        }
+
+                        function loadAudioLabHistory() {
+                            try {
+                                const raw = localStorage.getItem(AUDIO_LAB_HISTORY_KEY);
+                                if (!raw) {
+                                    audioLabPromptHistory = [];
+                                    return;
+                                }
+
+                                const parsed = JSON.parse(raw);
+                                if (!Array.isArray(parsed)) {
+                                    audioLabPromptHistory = [];
+                                    return;
+                                }
+
+                                audioLabPromptHistory = parsed
+                                    .map((item) => String(item || '').trim())
+                                    .filter(Boolean)
+                                    .slice(0, 5);
+                            } catch (error) {
+                                console.warn('Unable to load audio lab history:', error);
+                                audioLabPromptHistory = [];
+                            }
+                        }
+
+                        function renderAudioLabHistory() {
+                            const historyContainer = document.getElementById('audioLabHistory');
+                            if (!historyContainer) return;
+
+                            if (audioLabPromptHistory.length === 0) {
+                                historyContainer.innerHTML = '<span style="font-size:0.68rem;color:var(--fg-secondary);">Prompt history appears here.</span>';
+                                return;
+                            }
+
+                            historyContainer.innerHTML = audioLabPromptHistory
+                                .map((prompt, index) => `<button class="audio-lab-chip" title="${escapeHtml(prompt)}" onclick="reusePromptHistory(${index})">${escapeHtml(prompt)}</button>`)
+                                .join('');
+
+                            historyContainer.innerHTML += '<button class="audio-lab-chip clear" onclick="clearAudioLabHistory()">Clear history</button>';
+                        }
+
+                        function clearAudioLabHistory() {
+                            audioLabPromptHistory = [];
+                            saveAudioLabHistory();
+                            renderAudioLabHistory();
+                            showToast('Prompt history cleared');
+                        }
+
+                        function normalizeRetrievalItems(retrieval) {
+                            if (!retrieval) return [];
+                            if (Array.isArray(retrieval)) return retrieval;
+                            if (Array.isArray(retrieval.results)) return retrieval.results;
+                            if (Array.isArray(retrieval.data)) return retrieval.data;
+                            return [];
+                        }
+
+                        function derivePromptFromRetrievalItem(item) {
+                            if (!item || typeof item !== 'object') {
+                                return '';
+                            }
+
+                            const candidates = [
+                                item.prompt,
+                                item.query,
+                                item.text,
+                                item.description,
+                                item.summary,
+                                item.title,
+                                item.name,
+                                item.id
+                            ];
+
+                            const candidate = candidates.find((value) => typeof value === 'string' && value.trim());
+                            return candidate ? candidate.trim() : '';
+                        }
+
+                        function extractAudioUrl(payload) {
+                            if (!payload || typeof payload !== 'object') return null;
+                            const candidates = ['audio_url', 'audioUrl', 'url', 'download_url', 'downloadUrl'];
+
+                            for (const key of candidates) {
+                                if (typeof payload[key] === 'string' && /^https?:\/\//.test(payload[key])) {
+                                    return payload[key];
+                                }
+                            }
+
+                            for (const value of Object.values(payload)) {
+                                if (value && typeof value === 'object') {
+                                    const nested = extractAudioUrl(value);
+                                    if (nested) return nested;
+                                }
+                            }
+
+                            return null;
+                        }
+
+                        function setProviderStatus(name, available) {
+                            const elementId = name === 'turbopuffer' ? 'tpufStatus' : 'elevenStatus';
+                            const element = document.getElementById(elementId);
+                            if (!element) return;
+
+                            element.textContent = `${name}: ${available ? 'ready' : 'missing key'}`;
+                            element.style.borderColor = available ? 'rgba(20,241,149,0.5)' : 'rgba(255,85,85,0.5)';
+                            element.style.color = available ? 'var(--color-green)' : 'var(--color-red)';
+                        }
+
+                        async function refreshAudioLabProviderStatus() {
+                            try {
+                                const response = await window.VersionsApi.getJson('/api/v1/providers');
+                                const providers = response.data || {};
+                                setProviderStatus('turbopuffer', providers.turbopuffer === true);
+                                setProviderStatus('elevenlabs', providers.elevenlabs === true);
+                            } catch (error) {
+                                console.warn('Provider status unavailable:', error);
+                            }
+                        }
+
+                        function renderAudioLabOutput(composeData) {
+                            const output = document.getElementById('audioLabResults');
+                            if (!output) return;
+
+                            const retrievalItems = normalizeRetrievalItems(composeData.retrieval);
+                            audioLabLastRetrieval = retrievalItems;
+                            const generation = composeData.generation || {};
+                            const audioUrl = extractAudioUrl(generation);
+
+                            const retrievalHtml = retrievalItems.length === 0
+                                ? '<div style="font-size:0.75rem;color:var(--fg-secondary);">No semantic matches returned.</div>'
+                                : `<div class="audio-lab-list">${retrievalItems.slice(0, 5).map((item, index) => {
+                                    const title = item.title || item.name || item.id || `result-${index + 1}`;
+                                    const score = item.score ?? item.similarity ?? item.distance ?? 'n/a';
+                                    const derivedPrompt = derivePromptFromRetrievalItem(item);
+                                    const usePromptButton = derivedPrompt
+                                        ? `<button class="audio-lab-btn" style="margin-top:6px;padding:6px 8px;font-size:0.7rem;" onclick="useRetrievalPromptFromItem(${index})">Use as prompt ↺</button>`
+                                        : '';
+
+                                    return `<div class="audio-lab-item"><strong>#${index + 1}</strong> ${escapeHtml(title)} <span style="color:var(--color-blue)">score: ${escapeHtml(score)}</span>${usePromptButton}</div>`;
+                                }).join('')}</div>`;
+
+                            const playerHtml = audioUrl
+                                ? `<div style="margin-top: 10px;"><audio controls src="${escapeHtml(audioUrl)}" style="width:100%;"></audio></div>`
+                                : '<div style="margin-top:10px;font-size:0.75rem;color:var(--fg-secondary);">No direct audio URL in response. Raw payload shown below.</div>';
+
+                            output.innerHTML = `
+                                <div style="font-size:0.78rem;color:var(--fg-secondary);">Mode: <strong>${escapeHtml(composeData.mode)}</strong> · Prompt: ${escapeHtml(composeData.query)}</div>
+                                ${retrievalHtml}
+                                ${playerHtml}
+                                <pre class="audio-lab-pre">${escapeHtml(JSON.stringify(generation, null, 2))}</pre>
+                            `;
+                        }
+
+                        async function runAudioCompose() {
+                            if (audioLabBusy) return;
+
+                            const promptInput = document.getElementById('audioLabPrompt');
+                            const modeInput = document.getElementById('audioLabMode');
+                            const topKInput = document.getElementById('audioLabTopK');
+                            const button = document.getElementById('audioLabComposeBtn');
+                            const output = document.getElementById('audioLabResults');
+
+                            const prompt = promptInput ? promptInput.value.trim() : '';
+                            const mode = modeInput ? modeInput.value : 'music';
+                            const topK = topKInput ? parseInt(topKInput.value, 10) : 5;
+
+                            if (!prompt) {
+                                showToast('Enter a prompt first', true);
+                                return;
+                            }
+
+                            pushPromptHistory(prompt);
+
+                            try {
+                                audioLabBusy = true;
+                                if (button) button.disabled = true;
+                                if (output) {
+                                    output.innerHTML = '<div style="font-size:0.78rem;color:var(--fg-secondary);">Composing… running semantic search + generation.</div>';
+                                }
+
+                                const response = await window.VersionsApi.postJson('/api/v1/audio/compose', {
+                                    query: prompt,
+                                    mode,
+                                    topK
+                                });
+
+                                renderAudioLabOutput(response.data || {});
+                            } catch (error) {
+                                console.error('Audio compose failed:', error);
+                                showToast('Audio compose failed', true);
+                                if (output) {
+                                    output.innerHTML = `<div style="font-size:0.78rem;color:var(--color-red);">Compose failed: ${escapeHtml(error.message)}</div>`;
+                                }
+                            } finally {
+                                audioLabBusy = false;
+                                if (button) button.disabled = false;
+                            }
+                        }
+
+                        async function useRetrievalPromptFromItem(index) {
+                            const item = audioLabLastRetrieval[index];
+                            const prompt = derivePromptFromRetrievalItem(item);
+                            if (!prompt) {
+                                showToast('No reusable prompt found for this result', true);
+                                return;
+                            }
+
+                            const promptInput = document.getElementById('audioLabPrompt');
+                            if (promptInput) {
+                                promptInput.value = prompt;
+                            }
+
+                            await runAudioCompose();
+                        }
+
+                        async function reusePromptHistory(index) {
+                            const prompt = audioLabPromptHistory[index];
+                            if (!prompt) {
+                                return;
+                            }
+
+                            const promptInput = document.getElementById('audioLabPrompt');
+                            if (promptInput) {
+                                promptInput.value = prompt;
+                            }
+
+                            await runAudioCompose();
+                        }
+
+                        window.runAudioCompose = runAudioCompose;
+                        window.useRetrievalPromptFromItem = useRetrievalPromptFromItem;
+                        window.reusePromptHistory = reusePromptHistory;
+                        window.clearAudioLabHistory = clearAudioLabHistory;
                     
                         // SOCIAL RECOMMENDATIONS
                         async function updateRecommendations() {
@@ -2067,6 +2439,20 @@
         // INIT
         document.addEventListener('DOMContentLoaded', () => {
             loadAudiusTracks();
+            refreshAudioLabProviderStatus();
+            loadAudioLabHistory();
+            renderAudioLabHistory();
+
+            const promptInput = document.getElementById('audioLabPrompt');
+            if (promptInput) {
+                promptInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        runAudioCompose();
+                    }
+                });
+            }
+
             // Delay recommendations slightly to allow Farcaster SDK to initialize
             setTimeout(updateRecommendations, 1000);
         });

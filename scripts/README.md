@@ -9,6 +9,7 @@
 ### **Testing**
 - **`test_server.sh`** - Test all API endpoints
 - **`test_api.sh`** - Legacy API testing (use test_server.sh)
+- **`doctor.sh`** - Production readiness check (env + health endpoints)
 
 ## **Usage**
 
@@ -19,6 +20,9 @@
 
 # 2. Test API
 ./scripts/test_server.sh
+
+# 3. Run production doctor checks
+./scripts/doctor.sh --skip-http
 ```
 
 ### **Recommended Workflow**

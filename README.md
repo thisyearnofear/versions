@@ -65,6 +65,14 @@ This submission focuses on the **core concept** with a working demo:
 3. **Access Control** - Token-gated version unlocking
 4. **Clean UX** - Simple, intuitive interface
 
+### ElevenHacks Extension Plan
+
+For the turbopuffer + ElevenLabs track, see:
+
+- [docs/ELEVENHACKS_IMPLEMENTATION_PLAN.md](docs/ELEVENHACKS_IMPLEMENTATION_PLAN.md)
+
+This plan introduces a provider-agnostic pipeline (`ingest -> index -> retrieve -> generate`) so Audius is an adapter, not the product center.
+
 See [HACKATHON_SUBMISSION.md](HACKATHON_SUBMISSION.md) for full details.
 
 ---

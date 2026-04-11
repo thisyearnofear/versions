@@ -514,10 +514,9 @@
 
     <div class="toast" id="toast"></div>
 
+    <script src="./api-client.js"></script>
     <script>
-        const API_PROXY = window.location.hostname === 'localhost' 
-            ? 'http://localhost:8080'
-            : 'https://versions.thisyearnofear.com';
+        const API_PROXY = window.VersionsApi.baseUrl;
 
         let connected = false;
         let artistData = null;
@@ -526,11 +525,7 @@
 
         // Helper to call backend proxy
         async function proxyFetch(endpoint) {
-            const response = await fetch(`${API_PROXY}${endpoint}`);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            return response.json();
+            return window.VersionsApi.getJson(endpoint);
         }
 
         // Connect wallet and fetch artist data
@@ -737,18 +732,13 @@
         async function linkTrackToParent(versionId, parentId) {
             try {
                 showToast('Linking version to parent...');
-                const response = await fetch(`${API_PROXY}/api/v1/relationships/link`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        parent_id: parentId,
-                        version_id: versionId,
-                        version_type: 'version',
-                        artist_id: artistData.id
-                    })
+                const result = await window.VersionsApi.postJson('/api/v1/relationships/link', {
+                    parent_id: parentId,
+                    version_id: versionId,
+                    version_type: 'version',
+                    artist_id: artistData.id
                 });
-                
-                const result = await response.json();
+
                 if (result.success) {
                     showToast('✅ Successfully linked version! Refreshing grouping...', false);
                 } else {
