@@ -4,6 +4,7 @@
   "description": "Simple proxy server for VERSIONS hackathon demo",
   "main": "proxy-server.js",
   "scripts": {
+    "build": "echo 'No build step required (static site + Node proxy)'",
     "start": "node proxy-server.js",
     "dev": "node proxy-server.js"
   },

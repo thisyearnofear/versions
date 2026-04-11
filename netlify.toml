@@ -1,7 +1,7 @@
 # Netlify deployment configuration for VERSIONS web interface
 [build]
   base = "web"
-  publish = "web"
+  publish = "."
   command = "echo 'Static deployment - no build needed'"
 
 # Redirect all API calls to the backend
