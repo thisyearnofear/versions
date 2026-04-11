@@ -1,8 +1,8 @@
+use anyhow::{Context, Result};
 use rusqlite::{Connection, params};
 use serde::Serialize;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use anyhow::{Result, Context};
 use uuid::Uuid;
 
 /// ENHANCEMENT FIRST: Simple database using existing rusqlite
@@ -17,36 +17,43 @@ impl Database {
     pub async fn new(database_path: &str) -> Result<Self> {
         // Ensure parent directory exists
         if let Some(parent) = Path::new(database_path).parent() {
-            tokio::fs::create_dir_all(parent).await
+            tokio::fs::create_dir_all(parent)
+                .await
                 .context("Failed to create database directory")?;
         }
 
         // Create connection
-        let conn = Connection::open(database_path)
-            .context("Failed to open database")?;
-        
-        let db = Self { 
-            conn: Arc::new(Mutex::new(conn)) 
+        let conn = Connection::open(database_path).context("Failed to open database")?;
+
+        let db = Self {
+            conn: Arc::new(Mutex::new(conn)),
         };
-        
+
         // ORGANIZED: Run migrations on startup
         db.run_migrations().await?;
-        
+
         Ok(db)
     }
 
     /// ORGANIZED: Apply database migrations
     async fn run_migrations(&self) -> Result<()> {
-        let migration_sql = include_str!("../migrations/001_initial_schema.sql");
-        
+        let migration_001 = include_str!("../migrations/001_initial_schema.sql");
+        let migration_002 = include_str!("../migrations/002_hackathon_audius_solana.sql");
+
         let conn = self.conn.lock().unwrap();
-        conn.execute_batch(migration_sql)
-            .context("Failed to run database migrations")?;
-        
-        log::info!("Database migrations completed successfully");
+
+        // Run migration 001
+        conn.execute_batch(migration_001)
+            .context("Failed to run database migration 001")?;
+
+        // Run migration 002
+        conn.execute_batch(migration_002)
+            .context("Failed to run database migration 002")?;
+
+        log::info!("Database migrations 001 and 002 completed successfully");
         Ok(())
     }
-    
+
     /// ORGANIZED: Seed database with example data for development
     pub async fn seed_example_data(&self) -> Result<()> {
         log::info!("Seeding database with example data...");
@@ -62,29 +69,45 @@ impl Database {
 
         // Create example songs and versions
         let songs_data = vec![
-            ("Bohemian Rhapsody", "Queen", vec![
-                ("Studio Version", 2, 1000, 4.8, 50),
-                ("Live at Wembley", 3, 750, 4.9, 42),
-                ("Demo Version", 1, 234, 4.6, 18),
-            ]),
-            ("Imagine", "John Lennon", vec![
-                ("Original 1971", 2, 856, 4.7, 38),
-                ("Live in New York", 3, 445, 4.5, 25),
-            ]),
-            ("Yesterday", "The Beatles", vec![
-                ("Home Recording", 1, 634, 4.8, 31),
-                ("Studio Version", 2, 1234, 4.9, 67),
-                ("Acoustic Version", 6, 389, 4.7, 22),
-            ]),
-            ("Stairway to Heaven", "Led Zeppelin", vec![
-                ("Studio Version", 2, 2156, 4.9, 89),
-                ("Live at Madison Square Garden", 3, 987, 4.8, 45),
-                ("Remastered 2014", 5, 567, 4.6, 28),
-            ]),
+            (
+                "Bohemian Rhapsody",
+                "Queen",
+                vec![
+                    ("Studio Version", 2, 1000, 4.8, 50),
+                    ("Live at Wembley", 3, 750, 4.9, 42),
+                    ("Demo Version", 1, 234, 4.6, 18),
+                ],
+            ),
+            (
+                "Imagine",
+                "John Lennon",
+                vec![
+                    ("Original 1971", 2, 856, 4.7, 38),
+                    ("Live in New York", 3, 445, 4.5, 25),
+                ],
+            ),
+            (
+                "Yesterday",
+                "The Beatles",
+                vec![
+                    ("Home Recording", 1, 634, 4.8, 31),
+                    ("Studio Version", 2, 1234, 4.9, 67),
+                    ("Acoustic Version", 6, 389, 4.7, 22),
+                ],
+            ),
+            (
+                "Stairway to Heaven",
+                "Led Zeppelin",
+                vec![
+                    ("Studio Version", 2, 2156, 4.9, 89),
+                    ("Live at Madison Square Garden", 3, 987, 4.8, 45),
+                    ("Remastered 2014", 5, 567, 4.6, 28),
+                ],
+            ),
         ];
 
         let songs_count = songs_data.len();
-        
+
         for (song_title, artist, versions) in songs_data {
             let song_id = Uuid::new_v4().to_string();
 
@@ -105,7 +128,10 @@ impl Database {
             }
         }
 
-        log::info!("Example data seeded successfully with {} songs", songs_count);
+        log::info!(
+            "Example data seeded successfully with {} songs",
+            songs_count
+        );
         Ok(())
     }
 
@@ -162,9 +188,18 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         let song_count: i64 = conn.query_row("SELECT COUNT(*) FROM songs", [], |row| row.get(0))?;
-        let version_count: i64 = conn.query_row("SELECT COUNT(*) FROM versions", [], |row| row.get(0))?;
-        let total_play_count: i64 = conn.query_row("SELECT COALESCE(SUM(play_count), 0) FROM versions", [], |row| row.get(0))?;
-        let avg_vote_score: f64 = conn.query_row("SELECT COALESCE(AVG(vote_score), 0.0) FROM versions", [], |row| row.get(0))?;
+        let version_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM versions", [], |row| row.get(0))?;
+        let total_play_count: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(play_count), 0) FROM versions",
+            [],
+            |row| row.get(0),
+        )?;
+        let avg_vote_score: f64 = conn.query_row(
+            "SELECT COALESCE(AVG(vote_score), 0.0) FROM versions",
+            [],
+            |row| row.get(0),
+        )?;
 
         Ok(DatabaseStats {
             song_count: song_count as u32,
@@ -191,7 +226,11 @@ impl Database {
         )?;
 
         if deleted_versions > 0 || deleted_songs > 0 {
-            log::info!("Cleaned up {} orphaned versions and {} empty songs", deleted_versions, deleted_songs);
+            log::info!(
+                "Cleaned up {} orphaned versions and {} empty songs",
+                deleted_versions,
+                deleted_songs
+            );
         }
 
         Ok(())
@@ -217,7 +256,7 @@ pub struct SimpleDbSong {
     pub average_vote_score: f64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct SimpleDbVersion {
     pub id: String,
     pub title: String,
@@ -229,20 +268,28 @@ pub struct SimpleDbVersion {
     pub play_count: i32,
     pub vote_score: f64,
     pub format: String,
+    pub audius_track_id: Option<String>,
+    pub audius_artist_id: Option<String>,
+    pub artist_coin_address: Option<String>,
+    pub is_premium: bool,
+    pub ticket_price_usd: f64,
 }
 
-/// MODULAR: Database operations 
+/// MODULAR: Database operations
 impl Database {
     /// Get song with versions - simplified version
-    pub async fn get_song_with_versions(&self, song_id: &str) -> Result<Option<(SimpleDbSong, Vec<SimpleDbVersion>)>> {
+    pub async fn get_song_with_versions(
+        &self,
+        song_id: &str,
+    ) -> Result<Option<(SimpleDbSong, Vec<SimpleDbVersion>)>> {
         let conn = self.conn.lock().unwrap();
-        
+
         // Get song
         let mut song_stmt = conn.prepare(
             "SELECT id, canonical_title, total_versions, total_play_count, average_vote_score 
-             FROM songs WHERE id = ?"
+             FROM songs WHERE id = ?",
         )?;
-        
+
         let song_result = song_stmt.query_row(params![song_id], |row| {
             Ok(SimpleDbSong {
                 id: row.get(0)?,
@@ -252,23 +299,24 @@ impl Database {
                 average_vote_score: row.get(4)?,
             })
         });
-        
+
         let song = match song_result {
             Ok(s) => s,
             Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
             Err(e) => return Err(e.into()),
         };
-        
+
         // Get versions
         let mut version_stmt = conn.prepare(
             "SELECT v.id, v.title, v.artist, vt.name, v.duration_seconds, v.file_size, 
-             v.upload_date, v.play_count, v.vote_score, COALESCE(v.format, 'mp3')
+             v.upload_date, v.play_count, v.vote_score, COALESCE(v.format, 'mp3'),
+             v.audius_track_id, v.audius_artist_id, v.artist_coin_address, v.is_premium, v.ticket_price_usd
              FROM versions v 
              JOIN version_types vt ON v.version_type_id = vt.id 
              WHERE v.song_id = ? 
              ORDER BY v.vote_score DESC"
         )?;
-        
+
         let version_iter = version_stmt.query_map(params![song_id], |row| {
             Ok(SimpleDbVersion {
                 id: row.get(0)?,
@@ -281,28 +329,37 @@ impl Database {
                 play_count: row.get(7)?,
                 vote_score: row.get(8)?,
                 format: row.get::<_, String>(9)?,
+                audius_track_id: row.get(10)?,
+                audius_artist_id: row.get(11)?,
+                artist_coin_address: row.get(12)?,
+                is_premium: row.get(13)?,
+                ticket_price_usd: row.get(14)?,
             })
         })?;
-        
+
         let versions: Result<Vec<_>, _> = version_iter.collect();
         let versions = versions?;
-        
+
         Ok(Some((song, versions)))
     }
-    
+
     /// List songs - simplified version
-    pub async fn list_songs(&self, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<SimpleDbSong>> {
+    pub async fn list_songs(
+        &self,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> Result<Vec<SimpleDbSong>> {
         let limit = limit.unwrap_or(50).min(200);
         let offset = offset.unwrap_or(0);
-        
+
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, canonical_title, total_versions, total_play_count, average_vote_score 
              FROM songs 
              ORDER BY average_vote_score DESC, total_play_count DESC
-             LIMIT ? OFFSET ?"
+             LIMIT ? OFFSET ?",
         )?;
-        
+
         let song_iter = stmt.query_map(params![limit, offset], |row| {
             Ok(SimpleDbSong {
                 id: row.get(0)?,
@@ -312,24 +369,29 @@ impl Database {
                 average_vote_score: row.get(4)?,
             })
         })?;
-        
+
         let songs: Result<Vec<_>, _> = song_iter.collect();
         songs.map_err(Into::into)
     }
-    
+
     /// MODULAR: Create a new song
-    pub async fn create_song(&self, song_id: &str, title: &str, artist: Option<&str>) -> Result<()> {
+    pub async fn create_song(
+        &self,
+        song_id: &str,
+        title: &str,
+        artist: Option<&str>,
+    ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        
+
         conn.execute(
             "INSERT INTO songs (id, canonical_title, original_artist, total_versions, total_play_count, average_vote_score) VALUES (?1, ?2, ?3, 0, 0, 0.0)",
             params![song_id, title, artist],
         )?;
-        
+
         log::info!("Created song: {} with ID: {}", title, song_id);
         Ok(())
     }
-    
+
     /// MODULAR: Create a new version
     pub async fn create_version(
         &self,
@@ -347,31 +409,31 @@ impl Database {
         bitrate: Option<i32>,
     ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        
+
         conn.execute(
             "INSERT INTO versions (id, song_id, version_type_id, title, artist, file_path, file_size, duration_seconds, format, sample_rate, channels, bitrate, upload_date, play_count, vote_score, vote_count) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, datetime('now'), 0, 0.0, 0)",
             params![
-                version_id, 
-                song_id, 
-                version_type_id, 
-                title, 
-                artist, 
-                file_path, 
-                file_size, 
-                duration_seconds, 
-                format, 
-                sample_rate, 
-                channels, 
+                version_id,
+                song_id,
+                version_type_id,
+                title,
+                artist,
+                file_path,
+                file_size,
+                duration_seconds,
+                format,
+                sample_rate,
+                channels,
                 bitrate
             ],
         )?;
-        
+
         // PERFORMANT: Update song statistics
         conn.execute(
             "UPDATE songs SET total_versions = total_versions + 1 WHERE id = ?1",
             params![song_id],
         )?;
-        
+
         log::info!("Created version: {} for song: {}", title, song_id);
         Ok(())
     }
@@ -382,7 +444,8 @@ impl Database {
 
         let mut stmt = conn.prepare(
             "SELECT v.id, v.title, v.artist, vt.name, v.duration_seconds, v.file_size,
-             v.upload_date, v.play_count, v.vote_score, v.format
+             v.upload_date, v.play_count, v.vote_score, v.format,
+             v.audius_track_id, v.audius_artist_id, v.artist_coin_address, v.is_premium, v.ticket_price_usd
              FROM versions v
              JOIN version_types vt ON v.version_type_id = vt.id
              WHERE v.id = ?"
@@ -400,6 +463,11 @@ impl Database {
                 play_count: row.get(7)?,
                 vote_score: row.get(8)?,
                 format: row.get(9)?,
+                audius_track_id: row.get(10)?,
+                audius_artist_id: row.get(11)?,
+                artist_coin_address: row.get(12)?,
+                is_premium: row.get(13)?,
+                ticket_price_usd: row.get(14)?,
             })
         });
 
@@ -426,7 +494,11 @@ impl Database {
     }
 
     /// MODULAR: Validate comparison session (placeholder)
-    pub async fn validate_comparison_session(&self, _session_id: &str, _version_id: &str) -> Result<bool> {
+    pub async fn validate_comparison_session(
+        &self,
+        _session_id: &str,
+        _version_id: &str,
+    ) -> Result<bool> {
         // This is a placeholder - in a real implementation, this would:
         // 1. Check if the session exists
         // 2. Verify the version is part of the session
@@ -437,8 +509,47 @@ impl Database {
         Ok(self.get_version_data(_version_id).await?.is_some())
     }
 
+    /// MODULAR: Map a version to a Solana artist coin
+    pub async fn map_version_to_coin(
+        &self,
+        version_id: &str,
+        coin_address: &str,
+        audius_track_id: Option<&str>,
+        audius_artist_id: Option<&str>,
+        is_premium: bool,
+        price_usd: f64,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE versions SET 
+             artist_coin_address = ?2, 
+             audius_track_id = ?3, 
+             audius_artist_id = ?4, 
+             is_premium = ?5, 
+             ticket_price_usd = ?6 
+             WHERE id = ?1",
+            params![
+                version_id,
+                coin_address,
+                audius_track_id,
+                audius_artist_id,
+                is_premium,
+                price_usd
+            ],
+        )?;
+
+        log::info!("Mapped version {} to coin {}", version_id, coin_address);
+        Ok(())
+    }
+
     /// MODULAR: Full-text search across songs and versions
-    pub async fn search_songs_and_versions(&self, query: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<SimpleDbSong>> {
+    pub async fn search_songs_and_versions(
+        &self,
+        query: &str,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> Result<Vec<SimpleDbSong>> {
         let limit = limit.unwrap_or(50).min(200);
         let offset = offset.unwrap_or(0);
         let search_term = format!("%{}%", query.to_lowercase());
@@ -455,7 +566,7 @@ impl Database {
                        WHEN LOWER(original_artist) LIKE ?1 THEN 2
                        ELSE 3 END),
                  average_vote_score DESC, total_play_count DESC
-             LIMIT ?2 OFFSET ?3"
+             LIMIT ?2 OFFSET ?3",
         )?;
 
         let song_iter = song_stmt.query_map(params![search_term, limit, offset], |row| {
@@ -484,17 +595,19 @@ impl Database {
                  LIMIT ?2"
             )?;
 
-            let version_iter = version_stmt.query_map(params![search_term, remaining_limit as u32], |row| {
-                Ok(SimpleDbSong {
-                    id: row.get(0)?,
-                    canonical_title: row.get(1)?,
-                    total_versions: row.get(2)?,
-                    total_play_count: row.get(3)?,
-                    average_vote_score: row.get(4)?,
-                })
-            })?;
+            let version_iter =
+                version_stmt.query_map(params![search_term, remaining_limit as u32], |row| {
+                    Ok(SimpleDbSong {
+                        id: row.get(0)?,
+                        canonical_title: row.get(1)?,
+                        total_versions: row.get(2)?,
+                        total_play_count: row.get(3)?,
+                        average_vote_score: row.get(4)?,
+                    })
+                })?;
 
-            let mut version_results: Vec<SimpleDbSong> = version_iter.collect::<Result<Vec<_>, _>>()?;
+            let version_results: Vec<SimpleDbSong> =
+                version_iter.collect::<Result<Vec<_>, _>>()?;
 
             // Remove duplicates and merge results
             for version_song in version_results {
@@ -506,15 +619,19 @@ impl Database {
 
         // Sort final results by relevance and score
         results.sort_by(|a, b| {
-            b.average_vote_score.partial_cmp(&a.average_vote_score)
+            b.average_vote_score
+                .partial_cmp(&a.average_vote_score)
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| b.total_play_count.cmp(&a.total_play_count))
         });
 
         // Apply offset and limit to final results
         let start_idx = offset as usize;
-        let end_idx = (offset + limit) as usize;
-        results = results.into_iter().skip(start_idx).take(limit as usize).collect();
+        results = results
+            .into_iter()
+            .skip(start_idx)
+            .take(limit as usize)
+            .collect();
 
         log::info!("Search for '{}' returned {} results", query, results.len());
         Ok(results)

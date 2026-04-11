@@ -23,8 +23,8 @@ use lofty::{
 use lru::LruCache;
 
 use crate::{
-    player::playlist_helpers::PlaylistTrackSource, podcast::episode::Episode, songtag::lrc::Lyric,
-    utils::SplitArrayIter, onchain::VersionOwnership,
+    onchain::VersionOwnership, player::playlist_helpers::PlaylistTrackSource,
+    podcast::episode::Episode, songtag::lrc::Lyric, utils::SplitArrayIter,
 };
 
 /// A simple no-value representation of [`MediaTypes`].

@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// MODULAR: Filecoin service following our architecture patterns
 /// CLEAN: Abstracts all Filecoin complexity from the rest of the system
@@ -71,7 +71,7 @@ impl FilecoinService {
             "mainnet" => "https://api.synapse.filecoin.io".to_string(),
             _ => "https://api-calibration.synapse.filecoin.io".to_string(),
         };
-        
+
         Self {
             client: Client::new(),
             synapse_endpoint,
@@ -83,11 +83,13 @@ impl FilecoinService {
     /// ENHANCEMENT FIRST: Upload audio version to Filecoin
     /// CLEAN: Hides all Filecoin complexity behind simple interface
     pub async fn upload_version(
-        &mut self, 
-        _request: FilecoinUploadRequest
+        &mut self,
+        _request: FilecoinUploadRequest,
     ) -> Result<FilecoinStorageInfo> {
         // CLEAN: Return error - real implementation requires Synapse SDK integration
-        Err(anyhow::anyhow!("Filecoin upload requires Synapse SDK integration. Please use the web interface with wallet connection for real Filecoin uploads."))
+        Err(anyhow::anyhow!(
+            "Filecoin upload requires Synapse SDK integration. Please use the web interface with wallet connection for real Filecoin uploads."
+        ))
     }
 
     /// PERFORMANT: Stream audio from FilCDN
@@ -95,11 +97,9 @@ impl FilecoinService {
     pub async fn stream_version(&self, piece_cid: &str) -> Result<Vec<u8>> {
         // PERFORMANT: Try FilCDN first for global speed
         let cdn_url = format!("https://cdn.filecoin.io/{}", piece_cid);
-        
+
         match self.client.get(&cdn_url).send().await {
-            Ok(response) if response.status().is_success() => {
-                Ok(response.bytes().await?.to_vec())
-            }
+            Ok(response) if response.status().is_success() => Ok(response.bytes().await?.to_vec()),
             _ => {
                 // CLEAN: Fallback to direct Filecoin retrieval
                 let filecoin_url = format!("{}/retrieve/{}", self.synapse_endpoint, piece_cid);
@@ -117,17 +117,18 @@ impl FilecoinService {
         _fan_address: &str,
     ) -> Result<PaymentRail> {
         // CLEAN: Return error - real implementation requires Filecoin Pay integration
-        Err(anyhow::anyhow!("Payment rail creation requires Filecoin Pay smart contract integration. Please use the web interface with wallet connection for real payments."))
+        Err(anyhow::anyhow!(
+            "Payment rail creation requires Filecoin Pay smart contract integration. Please use the web interface with wallet connection for real payments."
+        ))
     }
 
     /// MODULAR: Execute creator payment
     /// CLEAN: Simple USD-based interface hiding token complexity
-    pub async fn pay_creator(
-        &self,
-        _request: CreatorPaymentRequest,
-    ) -> Result<String> {
+    pub async fn pay_creator(&self, _request: CreatorPaymentRequest) -> Result<String> {
         // CLEAN: Return error - real implementation requires Filecoin Pay integration
-        Err(anyhow::anyhow!("Creator payments require Filecoin Pay smart contract integration. Please use the web interface with wallet connection for real payments."))
+        Err(anyhow::anyhow!(
+            "Creator payments require Filecoin Pay smart contract integration. Please use the web interface with wallet connection for real payments."
+        ))
     }
 
     /// CLEAN: Get storage information for a version
@@ -136,7 +137,7 @@ impl FilecoinService {
         if let Some(info) = self.storage_cache.get(file_id) {
             return Ok(Some(info.clone()));
         }
-        
+
         // TODO: Query actual Filecoin network
         Ok(None)
     }

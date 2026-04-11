@@ -1,22 +1,23 @@
-use axum::{
-    extract::{Path, Query, State, Multipart},
-    http::{StatusCode, HeaderMap, header},
-    response::{Json, Response},
-    body::Body,
-    routing::{get, post},
-    Router,
-};
-use serde_json::json;
-use crate::farcaster_service::{FarcasterService, FarcasterUser, SocialRecommendation};
-use crate::audio_service::{AudioService, AudioMetadata};
-use crate::filecoin_service::{FilecoinService, FilecoinUploadRequest, CreatorPaymentRequest};
+use crate::audio_service::{AudioMetadata, AudioService};
 use crate::database::{self as database, Database, SimpleDbSong, SimpleDbVersion};
+use crate::farcaster_service::{FarcasterService, FarcasterUser, SocialRecommendation};
+use crate::filecoin_service::{CreatorPaymentRequest, FilecoinService, FilecoinUploadRequest};
+use anyhow;
+use axum::{
+    Router,
+    body::Body,
+    extract::{Multipart, Path, Query, State},
+    http::{HeaderMap, StatusCode, header},
+    response::{Json, Response},
+    routing::{get, post},
+};
+use chrono;
+use reqwest;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashMap;
 use std::env;
-use chrono;
 use uuid::Uuid;
-use anyhow;
 // AGGRESSIVE CONSOLIDATION: Remove unused import
 // use tower_http::cors::CorsLayer; // Not needed, using tower_http::cors::CorsLayer directly
 
@@ -32,6 +33,11 @@ pub struct VersionInfo {
     pub upload_date: String,
     pub play_count: u64,
     pub vote_score: f64,
+    pub audius_track_id: Option<String>,
+    pub audius_artist_id: Option<String>,
+    pub artist_coin_address: Option<String>,
+    pub is_premium: bool,
+    pub ticket_price_usd: f64,
 }
 
 /// Song with multiple versions
@@ -93,6 +99,11 @@ impl VersionInfo {
             upload_date: db_version.upload_date,
             play_count: db_version.play_count as u64,
             vote_score: db_version.vote_score,
+            audius_track_id: db_version.audius_track_id,
+            audius_artist_id: db_version.audius_artist_id,
+            artist_coin_address: db_version.artist_coin_address,
+            is_premium: db_version.is_premium,
+            ticket_price_usd: db_version.ticket_price_usd,
         }
     }
 }
@@ -104,7 +115,7 @@ impl Song {
             .into_iter()
             .map(VersionInfo::from_simple_db)
             .collect();
-            
+
         Self {
             id: db_song.id,
             canonical_title: db_song.canonical_title,
@@ -112,6 +123,21 @@ impl Song {
             total_versions: db_song.total_versions as usize,
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MapCoinRequest {
+    pub coin_address: String,
+    pub audius_track_id: Option<String>,
+    pub audius_artist_id: Option<String>,
+    pub is_premium: bool,
+    pub price_usd: f64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VerifyOwnershipRequest {
+    pub wallet_address: String,
+    pub coin_address: String,
 }
 
 /// Create the REST API router with database integration (ENHANCEMENT FIRST)
@@ -126,8 +152,20 @@ pub fn create_router(database: Database) -> Router {
         // ENHANCEMENT: Add Farcaster endpoints to existing API
         .route("/api/v1/farcaster/profile/:fid", get(get_farcaster_profile))
         .route("/api/v1/farcaster/cast", post(create_farcaster_cast))
-        .route("/api/v1/farcaster/recommendations", get(get_social_recommendations))
-        .route("/api/v1/versions/:id/discussions", get(get_version_discussions))
+        .route(
+            "/api/v1/farcaster/recommendations",
+            get(get_social_recommendations),
+        )
+        .route("/api/v1/script/execute", post(execute_script))
+        .route(
+            "/api/v1/versions/:id/map-coin",
+            post(map_version_to_coin_handler),
+        )
+        .route("/api/v1/verify-ownership", post(verify_ownership_handler))
+        .route(
+            "/api/v1/versions/:id/discussions",
+            get(get_version_discussions),
+        )
         // Farcaster Mini App manifest at well-known path
         .route("/.well-known/farcaster.json", get(get_farcaster_manifest))
         // ENHANCEMENT: Add audio streaming endpoints
@@ -137,22 +175,46 @@ pub fn create_router(database: Database) -> Router {
         .route("/api/v1/audio/upload", post(upload_audio_file))
         // ENHANCEMENT: Add version comparison endpoints
         .route("/api/v1/compare/versions", post(compare_versions))
-        .route("/api/v1/compare/:session_id/metadata", get(get_comparison_metadata))
-        .route("/api/v1/compare/:session_id/stream/:version_id", get(stream_comparison_audio))
+        .route(
+            "/api/v1/compare/:session_id/metadata",
+            get(get_comparison_metadata),
+        )
+        .route(
+            "/api/v1/compare/:session_id/stream/:version_id",
+            get(stream_comparison_audio),
+        )
         // ENHANCEMENT: Add database management endpoints
         .route("/api/v1/database/stats", get(get_database_stats))
         .route("/api/v1/database/cleanup", post(cleanup_database))
         // ENHANCEMENT: Add Filecoin endpoints for global storage and creator economy
         .route("/api/v1/filecoin/upload", post(upload_to_filecoin))
-        .route("/api/v1/filecoin/stream/:piece_cid", get(stream_from_filecoin))
-        .route("/api/v1/filecoin/storage/:file_id", get(get_filecoin_storage_info))
-        .route("/api/v1/filecoin/network/status", get(get_filecoin_network_status))
+        .route(
+            "/api/v1/filecoin/stream/:piece_cid",
+            get(stream_from_filecoin),
+        )
+        .route(
+            "/api/v1/filecoin/storage/:file_id",
+            get(get_filecoin_storage_info),
+        )
+        .route(
+            "/api/v1/filecoin/network/status",
+            get(get_filecoin_network_status),
+        )
         .route("/api/v1/filecoin/payment/creator", post(pay_creator))
         .route("/api/v1/filecoin/payment/rail", post(create_payment_rail))
         // ENHANCEMENT FIRST: Creator dashboard endpoints
-        .route("/api/v1/filecoin/creator/earnings", get(get_creator_earnings))
-        .route("/api/v1/filecoin/creator/withdraw", post(withdraw_creator_earnings))
-        .route("/api/v1/filecoin/creator/analytics", get(get_creator_analytics))
+        .route(
+            "/api/v1/filecoin/creator/earnings",
+            get(get_creator_earnings),
+        )
+        .route(
+            "/api/v1/filecoin/creator/withdraw",
+            post(withdraw_creator_earnings),
+        )
+        .route(
+            "/api/v1/filecoin/creator/analytics",
+            get(get_creator_analytics),
+        )
         // HACKATHON: Audius + Solana Integration
         .route("/api/v1/audius/track/:track_id", get(get_audius_track))
         .route("/api/v1/audius/search", get(search_audius))
@@ -162,7 +224,10 @@ pub fn create_router(database: Database) -> Router {
         .route("/api/v1/solana/connect", post(connect_wallet))
         .route("/api/v1/solana/verify-ownership", post(verify_ownership))
         .route("/api/v1/versions/:id/link-coin", post(link_version_to_coin))
-        .route("/api/v1/versions/:id/check-access", post(check_version_access))
+        .route(
+            "/api/v1/versions/:id/check-access",
+            post(check_version_access),
+        )
         // VERSIONS AS TICKETS: Creator & Collection
         .route("/api/v1/versions/create", post(create_version))
         .route("/api/v1/versions/mint", post(mint_version))
@@ -184,7 +249,7 @@ async fn health_check() -> Json<ApiResponse<HashMap<String, String>>> {
     status.insert("status".to_string(), "healthy".to_string());
     status.insert("service".to_string(), "versions-api".to_string());
     status.insert("version".to_string(), env!("CARGO_PKG_VERSION").to_string());
-    
+
     Json(ApiResponse::success(status))
 }
 
@@ -193,11 +258,15 @@ async fn get_farcaster_manifest() -> Response {
     // Read configuration from environment with sensible defaults
     let name = env::var("FARCASTER_APP_NAME").unwrap_or_else(|_| "VERSIONS".to_string());
     let domain = env::var("FARCASTER_DOMAIN").unwrap_or_else(|_| "localhost:3000".to_string());
-    let icon_url = env::var("FARCASTER_ICON_URL").unwrap_or_else(|_| format!("https://{}/app.png", domain));
-    let home_url = env::var("FARCASTER_HOME_URL").unwrap_or_else(|_| format!("https://{}/", domain));
-    let image_url = env::var("FARCASTER_IMAGE_URL").unwrap_or_else(|_| format!("https://{}/opengraph-image.png", domain));
+    let icon_url =
+        env::var("FARCASTER_ICON_URL").unwrap_or_else(|_| format!("https://{}/app.png", domain));
+    let home_url =
+        env::var("FARCASTER_HOME_URL").unwrap_or_else(|_| format!("https://{}/", domain));
+    let image_url = env::var("FARCASTER_IMAGE_URL")
+        .unwrap_or_else(|_| format!("https://{}/opengraph-image.png", domain));
     let button_title = env::var("FARCASTER_BUTTON_TITLE").unwrap_or_else(|_| "Open".to_string());
-    let splash_image_url = env::var("FARCASTER_SPLASH_IMAGE_URL").unwrap_or_else(|_| icon_url.clone());
+    let splash_image_url =
+        env::var("FARCASTER_SPLASH_IMAGE_URL").unwrap_or_else(|_| icon_url.clone());
     let splash_bg = env::var("FARCASTER_SPLASH_BG").unwrap_or_else(|_| "#000000".to_string());
 
     let manifest = json!({
@@ -225,12 +294,18 @@ async fn get_farcaster_manifest() -> Response {
 /// List songs with pagination (ENHANCEMENT FIRST: now uses real database)
 async fn list_songs(
     State(db): State<Database>,
-    Query(params): Query<ListQuery>
+    Query(params): Query<ListQuery>,
 ) -> Json<ApiResponse<Vec<Song>>> {
-    match db.list_songs(params.limit, params.page.map(|p| p * params.limit.unwrap_or(50))).await {
+    match db
+        .list_songs(
+            params.limit,
+            params.page.map(|p| p * params.limit.unwrap_or(50)),
+        )
+        .await
+    {
         Ok(db_songs) => {
             let mut songs = Vec::new();
-            
+
             // PERFORMANT: Get versions for each song efficiently
             for db_song in db_songs {
                 match db.get_song_with_versions(&db_song.id).await {
@@ -254,7 +329,7 @@ async fn list_songs(
                     }
                 }
             }
-            
+
             Json(ApiResponse::success(songs))
         }
         Err(e) => {
@@ -271,7 +346,7 @@ async fn list_songs(
 /// Get a specific song by ID (ENHANCEMENT FIRST: now uses real database)
 async fn get_song(
     State(db): State<Database>,
-    Path(id): Path<String>
+    Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<Song>>, StatusCode> {
     match db.get_song_with_versions(&id).await {
         Ok(Some((db_song, versions_data))) => {
@@ -286,10 +361,58 @@ async fn get_song(
     }
 }
 
+/// Map a version to a Solana artist coin
+async fn map_version_to_coin_handler(
+    State(db): State<Database>,
+    Path(id): Path<String>,
+    Json(payload): Json<MapCoinRequest>,
+) -> Json<ApiResponse<String>> {
+    match db
+        .map_version_to_coin(
+            &id,
+            &payload.coin_address,
+            payload.audius_track_id.as_deref(),
+            payload.audius_artist_id.as_deref(),
+            payload.is_premium,
+            payload.price_usd,
+        )
+        .await
+    {
+        Ok(_) => Json(ApiResponse::success(
+            "Successfully mapped version to coin".to_string(),
+        )),
+        Err(e) => Json(ApiResponse::error(format!("Failed to map version: {}", e))),
+    }
+}
+
+/// Verify on-chain ownership of an artist coin
+async fn verify_ownership_handler(
+    State(_db): State<Database>,
+    Json(payload): Json<VerifyOwnershipRequest>,
+) -> Json<ApiResponse<bool>> {
+    let helius_api_key = env::var("HELIUS_API_KEY").unwrap_or_default();
+    if helius_api_key.is_empty() {
+        return Json(ApiResponse::error(
+            "HELIUS_API_KEY not configured".to_string(),
+        ));
+    }
+
+    // Call Helius RPC (DAS API) to check if the wallet owns the token
+    // For the hackathon, we simulate this or call the proxy
+    let _client = reqwest::Client::new();
+    let _rpc_url = format!("https://mainnet.helius-rpc.com/?api-key={}", helius_api_key);
+
+    // In a real implementation, we'd use `getTokenAccountsByOwner` or DAS API
+    // For now, let's assume successful verification if the wallet exists for the demo
+    let is_verified = !payload.wallet_address.is_empty() && !payload.coin_address.is_empty();
+
+    Json(ApiResponse::success(is_verified))
+}
+
 /// Get a specific version by ID (ENHANCEMENT FIRST: simplified approach)
 async fn get_version(
-    State(_db): State<Database>, 
-    Path(id): Path<String>
+    State(_db): State<Database>,
+    Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<VersionInfo>>, StatusCode> {
     // For now, return sample data - can be enhanced later with proper query
     if id == "version1" || id.contains("version") {
@@ -303,6 +426,11 @@ async fn get_version(
             upload_date: "2024-01-01T00:00:00Z".to_string(),
             play_count: 1000,
             vote_score: 4.8,
+            audius_track_id: None,
+            audius_artist_id: None,
+            artist_coin_address: None,
+            is_premium: false,
+            ticket_price_usd: 0.0,
         };
         Ok(Json(ApiResponse::success(version)))
     } else {
@@ -313,7 +441,9 @@ async fn get_version(
 /// Upload a new version
 async fn upload_version() -> Json<ApiResponse<String>> {
     // TODO: Implement actual version upload
-    Json(ApiResponse::success("Upload endpoint coming soon".to_string()))
+    Json(ApiResponse::success(
+        "Upload endpoint coming soon".to_string(),
+    ))
 }
 
 /// Search endpoint with full-text search across songs and versions
@@ -324,10 +454,15 @@ async fn search(
     match params.search {
         Some(query) if !query.trim().is_empty() => {
             // Perform full-text search
-            match db.search_songs_and_versions(&query, params.limit, params.page.map(|p| p * params.limit.unwrap_or(50))).await {
-                Ok(results) => {
-                    Json(ApiResponse::success(results))
-                }
+            match db
+                .search_songs_and_versions(
+                    &query,
+                    params.limit,
+                    params.page.map(|p| p * params.limit.unwrap_or(50)),
+                )
+                .await
+            {
+                Ok(results) => Json(ApiResponse::success(results)),
                 Err(e) => {
                     log::error!("Search failed: {}", e);
                     Json(ApiResponse {
@@ -340,7 +475,13 @@ async fn search(
         }
         _ => {
             // No search query - return recent songs
-            match db.list_songs(params.limit, params.page.map(|p| p * params.limit.unwrap_or(50))).await {
+            match db
+                .list_songs(
+                    params.limit,
+                    params.page.map(|p| p * params.limit.unwrap_or(50)),
+                )
+                .await
+            {
                 Ok(songs) => Json(ApiResponse::success(songs)),
                 Err(e) => {
                     log::error!("Failed to list songs: {}", e);
@@ -361,7 +502,7 @@ async fn search(
 async fn get_farcaster_profile(Path(fid): Path<u64>) -> Json<ApiResponse<FarcasterUser>> {
     // MODULAR: Use our Farcaster service
     let mut service = FarcasterService::new();
-    
+
     match service.get_user_profile(fid).await {
         Ok(user) => Json(ApiResponse::success(user)),
         Err(_) => Json(ApiResponse {
@@ -375,9 +516,11 @@ async fn get_farcaster_profile(Path(fid): Path<u64>) -> Json<ApiResponse<Farcast
 // ENHANCEMENT FIRST: Creator dashboard endpoints
 
 /// Get creator earnings and version performance
-async fn get_creator_earnings(Query(params): Query<HashMap<String, String>>) -> Json<ApiResponse<HashMap<String, serde_json::Value>>> {
+async fn get_creator_earnings(
+    Query(params): Query<HashMap<String, String>>,
+) -> Json<ApiResponse<HashMap<String, serde_json::Value>>> {
     let address = params.get("address").map_or("", |v| v);
-    
+
     if address.is_empty() {
         return Json(ApiResponse {
             success: false,
@@ -385,7 +528,7 @@ async fn get_creator_earnings(Query(params): Query<HashMap<String, String>>) -> 
             error: Some("Creator address is required".to_string()),
         });
     }
-    
+
     // CLEAN: Return error - real implementation requires Filecoin Pay integration
     Json(ApiResponse {
         success: false,
@@ -395,14 +538,18 @@ async fn get_creator_earnings(Query(params): Query<HashMap<String, String>>) -> 
 }
 
 /// Withdraw creator earnings
-async fn withdraw_creator_earnings(Json(request): Json<HashMap<String, serde_json::Value>>) -> Json<ApiResponse<HashMap<String, String>>> {
-    let creator_address = request.get("creator_address")
+async fn withdraw_creator_earnings(
+    Json(request): Json<HashMap<String, serde_json::Value>>,
+) -> Json<ApiResponse<HashMap<String, String>>> {
+    let creator_address = request
+        .get("creator_address")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let amount_usd = request.get("amount_usd")
+    let amount_usd = request
+        .get("amount_usd")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
-    
+
     if creator_address.is_empty() {
         return Json(ApiResponse {
             success: false,
@@ -410,7 +557,7 @@ async fn withdraw_creator_earnings(Json(request): Json<HashMap<String, serde_jso
             error: Some("Creator address is required".to_string()),
         });
     }
-    
+
     if amount_usd <= 0.0 {
         return Json(ApiResponse {
             success: false,
@@ -418,7 +565,7 @@ async fn withdraw_creator_earnings(Json(request): Json<HashMap<String, serde_jso
             error: Some("Withdrawal amount must be greater than 0".to_string()),
         });
     }
-    
+
     // CLEAN: Return error - real implementation requires fiat off-ramp integration
     Json(ApiResponse {
         success: false,
@@ -428,10 +575,12 @@ async fn withdraw_creator_earnings(Json(request): Json<HashMap<String, serde_jso
 }
 
 /// Get creator analytics
-async fn get_creator_analytics(Query(params): Query<HashMap<String, String>>) -> Json<ApiResponse<HashMap<String, serde_json::Value>>> {
+async fn get_creator_analytics(
+    Query(params): Query<HashMap<String, String>>,
+) -> Json<ApiResponse<HashMap<String, serde_json::Value>>> {
     let address = params.get("address").map_or("", |v| v);
     let _period = params.get("period").map_or("30d", |v| v);
-    
+
     if address.is_empty() {
         return Json(ApiResponse {
             success: false,
@@ -439,7 +588,7 @@ async fn get_creator_analytics(Query(params): Query<HashMap<String, String>>) ->
             error: Some("Creator address is required".to_string()),
         });
     }
-    
+
     // CLEAN: Return error - real implementation requires analytics service integration
     Json(ApiResponse {
         success: false,
@@ -456,17 +605,22 @@ struct CastRequest {
 }
 
 /// Create a Farcaster cast
-async fn create_farcaster_cast(Json(request): Json<CastRequest>) -> Json<ApiResponse<HashMap<String, String>>> {
+async fn create_farcaster_cast(
+    Json(request): Json<CastRequest>,
+) -> Json<ApiResponse<HashMap<String, String>>> {
     let service = FarcasterService::new();
     let embed_url = request.embed_url.unwrap_or_default();
-    
-    match service.cast_version_discovery(&request.text, &embed_url).await {
+
+    match service
+        .cast_version_discovery(&request.text, &embed_url)
+        .await
+    {
         Ok(cast_hash) => {
             let mut response = HashMap::new();
             response.insert("cast_hash".to_string(), cast_hash);
             response.insert("status".to_string(), "success".to_string());
             Json(ApiResponse::success(response))
-        },
+        }
         Err(_) => Json(ApiResponse {
             success: false,
             data: None,
@@ -476,13 +630,16 @@ async fn create_farcaster_cast(Json(request): Json<CastRequest>) -> Json<ApiResp
 }
 
 /// Get social recommendations based on Farcaster graph
-async fn get_social_recommendations(Query(params): Query<HashMap<String, String>>) -> Json<ApiResponse<Vec<SocialRecommendation>>> {
-    let fid = params.get("fid")
+async fn get_social_recommendations(
+    Query(params): Query<HashMap<String, String>>,
+) -> Json<ApiResponse<Vec<SocialRecommendation>>> {
+    let fid = params
+        .get("fid")
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(1); // Default FID for testing
-    
+
     let service = FarcasterService::new();
-    
+
     match service.get_social_recommendations(fid).await {
         Ok(recommendations) => Json(ApiResponse::success(recommendations)),
         Err(_) => Json(ApiResponse {
@@ -494,9 +651,11 @@ async fn get_social_recommendations(Query(params): Query<HashMap<String, String>
 }
 
 /// Get Farcaster discussions for a version
-async fn get_version_discussions(Path(version_id): Path<String>) -> Json<ApiResponse<Vec<crate::farcaster_service::FarcasterCast>>> {
+async fn get_version_discussions(
+    Path(version_id): Path<String>,
+) -> Json<ApiResponse<Vec<crate::farcaster_service::FarcasterCast>>> {
     let service = FarcasterService::new();
-    
+
     match service.get_version_discussions(&version_id).await {
         Ok(discussions) => Json(ApiResponse::success(discussions)),
         Err(_) => Json(ApiResponse {
@@ -512,7 +671,7 @@ async fn get_version_discussions(Path(version_id): Path<String>) -> Json<ApiResp
 /// List available audio files
 async fn list_audio_files() -> Json<ApiResponse<Vec<String>>> {
     let service = AudioService::default();
-    
+
     match service.list_audio_files().await {
         Ok(files) => Json(ApiResponse::success(files)),
         Err(_) => Json(ApiResponse {
@@ -526,7 +685,7 @@ async fn list_audio_files() -> Json<ApiResponse<Vec<String>>> {
 /// Get audio file metadata
 async fn get_audio_metadata(Path(file_id): Path<String>) -> Json<ApiResponse<AudioMetadata>> {
     let mut service = AudioService::default();
-    
+
     match service.get_audio_metadata(&file_id).await {
         Ok(metadata) => Json(ApiResponse::success(metadata)),
         Err(_) => Json(ApiResponse {
@@ -538,25 +697,31 @@ async fn get_audio_metadata(Path(file_id): Path<String>) -> Json<ApiResponse<Aud
 }
 
 /// Stream audio file with range support
-async fn stream_audio(Path(file_id): Path<String>, headers: HeaderMap) -> Result<Response<Body>, StatusCode> {
+async fn stream_audio(
+    Path(file_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Response<Body>, StatusCode> {
     let service = AudioService::default();
-    
+
     // PERFORMANT: Parse range header for efficient streaming
     let range_request = parse_range_header(&headers);
     let has_range = range_request.is_some();
-    
+
     match service.stream_audio(&file_id, range_request).await {
         Ok(audio_stream) => {
             let mut response = Response::builder()
                 .header(header::CONTENT_TYPE, audio_stream.content_type)
-                .header(header::CONTENT_LENGTH, audio_stream.content_length.to_string())
+                .header(
+                    header::CONTENT_LENGTH,
+                    audio_stream.content_length.to_string(),
+                )
                 .header(header::ACCEPT_RANGES, "bytes");
-            
+
             // PERFORMANT: Add range headers for partial content
             if has_range {
                 response = response.status(StatusCode::PARTIAL_CONTENT);
             }
-            
+
             response
                 .body(Body::from(audio_stream.content))
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
@@ -568,38 +733,41 @@ async fn stream_audio(Path(file_id): Path<String>, headers: HeaderMap) -> Result
 /// Upload audio file using multipart form data
 async fn upload_audio_file(
     State(db): State<Database>,
-    mut multipart: Multipart
+    mut multipart: Multipart,
 ) -> Json<ApiResponse<AudioMetadata>> {
     let service = AudioService::default();
     let mut file_data: Option<Vec<u8>> = None;
     let mut filename: Option<String> = None;
     let mut file_format: Option<String> = None;
-    
+
     // ENHANCEMENT: Process multipart form data
     while let Some(field) = multipart.next_field().await.unwrap_or(None) {
         let field_name = field.name().unwrap_or("").to_string();
-        
+
         match field_name.as_str() {
             "file" => {
                 // Extract filename from field
                 if let Some(file_name) = field.file_name() {
                     filename = Some(file_name.to_string());
-                    
+
                     // Extract format from filename extension
                     if let Some(extension) = std::path::Path::new(file_name)
                         .extension()
-                        .and_then(|ext| ext.to_str()) 
+                        .and_then(|ext| ext.to_str())
                     {
                         file_format = Some(extension.to_lowercase());
                     }
                 }
-                
+
                 // Read file content
                 match field.bytes().await {
                     Ok(bytes) => {
                         file_data = Some(bytes.to_vec());
-                        log::info!("Received file upload: {} bytes, format: {:?}", 
-                                  bytes.len(), file_format);
+                        log::info!(
+                            "Received file upload: {} bytes, format: {:?}",
+                            bytes.len(),
+                            file_format
+                        );
                     }
                     Err(e) => {
                         return Json(ApiResponse {
@@ -616,7 +784,7 @@ async fn upload_audio_file(
             }
         }
     }
-    
+
     // CLEAN: Validate required data
     let content = match file_data {
         Some(data) => data,
@@ -628,7 +796,7 @@ async fn upload_audio_file(
             });
         }
     };
-    
+
     let format = match file_format {
         Some(fmt) => fmt,
         None => {
@@ -639,7 +807,7 @@ async fn upload_audio_file(
             });
         }
     };
-    
+
     // MODULAR: Generate unique file ID from filename or create one
     let file_id = if let Some(ref name) = filename {
         std::path::Path::new(name)
@@ -650,15 +818,19 @@ async fn upload_audio_file(
     } else {
         format!("upload-{}", chrono::Utc::now().timestamp())
     };
-    
-    log::info!("Processing upload: file_id={}, format={}, size={} bytes", 
-               file_id, format, content.len());
-    
+
+    log::info!(
+        "Processing upload: file_id={}, format={}, size={} bytes",
+        file_id,
+        format,
+        content.len()
+    );
+
     // ENHANCEMENT: Upload and extract metadata
     match service.upload_audio_file(&file_id, content, &format).await {
         Ok(metadata) => {
             log::info!("Upload successful: {:?}", metadata);
-            
+
             // MODULAR: Create database entries for the uploaded audio
             match create_database_entries(&db, &metadata, &file_id).await {
                 Ok(_) => {
@@ -671,7 +843,10 @@ async fn upload_audio_file(
                     Json(ApiResponse {
                         success: false,
                         data: None,
-                        error: Some(format!("Upload succeeded but database integration failed: {}", e)),
+                        error: Some(format!(
+                            "Upload succeeded but database integration failed: {}",
+                            e
+                        )),
                     })
                 }
             }
@@ -688,25 +863,40 @@ async fn upload_audio_file(
 }
 
 /// MODULAR: Create database entries for uploaded audio file
-async fn create_database_entries(db: &Database, metadata: &AudioMetadata, file_id: &str) -> Result<(), String> {
-    
+async fn create_database_entries(
+    db: &Database,
+    metadata: &AudioMetadata,
+    file_id: &str,
+) -> Result<(), String> {
     // CLEAN: Extract song title and artist from metadata
-    let song_title = metadata.title.as_deref().unwrap_or("Unknown Title").to_string();
-    let artist = metadata.artist.as_deref().unwrap_or("Unknown Artist").to_string();
-    
+    let song_title = metadata
+        .title
+        .as_deref()
+        .unwrap_or("Unknown Title")
+        .to_string();
+    let artist = metadata
+        .artist
+        .as_deref()
+        .unwrap_or("Unknown Artist")
+        .to_string();
+
     // MODULAR: Try to find existing song or create new one
     let song_id = match find_or_create_song(db, &song_title, &artist).await {
         Ok(id) => id,
         Err(e) => return Err(format!("Failed to create/find song: {}", e)),
     };
-    
+
     // ENHANCEMENT: Determine version type based on filename or metadata
     let version_type = determine_version_type(file_id, metadata);
-    
+
     // MODULAR: Create version entry with audio metadata
     match create_version_entry(db, &song_id, file_id, metadata, &version_type, &artist).await {
         Ok(_) => {
-            log::info!("Created version entry for song '{}' with type '{}'", song_title, version_type);
+            log::info!(
+                "Created version entry for song '{}' with type '{}'",
+                song_title,
+                version_type
+            );
             Ok(())
         }
         Err(e) => Err(format!("Failed to create version: {}", e)),
@@ -714,20 +904,32 @@ async fn create_database_entries(db: &Database, metadata: &AudioMetadata, file_i
 }
 
 /// CLEAN: Find existing song or create new one
-async fn find_or_create_song(db: &Database, title: &str, artist: &str) -> Result<String, anyhow::Error> {
+async fn find_or_create_song(
+    db: &Database,
+    title: &str,
+    artist: &str,
+) -> Result<String, anyhow::Error> {
     // PERFORMANT: Try to find existing song by title (fuzzy match)
     let similar_songs = db.list_songs(Some(10), None).await?;
-    
+
     for song in similar_songs {
-        if song.canonical_title.to_lowercase().contains(&title.to_lowercase()) {
-            log::info!("Found existing song: {} ({})", song.canonical_title, song.id);
+        if song
+            .canonical_title
+            .to_lowercase()
+            .contains(&title.to_lowercase())
+        {
+            log::info!(
+                "Found existing song: {} ({})",
+                song.canonical_title,
+                song.id
+            );
             return Ok(song.id);
         }
     }
-    
+
     // MODULAR: Create new song if not found
     let song_id = Uuid::new_v4().to_string();
-    
+
     match db.create_song(&song_id, title, Some(artist)).await {
         Ok(_) => {
             log::info!("Created new song: {} ({})", title, song_id);
@@ -741,7 +943,7 @@ async fn find_or_create_song(db: &Database, title: &str, artist: &str) -> Result
 fn determine_version_type(file_id: &str, metadata: &AudioMetadata) -> String {
     let file_lower = file_id.to_lowercase();
     let title_lower = metadata.title.as_deref().unwrap_or("").to_lowercase();
-    
+
     // CLEAN: Smart version type detection
     if file_lower.contains("live") || title_lower.contains("live") {
         "live".to_string()
@@ -769,7 +971,7 @@ async fn create_version_entry(
 ) -> Result<(), anyhow::Error> {
     let version_id = Uuid::new_v4().to_string();
     let title = metadata.title.as_deref().unwrap_or(file_id).to_string();
-    
+
     // CLEAN: Get version type ID from database
     let version_type_id = match version_type {
         "demo" => 1,
@@ -780,7 +982,7 @@ async fn create_version_entry(
         "acoustic" => 6,
         _ => 2, // Default to studio
     };
-    
+
     db.create_version(
         &version_id,
         song_id,
@@ -794,7 +996,8 @@ async fn create_version_entry(
         metadata.sample_rate.map(|r| r as i32),
         metadata.channels.map(|c| c as i32),
         metadata.bitrate.map(|b| b as i32),
-    ).await
+    )
+    .await
 }
 
 /// MODULAR: Parse HTTP range header
@@ -851,7 +1054,7 @@ struct VersionComparisonData {
 /// Create a version comparison session
 async fn compare_versions(
     State(db): State<Database>,
-    Json(request): Json<VersionComparisonRequest>
+    Json(request): Json<VersionComparisonRequest>,
 ) -> Json<ApiResponse<VersionComparisonSession>> {
     // Validate request
     if request.version_ids.len() < 2 {
@@ -912,7 +1115,11 @@ async fn compare_versions(
         created_at: chrono::Utc::now().to_rfc3339(),
     };
 
-    log::info!("Created comparison session: {} with {} versions", session_id, request.version_ids.len());
+    log::info!(
+        "Created comparison session: {} with {} versions",
+        session_id,
+        request.version_ids.len()
+    );
 
     Json(ApiResponse::success(session))
 }
@@ -928,7 +1135,11 @@ async fn get_comparison_metadata(
     match db.get_comparison_metadata(&session_id).await {
         Ok(metadata) => Json(ApiResponse::success(metadata)),
         Err(e) => {
-            log::error!("Failed to get comparison metadata for {}: {}", session_id, e);
+            log::error!(
+                "Failed to get comparison metadata for {}: {}",
+                session_id,
+                e
+            );
             Json(ApiResponse {
                 success: false,
                 data: None,
@@ -942,10 +1153,13 @@ async fn get_comparison_metadata(
 async fn stream_comparison_audio(
     State(db): State<Database>,
     Path((session_id, version_id)): Path<(String, String)>,
-    headers: HeaderMap
+    headers: HeaderMap,
 ) -> Result<Response<Body>, StatusCode> {
     // Validate session and version
-    match db.validate_comparison_session(&session_id, &version_id).await {
+    match db
+        .validate_comparison_session(&session_id, &version_id)
+        .await
+    {
         Ok(true) => {
             // Get audio service instance
             let audio_service = crate::audio_service::AudioService::default();
@@ -958,7 +1172,10 @@ async fn stream_comparison_audio(
                 Ok(audio_stream) => {
                     let mut response = Response::builder()
                         .header(header::CONTENT_TYPE, audio_stream.content_type)
-                        .header(header::CONTENT_LENGTH, audio_stream.content_length.to_string())
+                        .header(
+                            header::CONTENT_LENGTH,
+                            audio_stream.content_length.to_string(),
+                        )
                         .header(header::ACCEPT_RANGES, "bytes");
 
                     // Add range headers for partial content
@@ -982,7 +1199,7 @@ async fn stream_comparison_audio(
 
 /// Get database statistics
 async fn get_database_stats(
-    State(db): State<Database>
+    State(db): State<Database>,
 ) -> Json<ApiResponse<crate::database::DatabaseStats>> {
     match db.get_database_stats().await {
         Ok(stats) => Json(ApiResponse::success(stats)),
@@ -999,13 +1216,16 @@ async fn get_database_stats(
 
 /// Clean up orphaned database data
 async fn cleanup_database(
-    State(db): State<Database>
+    State(db): State<Database>,
 ) -> Json<ApiResponse<HashMap<String, String>>> {
     match db.cleanup_orphaned_data().await {
         Ok(_) => {
             let mut response = HashMap::new();
             response.insert("status".to_string(), "success".to_string());
-            response.insert("message".to_string(), "Database cleanup completed".to_string());
+            response.insert(
+                "message".to_string(),
+                "Database cleanup completed".to_string(),
+            );
             Json(ApiResponse::success(response))
         }
         Err(e) => {
@@ -1022,9 +1242,11 @@ async fn cleanup_database(
 // ENHANCEMENT: Filecoin endpoints for global storage and creator economy
 
 /// Upload audio version to Filecoin global storage
-async fn upload_to_filecoin(Json(request): Json<FilecoinUploadRequest>) -> Json<ApiResponse<crate::filecoin_service::FilecoinStorageInfo>> {
+async fn upload_to_filecoin(
+    Json(request): Json<FilecoinUploadRequest>,
+) -> Json<ApiResponse<crate::filecoin_service::FilecoinStorageInfo>> {
     let mut service = FilecoinService::default();
-    
+
     match service.upload_version(request).await {
         Ok(storage_info) => Json(ApiResponse::success(storage_info)),
         Err(e) => Json(ApiResponse {
@@ -1038,7 +1260,7 @@ async fn upload_to_filecoin(Json(request): Json<FilecoinUploadRequest>) -> Json<
 /// Stream audio from Filecoin CDN
 async fn stream_from_filecoin(Path(piece_cid): Path<String>) -> Result<Response<Body>, StatusCode> {
     let service = FilecoinService::default();
-    
+
     match service.stream_version(&piece_cid).await {
         Ok(audio_data) => {
             Response::builder()
@@ -1053,9 +1275,11 @@ async fn stream_from_filecoin(Path(piece_cid): Path<String>) -> Result<Response<
 }
 
 /// Get Filecoin storage information for a version
-async fn get_filecoin_storage_info(Path(file_id): Path<String>) -> Json<ApiResponse<Option<crate::filecoin_service::FilecoinStorageInfo>>> {
+async fn get_filecoin_storage_info(
+    Path(file_id): Path<String>,
+) -> Json<ApiResponse<Option<crate::filecoin_service::FilecoinStorageInfo>>> {
     let service = FilecoinService::default();
-    
+
     match service.get_storage_info(&file_id).await {
         Ok(storage_info) => Json(ApiResponse::success(storage_info)),
         Err(e) => Json(ApiResponse {
@@ -1067,9 +1291,10 @@ async fn get_filecoin_storage_info(Path(file_id): Path<String>) -> Json<ApiRespo
 }
 
 /// Get Filecoin network status and costs
-async fn get_filecoin_network_status() -> Json<ApiResponse<crate::filecoin_service::NetworkStatus>> {
+async fn get_filecoin_network_status() -> Json<ApiResponse<crate::filecoin_service::NetworkStatus>>
+{
     let service = FilecoinService::default();
-    
+
     match service.get_network_status().await {
         Ok(status) => Json(ApiResponse::success(status)),
         Err(e) => Json(ApiResponse {
@@ -1081,16 +1306,18 @@ async fn get_filecoin_network_status() -> Json<ApiResponse<crate::filecoin_servi
 }
 
 /// Pay creator through Filecoin Pay
-async fn pay_creator(Json(request): Json<CreatorPaymentRequest>) -> Json<ApiResponse<HashMap<String, String>>> {
+async fn pay_creator(
+    Json(request): Json<CreatorPaymentRequest>,
+) -> Json<ApiResponse<HashMap<String, String>>> {
     let service = FilecoinService::default();
-    
+
     match service.pay_creator(request).await {
         Ok(tx_hash) => {
             let mut response = HashMap::new();
             response.insert("transaction_hash".to_string(), tx_hash);
             response.insert("status".to_string(), "success".to_string());
             Json(ApiResponse::success(response))
-        },
+        }
         Err(e) => Json(ApiResponse {
             success: false,
             data: None,
@@ -1100,13 +1327,18 @@ async fn pay_creator(Json(request): Json<CreatorPaymentRequest>) -> Json<ApiResp
 }
 
 /// Create payment rail for creator economy
-async fn create_payment_rail(Json(request): Json<HashMap<String, String>>) -> Json<ApiResponse<crate::filecoin_service::PaymentRail>> {
+async fn create_payment_rail(
+    Json(request): Json<HashMap<String, String>>,
+) -> Json<ApiResponse<crate::filecoin_service::PaymentRail>> {
     let service = FilecoinService::default();
-    
+
     let creator_address = request.get("creator_address").map_or("", |v| v);
     let fan_address = request.get("fan_address").map_or("", |v| v);
-    
-    match service.create_payment_rail(creator_address, fan_address).await {
+
+    match service
+        .create_payment_rail(creator_address, fan_address)
+        .await
+    {
         Ok(rail) => Json(ApiResponse::success(rail)),
         Err(e) => Json(ApiResponse {
             success: false,
@@ -1164,46 +1396,60 @@ pub struct AccessCheckRequest {
 }
 
 /// Get track from Audius by ID
-async fn get_audius_track(
-    Path(track_id): Path<String>,
-) -> Json<ApiResponse<AudiusTrack>> {
+async fn get_audius_track(Path(track_id): Path<String>) -> Json<ApiResponse<AudiusTrack>> {
     let client = reqwest::Client::new();
     let api_key = get_audius_api_key();
     let url = if api_key.is_empty() {
-        format!("{}/v1/tracks/{}?app_name=VersionsHack", AUDIUS_API_HOST, track_id)
+        format!(
+            "{}/v1/tracks/{}?app_name=VersionsHack",
+            AUDIUS_API_HOST, track_id
+        )
     } else {
-        format!("{}/v1/tracks/{}?api_key={}", AUDIUS_API_HOST, track_id, api_key)
+        format!(
+            "{}/v1/tracks/{}?api_key={}",
+            AUDIUS_API_HOST, track_id, api_key
+        )
     };
-    
-    match client
-        .get(&url)
-        .send()
-        .await
-    {
-        Ok(response) => {
-            match response.json::<serde_json::Value>().await {
-                Ok(data) => {
-                    if let Some(track) = data.get("data") {
-                        let audius_track = AudiusTrack {
-                            id: track.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                            title: track.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                            artist_id: track.get("user").and_then(|u| u.get("id")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                            duration: track.get("duration").and_then(|v| v.as_u64()),
-                            stream_url: track.get("stream_url").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                            artwork: track.get("artwork").and_then(|a| a.as_object()).map(|obj| {
-                                obj.iter()
-                                    .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string()))
-                                    .collect()
-                            }),
-                        };
-                        Json(ApiResponse::success(audius_track))
-                    } else {
-                        Json(ApiResponse::error("Track not found".to_string()))
-                    }
+
+    match client.get(&url).send().await {
+        Ok(response) => match response.json::<serde_json::Value>().await {
+            Ok(data) => {
+                if let Some(track) = data.get("data") {
+                    let audius_track = AudiusTrack {
+                        id: track
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        title: track
+                            .get("title")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        artist_id: track
+                            .get("user")
+                            .and_then(|u| u.get("id"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        duration: track.get("duration").and_then(|v| v.as_u64()),
+                        stream_url: track
+                            .get("stream_url")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        artwork: track.get("artwork").and_then(|a| a.as_object()).map(|obj| {
+                            obj.iter()
+                                .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string()))
+                                .collect()
+                        }),
+                    };
+                    Json(ApiResponse::success(audius_track))
+                } else {
+                    Json(ApiResponse::error("Track not found".to_string()))
                 }
-                Err(e) => Json(ApiResponse::error(format!("Failed to parse track: {}", e))),
             }
-        }
+            Err(e) => Json(ApiResponse::error(format!("Failed to parse track: {}", e))),
+        },
         Err(e) => Json(ApiResponse::error(format!("Failed to fetch track: {}", e))),
     }
 }
@@ -1216,43 +1462,57 @@ async fn search_audius(
     let client = reqwest::Client::new();
     let api_key = get_audius_api_key();
     let url = if api_key.is_empty() {
-        format!("{}/v1/tracks/search?query={}&app_name=VersionsHack", AUDIUS_API_HOST, urlencoding::encode(&query))
+        format!(
+            "{}/v1/tracks/search?query={}&app_name=VersionsHack",
+            AUDIUS_API_HOST,
+            urlencoding::encode(&query)
+        )
     } else {
-        format!("{}/v1/tracks/search?query={}&api_key={}", AUDIUS_API_HOST, urlencoding::encode(&query), api_key)
+        format!(
+            "{}/v1/tracks/search?query={}&api_key={}",
+            AUDIUS_API_HOST,
+            urlencoding::encode(&query),
+            api_key
+        )
     };
-    
-    match client
-        .get(&url)
-        .send()
-        .await
-    {
-        Ok(response) => {
-            match response.json::<serde_json::Value>().await {
-                Ok(data) => {
-                    let tracks: Vec<AudiusTrack> = data.get("data")
-                        .and_then(|d| d.as_array())
-                        .map(|arr| {
-                            arr.iter().filter_map(|track| {
+
+    match client.get(&url).send().await {
+        Ok(response) => match response.json::<serde_json::Value>().await {
+            Ok(data) => {
+                let tracks: Vec<AudiusTrack> = data
+                    .get("data")
+                    .and_then(|d| d.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|track| {
                                 Some(AudiusTrack {
                                     id: track.get("id")?.as_str()?.to_string(),
                                     title: track.get("title")?.as_str()?.to_string(),
                                     artist_id: track.get("user")?.get("id")?.as_str()?.to_string(),
                                     duration: track.get("duration")?.as_u64(),
-                                    stream_url: track.get("stream_url")?.as_str().map(|s| s.to_string()),
+                                    stream_url: track
+                                        .get("stream_url")?
+                                        .as_str()
+                                        .map(|s| s.to_string()),
                                     artwork: track.get("artwork")?.as_object().map(|obj| {
                                         obj.iter()
-                                            .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string()))
+                                            .map(|(k, v)| {
+                                                (k.clone(), v.as_str().unwrap_or("").to_string())
+                                            })
                                             .collect()
                                     }),
                                 })
-                            }).collect()
-                        })
-                        .unwrap_or_default();
-                    Json(ApiResponse::success(tracks))
-                }
-                Err(e) => Json(ApiResponse::error(format!("Failed to parse results: {}", e))),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Json(ApiResponse::success(tracks))
             }
-        }
+            Err(e) => Json(ApiResponse::error(format!(
+                "Failed to parse results: {}",
+                e
+            ))),
+        },
         Err(e) => Json(ApiResponse::error(format!("Search failed: {}", e))),
     }
 }
@@ -1262,77 +1522,102 @@ async fn get_audius_trending() -> Json<ApiResponse<Vec<AudiusTrack>>> {
     let client = reqwest::Client::new();
     let api_key = get_audius_api_key();
     let url = if api_key.is_empty() {
-        format!("{}/v1/tracks/trending?app_name=VersionsHack", AUDIUS_API_HOST)
+        format!(
+            "{}/v1/tracks/trending?app_name=VersionsHack",
+            AUDIUS_API_HOST
+        )
     } else {
         format!("{}/v1/tracks/trending?api_key={}", AUDIUS_API_HOST, api_key)
     };
-    
-    match client
-        .get(&url)
-        .send()
-        .await
-    {
-        Ok(response) => {
-            match response.json::<serde_json::Value>().await {
-                Ok(data) => {
-                    let tracks: Vec<AudiusTrack> = data.get("data")
-                        .and_then(|d| d.as_array())
-                        .map(|arr| {
-                            arr.iter().filter_map(|track| {
+
+    match client.get(&url).send().await {
+        Ok(response) => match response.json::<serde_json::Value>().await {
+            Ok(data) => {
+                let tracks: Vec<AudiusTrack> = data
+                    .get("data")
+                    .and_then(|d| d.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|track| {
                                 Some(AudiusTrack {
                                     id: track.get("id")?.as_str()?.to_string(),
                                     title: track.get("title")?.as_str()?.to_string(),
                                     artist_id: track.get("user")?.get("id")?.as_str()?.to_string(),
                                     duration: track.get("duration")?.as_u64(),
-                                    stream_url: track.get("stream_url")?.as_str().map(|s| s.to_string()),
+                                    stream_url: track
+                                        .get("stream_url")?
+                                        .as_str()
+                                        .map(|s| s.to_string()),
                                     artwork: track.get("artwork")?.as_object().map(|obj| {
                                         obj.iter()
-                                            .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string()))
+                                            .map(|(k, v)| {
+                                                (k.clone(), v.as_str().unwrap_or("").to_string())
+                                            })
                                             .collect()
                                     }),
                                 })
-                            }).collect()
-                        })
-                        .unwrap_or_default();
-                    Json(ApiResponse::success(tracks))
-                }
-                Err(e) => Json(ApiResponse::error(format!("Failed to parse trending: {}", e))),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Json(ApiResponse::success(tracks))
             }
-        }
-        Err(e) => Json(ApiResponse::error(format!("Failed to fetch trending: {}", e))),
+            Err(e) => Json(ApiResponse::error(format!(
+                "Failed to parse trending: {}",
+                e
+            ))),
+        },
+        Err(e) => Json(ApiResponse::error(format!(
+            "Failed to fetch trending: {}",
+            e
+        ))),
     }
 }
 
 /// Get user's artist coins from Audius
-async fn get_user_coins(
-    Path(user_id): Path<String>,
-) -> Json<ApiResponse<serde_json::Value>> {
+async fn get_user_coins(Path(user_id): Path<String>) -> Json<ApiResponse<serde_json::Value>> {
     let client = reqwest::Client::new();
     let api_key = get_audius_api_key();
     let url = if api_key.is_empty() {
-        format!("{}/v1/users/{}/coins?app_name=VersionsHack", AUDIUS_API_HOST, user_id)
+        format!(
+            "{}/v1/users/{}/coins?app_name=VersionsHack",
+            AUDIUS_API_HOST, user_id
+        )
     } else {
-        format!("{}/v1/users/{}/coins?api_key={}", AUDIUS_API_HOST, user_id, api_key)
+        format!(
+            "{}/v1/users/{}/coins?api_key={}",
+            AUDIUS_API_HOST, user_id, api_key
+        )
     };
-    
+
     match client.get(&url).send().await {
-        Ok(response) => {
-            match response.json::<serde_json::Value>().await {
-                Ok(data) => Json(ApiResponse::success(data)),
-                Err(e) => Json(ApiResponse::error(format!("Failed to parse coins: {}", e))),
-            }
-        }
+        Ok(response) => match response.json::<serde_json::Value>().await {
+            Ok(data) => Json(ApiResponse::success(data)),
+            Err(e) => Json(ApiResponse::error(format!("Failed to parse coins: {}", e))),
+        },
         Err(e) => Json(ApiResponse::error(format!("Failed to fetch coins: {}", e))),
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ScriptRequest {
+    pub script: String,
+}
+
+/// ENHANCEMENT: Execute a Rhai script for custom audio analysis (inspired by cliamp plugins)
+async fn execute_script(Json(payload): Json<ScriptRequest>) -> Json<ApiResponse<String>> {
+    let script_service = crate::script_service::ScriptService::new();
+    match script_service.execute(&payload.script) {
+        Ok(result) => Json(ApiResponse::success(result)),
+        Err(e) => Json(ApiResponse::error(e.to_string())),
+    }
+}
+
 /// Proxy Solana RPC requests through Helius
-async fn solana_rpc_proxy(
-    Json(rpc_request): Json<serde_json::Value>,
-) -> Json<serde_json::Value> {
+async fn solana_rpc_proxy(Json(rpc_request): Json<serde_json::Value>) -> Json<serde_json::Value> {
     let client = reqwest::Client::new();
     let api_key = get_helius_api_key();
-    
+
     if api_key.is_empty() {
         return Json(json!({
             "jsonrpc": "2.0",
@@ -1343,28 +1628,21 @@ async fn solana_rpc_proxy(
             "id": rpc_request.get("id")
         }));
     }
-    
+
     let url = format!("https://mainnet.helius-rpc.com/?api-key={}", api_key);
-    
-    match client
-        .post(&url)
-        .json(&rpc_request)
-        .send()
-        .await
-    {
-        Ok(response) => {
-            match response.json::<serde_json::Value>().await {
-                Ok(data) => Json(data),
-                Err(e) => Json(json!({
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32603,
-                        "message": format!("Failed to parse RPC response: {}", e)
-                    },
-                    "id": rpc_request.get("id")
-                })),
-            }
-        }
+
+    match client.post(&url).json(&rpc_request).send().await {
+        Ok(response) => match response.json::<serde_json::Value>().await {
+            Ok(data) => Json(data),
+            Err(e) => Json(json!({
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": format!("Failed to parse RPC response: {}", e)
+                },
+                "id": rpc_request.get("id")
+            })),
+        },
         Err(e) => Json(json!({
             "jsonrpc": "2.0",
             "error": {
@@ -1383,10 +1661,13 @@ async fn connect_wallet(
     let mut response = HashMap::new();
     response.insert("wallet_address".to_string(), request.wallet_address.clone());
     response.insert("status".to_string(), "connected".to_string());
-    response.insert("message".to_string(), "Wallet connected (demo mode)".to_string());
-    
+    response.insert(
+        "message".to_string(),
+        "Wallet connected (demo mode)".to_string(),
+    );
+
     log::info!("Wallet connected: {}", request.wallet_address);
-    
+
     Json(ApiResponse::success(response))
 }
 
@@ -1395,14 +1676,17 @@ async fn verify_ownership(
     Json(request): Json<OwnershipVerificationRequest>,
 ) -> Json<ApiResponse<HashMap<String, String>>> {
     let mut response = HashMap::new();
-    
+
     // DEMO: Always return owned for demo purposes
     // In production: Query Solana blockchain for token ownership
     response.insert("owned".to_string(), "true".to_string());
     response.insert("wallet".to_string(), request.wallet_address);
     response.insert("coin_address".to_string(), request.coin_address);
-    response.insert("message".to_string(), "Demo mode: access granted".to_string());
-    
+    response.insert(
+        "message".to_string(),
+        "Demo mode: access granted".to_string(),
+    );
+
     Json(ApiResponse::success(response))
 }
 
@@ -1415,12 +1699,18 @@ async fn link_version_to_coin(
     // In production: Update database with coin mapping
     let mut response = HashMap::new();
     response.insert("version_id".to_string(), version_id);
-    response.insert("artist_coin_address".to_string(), request.artist_coin_address);
-    response.insert("audius_track_id".to_string(), request.audius_track_id.unwrap_or_default());
+    response.insert(
+        "artist_coin_address".to_string(),
+        request.artist_coin_address,
+    );
+    response.insert(
+        "audius_track_id".to_string(),
+        request.audius_track_id.unwrap_or_default(),
+    );
     response.insert("status".to_string(), "linked".to_string());
-    
+
     log::info!("Version linked to artist coin");
-    
+
     Json(ApiResponse::success(response))
 }
 
@@ -1430,14 +1720,17 @@ async fn check_version_access(
     Json(request): Json<AccessCheckRequest>,
 ) -> Json<ApiResponse<HashMap<String, String>>> {
     let mut response = HashMap::new();
-    
+
     // DEMO: Allow access if wallet connected
     // In production: Check version_tickets table for ownership
     response.insert("access".to_string(), "true".to_string());
     response.insert("version_id".to_string(), version_id);
     response.insert("wallet".to_string(), request.wallet_address);
-    response.insert("message".to_string(), "Demo mode: access granted".to_string());
-    
+    response.insert(
+        "message".to_string(),
+        "Demo mode: access granted".to_string(),
+    );
+
     Json(ApiResponse::success(response))
 }
 
@@ -1479,16 +1772,23 @@ async fn create_version(
     Json(request): Json<CreateVersionRequest>,
 ) -> Json<ApiResponse<HashMap<String, String>>> {
     let version_id = uuid::Uuid::new_v4().to_string();
-    
+
     let mut response = HashMap::new();
     response.insert("version_id".to_string(), version_id.clone());
     response.insert("title".to_string(), request.title.clone());
     response.insert("artist".to_string(), request.artist.clone());
-    response.insert("artist_coin_address".to_string(), request.artist_coin_address.clone());
+    response.insert(
+        "artist_coin_address".to_string(),
+        request.artist_coin_address.clone(),
+    );
     response.insert("status".to_string(), "created".to_string());
-    
-    log::info!("Created version: {} for artist: {}", version_id, request.artist);
-    
+
+    log::info!(
+        "Created version: {} for artist: {}",
+        version_id,
+        request.artist
+    );
+
     Json(ApiResponse::success(response))
 }
 
@@ -1497,21 +1797,28 @@ async fn mint_version(
     Json(request): Json<MintVersionRequest>,
 ) -> Json<ApiResponse<HashMap<String, String>>> {
     let mut response = HashMap::new();
-    
+
     // In production: Create actual NFT/token on Solana
     // For demo: Record ownership in database
     let ticket_id = uuid::Uuid::new_v4().to_string();
     let version_id = request.version_id.clone();
     let wallet_address = request.wallet_address.clone();
-    
+
     response.insert("ticket_id".to_string(), ticket_id);
     response.insert("version_id".to_string(), request.version_id);
     response.insert("wallet_address".to_string(), request.wallet_address);
     response.insert("status".to_string(), "minted".to_string());
-    response.insert("message".to_string(), "Version ticket minted successfully!".to_string());
-    
-    log::info!("Minted version {} for wallet {}", version_id, wallet_address);
-    
+    response.insert(
+        "message".to_string(),
+        "Version ticket minted successfully!".to_string(),
+    );
+
+    log::info!(
+        "Minted version {} for wallet {}",
+        version_id,
+        wallet_address
+    );
+
     Json(ApiResponse::success(response))
 }
 
@@ -1519,27 +1826,25 @@ async fn mint_version(
 async fn get_owned_versions(
     Query(params): Query<HashMap<String, String>>,
 ) -> Json<ApiResponse<Vec<OwnedVersion>>> {
-    let wallet = params.get("wallet").cloned().unwrap_or_default();
-    
+    let _wallet = params.get("wallet").cloned().unwrap_or_default();
+
     // In production: Query database for owned versions
     // For demo: Return mock data
-    let owned_versions = vec![
-        OwnedVersion {
-            id: "v1".to_string(),
-            title: "My Version".to_string(),
-            artist: "My Artist".to_string(),
-            version_type: "studio".to_string(),
-            artwork_url: None,
-            minted_at: "2026-02-27T10:00:00Z".to_string(),
-        }
-    ];
-    
+    let owned_versions = vec![OwnedVersion {
+        id: "v1".to_string(),
+        title: "My Version".to_string(),
+        artist: "My Artist".to_string(),
+        version_type: "studio".to_string(),
+        artwork_url: None,
+        minted_at: "2026-02-27T10:00:00Z".to_string(),
+    }];
+
     Json(ApiResponse::success(owned_versions))
 }
 
 /// Get all available versions (for creators to list)
 async fn get_versions(
-    Query(params): Query<HashMap<String, String>>,
+    Query(_params): Query<HashMap<String, String>>,
 ) -> Json<ApiResponse<Vec<HashMap<String, String>>>> {
     // In production: Query database for all versions
     // For demo: Return empty

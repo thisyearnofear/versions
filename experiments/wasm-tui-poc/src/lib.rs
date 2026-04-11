@@ -89,6 +89,61 @@ impl TerminalState {
         }
     }
 
+    /// ENHANCEMENT: Draw a panel box with title (Winamp/cliamp aesthetic)
+    #[wasm_bindgen]
+    pub fn draw_panel(&mut self, x: u32, y: u32, w: u32, h: u32, title: &str, border_color: u32) {
+        // Draw corners
+        self.set_char(x, y, '┌', border_color, 0x101421);
+        self.set_char(x + w - 1, y, '┐', border_color, 0x101421);
+        self.set_char(x, y + h - 1, '└', border_color, 0x101421);
+        self.set_char(x + w - 1, y + h - 1, '┘', border_color, 0x101421);
+
+        // Draw horizontal edges
+        for i in 1..w - 1 {
+            self.set_char(x + i, y, '─', border_color, 0x101421);
+            self.set_char(x + i, y + h - 1, '─', border_color, 0x101421);
+        }
+
+        // Draw vertical edges
+        for j in 1..h - 1 {
+            self.set_char(x, y + j, '│', border_color, 0x101421);
+            self.set_char(x + w - 1, y + j, '│', border_color, 0x101421);
+        }
+
+        // Draw title
+        let title_len = title.chars().count() as u32;
+        if title_len > 0 && title_len < w - 2 {
+            let title_start = x + (w - title_len) / 2;
+            for (i, ch) in title.chars().enumerate() {
+                self.set_char(title_start + i as u32, y, ch, 0x00FF00, 0x101421); // Green title
+            }
+        }
+    }
+
+    /// ENHANCEMENT: Draw a simple spectrum visualizer in a panel
+    #[wasm_bindgen]
+    pub fn draw_visualizer(&mut self, x: u32, y: u32, w: u32, h: u32, data: Vec<f32>) {
+        for (i, &val) in data.iter().enumerate().take(w as usize - 2) {
+            let bar_height = (val * (h as f32 - 2.0)) as u32;
+            let bar_height = bar_height.min(h - 2);
+            for j in 0..bar_height {
+                self.set_char(x + 1 + i as u32, y + h - 2 - j, '█', 0x00FFFF, 0x101421); // Cyan bars
+            }
+        }
+    }
+
+    /// MODULAR: Print string at specific position
+    #[wasm_bindgen]
+    pub fn print_at(&mut self, x: u32, y: u32, text: &str, fg_color: u32, bg_color: u32) {
+        let old_x = self.cursor_x;
+        let old_y = self.cursor_y;
+        self.cursor_x = x;
+        self.cursor_y = y;
+        self.print(text, fg_color, bg_color);
+        self.cursor_x = old_x;
+        self.cursor_y = old_y;
+    }
+
     /// MODULAR: Print string at current cursor position
     #[wasm_bindgen]
     pub fn print(&mut self, text: &str, fg_color: u32, bg_color: u32) {
@@ -379,7 +434,40 @@ impl VersionsTerminalPOC {
                 self.terminal.print("\n🔧 Utilities:\n", 0xB8C5D6, 0x101421);
                 self.terminal.print("  test     - Run WASM performance test\n", 0xFFFFFF, 0x101421);
                 self.terminal.print("  clear    - Clear terminal\n", 0xFFFFFF, 0x101421);
+                self.terminal.print("  professional - Professional audio layout\n", 0x00D4FF, 0x101421);
                 self.terminal.print("  help     - Show this help\n", 0xFFFFFF, 0x101421);
+            }
+            "professional" => {
+                self.terminal.clear();
+                let w = self.terminal.width;
+                let h = self.terminal.height;
+                
+                // ENHANCEMENT: Draw main panels (Winamp layout)
+                self.terminal.draw_panel(0, 0, w, 10, "SPECTRUM VISUALIZER", 0x00D4FF);
+                self.terminal.draw_panel(0, 10, w / 2, h - 11, "PLAYLIST & VERSIONS", 0x00FF88);
+                self.terminal.draw_panel(w / 2, 10, w / 2, h - 11, "METADATA & ANALYSIS", 0xF6C744);
+
+                // Mock visualizer data
+                let mut data = Vec::with_capacity((w - 2) as usize);
+                for i in 0..w-2 {
+                    let val = ((i as f32 * 0.2).sin() + 1.0) * 0.5;
+                    data.push(val);
+                }
+                self.terminal.draw_visualizer(0, 0, w, 10, data);
+                
+                // Add some mock text in panels
+                self.terminal.set_char(2, 12, '1', 0xFFFFFF, 0x101421);
+                self.terminal.print_at(4, 12, "Bohemian Rhapsody (Demo)", 0xFFFFFF, 0x101421);
+                self.terminal.set_char(2, 13, '2', 0xFFFFFF, 0x101421);
+                self.terminal.print_at(4, 13, "Bohemian Rhapsody (Live)", 0xB8C5D6, 0x101421);
+                
+                self.terminal.print_at(w / 2 + 2, 12, "Bitrate: 320kbps", 0xF6C744, 0x101421);
+                self.terminal.print_at(w / 2 + 2, 13, "Sample Rate: 48kHz", 0xF6C744, 0x101421);
+                self.terminal.print_at(w / 2 + 2, 14, "Solana Coin: 4k8...j2u", 0x64DBED, 0x101421);
+                
+                // Reset cursor for input
+                self.terminal.cursor_x = 0;
+                self.terminal.cursor_y = h - 1;
             }
             "clear" => {
                 self.terminal.clear();

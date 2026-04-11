@@ -1,6 +1,6 @@
+use anyhow::Result;
 use std::collections::HashMap;
 use std::path::Path;
-use anyhow::Result;
 use termusiclib::distributed::{DistributedConfig, DistributedFile};
 
 /// Distributed storage service for IPFS and P2P features
@@ -26,19 +26,20 @@ impl DistributedService {
         // TODO: Implement actual IPFS upload
         // For now, return a placeholder hash
         let placeholder_hash = format!("Qm{:x}", file_path.to_string_lossy().len());
-        
+
         // Cache the file metadata
         let distributed_file = DistributedFile {
             ipfs_hash: placeholder_hash.clone(),
-            file_size: 0, // TODO: Get actual file size
+            file_size: 0,                        // TODO: Get actual file size
             mime_type: "audio/mpeg".to_string(), // TODO: Detect actual MIME type
             local_path: Some(file_path.to_path_buf()),
             pinned: true,
             replicas: vec!["local".to_string()],
         };
-        
-        self.file_cache.insert(placeholder_hash.clone(), distributed_file);
-        
+
+        self.file_cache
+            .insert(placeholder_hash.clone(), distributed_file);
+
         Ok(placeholder_hash)
     }
 

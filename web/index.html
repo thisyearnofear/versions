@@ -958,6 +958,28 @@
                 <div class="tool-title">🛠️ Professional Audio Tools</div>
                 <button class="onboarding-btn" style="width: auto; padding: 6px 16px; font-size: 0.8rem;" onclick="runBatchAnalysis()">Run Batch Analysis</button>
             </div>
+            
+            <!-- WASM TUI CONTAINER (AGGRESSIVE ENHANCEMENT) -->
+            <div id="terminal-container" style="margin-top: 24px; border: 1px solid var(--color-blue); border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+                <div class="terminal-header" style="background: rgba(153, 69, 255, 0.2); padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-blue);">
+                    <span style="font-family: monospace; font-size: 0.8rem; color: var(--color-blue);">> VERSIONS_TERMINAL_v0.1.0 (WASM)</span>
+                    <div style="display: flex; gap: 6px;">
+                        <div style="width: 10px; height: 10px; border-radius: 50%; background: #ff5f56;"></div>
+                        <div style="width: 10px; height: 10px; border-radius: 50%; background: #ffbd2e;"></div>
+                        <div style="width: 10px; height: 10px; border-radius: 50%; background: #27c93f;"></div>
+                    </div>
+                </div>
+                <div id="wasm-tui-viewport" style="width: 100%; min-height: 400px; padding: 4px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; position: relative;">
+                    <canvas id="canvas" style="display: block; width: 100%; height: 100%;"></canvas>
+                    <div id="tui-loader" style="position: absolute; color: var(--color-blue); font-family: monospace; font-size: 0.8rem;">
+                        Initializing WASM TUI engine...
+                    </div>
+                </div>
+                <div class="terminal-footer" style="padding: 4px 16px; background: rgba(0,0,0,0.5); font-size: 0.7rem; color: var(--fg-secondary); font-family: monospace; border-top: 1px solid rgba(255,255,255,0.1);">
+                    Ctrl+C: Quit | Ctrl+L: Clear | Type 'help' for commands
+                </div>
+            </div>
+
             <p style="color: var(--fg-secondary); font-size: 0.9rem; margin-bottom: 20px;">
                 Compare multiple versions of a song side-by-side or perform deep audio analysis on your collection.
             </p>
@@ -1071,6 +1093,19 @@
             <input type="text" class="search-input" id="searchInput" placeholder="🔍 Search songs or artists..." oninput="handleSearch(this.value)">
         </section>
 
+        <!-- SOCIAL RECOMMENDATIONS (Farcaster Integration) -->
+        <section id="socialRecommendations" class="social-recommendations" style="display: none; margin-bottom: 24px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <h3 style="font-size: 0.9rem; text-transform: uppercase; color: var(--color-purple); letter-spacing: 1px;">🎭 Social Discovery</h3>
+                <div class="social-indicator" id="socialIndicator">
+                    <span style="font-size: 0.7rem; color: var(--fg-secondary);">Connect to Farcaster for recommendations</span>
+                </div>
+            </div>
+            <div id="recommendationsContainer" class="recommendations-grid" style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px;">
+                <!-- Recommendations will be injected here -->
+            </div>
+        </section>
+
         <div id="versionsContainer">
             <div class="loading-grid">
                 <div class="loading-skeleton"></div>
@@ -1120,6 +1155,11 @@
     </div>
 
     <script src="./audius-solana.js?v=3"></script>
+    <script src="./farcaster-miniapp.js"></script>
+    <script type="module">
+        import init from "./wasm/versions_wasm_poc.js";
+        window.initWasm = init;
+    </script>
     <script>
         // STATE
         let walletConnected = false;
@@ -1165,6 +1205,32 @@
 
             if (section === 'creator') {
                 updateCreatorDashboard();
+            } else if (section === 'professional') {
+                initializeWasmTui();
+            }
+        }
+
+        // WASM TUI (PROFESSIONAL TOOLS ENHANCEMENT)
+        let wasmInitialized = false;
+        async function initializeWasmTui() {
+            if (wasmInitialized) return;
+            
+            const loader = document.getElementById('tui-loader');
+            try {
+                if (typeof window.initWasm === 'function') {
+                    await window.initWasm();
+                    wasmInitialized = true;
+                    if (loader) loader.style.display = 'none';
+                    console.log('✅ VERSIONS WASM TUI Initialized');
+                } else {
+                    throw new Error('WASM init function not found');
+                }
+            } catch (err) {
+                console.error('Failed to initialize WASM TUI:', err);
+                if (loader) {
+                    loader.textContent = '❌ TUI Engine failure. Check console for details.';
+                    loader.style.color = 'var(--color-pink)';
+                }
             }
         }
 
@@ -1679,6 +1745,45 @@
                             renderVersions();
                         }
                     
+                        // SOCIAL RECOMMENDATIONS
+                        async function updateRecommendations() {
+                            const socialSection = document.getElementById('socialRecommendations');
+                            const recContainer = document.getElementById('recommendationsContainer');
+            
+                            if (!window.farcasterApp || !window.farcasterApp.isReady) {
+                                socialSection.style.display = 'none';
+                                return;
+                            }
+
+                            // Show section
+                            socialSection.style.display = 'block';
+
+                            try {
+                                const recommendations = await window.farcasterApp.getSocialRecommendations();
+                
+                                if (!recommendations || recommendations.length === 0) {
+                                    recContainer.innerHTML = `
+                                        <div style="padding: 12px; font-size: 0.8rem; color: var(--fg-secondary); width: 100%;">
+                                            No recommendations yet. Interact with more creators on Farcaster!
+                                        </div>
+                                    `;
+                                    return;
+                                }
+
+                                recContainer.innerHTML = recommendations.map(rec => `
+                                    <div class="recommendation-card" onclick="handleSearch('${rec.artist}')" style="min-width: 180px; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; cursor: pointer; border: 1px solid rgba(153, 69, 255, 0.2);">
+                                        <div style="font-size: 0.8rem; font-weight: 700; color: var(--color-blue); margin-bottom: 4px;">@${rec.username} recommended</div>
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 2px;">${rec.track_title}</div>
+                                        <div style="font-size: 0.75rem; color: var(--fg-secondary);">${rec.artist}</div>
+                                    </div>
+                                `).join('');
+
+                            } catch (err) {
+                                console.warn('Failed to fetch recommendations:', err);
+                                socialSection.style.display = 'none';
+                            }
+                        }
+
                         // RENDER
                         function renderVersions() {
                             const container = document.getElementById('versionsContainer');
@@ -1960,7 +2065,11 @@
         }
 
         // INIT
-        document.addEventListener('DOMContentLoaded', loadAudiusTracks);
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAudiusTracks();
+            // Delay recommendations slightly to allow Farcaster SDK to initialize
+            setTimeout(updateRecommendations, 1000);
+        });
     </script>
 </body>
 </html>

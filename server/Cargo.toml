@@ -60,6 +60,7 @@ lofty.workspace = true
 dotenvy = "0.15"
 # CLEAN: URL encoding for API requests
 urlencoding = "2.1"
+rhai.workspace = true
 
 
 [features]

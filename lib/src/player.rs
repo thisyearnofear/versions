@@ -10,6 +10,7 @@ mod protobuf {
 pub use protobuf::*;
 
 use crate::config::v2::server::LoopMode;
+use serde::{Deserialize, Serialize};
 
 // implement transform function for easy use
 impl From<protobuf::Duration> for std::time::Duration {
@@ -30,7 +31,7 @@ impl From<std::time::Duration> for protobuf::Duration {
 /// The primitive in which time (current position / total duration) will be stored as
 pub type PlayerTimeUnit = std::time::Duration;
 
-#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum RunningStatus {
     #[default]
     Stopped,
@@ -69,7 +70,7 @@ impl std::fmt::Display for RunningStatus {
 }
 
 /// Struct to keep both values with a name, as tuples cannot have named fields
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PlayerProgress {
     pub position: Option<PlayerTimeUnit>,
     /// Total duration of the currently playing track, if there is a known total duration

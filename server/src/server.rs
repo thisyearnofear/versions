@@ -1,14 +1,16 @@
+mod audio_service; // ENHANCEMENT: Add Audio streaming service
 mod cli;
+mod database_simple;
+mod distributed_service;
+mod farcaster_service; // ENHANCEMENT: Add Farcaster service
+mod filecoin_service; // ENHANCEMENT: Add Filecoin integration service
 mod logger;
 mod music_player_service;
 mod onchain_service;
-mod distributed_service;
-mod farcaster_service; // ENHANCEMENT: Add Farcaster service
-mod audio_service; // ENHANCEMENT: Add Audio streaming service
-mod filecoin_service; // ENHANCEMENT: Add Filecoin integration service
-mod database_simple;
 use database_simple as database; // MODULAR: Add simplified database module
+mod ipc_service; // ENHANCEMENT: Add IPC service for remote control
 mod rest_api;
+mod script_service; // ENHANCEMENT: Add scripting service for custom discovery
 
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
@@ -18,12 +20,13 @@ use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
 use clap::Parser;
+use database::Database;
 use music_player_service::MusicPlayerService;
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 use termusiclib::config::v2::server::config_extra::ServerConfigVersionedDefaulted;
 use termusiclib::config::v2::server::{ComProtocol, ScanDepth};
 use termusiclib::config::{ServerOverlay, SharedServerSettings, new_shared_server_settings};
-use database::Database;
 use termusiclib::player::music_player_server::MusicPlayerServer;
 use termusiclib::player::{GetProgressResponse, PlayerProgress, PlayerTime, RunningStatus};
 use termusiclib::track::MediaTypesSimple;
@@ -52,8 +55,8 @@ pub const SPEED_STEP: SpeedSigned = 1;
 const BACKEND_ERROR_LIMIT: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 
 /// Stats for the music player responses
-#[derive(Debug, Clone, PartialEq)]
-struct PlayerStats {
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlayerStats {
     pub progress: PlayerProgress,
     pub current_track_index: u64,
     pub volume: u16,
@@ -109,7 +112,7 @@ async fn actual_main() -> Result<()> {
     // CLEAN: Load environment variables from .env file
     // Ignore error if .env doesn't exist (production may use system env vars)
     let _ = dotenvy::dotenv();
-    
+
     let args = cli::Args::parse();
     let _ = logger::setup(&args);
     let config = get_config(&args)?;
@@ -164,8 +167,24 @@ async fn actual_main() -> Result<()> {
 
     let grpc_handle =
         start_grpc_service(&config, music_player_service, service_cancel_token.clone()).await?;
-    
+
     let rest_handle = start_rest_api(service_cancel_token.clone()).await?;
+
+    // ENHANCEMENT: Start IPC service (inspired by cliamp)
+    let ipc_cmd_tx = cmd_tx.clone();
+    let ipc_player_stats = playerstats.clone();
+    let ipc_cancel_token = service_cancel_token.clone();
+    let ipc_socket_path = utils::get_app_config_path()?.join("versions.sock");
+
+    let ipc_handle = tokio::spawn(async move {
+        let service = ipc_service::IpcService::new(ipc_cmd_tx, ipc_player_stats, ipc_socket_path);
+        tokio::select! {
+            _ = service.run() => {},
+            _ = ipc_cancel_token.cancelled() => {
+                info!("IPC service shutting down...");
+            }
+        }
+    });
 
     let tokio_handle = Handle::current();
 
@@ -204,6 +223,7 @@ async fn actual_main() -> Result<()> {
     service_cancel_token.cancel();
     let _ = grpc_handle.await;
     let _ = rest_handle.await;
+    let _ = ipc_handle.await;
 
     // Graceful exit log
     info!("Bye");
@@ -290,10 +310,11 @@ async fn start_rest_api(
     // MODULAR: Initialize database
     let database_path = "./data/versions.db";
     info!("Initializing database at {}", database_path);
-    
-    let db = Database::new(database_path).await
+
+    let db = Database::new(database_path)
+        .await
         .context("Failed to initialize database")?;
-    
+
     // ORGANIZED: Run database migration and seed example data
     if let Err(e) = db.migrate_existing_data().await {
         warn!("Failed to migrate database: {}", e);
@@ -307,21 +328,23 @@ async fn start_rest_api(
     } else {
         info!("Database initialized with example data");
     }
-    
+
     let app = rest_api::create_router(db);
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-    
+
     info!("REST API attempting to bind to {addr}");
-    
+
     // Test binding first
-    let listener = tokio::net::TcpListener::bind(addr).await
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
         .with_context(|| format!("Failed to bind REST API to {addr}"))?;
-    
-    let actual_addr = listener.local_addr()
+
+    let actual_addr = listener
+        .local_addr()
         .with_context(|| "Failed to get local address for REST API")?;
-    
+
     info!("REST API successfully bound to {actual_addr}");
-    
+
     let handle = tokio::spawn(async move {
         info!("Starting REST API server...");
         // For axum 0.7 with state
@@ -339,7 +362,7 @@ async fn start_rest_api(
             }
         }
     });
-    
+
     Ok(handle)
 }
 
@@ -786,7 +809,7 @@ fn get_config(args: &cli::Args) -> Result<ServerOverlay> {
         music_dir_overwrite: music_dir,
         disable_discord_status: args.disable_discord,
         metadata_scan_depth: max_depth,
-        onchain_config: None, // Default to no blockchain config for now
+        onchain_config: None,     // Default to no blockchain config for now
         distributed_config: None, // Default to no distributed storage for now
     };
 

@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use anyhow::Result;
-use termusiclib::onchain::{VersionNft, VersionOwnership, OnchainConfig};
+use std::collections::HashMap;
+use termusiclib::onchain::{OnchainConfig, VersionNft, VersionOwnership};
 
 /// Onchain service for Arbitrum integration and IPFS storage
 pub struct OnchainService {
@@ -30,10 +30,11 @@ impl OnchainService {
         // For now, return default (no blockchain data)
         // TODO: Implement actual Arbitrum contract calls
         let ownership = VersionOwnership::default();
-        
+
         // Cache the result
-        self.ownership_cache.insert(track_path.to_string(), ownership.clone());
-        
+        self.ownership_cache
+            .insert(track_path.to_string(), ownership.clone());
+
         Ok(ownership)
     }
 

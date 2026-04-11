@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use super::v2::server::ScanDepth;
-use crate::onchain::OnchainConfig;
 use crate::distributed::DistributedConfig;
+use crate::onchain::OnchainConfig;
 
 /// The Server Settings to use, with possible overwrite (like from CLI)
 #[derive(Debug, Clone, PartialEq, Default)]

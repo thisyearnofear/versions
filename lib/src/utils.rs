@@ -7,7 +7,7 @@ use std::{
     process::{Child, Command},
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use pinyin::ToPinyin;
 use rand::Rng;
 use unicode_segmentation::UnicodeSegmentation;
@@ -85,7 +85,7 @@ pub fn get_parent_folder(path: &Path) -> Cow<'_, Path> {
 
 pub fn get_app_config_path() -> Result<PathBuf> {
     let mut path = dirs::config_dir().ok_or_else(|| anyhow!("failed to find os config dir."))?;
-    path.push("termusic");
+    path.push("versions");
 
     if !path.exists() {
         std::fs::create_dir_all(&path)?;
@@ -191,6 +191,21 @@ impl StringUtils for String {
     #[inline]
     fn grapheme_len(&self) -> usize {
         self.as_str().grapheme_len()
+    }
+}
+
+pub fn get_yt_dlp_url(url: &str) -> Result<String> {
+    let output = Command::new("yt-dlp")
+        .args(["-g", "-f", "bestaudio", url])
+        .output()
+        .context("failed to execute yt-dlp")?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8(output.stdout)?;
+        Ok(stdout.trim().to_string())
+    } else {
+        let stderr = String::from_utf8(output.stderr)?;
+        bail!("yt-dlp failed: {}", stderr)
     }
 }
 

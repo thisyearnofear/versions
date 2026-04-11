@@ -1,4 +1,4 @@
-use termusiclib::onchain::{OnchainConfig, VersionNft, VersionType, NftAttribute};
+use termusiclib::onchain::{NftAttribute, OnchainConfig, VersionNft, VersionType};
 use termusiclib::track::Track;
 
 #[tokio::main]
@@ -43,8 +43,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n✅ Tracks now include blockchain ownership information");
     println!("✅ Server includes onchain service for Arbitrum integration");
     println!("✅ Configuration supports blockchain settings");
-    
+
     println!("\n🚀 Ready for Arbitrum Stylus smart contract integration!");
-    
+
     Ok(())
 }

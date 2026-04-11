@@ -9,7 +9,9 @@
 pub mod common;
 pub mod config;
 
+pub mod distributed;
 pub mod new_database;
+pub mod onchain;
 pub mod player;
 pub mod playlist;
 pub mod podcast;
@@ -18,8 +20,6 @@ pub mod taskpool;
 pub mod track;
 pub mod ueberzug;
 pub mod utils;
-pub mod onchain;
-pub mod distributed;
 pub mod xywh;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

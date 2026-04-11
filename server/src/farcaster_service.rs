@@ -1,8 +1,8 @@
+use anyhow::{Result, anyhow};
+use log::{info, warn};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
-use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
-use log::{info, warn};
 
 /// Neynar API response structures (following their API spec)
 #[derive(Debug, Deserialize)]
@@ -95,7 +95,7 @@ impl FarcasterService {
         } else {
             info!("NEYNAR_API_KEY found - using real Farcaster API");
         }
-        
+
         Self {
             client: reqwest::Client::new(),
             neynar_api_key,
@@ -116,7 +116,10 @@ impl FarcasterService {
             match self.fetch_user_from_neynar(fid, api_key).await {
                 Ok(user) => user,
                 Err(e) => {
-                    warn!("Failed to fetch user {} from Neynar API: {}. Using fallback.", fid, e);
+                    warn!(
+                        "Failed to fetch user {} from Neynar API: {}. Using fallback.",
+                        fid, e
+                    );
                     self.create_fallback_user(fid)
                 }
             }
@@ -129,12 +132,13 @@ impl FarcasterService {
         self.user_cache.insert(fid, user.clone());
         Ok(user)
     }
-    
+
     /// MODULAR: Fetch user from Neynar API
     async fn fetch_user_from_neynar(&self, fid: u64, api_key: &str) -> Result<FarcasterUser> {
         let url = format!("{}/farcaster/user?fid={}", self.neynar_base_url, fid);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&url)
             .header("api_key", api_key)
             .header("accept", "application/json")
@@ -146,7 +150,9 @@ impl FarcasterService {
             return Err(anyhow!("Neynar API returned status: {}", response.status()));
         }
 
-        let neynar_response: NeynarUserResponse = response.json().await
+        let neynar_response: NeynarUserResponse = response
+            .json()
+            .await
             .map_err(|e| anyhow!("Failed to parse Neynar response: {}", e))?;
 
         Ok(FarcasterUser {
@@ -158,7 +164,7 @@ impl FarcasterService {
             following_count: neynar_response.user.following_count,
         })
     }
-    
+
     /// CLEAN: Create fallback user for when API is unavailable
     fn create_fallback_user(&self, fid: u64) -> FarcasterUser {
         FarcasterUser {
@@ -193,7 +199,10 @@ impl FarcasterService {
             match self.search_casts_for_version(version_id, api_key).await {
                 Ok(casts) => Ok(casts),
                 Err(e) => {
-                    warn!("Failed to search casts for version {}: {}. Using fallback.", version_id, e);
+                    warn!(
+                        "Failed to search casts for version {}: {}. Using fallback.",
+                        version_id, e
+                    );
                     Ok(self.create_fallback_discussions(version_id))
                 }
             }
@@ -202,14 +211,22 @@ impl FarcasterService {
             Ok(self.create_fallback_discussions(version_id))
         }
     }
-    
+
     /// MODULAR: Search casts about a version using Neynar API
-    async fn search_casts_for_version(&self, version_id: &str, api_key: &str) -> Result<Vec<FarcasterCast>> {
+    async fn search_casts_for_version(
+        &self,
+        version_id: &str,
+        api_key: &str,
+    ) -> Result<Vec<FarcasterCast>> {
         // Search for casts mentioning the version
         let search_query = format!("{}+version+music", version_id.replace("-", "+"));
-        let url = format!("{}/farcaster/cast/search?q={}&limit=10", self.neynar_base_url, search_query);
-        
-        let response = self.client
+        let url = format!(
+            "{}/farcaster/cast/search?q={}&limit=10",
+            self.neynar_base_url, search_query
+        );
+
+        let response = self
+            .client
             .get(&url)
             .header("api_key", api_key)
             .header("accept", "application/json")
@@ -218,22 +235,31 @@ impl FarcasterService {
             .map_err(|e| anyhow!("Failed to search casts: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(anyhow!("Neynar search API returned status: {}", response.status()));
+            return Err(anyhow!(
+                "Neynar search API returned status: {}",
+                response.status()
+            ));
         }
 
-        let search_response: NeynarCastsResponse = response.json().await
+        let search_response: NeynarCastsResponse = response
+            .json()
+            .await
             .map_err(|e| anyhow!("Failed to parse search response: {}", e))?;
 
-        Ok(search_response.casts.into_iter().map(|neynar_cast| FarcasterCast {
-            hash: neynar_cast.hash,
-            author_fid: neynar_cast.author.fid,
-            text: neynar_cast.text,
-            timestamp: neynar_cast.timestamp,
-            replies_count: neynar_cast.replies.count,
-            reactions_count: neynar_cast.reactions.count,
-        }).collect())
+        Ok(search_response
+            .casts
+            .into_iter()
+            .map(|neynar_cast| FarcasterCast {
+                hash: neynar_cast.hash,
+                author_fid: neynar_cast.author.fid,
+                text: neynar_cast.text,
+                timestamp: neynar_cast.timestamp,
+                replies_count: neynar_cast.replies.count,
+                reactions_count: neynar_cast.reactions.count,
+            })
+            .collect())
     }
-    
+
     /// CLEAN: Create fallback discussions for when API is unavailable
     fn create_fallback_discussions(&self, version_id: &str) -> Vec<FarcasterCast> {
         vec![
@@ -252,7 +278,7 @@ impl FarcasterService {
                 timestamp: "2024-01-02T00:00:00Z".to_string(),
                 replies_count: 3,
                 reactions_count: 15,
-            }
+            },
         ]
     }
 
@@ -261,7 +287,7 @@ impl FarcasterService {
         // TODO: Implement actual social graph analysis
         // For now, return mock recommendations based on user's social graph
         let social_graph = self.get_social_graph(fid).await?;
-        
+
         // MODULAR: Generate recommendations based on social connections
         let recommendations = vec![
             SocialRecommendation {
@@ -283,9 +309,9 @@ impl FarcasterService {
                 recommended_by_username: "rockfan42".to_string(),
                 reason: "Popular in your music network".to_string(),
                 score: 0.87,
-            }
+            },
         ];
-        
+
         Ok(recommendations)
     }
 }

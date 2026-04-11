@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
 use tokio::fs;
 
 /// MODULAR: Audio streaming service following our architecture patterns
@@ -64,20 +64,39 @@ impl AudioService {
 
         let file_path = self.get_file_path(file_id)?;
         let metadata = self.extract_metadata(&file_path).await?;
-        
+
         // PERFORMANT: Cache the result
-        self.metadata_cache.insert(file_id.to_string(), metadata.clone());
+        self.metadata_cache
+            .insert(file_id.to_string(), metadata.clone());
         Ok(metadata)
+    }
+
+    /// ENHANCEMENT: Resolve multi-source URLs using yt-dlp (inspired by cliamp)
+    /// This allows linking song versions from YouTube, SoundCloud, and 1000+ other platforms.
+    #[allow(dead_code)]
+    pub async fn resolve_multi_source_url(&self, url: &str) -> Result<String> {
+        // ENHANCEMENT FIRST: If it's already a direct audio link or Audius, return it
+        if url.ends_with(".mp3")
+            || url.ends_with(".wav")
+            || url.ends_with(".flac")
+            || url.contains("audius.co")
+        {
+            return Ok(url.to_string());
+        }
+
+        // ENHANCEMENT: Use yt-dlp for other platforms
+        log::info!("Resolving multi-source URL using yt-dlp: {}", url);
+        crate::utils::get_yt_dlp_url(url)
     }
 
     /// MODULAR: Extract audio metadata from file using lofty
     async fn extract_metadata(&self, file_path: &Path) -> Result<AudioMetadata> {
         use lofty::prelude::*;
         use lofty::probe::Probe;
-        
+
         let file_metadata = fs::metadata(file_path).await?;
         let file_size = file_metadata.len();
-        
+
         // CLEAN: Determine format from extension
         let format = file_path
             .extension()
@@ -89,8 +108,11 @@ impl AudioService {
         let tagged_file = match Probe::open(file_path)?.read() {
             Ok(file) => file,
             Err(e) => {
-                log::warn!("Failed to read audio metadata from {}: {}. Using basic metadata.", 
-                          file_path.display(), e);
+                log::warn!(
+                    "Failed to read audio metadata from {}: {}. Using basic metadata.",
+                    file_path.display(),
+                    e
+                );
                 // Fallback to basic metadata if lofty fails
                 return Ok(AudioMetadata {
                     file_path: file_path.to_string_lossy().to_string(),
@@ -110,20 +132,26 @@ impl AudioService {
         // CLEAN: Extract metadata from tags
         let tag = tagged_file.primary_tag();
         let properties = tagged_file.properties();
-        
-        let title = tag.and_then(|t| t.title().map(|s| s.to_string()))
+
+        let title = tag
+            .and_then(|t| t.title().map(|s| s.to_string()))
             .or_else(|| self.extract_title_from_filename(file_path));
         let artist = tag.and_then(|t| t.artist().map(|s| s.to_string()));
         let album = tag.and_then(|t| t.album().map(|s| s.to_string()));
-        
+
         // PERFORMANT: Extract technical properties
         let duration_seconds = Some(properties.duration().as_secs());
         let sample_rate = properties.sample_rate();
         let channels = properties.channels().map(|c| c as u16);
         let bitrate = properties.overall_bitrate();
 
-        log::info!("Extracted metadata from {}: title={:?}, artist={:?}, duration={:?}s",
-                   file_path.display(), title, artist, duration_seconds);
+        log::info!(
+            "Extracted metadata from {}: title={:?}, artist={:?}, duration={:?}s",
+            file_path.display(),
+            title,
+            artist,
+            duration_seconds
+        );
 
         Ok(AudioMetadata {
             file_path: file_path.to_string_lossy().to_string(),
@@ -148,7 +176,11 @@ impl AudioService {
     }
 
     /// PERFORMANT: Stream audio with range support
-    pub async fn stream_audio(&self, file_id: &str, range: Option<RangeRequest>) -> Result<AudioStream> {
+    pub async fn stream_audio(
+        &self,
+        file_id: &str,
+        range: Option<RangeRequest>,
+    ) -> Result<AudioStream> {
         let file_path = self.get_file_path(file_id)?;
         let file_metadata = fs::metadata(&file_path).await?;
         let file_size = file_metadata.len();
@@ -160,10 +192,10 @@ impl AudioService {
                 // PERFORMANT: Handle range requests for efficient streaming
                 let start = range_req.start;
                 let end = range_req.end.unwrap_or(file_size - 1).min(file_size - 1);
-                
+
                 let mut file = File::open(&file_path)?;
                 file.seek(SeekFrom::Start(start))?;
-                
+
                 let content_length = end - start + 1;
                 let mut content = vec![0u8; content_length as usize];
                 file.read_exact(&mut content)?;
@@ -178,7 +210,7 @@ impl AudioService {
             None => {
                 // CLEAN: Full file streaming
                 let content = fs::read(&file_path).await?;
-                
+
                 Ok(AudioStream {
                     content_length: content.len() as u64,
                     content,
@@ -193,17 +225,19 @@ impl AudioService {
     fn get_file_path(&self, file_id: &str) -> Result<PathBuf> {
         // CLEAN: Sanitize file ID to prevent directory traversal
         let sanitized_id = file_id.replace(['/', '\\'], "").replace("..", "");
-        
+
         // ORGANIZED: Look for file in audio directory
         let extensions = ["mp3", "flac", "wav", "m4a", "ogg", "aiff"];
-        
+
         for ext in &extensions {
-            let file_path = self.audio_directory.join(format!("{}.{}", sanitized_id, ext));
+            let file_path = self
+                .audio_directory
+                .join(format!("{}.{}", sanitized_id, ext));
             if file_path.exists() {
                 return Ok(file_path);
             }
         }
-        
+
         Err(anyhow::anyhow!("Audio file not found: {}", file_id))
     }
 
@@ -217,14 +251,15 @@ impl AudioService {
             Some("ogg") => "audio/ogg",
             Some("aiff") => "audio/aiff",
             _ => "application/octet-stream",
-        }.to_string()
+        }
+        .to_string()
     }
 
     /// MODULAR: List available audio files
     pub async fn list_audio_files(&self) -> Result<Vec<String>> {
         let mut files = Vec::new();
         let mut entries = fs::read_dir(&self.audio_directory).await?;
-        
+
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             if path.is_file() {
@@ -238,13 +273,18 @@ impl AudioService {
                 }
             }
         }
-        
+
         files.sort();
         Ok(files)
     }
 
     /// ENHANCEMENT: Upload audio file
-    pub async fn upload_audio_file(&self, file_id: &str, content: Vec<u8>, format: &str) -> Result<AudioMetadata> {
+    pub async fn upload_audio_file(
+        &self,
+        file_id: &str,
+        content: Vec<u8>,
+        format: &str,
+    ) -> Result<AudioMetadata> {
         // CLEAN: Validate format
         let valid_formats = ["mp3", "flac", "wav", "m4a", "ogg", "aiff"];
         if !valid_formats.contains(&format.to_lowercase().as_str()) {
@@ -266,7 +306,7 @@ impl Default for AudioService {
         let audio_dir = std::env::current_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
             .join("audio_files");
-        
+
         Self::new(audio_dir)
     }
 }
