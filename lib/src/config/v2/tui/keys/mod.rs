@@ -133,7 +133,7 @@ impl CheckConflict for Keys {
             // check global first
             if let Some(existing_path) = global_keys.get(key) {
                 conflicts.push(KeyConflictError {
-                    key_path_first: existing_path.to_string(),
+                    key_path_first: existing_path.clone(),
                     key_path_second: key_path.join_with_field(path),
                     key: key.clone(),
                 });
@@ -288,7 +288,7 @@ impl CheckConflict for KeysSelectView {
             // check global first
             if let Some(existing_path) = global_keys.get(key) {
                 conflicts.push(KeyConflictError {
-                    key_path_first: existing_path.to_string(),
+                    key_path_first: existing_path.clone(),
                     key_path_second: key_path.join_with_field(path),
                     key: key.clone(),
                 });
@@ -434,7 +434,7 @@ impl CheckConflict for KeysPlayer {
             // check global first
             if let Some(existing_path) = global_keys.get(key) {
                 conflicts.push(KeyConflictError {
-                    key_path_first: existing_path.to_string(),
+                    key_path_first: existing_path.clone(),
                     key_path_second: key_path.join_with_field(path),
                     key: key.clone(),
                 });
@@ -523,7 +523,7 @@ impl CheckConflict for KeysLyric {
             // check global first
             if let Some(existing_path) = global_keys.get(key) {
                 conflicts.push(KeyConflictError {
-                    key_path_first: existing_path.to_string(),
+                    key_path_first: existing_path.clone(),
                     key_path_second: key_path.join_with_field(path),
                     key: key.clone(),
                 });
@@ -612,7 +612,7 @@ impl CheckConflict for KeysNavigation {
             // check global first
             if let Some(existing_path) = global_keys.get(key) {
                 conflicts.push(KeyConflictError {
-                    key_path_first: existing_path.to_string(),
+                    key_path_first: existing_path.clone(),
                     key_path_second: key_path.join_with_field(path),
                     key: key.clone(),
                 });
@@ -719,7 +719,7 @@ impl CheckConflict for KeysLibrary {
             // check global first
             if let Some(existing_path) = global_keys.get(key) {
                 conflicts.push(KeyConflictError {
-                    key_path_first: existing_path.to_string(),
+                    key_path_first: existing_path.clone(),
                     key_path_second: key_path.join_with_field(path),
                     key: key.clone(),
                 });
@@ -839,7 +839,7 @@ impl CheckConflict for KeysPlaylist {
             // check global first
             if let Some(existing_path) = global_keys.get(key) {
                 conflicts.push(KeyConflictError {
-                    key_path_first: existing_path.to_string(),
+                    key_path_first: existing_path.clone(),
                     key_path_second: key_path.join_with_field(path),
                     key: key.clone(),
                 });
@@ -948,7 +948,7 @@ impl CheckConflict for KeysPodcast {
             // check global first
             if let Some(existing_path) = global_keys.get(key) {
                 conflicts.push(KeyConflictError {
-                    key_path_first: existing_path.to_string(),
+                    key_path_first: existing_path.clone(),
                     key_path_second: key_path.join_with_field(path),
                     key: key.clone(),
                 });
@@ -1066,7 +1066,7 @@ impl CheckConflict for KeysMoveCoverArt {
             // check global first
             if let Some(existing_path) = global_keys.get(key) {
                 conflicts.push(KeyConflictError {
-                    key_path_first: existing_path.to_string(),
+                    key_path_first: existing_path.clone(),
                     key_path_second: key_path.join_with_field(path),
                     key: key.clone(),
                 });
@@ -1133,7 +1133,7 @@ impl CheckConflict for KeysConfigEditor {
             // check global first
             if let Some(existing_path) = global_keys.get(key) {
                 conflicts.push(KeyConflictError {
-                    key_path_first: existing_path.to_string(),
+                    key_path_first: existing_path.clone(),
                     key_path_second: key_path.join_with_field(path),
                     key: key.clone(),
                 });
@@ -1202,7 +1202,7 @@ impl CheckConflict for KeysDatabase {
             // check global first
             if let Some(existing_path) = global_keys.get(key) {
                 conflicts.push(KeyConflictError {
-                    key_path_first: existing_path.to_string(),
+                    key_path_first: existing_path.clone(),
                     key_path_second: key_path.join_with_field(path),
                     key: key.clone(),
                 });

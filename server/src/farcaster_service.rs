@@ -6,6 +6,7 @@ use std::env;
 
 /// Neynar API response structures (following their API spec)
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct NeynarUser {
     fid: u64,
     username: String,
@@ -295,7 +296,7 @@ impl FarcasterService {
                 title: "Bohemian Rhapsody (Live Aid 1985)".to_string(),
                 artist: "Queen".to_string(),
                 version_type: "Live".to_string(),
-                recommended_by_fid: social_graph.get(0).copied().unwrap_or(1),
+                recommended_by_fid: social_graph.first().copied().unwrap_or(1),
                 recommended_by_username: "musiclover1".to_string(),
                 reason: "Your friend discovered this legendary performance".to_string(),
                 score: 0.95,

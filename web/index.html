@@ -1616,13 +1616,13 @@
             updateComparisonButton();
             switchSection('explore');
             const container = document.getElementById('comparisonContainer');
-            container.innerHTML = \`
+            container.innerHTML = `
                 <div style="text-align: center; padding: 40px; background: rgba(0,0,0,0.2); border-radius: 16px; border: 1px dashed rgba(255,255,255,0.1);">
                     <div style="font-size: 2rem; margin-bottom: 12px;">⚖️</div>
                     <div style="font-weight: 600; margin-bottom: 4px;">Version Comparison</div>
                     <div style="font-size: 0.8rem; color: var(--fg-secondary);">Select 2-4 versions from the Explore tab to start a comparison session.</div>
                 </div>
-            \`;
+            `;
         }
 
         function toggleComparisonSelect(versionId, event) {
@@ -1639,7 +1639,7 @@
             }
             
             // Update UI for all version items
-            document.querySelectorAll(\`.compare-checkbox[data-version-id="\${versionId}"]\`).forEach(cb => {
+            document.querySelectorAll(`.compare-checkbox[data-version-id="${versionId}"]`).forEach(cb => {
                 cb.checked = selectedForComparison.includes(versionId);
             });
 
@@ -1658,7 +1658,7 @@
                     btn.onclick = startComparison;
                     document.body.appendChild(btn);
                 }
-                btn.textContent = \`Compare \${selectedForComparison.length} Versions ⚖️\`;
+                btn.textContent = `Compare ${selectedForComparison.length} Versions ⚖️`;
                 btn.style.display = 'block';
             } else if (btn) {
                 btn.style.display = 'none';
@@ -1669,11 +1669,11 @@
         async function updateCreatorDashboard() {
             try {
                 // In hackathon demo, we might use proxy or direct
-                const url = typeof API_PROXY !== 'undefined' ? \`\${API_PROXY}/filecoin/creator/earnings\` : \`\${API_URL}/api/v1/filecoin/creator/earnings\`;
+                const url = typeof API_PROXY !== 'undefined' ? `${API_PROXY}/filecoin/creator/earnings` : `${API_URL}/api/v1/filecoin/creator/earnings`;
                 const response = await fetch(url);
                 const result = await response.json();
                 if (result.success) {
-                    document.getElementById('creatorEarnings').textContent = \`\${result.data.total_earned} SOL\`;
+                    document.getElementById('creatorEarnings').textContent = `${result.data.total_earned} SOL`;
                 }
             } catch (err) {
                 console.error('Failed to fetch earnings:', err);
@@ -1683,7 +1683,7 @@
         async function withdrawEarnings() {
             showLoading('Processing...', 'Withdrawing your earnings to your connected Solana wallet.');
             try {
-                const url = typeof API_PROXY !== 'undefined' ? \`\${API_PROXY}/filecoin/creator/withdraw\` : \`\${API_URL}/api/v1/filecoin/creator/withdraw\`;
+                const url = typeof API_PROXY !== 'undefined' ? `${API_PROXY}/filecoin/creator/withdraw` : `${API_URL}/api/v1/filecoin/creator/withdraw`;
                 const response = await fetch(url, { method: 'POST' });
                 const result = await response.json();
                 if (result.success) {

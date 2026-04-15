@@ -48,19 +48,11 @@ impl Default for OnchainConfig {
 }
 
 /// Version ownership and metadata
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct VersionOwnership {
     pub nft_data: Option<VersionNft>,
     pub owner_address: Option<String>,
     pub is_verified: bool,
 }
 
-impl Default for VersionOwnership {
-    fn default() -> Self {
-        Self {
-            nft_data: None,
-            owner_address: None,
-            is_verified: false,
-        }
-    }
-}
+

@@ -215,7 +215,7 @@ impl SongTag {
 
     /// Download functionality has been removed in favor of user-uploaded content model.
     /// This method now returns an error to maintain API compatibility.
-    pub async fn download(
+    pub fn download(
         &self,
         _file: &Path,
         tx: impl Fn(TrackDLMsg) + Send + 'static,

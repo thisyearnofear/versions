@@ -139,39 +139,44 @@ impl Database {
     pub async fn migrate_existing_data(&self) -> Result<()> {
         log::info!("Starting database migration...");
 
-        let conn = self.conn.lock().unwrap();
+        // Perform all synchronous DB operations within one lock scope
+        let needs_migration = {
+            let conn = self.conn.lock().unwrap();
 
-        // Add missing columns if they don't exist (for future migrations)
-        let mut needs_migration = false;
+            // Add missing columns if they don't exist (for future migrations)
+            let mut needs_migration = false;
 
-        // Check if we need to add any missing indexes
-        let index_count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_versions_format'",
-            [],
-            |row| row.get(0)
-        ).unwrap_or(0);
+            // Check if we need to add any missing indexes
+            let index_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_versions_format'",
+                [],
+                |row| row.get(0)
+            ).unwrap_or(0);
 
-        if index_count == 0 {
-            // Add index for format-based queries
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_versions_format ON versions(format)",
+            if index_count == 0 {
+                // Add index for format-based queries
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_versions_format ON versions(format)",
+                    [],
+                )?;
+                needs_migration = true;
+            }
+
+            // Update any versions without format information
+            let updated_count = conn.execute(
+                "UPDATE versions SET format = 'mp3' WHERE format IS NULL OR format = ''",
                 [],
             )?;
-            needs_migration = true;
-        }
 
-        // Update any versions without format information
-        let updated_count = conn.execute(
-            "UPDATE versions SET format = 'mp3' WHERE format IS NULL OR format = ''",
-            [],
-        )?;
+            if updated_count > 0 {
+                log::info!("Updated {} versions with default format", updated_count);
+                needs_migration = true;
+            }
 
-        if updated_count > 0 {
-            log::info!("Updated {} versions with default format", updated_count);
-            needs_migration = true;
-        }
+            needs_migration
+        }; // conn is dropped here
 
-        // Clean up any data inconsistencies
+        // Clean up any data inconsistencies (async call - no lock held)
         self.cleanup_orphaned_data().await?;
 
         if needs_migration {
@@ -393,6 +398,7 @@ impl Database {
     }
 
     /// MODULAR: Create a new version
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_version(
         &self,
         version_id: &str,
@@ -606,8 +612,7 @@ impl Database {
                     })
                 })?;
 
-            let version_results: Vec<SimpleDbSong> =
-                version_iter.collect::<Result<Vec<_>, _>>()?;
+            let version_results: Vec<SimpleDbSong> = version_iter.collect::<Result<Vec<_>, _>>()?;
 
             // Remove duplicates and merge results
             for version_song in version_results {

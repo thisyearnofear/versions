@@ -237,6 +237,7 @@ impl MusicPlayer for MusicPlayerService {
         let rx = self.stream_tx.subscribe();
 
         // map to the grpc types
+        #[allow(clippy::result_large_err)]
         let receiver_stream = BroadcastStream::new(rx).map(|res| match res {
             Ok(ev) => Ok(ev.into()),
             Err(err) => {

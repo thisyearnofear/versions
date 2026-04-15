@@ -2,7 +2,6 @@ use crate::audio_service::{AudioMetadata, AudioService};
 use crate::database::{self as database, Database, SimpleDbSong, SimpleDbVersion};
 use crate::farcaster_service::{FarcasterService, FarcasterUser, SocialRecommendation};
 use crate::filecoin_service::{CreatorPaymentRequest, FilecoinService, FilecoinUploadRequest};
-use anyhow;
 use axum::{
     Router,
     body::Body,
@@ -11,8 +10,6 @@ use axum::{
     response::{Json, Response},
     routing::{get, post},
 };
-use chrono;
-use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -1006,8 +1003,7 @@ fn parse_range_header(headers: &HeaderMap) -> Option<crate::audio_service::Range
         .get(header::RANGE)
         .and_then(|value| value.to_str().ok())
         .and_then(|range_str| {
-            if range_str.starts_with("bytes=") {
-                let range_part = &range_str[6..]; // Remove "bytes="
+            if let Some(range_part) = range_str.strip_prefix("bytes=") {
                 let parts: Vec<&str> = range_part.split('-').collect();
                 if parts.len() == 2 {
                     let start = parts[0].parse::<u64>().ok()?;

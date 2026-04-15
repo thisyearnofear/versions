@@ -172,7 +172,7 @@ impl AudioService {
         file_path
             .file_stem()
             .and_then(|stem| stem.to_str())
-            .map(|s| s.replace('_', " ").replace('-', " "))
+            .map(|s| s.replace(['_', '-'], " "))
     }
 
     /// PERFORMANT: Stream audio with range support

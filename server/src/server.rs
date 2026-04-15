@@ -79,7 +79,15 @@ impl PlayerStats {
             radio_title: String::new(),
         }
     }
+}
 
+impl Default for PlayerStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PlayerStats {
     pub fn as_getprogress_response(&self, status: RunningStatus) -> GetProgressResponse {
         GetProgressResponse {
             progress: Some(self.as_playertime()),
