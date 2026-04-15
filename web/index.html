@@ -532,6 +532,168 @@
             border-color: rgba(255,85,85,0.8);
         }
 
+        /* AUDIO LAB HERO */
+        .audio-lab-hero {
+            padding: 20px;
+            border: 1px solid rgba(153, 69, 255, 0.35);
+            background: linear-gradient(135deg, rgba(15, 18, 28, 0.95) 0%, rgba(30, 20, 50, 0.95) 100%);
+            box-shadow: 0 8px 32px rgba(153, 69, 255, 0.12);
+        }
+        .audio-lab-hero-prompt { display: flex; flex-direction: column; gap: 10px; }
+        .audio-lab-input-hero {
+            font-size: 1.05rem !important;
+            padding: 14px 16px !important;
+            border-radius: 12px !important;
+            border: 2px solid rgba(153, 69, 255, 0.25) !important;
+            background: rgba(0,0,0,0.35) !important;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .audio-lab-input-hero:focus {
+            border-color: rgba(153, 69, 255, 0.7) !important;
+            box-shadow: 0 0 20px rgba(153, 69, 255, 0.2);
+            outline: none;
+        }
+        .audio-lab-hero-row { display: flex; gap: 8px; align-items: center; }
+        .audio-lab-btn-hero {
+            padding: 11px 22px !important;
+            font-size: 0.9rem !important;
+            border-radius: 12px !important;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .audio-lab-btn-hero:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(153, 69, 255, 0.4);
+        }
+
+        /* WAVEFORM VISUALIZER */
+        .audio-lab-waveform {
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+            padding: 18px 0;
+        }
+        .waveform-bars {
+            display: flex; align-items: center; justify-content: center; gap: 3px; height: 40px;
+        }
+        .waveform-bars span {
+            display: inline-block; width: 4px; border-radius: 2px;
+            background: linear-gradient(180deg, var(--color-purple), var(--color-green));
+            animation: waveformPulse 1.2s ease-in-out infinite;
+        }
+        .waveform-bars span:nth-child(1) { animation-delay: 0s; }
+        .waveform-bars span:nth-child(2) { animation-delay: 0.1s; }
+        .waveform-bars span:nth-child(3) { animation-delay: 0.2s; }
+        .waveform-bars span:nth-child(4) { animation-delay: 0.3s; }
+        .waveform-bars span:nth-child(5) { animation-delay: 0.4s; }
+        .waveform-bars span:nth-child(6) { animation-delay: 0.5s; }
+        .waveform-bars span:nth-child(7) { animation-delay: 0.6s; }
+        .waveform-bars span:nth-child(8) { animation-delay: 0.7s; }
+        .waveform-bars span:nth-child(9) { animation-delay: 0.8s; }
+        .waveform-bars span:nth-child(10) { animation-delay: 0.9s; }
+        .waveform-bars span:nth-child(11) { animation-delay: 0.15s; }
+        .waveform-bars span:nth-child(12) { animation-delay: 0.25s; }
+        .waveform-bars span:nth-child(13) { animation-delay: 0.35s; }
+        .waveform-bars span:nth-child(14) { animation-delay: 0.45s; }
+        .waveform-bars span:nth-child(15) { animation-delay: 0.55s; }
+        .waveform-bars span:nth-child(16) { animation-delay: 0.65s; }
+        .waveform-bars span:nth-child(17) { animation-delay: 0.75s; }
+        .waveform-bars span:nth-child(18) { animation-delay: 0.85s; }
+        .waveform-bars span:nth-child(19) { animation-delay: 0.05s; }
+        .waveform-bars span:nth-child(20) { animation-delay: 0.95s; }
+        @keyframes waveformPulse {
+            0%, 100% { height: 6px; opacity: 0.4; }
+            50% { height: 36px; opacity: 1; }
+        }
+        .waveform-label { font-size: 0.78rem; color: var(--color-purple); letter-spacing: 0.5px; }
+
+        /* AUDIO LAB RESULTS CARDS */
+        .audio-lab-match-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            transition: border-color 0.2s;
+        }
+        .audio-lab-match-card:hover { border-color: rgba(153, 69, 255, 0.4); }
+        .match-rank {
+            font-size: 0.65rem; font-weight: 700; color: var(--color-purple);
+            background: rgba(153, 69, 255, 0.15); border-radius: 6px;
+            padding: 3px 7px; min-width: 24px; text-align: center;
+        }
+        .match-score {
+            font-size: 0.65rem; color: var(--color-green); font-family: monospace;
+        }
+        .audio-lab-generated-player {
+            margin-top: 14px; padding: 14px;
+            background: linear-gradient(135deg, rgba(153, 69, 255, 0.08), rgba(20, 241, 149, 0.08));
+            border: 1px solid rgba(153, 69, 255, 0.25);
+            border-radius: 12px;
+        }
+        .audio-lab-generated-player audio { width: 100%; margin-top: 8px; }
+        .generated-label {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.8px;
+            color: var(--color-green); font-weight: 600; margin-bottom: 4px;
+        }
+        .enriched-prompt-display {
+            font-size: 0.72rem; color: var(--fg-secondary); font-style: italic;
+            margin-top: 4px; line-height: 1.4;
+        }
+
+        /* TRACK DETAIL MODAL */
+        .track-detail-modal {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1000;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .track-detail-backdrop {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+        }
+        .track-detail-panel {
+            position: relative; z-index: 1;
+            background: linear-gradient(135deg, rgba(20, 24, 36, 0.98), rgba(30, 36, 51, 0.98));
+            border: 1px solid rgba(153, 69, 255, 0.3);
+            border-radius: 16px; padding: 24px;
+            max-width: 520px; width: 90%; max-height: 85vh; overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .track-detail-close {
+            position: absolute; top: 12px; right: 14px;
+            background: none; border: none; color: var(--fg-secondary);
+            font-size: 1.2rem; cursor: pointer; padding: 4px 8px;
+        }
+        .track-detail-close:hover { color: var(--fg-primary); }
+        .track-detail-artwork { width: 100%; aspect-ratio: 1; border-radius: 12px; overflow: hidden; margin-bottom: 16px; background: rgba(0,0,0,0.3); }
+        .track-detail-artwork img { width: 100%; height: 100%; object-fit: cover; }
+        .track-detail-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+        .track-detail-artist { font-size: 0.9rem; color: var(--fg-secondary); margin-bottom: 16px; }
+        .track-detail-versions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+        .generate-version-btn {
+            width: 100%; padding: 12px; border: 2px dashed rgba(153, 69, 255, 0.4);
+            background: rgba(153, 69, 255, 0.06); border-radius: 10px;
+            color: var(--color-purple); font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .generate-version-btn:hover {
+            border-color: rgba(153, 69, 255, 0.7);
+            background: rgba(153, 69, 255, 0.12);
+        }
+
+        /* SKELETON LOADERS */
+        @keyframes skeletonShimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .skeleton-card {
+            background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+            background-size: 200% 100%;
+            animation: skeletonShimmer 1.5s infinite;
+            border-radius: 16px; height: 280px;
+        }
+
         /* VERSION GRID */
         .versions-grid {
             display: grid;
@@ -1135,36 +1297,36 @@
         <div id="exploreSection">
         <header class="header">
             <div class="logo">VERSIONS</div>
-            <p class="tagline">Song versions as tickets — own the artist coin, unlock the version</p>
-            <a href="artist.html" class="artist-link" title="Artist Dashboard">🎨 Artist Dashboard</a>
+            <p class="tagline">Semantic music search → AI-generated versions · Powered by turbopuffer + ElevenLabs</p>
         </header>
 
         <!-- INFO BANNER -->
         <section class="info-banner" id="infoBanner">
             <div class="info-content">
-                <div class="info-icon">🎫</div>
+                <div class="info-icon">🎛️</div>
                 <div class="info-text">
                     <div class="info-title">How It Works</div>
-                    <div class="info-desc">Each song has multiple versions (demo, live, studio, remix). Premium versions require the artist's Audius Coin to unlock.</div>
+                    <div class="info-desc">Describe a vibe → turbopuffer finds semantically matching tracks → ElevenLabs generates a new AI version. Try it below!</div>
                 </div>
             </div>
             <div class="info-stats" id="infoStats">
                 <div class="stat">
                     <div class="stat-value" id="totalVersions">-</div>
-                    <div class="stat-label">Total Versions</div>
+                    <div class="stat-label">Tracks Indexed</div>
                 </div>
                 <div class="stat">
                     <div class="stat-value" id="premiumVersions">-</div>
-                    <div class="stat-label">Premium (Locked)</div>
+                    <div class="stat-label">Genres</div>
                 </div>
                 <div class="stat">
                     <div class="stat-value" id="unlockedVersions">-</div>
-                    <div class="stat-label">Unlocked</div>
+                    <div class="stat-label">AI Versions</div>
                 </div>
             </div>
         </section>
 
-        <section class="wallet-section">
+        <!-- Hidden wallet section (not relevant for ElevenHacks) -->
+        <section class="wallet-section" style="display:none;">
             <button id="connectBtn" class="connect-btn" onclick="handleWalletConnect()">
                 <span>🔗</span><span>Connect Wallet</span>
             </button>
@@ -1176,35 +1338,49 @@
             <input type="text" class="search-input" id="searchInput" placeholder="🔍 Search songs or artists..." oninput="handleSearch(this.value)">
         </section>
 
-        <section class="audio-lab" id="audioLabSection">
+        <section class="audio-lab audio-lab-hero" id="audioLabSection">
             <div class="audio-lab-header">
-                <div class="audio-lab-title">🎛️ Audio Lab (turbopuffer + ElevenLabs)</div>
+                <div class="audio-lab-title">🎛️ Audio Lab</div>
                 <div class="audio-lab-status">
-                    <span class="audio-lab-pill" id="tpufStatus">turbopuffer: unknown</span>
-                    <span class="audio-lab-pill" id="elevenStatus">elevenlabs: unknown</span>
+                    <span class="audio-lab-pill" id="tpufStatus">turbopuffer: checking…</span>
+                    <span class="audio-lab-pill" id="elevenStatus">elevenlabs: checking…</span>
                 </div>
             </div>
-            <div class="audio-lab-controls">
-                <input class="audio-lab-input" id="audioLabPrompt" type="text" placeholder="Describe a vibe (e.g., dreamy synthwave rain at 110 BPM)">
-                <select class="audio-lab-select" id="audioLabMode">
-                    <option value="music">music</option>
-                    <option value="sfx">sfx</option>
-                </select>
-                <select class="audio-lab-select" id="audioLabTopK">
-                    <option value="3">topK: 3</option>
-                    <option value="5" selected>topK: 5</option>
-                    <option value="8">topK: 8</option>
-                </select>
-                <button class="audio-lab-btn" id="audioLabComposeBtn" onclick="runAudioCompose()">Compose</button>
+            <div class="audio-lab-hero-prompt">
+                <input class="audio-lab-input audio-lab-input-hero" id="audioLabPrompt" type="text" placeholder="dreamy synthwave rain at 110 BPM">
+                <div class="audio-lab-hero-row">
+                    <select class="audio-lab-select" id="audioLabMode">
+                        <option value="music">🎵 Music</option>
+                        <option value="sfx">🔊 SFX</option>
+                    </select>
+                    <select class="audio-lab-select" id="audioLabTopK">
+                        <option value="3">Top 3</option>
+                        <option value="5" selected>Top 5</option>
+                        <option value="8">Top 8</option>
+                    </select>
+                    <button class="audio-lab-btn audio-lab-btn-hero" id="audioLabComposeBtn" onclick="runAudioCompose()">
+                        <span id="composeBtnText">✨ Compose</span>
+                    </button>
+                </div>
+            </div>
+            <!-- Waveform visualizer (shown during generation) -->
+            <div class="audio-lab-waveform" id="audioLabWaveform" style="display:none;">
+                <div class="waveform-bars">
+                    <span></span><span></span><span></span><span></span><span></span>
+                    <span></span><span></span><span></span><span></span><span></span>
+                    <span></span><span></span><span></span><span></span><span></span>
+                    <span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <div class="waveform-label" id="waveformLabel">Searching semantically…</div>
             </div>
             <div class="audio-lab-history" id="audioLabHistory"></div>
             <div class="audio-lab-results" id="audioLabResults">
-                <div style="font-size: 0.75rem; color: var(--fg-secondary);">Run compose to retrieve semantic matches and generate audio.</div>
+                <div style="font-size: 0.8rem; color: var(--fg-secondary); text-align:center; padding: 12px;">Describe a vibe and hit Compose to find matching tracks and generate AI audio.</div>
             </div>
         </section>
 
-        <!-- SOCIAL RECOMMENDATIONS (Farcaster Integration) -->
-        <section id="socialRecommendations" class="social-recommendations" style="display: none; margin-bottom: 24px;">
+        <!-- SOCIAL RECOMMENDATIONS (Hidden for ElevenHacks) -->
+        <section id="socialRecommendations" class="social-recommendations" style="display: none !important; margin-bottom: 24px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                 <h3 style="font-size: 0.9rem; text-transform: uppercase; color: var(--color-purple); letter-spacing: 1px;">🎭 Social Discovery</h3>
                 <div class="social-indicator" id="socialIndicator">
@@ -1225,9 +1401,20 @@
         </div>
 
         <footer class="footer">
-            Built for <a href="https://solana.com/graveyard-hack" target="_blank">Solana Graveyard Hackathon</a><br>
-            Audius Track — "Versions as Tickets"
+            Built for <a href="https://elevenlabs.io/hacks" target="_blank">#ElevenHacks</a> · Powered by
+            <a href="https://turbopuffer.com" target="_blank">turbopuffer</a> +
+            <a href="https://elevenlabs.io" target="_blank">ElevenLabs</a><br>
+            Semantic search → AI music generation
         </footer>
+
+        <!-- Track Detail Modal -->
+        <div class="track-detail-modal" id="trackDetailModal" style="display:none;">
+            <div class="track-detail-backdrop" onclick="closeTrackDetail()"></div>
+            <div class="track-detail-panel">
+                <button class="track-detail-close" onclick="closeTrackDetail()">✕</button>
+                <div id="trackDetailContent"></div>
+            </div>
+        </div>
         </div> <!-- exploreSection -->
     </div> <!-- container -->
 
@@ -2010,40 +2197,63 @@
                             audioLabLastRetrieval = retrievalItems;
                             const generation = composeData.generation || {};
                             const audioUrl = extractAudioUrl(generation);
+                            const enrichedPrompt = composeData.enriched_prompt || '';
 
+                            // Semantic match cards
                             const retrievalHtml = retrievalItems.length === 0
-                                ? '<div style="font-size:0.75rem;color:var(--fg-secondary);">No semantic matches returned.</div>'
-                                : `<div class="audio-lab-list">${retrievalItems.slice(0, 5).map((item, index) => {
-                                    const title = item.title || item.name || item.id || `result-${index + 1}`;
-                                    const score = item.score ?? item.similarity ?? item.distance ?? 'n/a';
-                                    const derivedPrompt = derivePromptFromRetrievalItem(item);
-                                    const usePromptButton = derivedPrompt
-                                        ? `<button class="audio-lab-btn" style="margin-top:6px;padding:6px 8px;font-size:0.7rem;" onclick="useRetrievalPromptFromItem(${index})">Use as prompt ↺</button>`
-                                        : '';
+                                ? '<div style="font-size:0.8rem;color:var(--fg-secondary);padding:8px 0;">No semantic matches found. Try a different description.</div>'
+                                : `<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.6px;color:var(--color-purple);margin-bottom:8px;font-weight:600;">🔍 Semantic Matches</div>
+                                   <div class="audio-lab-list">${retrievalItems.slice(0, 5).map((item, index) => {
+                                    const title = item.title || item.name || item.id || `Match ${index + 1}`;
+                                    const artist = item.artist || '';
+                                    const genre = item.genre || item.attributes?.genre || '';
+                                    const mood = item.mood || item.attributes?.mood || '';
+                                    const dist = item.dist ?? item.score ?? item.similarity ?? item.distance ?? null;
+                                    const scoreDisplay = dist !== null ? (1 - Math.min(dist, 1)).toFixed(2) : '—';
+                                    const meta = [genre, mood].filter(Boolean).join(' · ');
 
-                                    return `<div class="audio-lab-item"><strong>#${index + 1}</strong> ${escapeHtml(title)} <span style="color:var(--color-blue)">score: ${escapeHtml(score)}</span>${usePromptButton}</div>`;
+                                    return `<div class="audio-lab-match-card">
+                                        <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+                                            <span class="match-rank">#${index + 1}</span>
+                                            <div style="min-width:0;">
+                                                <div style="font-size:0.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(title)}</div>
+                                                ${artist ? `<div style="font-size:0.7rem;color:var(--fg-secondary);">${escapeHtml(artist)}</div>` : ''}
+                                                ${meta ? `<div style="font-size:0.65rem;color:var(--fg-secondary);margin-top:2px;">${escapeHtml(meta)}</div>` : ''}
+                                            </div>
+                                        </div>
+                                        <span class="match-score">${scoreDisplay}</span>
+                                    </div>`;
                                 }).join('')}</div>`;
 
+                            // Generated audio player
                             const playerHtml = audioUrl
-                                ? `<div style="margin-top: 10px;"><audio controls src="${escapeHtml(audioUrl)}" style="width:100%;"></audio></div>`
-                                : '<div style="margin-top:10px;font-size:0.75rem;color:var(--fg-secondary);">No direct audio URL in response. Raw payload shown below.</div>';
+                                ? `<div class="audio-lab-generated-player">
+                                    <div class="generated-label">🎵 AI-Generated Audio</div>
+                                    ${enrichedPrompt ? `<div class="enriched-prompt-display">"${escapeHtml(enrichedPrompt.slice(0, 200))}"</div>` : ''}
+                                    <audio controls src="${escapeHtml(audioUrl)}" style="width:100%;margin-top:8px;"></audio>
+                                   </div>`
+                                : '<div style="margin-top:12px;font-size:0.8rem;color:var(--fg-secondary);text-align:center;">Audio generation pending — check API keys are configured.</div>';
 
                             output.innerHTML = `
-                                <div style="font-size:0.78rem;color:var(--fg-secondary);">Mode: <strong>${escapeHtml(composeData.mode)}</strong> · Prompt: ${escapeHtml(composeData.query)}</div>
+                                <div style="font-size:0.78rem;color:var(--fg-secondary);margin-bottom:10px;">
+                                    Mode: <strong>${escapeHtml(composeData.mode || 'music')}</strong> · Query: "${escapeHtml(composeData.query || '')}"
+                                </div>
                                 ${retrievalHtml}
                                 ${playerHtml}
-                                <pre class="audio-lab-pre">${escapeHtml(JSON.stringify(generation, null, 2))}</pre>
                             `;
                         }
 
-                        async function runAudioCompose() {
+                        async function runAudioCompose(extraContext) {
                             if (audioLabBusy) return;
 
                             const promptInput = document.getElementById('audioLabPrompt');
                             const modeInput = document.getElementById('audioLabMode');
                             const topKInput = document.getElementById('audioLabTopK');
                             const button = document.getElementById('audioLabComposeBtn');
+                            const btnText = document.getElementById('composeBtnText');
                             const output = document.getElementById('audioLabResults');
+                            const waveform = document.getElementById('audioLabWaveform');
+                            const waveformLabel = document.getElementById('waveformLabel');
 
                             const prompt = promptInput ? promptInput.value.trim() : '';
                             const mode = modeInput ? modeInput.value : 'music';
@@ -2059,26 +2269,34 @@
                             try {
                                 audioLabBusy = true;
                                 if (button) button.disabled = true;
-                                if (output) {
-                                    output.innerHTML = '<div style="font-size:0.78rem;color:var(--fg-secondary);">Composing… running semantic search + generation.</div>';
-                                }
+                                if (btnText) btnText.textContent = '⏳ Composing…';
+                                if (output) output.innerHTML = '';
+                                if (waveform) { waveform.style.display = 'flex'; }
+                                if (waveformLabel) waveformLabel.textContent = 'Searching semantically…';
 
-                                const response = await window.VersionsApi.postJson('/api/v1/audio/compose', {
-                                    query: prompt,
-                                    mode,
-                                    topK
-                                });
+                                // Brief delay then update label
+                                setTimeout(() => {
+                                    if (waveformLabel && audioLabBusy) waveformLabel.textContent = 'Generating audio with ElevenLabs…';
+                                }, 2500);
 
+                                const body = { query: prompt, mode, topK };
+                                if (extraContext) body.trackContext = extraContext;
+
+                                const response = await window.VersionsApi.postJson('/api/v1/audio/compose', body);
+
+                                if (waveform) waveform.style.display = 'none';
                                 renderAudioLabOutput(response.data || {});
                             } catch (error) {
                                 console.error('Audio compose failed:', error);
-                                showToast('Audio compose failed', true);
+                                showToast('Audio compose failed — ' + error.message, true);
+                                if (waveform) waveform.style.display = 'none';
                                 if (output) {
-                                    output.innerHTML = `<div style="font-size:0.78rem;color:var(--color-red);">Compose failed: ${escapeHtml(error.message)}</div>`;
+                                    output.innerHTML = `<div style="font-size:0.82rem;color:var(--color-red);text-align:center;padding:16px;">⚠️ Compose failed: ${escapeHtml(error.message)}<br><span style="font-size:0.72rem;color:var(--fg-secondary);">Check that TURBOPUFFER_API_KEY and ELEVENLABS_API_KEY are set.</span></div>`;
                                 }
                             } finally {
                                 audioLabBusy = false;
                                 if (button) button.disabled = false;
+                                if (btnText) btnText.textContent = '✨ Compose';
                             }
                         }
 
@@ -2116,6 +2334,99 @@
                         window.useRetrievalPromptFromItem = useRetrievalPromptFromItem;
                         window.reusePromptHistory = reusePromptHistory;
                         window.clearAudioLabHistory = clearAudioLabHistory;
+
+                        // TRACK DETAIL MODAL (Point 4)
+                        function openTrackDetail(songIndex) {
+                            const song = allVersions[songIndex];
+                            if (!song) return;
+                            const modal = document.getElementById('trackDetailModal');
+                            const content = document.getElementById('trackDetailContent');
+                            if (!modal || !content) return;
+
+                            const versionTypes = ['acoustic demo', 'lo-fi remix', 'live version', 'instrumental', 'slowed + reverb'];
+                            const existingTypes = song.versions.map(v => v.type.toLowerCase());
+                            const missingTypes = versionTypes.filter(t => !existingTypes.includes(t));
+
+                            content.innerHTML = `
+                                <div class="track-detail-artwork">
+                                    ${song.artwork ? `<img src="${song.artwork}" alt="${escapeHtml(song.canonical_title)}">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:3rem;">🎵</div>'}
+                                </div>
+                                <div class="track-detail-title">${escapeHtml(song.canonical_title)}</div>
+                                <div class="track-detail-artist">${escapeHtml(song.artist)}</div>
+                                <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.6px;color:var(--color-purple);margin-bottom:8px;font-weight:600;">Existing Versions</div>
+                                <div class="track-detail-versions">
+                                    ${song.versions.map(v => `
+                                        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.08);">
+                                            <div>
+                                                <span class="version-type ${v.type}" style="font-size:0.6rem;">${v.type}</span>
+                                                <span style="font-size:0.8rem;margin-left:6px;">${escapeHtml(v.title)}</span>
+                                            </div>
+                                            <button class="play-btn primary" style="padding:4px 10px;font-size:0.7rem;width:auto;" onclick="playVersion('${v.id}')">▶</button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                ${missingTypes.length > 0 ? `
+                                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.6px;color:var(--color-green);margin-bottom:8px;font-weight:600;">✨ Generate Missing Version</div>
+                                    <div style="display:flex;flex-direction:column;gap:6px;">
+                                        ${missingTypes.map(type => `
+                                            <button class="generate-version-btn" onclick="generateMissingVersion(${songIndex}, '${type}')">
+                                                🎛️ Generate ${type} of "${escapeHtml(song.canonical_title)}"
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                ` : ''}
+                            `;
+                            modal.style.display = 'flex';
+                        }
+
+                        function closeTrackDetail() {
+                            const modal = document.getElementById('trackDetailModal');
+                            if (modal) modal.style.display = 'none';
+                        }
+
+                        function generateMissingVersion(songIndex, versionType) {
+                            const song = allVersions[songIndex];
+                            if (!song) return;
+                            closeTrackDetail();
+                            // Pre-fill Audio Lab prompt with track context
+                            const promptInput = document.getElementById('audioLabPrompt');
+                            if (promptInput) {
+                                promptInput.value = `${versionType} of "${song.canonical_title}" by ${song.artist}`;
+                            }
+                            // Scroll to Audio Lab
+                            document.getElementById('audioLabSection').scrollIntoView({ behavior: 'smooth' });
+                            // Run compose with track context
+                            setTimeout(() => {
+                                runAudioCompose({
+                                    artist: song.artist,
+                                    genre: song.genre || '',
+                                    mood: song.mood || ''
+                                });
+                            }, 400);
+                        }
+
+                        window.openTrackDetail = openTrackDetail;
+                        window.closeTrackDetail = closeTrackDetail;
+                        window.generateMissingVersion = generateMissingVersion;
+
+                        // ANIMATED PLACEHOLDER
+                        const placeholderExamples = [
+                            'dreamy synthwave rain at 110 BPM',
+                            'lo-fi jazz piano with vinyl crackle',
+                            'epic orchestral trailer music',
+                            'chill acoustic guitar sunset vibes',
+                            'dark ambient drone with thunder',
+                            'funky disco bass groove 120 BPM',
+                            'ethereal choir pads with reverb'
+                        ];
+                        let placeholderIndex = 0;
+                        function rotatePlaceholder() {
+                            const input = document.getElementById('audioLabPrompt');
+                            if (!input || input === document.activeElement || input.value) return;
+                            placeholderIndex = (placeholderIndex + 1) % placeholderExamples.length;
+                            input.placeholder = placeholderExamples[placeholderIndex];
+                        }
+                        setInterval(rotatePlaceholder, 3000);
                     
                         // SOCIAL RECOMMENDATIONS
                         async function updateRecommendations() {
@@ -2183,8 +2494,9 @@
                         }
                     
                         function renderSongCard(song) {
+                            const songIdx = allVersions.indexOf(song);
                             return `
-                                <div class="version-card">
+                                <div class="version-card" onclick="openTrackDetail(${songIdx})" style="cursor:pointer;">
                                     <div class="track-artwork ${song.artwork ? '' : 'error'}">
                                         ${song.artwork ? `<img src="${song.artwork}" alt="${song.canonical_title}" onerror="this.classList.add('error')">` : ''}
                                     </div>
@@ -2192,9 +2504,11 @@
                                     <div class="track-artist">${song.artist}</div>
                                     
                                     <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px;">
-                                        <div style="font-size: 0.7rem; color: var(--fg-secondary); text-transform: uppercase; margin-bottom: 8px;">Available Versions</div>
-                                        <div style="display: flex; flex-direction: column; gap: 8px;">
-                                            ${song.versions.map(v => renderVersionListItem(v)).join('')}
+                                        <div style="font-size: 0.7rem; color: var(--fg-secondary); text-transform: uppercase; margin-bottom: 8px;">
+                                            ${song.versions.length} Version${song.versions.length !== 1 ? 's' : ''} · Click to explore
+                                        </div>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                                            ${song.versions.map(v => `<span class="version-type ${v.type}" style="font-size:0.6rem;">${v.type}</span>`).join('')}
                                         </div>
                                     </div>
                                 </div>

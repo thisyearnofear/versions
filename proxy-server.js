@@ -15,7 +15,8 @@ const { parsePositiveInt, validateMode, validatePromptText } = require('./proxy/
 const { createAudiusAdapter } = require('./proxy/adapters/audius');
 const { createHeliusAdapter } = require('./proxy/adapters/solana');
 const { createTurbopufferAdapter } = require('./proxy/adapters/turbopuffer');
-const { createElevenLabsAdapter } = require('./proxy/adapters/elevenlabs');
+const { createElevenLabsAdapter, AUDIO_DIR } = require('./proxy/adapters/elevenlabs');
+const path = require('path');
 const { createAudioComposeService } = require('./proxy/services/audio-compose');
 
 const app = express();
@@ -434,7 +435,7 @@ app.post('/api/v1/audio/generate', audioRateLimit, async (req, res) => {
 
 app.post('/api/v1/audio/compose', audioRateLimit, async (req, res) => {
   try {
-    const { query, mode = 'music', topK = 5, durationSeconds } = req.body || {};
+    const { query, mode = 'music', topK = 5, durationSeconds, trackContext } = req.body || {};
     const queryError = validatePromptText(query, 'query');
     if (queryError) {
       return fail(res, req, 400, queryError, null, 'INVALID_INPUT');
@@ -465,7 +466,8 @@ app.post('/api/v1/audio/compose', audioRateLimit, async (req, res) => {
       query: trimmedQuery,
       mode,
       topK: validatedTopK,
-      durationSeconds: validatedDurationSeconds
+      durationSeconds: validatedDurationSeconds,
+      trackContext: trackContext || null
     });
 
     audioCache.set(key, data);
@@ -474,6 +476,36 @@ app.post('/api/v1/audio/compose', audioRateLimit, async (req, res) => {
   } catch (error) {
     console.error('Audio compose error:', error.message);
     fail(res, req, 500, 'Audio compose failed', error.message, 'AUDIO_COMPOSE_FAILED');
+  }
+});
+
+// Serve generated audio files
+app.get('/api/v1/audio/files/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const filepath = path.join(AUDIO_DIR, filename);
+  const fs = require('fs');
+  if (!fs.existsSync(filepath)) {
+    return fail(res, req, 404, 'Audio file not found', null, 'FILE_NOT_FOUND');
+  }
+  const ext = path.extname(filename).slice(1);
+  const mimeMap = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg' };
+  res.setHeader('Content-Type', mimeMap[ext] || 'audio/mpeg');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  fs.createReadStream(filepath).pipe(res);
+});
+
+// Upsert vectors into turbopuffer namespace
+app.post('/api/v1/vectors/upsert', async (req, res) => {
+  try {
+    const { vectors, namespace } = req.body || {};
+    if (!Array.isArray(vectors) || vectors.length === 0) {
+      return fail(res, req, 400, 'vectors must be a non-empty array', null, 'INVALID_INPUT');
+    }
+    const data = await turbopuffer.upsert({ vectors, namespace });
+    res.json({ success: true, data, count: vectors.length, requestId: req.requestId });
+  } catch (error) {
+    console.error('Vector upsert error:', error.message);
+    fail(res, req, 500, 'Vector upsert failed', error.message, 'VECTOR_UPSERT_FAILED');
   }
 });
 
