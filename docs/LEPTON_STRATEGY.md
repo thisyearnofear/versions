@@ -1,49 +1,53 @@
-# ⚛️ LEPTON STRATEGY: VERSIONS as a Settlement Sidecar
+# ⚛️ LEPTON STRATEGY: VERSIONS Marketplace & Sidecar
 
-## 🎯 Vision
-Transform **VERSIONS** from a standalone player into a **Micro-Settlement Sidecar** for the creator economy. Using the **Arc L1** and **USDC**, we will enable per-second royalties for music demos and rare versions that were previously uneconomic to monetize.
+## 🎯 Vision: The Economic Home for the "Other" Music
+VERSIONS is a two-sided marketplace and discovery layer for **alternate takes, live recordings, and demos** — the high-value music that currently has no economic home.
 
-## 🏗️ Architectural Pivot: The Sidecar Model
-Instead of requiring users to switch to a new app, VERSIONS will act as a "shim" or "sidecar" that attaches to existing open-source media stacks.
-
-### 1. Subsonic Scrobble Sidecar (RFB #1)
-- **Protocol**: Implement the Subsonic API.
-- **Hook**: When a Subsonic client (DSub, Play:Sub, etc.) sends a "scrobble" or "now playing" event, VERSIONS intercepts it.
-- **Action**: The interception triggers a settlement event on the Arc L1.
-
-### 2. Arc L1 Settlement Layer
-- **Currency**: USDC (native on Arc).
-- **Frequency**: Every 30 seconds of playback or per-track "unlock."
-- **Efficiency**: Leveraging Arc's <500ms finality to provide instant feedback to the creator.
-
-### 3. Metadata & Payee Mapping (RFB #2)
-- **Registry**: Use MusicBrainz IDs (MBID) as the primary key.
-- **Mapping**: Create a lightweight registry mapping `MBID -> Wallet Address`.
-- **Fallthrough**: If no mapping exists, use a decentralized attribution model (e.g., Audius artist metadata).
-
-## 🛠️ Foundation Components (Phase 1: June 15-17)
-
-### A. The `Settlement` Trait (Rust)
-Define a generic trait in `lib/src/common.rs` that abstracts the payment provider:
-```rust
-pub trait SettlementProvider {
-    fn name(&self) -> &str;
-    async fn pay_royalty(&self, amount_usdc: f64, payee: &str) -> Result<String>;
-    async fn verify_unlock(&self, track_id: &str, user_wallet: &str) -> Result<bool>;
-}
-```
-
-### B. The Subsonic Adapter
-Create a new module `server/src/subsonic_adapter.rs` to handle:
-- Ping/Auth
-- `getMusicDirectory` (Proxy to local/Audius)
-- `scrobble` (The hook for payments)
-
-## 📅 Roadmap for Hackathon (June 15-29)
-1. **Foundation (June 15)**: Implement `Settlement` trait and Arc L1 boilerplate.
-2. **Sidecar (June 17)**: Launch Subsonic shim that proxies Audius tracks.
-3. **Mini App (June 20)**: Farcaster Mini App for "One-Click Settlement" discovery.
-4. **Validation (June 25)**: End-to-end demo: "Play in DSub, Get Paid in Arc Wallet."
+### The Core Insight
+Artists play songs differently every night. Fans value specific versions ("the bluesy 2019 Gravity solo"). VERSIONS monetizes this through two interlocking systems:
+1.  **Human-Powered Taste Graph**: Curation through structured, subjective metadata.
+2.  **Nanopayment Settlement Layer**: Every interaction is a micro-transaction on **Arc L1 (USDC)**.
 
 ---
-*This document serves as the foundational mandate for the Lepton 2026 Hackathon development.*
+
+## 🚀 PHASE 1 (HACKATHON MVP): SUBMISSION MARKETPLACE
+To bootstrap the catalog, we are starting with an active **SubmitHub-style marketplace** rather than passive streaming.
+
+### The Mechanic
+- **Artists**: Upload a version (MP3/FLAC) + metadata. Pay a **Submission Fee (USDC)** to enter the curation queue.
+- **Curators**: Claim tracks and complete a **Structured Rating Form**.
+- **Payout**: On submission, the fee pool is split: **70% to Curators, 20% to Platform, 10% to MusicBrainz Attribution**.
+- **Discovery**: A version is "published" to the catalog after receiving **N=3** ratings.
+
+### Structured Rating Dimensions
+Curators don't just give stars; they map the "taste graph":
+- **Solo Intensity** (1–10)
+- **Vocal Quality** (1–10)
+- **Energy vs. Studio** (Lower / Same / Higher)
+- **Tempo Feel** (Dragging / Locked / Rushing)
+- **Mood Tags** (Bluesy, Raw, Euphoric, etc.)
+
+---
+
+## 🛰️ PHASE 2 (STRETCH GOAL): SUBSONIC SCROBBLE SIDECAR
+Once the catalog is bootstrapped, we enable passive per-second payments via a protocol-level shim.
+
+### Architecture
+- **Target**: Navidrome (primary), Koel, Funkwhale.
+- **Function**: A lightweight process that runs alongside the media server, intercepts scrobbles, and triggers Arc L1 settlements for discovered versions.
+
+---
+
+## 🛠️ Implementation Mandates
+
+### 1. "Marketplace First"
+Prioritize the submission/rating flow over the player UI. The hackathon "win" is showing active USDC flow between artists and curators.
+
+### 2. Structured Metadata
+The database must support the specific "Taste Graph" dimensions. Metadata is not just an afterthought; it is the product.
+
+### 3. Arc-Native Settlement
+All fees and rewards must be handled as discrete Arc L1 transactions with sub-500ms feedback.
+
+---
+*This strategy replaces previous "streaming-first" plans to ensure immediate traction and transaction volume during the Lepton Hackathon.*
