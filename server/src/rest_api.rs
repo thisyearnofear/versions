@@ -2,6 +2,7 @@ use crate::audio_service::{AudioMetadata, AudioService};
 use crate::database::{self as database, Database, SimpleDbSong, SimpleDbVersion};
 use crate::farcaster_service::{FarcasterService, FarcasterUser, SocialRecommendation};
 use crate::filecoin_service::{CreatorPaymentRequest, FilecoinService, FilecoinUploadRequest};
+use crate::providers::{ArcProvider, FilecoinProvider, ProviderRegistry, SolanaProvider};
 use axum::{
     Router,
     body::Body,

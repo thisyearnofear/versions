@@ -4,35 +4,31 @@
 
 VERSIONS follows a **dual-interface architecture** with shared backend services, designed for both professional creators and community users.
 
-### **System Architecture**
+### **System Architecture: The Lepton Sidecar**
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  Terminal (TUI) │    │   gRPC + REST    │    │  Audio Engine   │
-│ Professional    │◄──►│     Server       │◄──►│   (Rust)        │
-│    Tools        │    │                  │    │                 │
+│ Subsonic Client │    │ VERSIONS Sidecar │    │   Arc L1        │
+│ (DSub / Amuse)  │◄──►│ (REST/Subsonic)  │◄──►│ (Settlement)    │
+│                 │    │                  │    │                 │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
                                 │                        │
 ┌─────────────────┐             │               ┌─────────────────┐
-│  Web Frontend   │◄────────────┘               │   Farcaster     │
-│ + Solana        │                             │ Social Layer    │
- │ Wallet          │◄────────────────────────────┤                 │
- └─────────────────┘                             └─────────────────┘
+│ Farcaster Mini  │◄────────────┘               │   USDC          │
+│ App Discovery   │                             │  (Payment)      │
+└─────────────────┘                             └─────────────────┘
                                 │
                     ┌───────────────────────────┐
-                    │      Audius               │
-                    │  + Solana Artist Coins   │
-                    │ (Ticket Validation)      │
+                    │      MusicBrainz          │
+                    │  (MBID -> Wallet Map)     │
                     └───────────────────────────┘
 ```
 
 ### **Core Components**
-- **Audio Service**: Streaming, metadata, file management
-- **Farcaster Service**: Social integration, authentication, casting
-- **REST API**: Web interface and external integrations
-- **gRPC Server**: Terminal interface and professional tools
-- **Web Interface**: Community platform with audio player
-- **Audius Service**: Track fetching, artist data, Artist Coin integration
-- **Solana Service**: Wallet connection, coin ownership validation
+- **Settlement Service**: Arc L1 integration, USDC nanopayments
+- **Subsonic Adapter**: Protocol-level shim for universal app support
+- **Audio Service**: High-performance streaming and metadata extraction
+- **Farcaster Service**: Social discovery layer for creators
+- **MusicBrainz Registry**: Metadata-driven payee discovery
 
 ## **Core Principles**
 
@@ -40,43 +36,36 @@ VERSIONS follows **8 Core Principles** that guide all development decisions:
 
 ### **1. ENHANCEMENT FIRST**
 Always prioritize enhancing existing components over creating new ones.
-- **Application**: New features extend current services, not replace them
-- **Hackathon**: Audius integration extends audio service, not replaces it
+- **Application**: The Subsonic adapter enhances the existing REST server.
+- **Lepton**: Nanopayments are an enhancement to the existing `TrackChanged` event system.
 
 ### **2. AGGRESSIVE CONSOLIDATION**
 Delete unnecessary code rather than deprecating it.
-- **Application**: Remove dead code, merge duplicate endpoints
-- **Hackathon**: Demo uses existing infrastructure, no new services created
+- **Application**: Remove old Solana-only mocks as we transition to the Arc settlement layer.
 
 ### **3. PREVENT BLOAT**
 Systematically audit and consolidate before adding new features.
-- **Application**: Each feature must justify its existence
-- **Hackathon**: Separate demo file prevents main app bloat
+- **Application**: Every settlement event must be lightweight to handle high-frequency nanopayments.
 
 ### **4. DRY (Don't Repeat Yourself)**
 Single source of truth for all shared logic.
-- **Application**: Shared types in `lib/`, services in `server/src/`
-- **Hackathon**: Uses existing audio service, REST API patterns
+- **Application**: The `SettlementProvider` trait is the single source of truth for payment providers.
 
 ### **5. CLEAN**
 Clear separation of concerns with explicit dependencies.
-- **Application**: Service modules have single responsibility
-- **Hackathon**: `audius-solana.js` handles only wallet/coin logic
+- **Application**: Payment logic is strictly decoupled from audio playback.
 
 ### **6. MODULAR**
 Composable, testable, independent modules.
-- **Application**: Each service can be tested independently
-- **Hackathon**: Demo imports integration, can be removed entirely
+- **Application**: The `ArcProvider` can be tested in isolation from the Subsonic shim.
 
 ### **7. PERFORMANT**
 Adaptive loading, caching, and resource optimization.
-- **Application**: Range requests, metadata caching, async throughout
-- **Hackathon**: Lazy-loads Audius data, caches wallet state
+- **Application**: <500ms settlement finality on Arc L1.
 
 ### **8. ORGANIZED**
 Predictable file structure with domain-driven design.
-- **Application**: Clear directory structure, consistent naming
-- **Hackathon**: Follows existing `web/` patterns, uses `.js` not `.ts`
+- **Application**: `lib/src/common.rs` houses shared settlement types.
 
 ## **How to Apply Principles**
 
@@ -359,6 +348,11 @@ cd web && python3 -m http.server 3000
 - **Build Failures**: Check Rust version (1.85.0+) and protobuf installation
 - **Port Conflicts**: Ensure ports 8080 and 3000 are available
 - **Audio Issues**: Verify file permissions and supported formats
+- **Farcaster Issues**: Check manifest accessibility and domain configuration
+
+---
+
+**🛠️ Building the future of version-centric music discovery!**nd supported formats
 - **Farcaster Issues**: Check manifest accessibility and domain configuration
 
 ---

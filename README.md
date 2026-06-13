@@ -1,172 +1,72 @@
 # 🎭 VERSIONS
 
-**🪦 Solana Graveyard Hackathon 2026 - Audius Music Track**
+**⚛️ Lepton Agents Hackathon 2026 - Nanopayments for the Creator Economy**
 
-**Song Versions as Tickets: Own Audius Artist Coins to unlock exclusive versions**
+**The Micro-Settlement Sidecar: Monetizing the creative process through per-second royalties on the Arc L1.**
 
 ---
 
-## 🏆 Hackathon Submission
+## 🏆 Current Focus: Lepton Hackathon (June 15-29, 2026)
 
-**[📺 Watch 3-Minute Demo Video](#)** | **[🚀 Try Live Demo](https://versions.netlify.app/hackathon-demo.html)**
+VERSIONS is pivoting from a standalone music platform into a **Settlement Sidecar**. We are building a "shim" that attaches to existing open-source media stacks (Audius, Subsonic, Navidrome) to enable nanopayments ($0.0001/sec) that were previously uneconomic.
 
-### Quick Start for Judges
+**[⚛️ Lepton Strategy & Roadmap](docs/LEPTON_STRATEGY.md)** | **[📺 Watch 3-Minute Demo Video](#)**
 
-```bash
-git clone https://github.com/thisyearnofear/versions.git
-cd versions/web
-python3 -m http.server 3000
-# Open http://localhost:3000/hackathon-demo.html
-```
-
-**No build step required!** Pure vanilla JavaScript.
+### The Lepton Vision
+- **Nanopayments**: Move value "too small to have been worth moving before" using USDC on Arc L1.
+- **Sidecar Architecture**: Don't build a new silo; enhance the existing creator stack.
+- **Settlement-Grade Events**: Convert audio playback "scrobbles" into instant creator payouts.
 
 ---
 
 ## 💡 The Concept
 
-Every song has multiple versions - demos, studio recordings, live performances, remixes. **VERSIONS** treats each version as a collectible where **Audius Artist Coins act as tickets** to unlock exclusive content.
-
-**Own the coin → Unlock the version → Support the artist**
+Every song has multiple versions - demos, studio recordings, live performances, remixes. **VERSIONS** treats the creative process as a stream of value. 
 
 ### The Problem
-- Artists create multiple versions but can't monetize them individually
-- Fans want rare versions (demos, live recordings) but can't access them  
-- Artist Coins exist but lack utility beyond speculation
+- **The $2.00 Floor**: Traditional payment rails (Stripe/PayPal) make micro-royalties impossible.
+- **The Silo Problem**: Creators are forced into closed platforms to monetize.
+- **The "Dead" Version**: Demos and rough cuts are rarely monetized because the overhead is too high.
 
 ### The Solution
-- Each song version is tied to an Audius Artist Coin
-- Owning the coin grants access to stream that version
-- Versions become collectible assets (like rare vinyl)
-- Artist Coins gain real utility
+- **Arc L1 Integration**: Instant (<500ms) settlement of sub-cent values.
+- **Subsonic Sidecar**: A protocol-level adapter that adds payments to *any* music app.
+- **MusicBrainz Mapping**: Automated payee discovery via global metadata standards.
 
 ---
 
 ## ✨ Features
 
+✅ **Nanopayment Settlement** - Per-second royalty engine (Arc L1 + USDC)  
+✅ **Subsonic Sidecar** - Protocol adapter for universal app compatibility  
 ✅ **Audius Integration** - Real trending tracks from Audius API  
-✅ **Phantom Wallet** - Solana wallet connection  
-✅ **Token-Gated Access** - Verify Artist Coin ownership on-chain  
-✅ **Version Discovery** - Browse demos, remixes, live versions  
-✅ **One-Click Copy** - Copy coin addresses to clipboard  
-✅ **Jupiter DEX Integration** - Direct buy links for artist coins  
-✅ **Real-Time Stats** - See total/premium/unlocked version counts  
-✅ **Toast Notifications** - Instant feedback for user actions  
-✅ **Mobile-First UI** - Works on all devices  
+✅ **Farcaster Mini App** - Social discovery and "One-Click Settlement"  
+✅ **Professional Rust Backend** - High-performance audio engine and gRPC server  
+✅ **WASM Readiness** - Browser-side settlement and playback  
 
 ---
 
-## 🎯 For the Hackathon
-
-This submission focuses on the **core concept** with a working demo:
-
-1. **Audius API Integration** - Fetches real track data
-2. **Wallet Connection** - Phantom wallet integration
-3. **Access Control** - Token-gated version unlocking
-4. **Clean UX** - Simple, intuitive interface
-
-### ElevenHacks Extension Plan
-
-For the turbopuffer + ElevenLabs track, see:
-
-- [docs/ELEVENHACKS_IMPLEMENTATION_PLAN.md](docs/ELEVENHACKS_IMPLEMENTATION_PLAN.md)
-
-This plan introduces a provider-agnostic pipeline (`ingest -> index -> retrieve -> generate`) so Audius is an adapter, not the product center.
-
-See [HACKATHON_SUBMISSION.md](HACKATHON_SUBMISSION.md) for full details.
-
----
-
-## 🏗️ Full Platform Vision
-
-Beyond the hackathon, VERSIONS is building a complete version-centric music platform:
-
-[![Build status](https://github.com/thisyearnofear/versions/actions/workflows/build.yml/badge.svg)](https://github.com/thisyearnofear/versions/actions)
-[![crates.io](https://img.shields.io/crates/v/versions.svg)](https://crates.io/crates/versions)
-[![MSRV](https://img.shields.io/badge/MSRV-1.85.0-blue)](https://releases.rs/docs/1.85.0/)
-
-## 🎯 **What is VERSIONS?**
-
-VERSIONS puts **song versions at the center** of music discovery with a **unified web interface** that combines **professional tools** and **Web3-native social features**:
-
-### **🖥️ Professional Tools (Terminal-Style)**
-- **Terminal-Like UX** - Familiar command-line interface in browser
-- **Audio Analysis** - Advanced version comparison and processing
-- **Batch Operations** - Efficient multi-file operations
-- **Power User Features** - Professional creator workflows
-
-### **🌐 Community Features**
-- **Audio Streaming** - Professional player with range request support
-- **Farcaster Integration** - Web3-native social discovery and Mini App
-- **Version Discovery** - Interactive sidebar with trending versions
-- **Social Recommendations** - Community-driven discovery through social graph
-- **Terminal-Style UX** - Professional command-like interface in browser
-
-### **🟣 Farcaster Mini App**  
-- **Native Integration** - Built-in Farcaster Mini App support
-- **Social Discovery** - Version recommendations from social graph
-- **Community Curation** - Trending versions and social voting
-- **Real-time Activity** - Live social indicators and friend activity
-
-## 🚀 **Quick Start**
-
-### **Requirements**
-- **Rust 1.85.0+** - [Install Rust](https://rustup.rs/)
-- **protobuf-compiler** - `brew install protobuf` (macOS) or `sudo apt install protobuf-compiler` (Ubuntu)
-
-### **Installation & Setup**
-```bash
-git clone https://github.com/thisyearnofear/versions.git
-cd versions
-
-# Build complete Rust workspace
-make full-build
-```
-
-### **Running VERSIONS**
-```bash
-# 1. Start the server (required)
-./target/debug/versions-server
-# Server runs on http://localhost:8080
-
-# 2. Web interface (unified platform)
-cd web && python3 -m http.server 3000
-# Open http://localhost:3000
-
-# 3. Future: WASM terminal interface
-# Coming: Same Rust code running in browser and terminal
-```
-
-### **First Steps**
-```bash
-# Test the complete system
-./scripts/test_server.sh
-
-# Add audio files
-cp your-music.mp3 audio_files/
-
-# Verify complete build
-make verify-build
-```
-
-## 🏗️ **Architecture**
-
-Unified web interface architecture with Rust backend:
+## 🏗️ Architecture: The Sidecar Model
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Unified Web Interface                        │
+│                    Existing Media Apps (DSub, etc.)             │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                    (Subsonic Protocol Hook)
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    VERSIONS SETTLEMENT SIDECAR                  │
 │  ┌──────────────────────┐  ┌──────────────────────────────────┐ │
-│  │  Terminal-Style UI   │  │       Community Platform         │ │
-│  │  Professional Tools  │  │   Social Features & Discovery    │ │
+│  │   Protocol Adapter   │  │       Settlement Engine          │ │
+│  │   (Subsonic/gRPC)    │  │       (Arc L1 / USDC)            │ │
 │  └──────────────────────┘  └──────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
 ┌──────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   gRPC + REST    │    │  Audio Engine   │    │   Farcaster     │
-│     Server       │◄──►│   (Rust)        │    │ Social Layer    │
-│                  │    │                 │    │                 │
+│   Audius API     │    │   MusicBrainz   │    │   Farcaster     │
+│  (Track Source)  │    │   (Payee Reg)   │    │ (Social Layer)  │
 └──────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 

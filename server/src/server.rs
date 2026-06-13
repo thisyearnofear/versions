@@ -7,6 +7,7 @@ mod filecoin_service; // ENHANCEMENT: Add Filecoin integration service
 mod logger;
 mod music_player_service;
 mod onchain_service;
+mod providers; // MODULAR: Add multichain provider architecture
 use database_simple as database; // MODULAR: Add simplified database module
 mod ipc_service; // ENHANCEMENT: Add IPC service for remote control
 mod rest_api;
