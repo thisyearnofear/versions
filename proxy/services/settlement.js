@@ -156,6 +156,11 @@ function createSettlementService({ arc = null, platformWallet = null, musicbrain
     /**
      * Backwards-compat: full splitFee (insertLegsAtomic + settleLegsAsync).
      * NOT safe to call inside a DB transaction (it does network I/O).
+     *
+     * CLEAN: the musicbrainz leg is routed to the submission's
+     * artist_wallet directly — that IS the MusicBrainz-attributed
+     * artist wallet. The musicbrainzResolver hook is kept for future
+     * off-platform overrides (e.g. a label wallet for a sub-publisher).
      */
     async splitFee(submissionId) {
       const sub = db.prepare('SELECT * FROM submissions WHERE id = ?').get(submissionId);
@@ -178,7 +183,11 @@ function createSettlementService({ arc = null, platformWallet = null, musicbrain
         submissionId,
         feeQuoteUsdc: sub.fee_quote_usdc,
         curatorWallets,
-        musicbrainzWallet: mbWallet
+        // MODULAR: the musicbrainz leg goes to the artist who owns the
+        // submission. The resolver hook above can override this for
+        // sub-publisher cases. The platform wallet is the last-resort
+        // fallback if neither is set.
+        musicbrainzWallet: mbWallet || sub.artist_wallet
       });
       const settleResults = await this.settleLegsAsync(legs.map((l) => l.id));
       return { ok: true, legs: this.getLegsForSubmission(submissionId), settle_results: settleResults };

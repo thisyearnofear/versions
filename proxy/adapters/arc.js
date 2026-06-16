@@ -17,6 +17,7 @@ const MOCK_FINALITY_MS = 500;
 
 function createArcAdapter({ rpcUrl, usdcContract, platformWallet, requestTimeoutMs = DEFAULT_TIMEOUT }) {
   const useMock = !rpcUrl;
+  let cachedChainId = null;
 
   // PERFORMANT: cache the "is RPC reachable?" check so we don't ping on
   // every request. Reset to null on a real failure so we re-check next call.
@@ -43,6 +44,26 @@ function createArcAdapter({ rpcUrl, usdcContract, platformWallet, requestTimeout
     return reachable;
   }
 
+  async function fetchChainId() {
+    if (cachedChainId) return cachedChainId;
+    try {
+      const res = await requestJson(
+        rpcUrl,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }),
+          timeoutMs: requestTimeoutMs
+        },
+        'Arc eth_chainId'
+      );
+      cachedChainId = res && res.result ? res.result : null;
+    } catch (_) {
+      cachedChainId = null;
+    }
+    return cachedChainId;
+  }
+
   function deterministicHash(payload) {
     return '0x' + crypto
       .createHash('sha256')
@@ -54,8 +75,9 @@ function createArcAdapter({ rpcUrl, usdcContract, platformWallet, requestTimeout
     /** Returns chain + USDC contract + mock flag. */
     async getInfo() {
       const up = await isReachable();
+      const chainId = up ? (await fetchChainId()) : null;
       return {
-        chainId: up ? 'arc-testnet-1' : null,
+        chainId,
         rpcUrl: rpcUrl || null,
         usdcContract: usdcContract || null,
         platformWallet: platformWallet || null,

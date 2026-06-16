@@ -6,7 +6,9 @@
 'use strict';
 
 import { api, baseUrl } from './lib/api.js';
-import { connect, wallet, signAs, messages } from './lib/wallet.js';
+import {
+  connect, wallet, signAs, sendUsdcTransferViaEvm, hasEvmProvider, messages
+} from './lib/wallet.js';
 import { showToast } from './lib/toast.js';
 import { playFile } from './lib/audio-player.js';
 
@@ -82,6 +84,7 @@ document.getElementById('submitForm').addEventListener('submit', async (e) => {
   status.textContent = 'Signing submission…';
   const { signature } = await signAs(messages.SUBMIT_MESSAGE, currentAddress);
   status.textContent = 'Uploading…';
+  let submissionId;
   try {
     const r = await api.post('/api/v1/submissions', {
       artistWallet: currentAddress,
@@ -96,15 +99,50 @@ document.getElementById('submitForm').addEventListener('submit', async (e) => {
       },
       audio: { contentType: audioFile.type || 'audio/mpeg', base64, durationSeconds: null }
     });
-    status.textContent = `Submission created (id ${r.id.slice(0, 8)}…). Verifying payment…`;
-    // Hackathon: the web client also acts as the Arc payer for the demo.
-    // In production the artist pays via Phantom's sendTransaction; here we
-    // call the verify endpoint with a mock tx hash to flip the status to
-    // awaiting_curation (the real Arc flow lands when the testnet is live).
-    const fakeTx = '0x' + Array.from(await crypto.getRandomValues(new Uint8Array(32)))
-      .map((b) => b.toString(16).padStart(2, '0')).join('');
-    await api.post(`/api/v1/submissions/${r.id}/verify-payment`, { txHash: fakeTx });
-    status.textContent = `Submitted — id ${r.id.slice(0, 8)}…`;
+    submissionId = r.id;
+    status.textContent = `Submission ${submissionId.slice(0, 8)}… created. Verifying payment…`;
+
+    // CLEAN: real USDC flow when the proxy is configured for real Arc
+    // AND the browser exposes an EVM provider. Otherwise fall back to
+    // a deterministic mock so the demo never gets stuck on a missing
+    // wallet or unreachable RPC.
+    const arcInfo = await api.get('/api/v1/arc/info');
+    let txHash;
+    if (!arcInfo.mock && arcInfo.usdcContract && hasEvmProvider()) {
+      status.textContent = 'Confirm USDC transfer in your wallet…';
+      try {
+        const sent = await sendUsdcTransferViaEvm({
+          usdcContract: arcInfo.usdcContract,
+          recipient: r.payment_address,
+          amountUsdc: r.fee_quote_usdc
+        });
+        txHash = sent.txHash;
+        status.textContent = `Payment broadcast: ${txHash.slice(0, 10)}… waiting for finality…`;
+        // PERFORMANT: poll verify-payment a few times. Real Arc finality
+        // is sub-second; we retry briefly while the tx propagates.
+        for (let i = 0; i < 5; i++) {
+          try {
+            const verify = await api.post(`/api/v1/submissions/${submissionId}/verify-payment`, { txHash });
+            if (verify.status === 'awaiting_curation') break;
+          } catch (_) { /* keep retrying */ }
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      } catch (err) {
+        // ENHANCEMENT FIRST: real EVM path failed (user rejected, wrong
+        // network, etc.) — fall through to mock so the demo still flows.
+        showToast(`EVM payment failed (${err.message}); using demo mock.`, 'warning', 5000);
+      }
+    }
+    if (!txHash) {
+      // PERFORMANT: mock tx hash lets the demo run end-to-end with no keys.
+      txHash = '0x' + Array.from(crypto.getRandomValues(new Uint8Array(32)))
+        .map((b) => b.toString(16).padStart(2, '0')).join('');
+    }
+    const verify = await api.post(`/api/v1/submissions/${submissionId}/verify-payment`, { txHash });
+    if (verify.status !== 'awaiting_curation') {
+      throw new Error(`Payment verification failed (status=${verify.status})`);
+    }
+    status.textContent = `Submitted — id ${submissionId.slice(0, 8)}…`;
     showToast('Submission live in the queue.', 'success');
     form.reset();
   } catch (err) {
@@ -139,7 +177,7 @@ document.getElementById('refreshQueueBtn').addEventListener('click', refreshQueu
 function renderQueue() {
   const ul = document.getElementById('queueList');
   if (currentQueue.length === 0) {
-    ul.innerHTML = '<li class="muted">Queue is empty.</li>';
+    ul.innerHTML = '<li class="empty-state"><strong>Queue is empty.</strong>No submissions awaiting curation. The first artist to submit will appear here.</li>';
     return;
   }
   ul.innerHTML = '';
@@ -257,7 +295,7 @@ document.getElementById('feedFilter').addEventListener('submit', async (e) => {
 function renderFeed(rows) {
   const ul = document.getElementById('feedList');
   if (rows.length === 0) {
-    ul.innerHTML = '<li class="muted">No published versions yet.</li>';
+    ul.innerHTML = '<li class="empty-state"><strong>No published versions yet.</strong>Once 3 curators rate a submission it lands here. Run <code>npm run seed</code> to populate the feed for the demo.</li>';
     return;
   }
   ul.innerHTML = '';

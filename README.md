@@ -43,14 +43,19 @@ bash scripts/test_api.sh           # full E2E smoke (25 assertions)
 npm test                          # 54 node:test cases
 ```
 
-To use real Arc:
+To use real Arc testnet (verified live as of June 2026):
 
 ```bash
-export ARC_RPC_URL=https://rpc.arc.testnet.arcscan.xyz
-export ARC_USDC_CONTRACT=0xUSDC…
-export PLATFORM_WALLET=0xPlat…
+export ARC_RPC_URL=https://rpc.testnet.arc.network
+export ARC_USDC_CONTRACT=0xUSDC…              # ask the Arc team for the testnet USDC
+export PLATFORM_WALLET=0xPlat…               # your platform fee recipient
 node proxy-server.js
+#  → /api/v1/arc/info reports { chainId: "0x4cef52", mock: false }
 ```
+
+The mock-first policy is still the default: omit `ARC_RPC_URL` and the
+proxy generates deterministic tx hashes for every leg, so the entire
+demo flow runs end-to-end with zero keys.
 
 ## Repository layout
 

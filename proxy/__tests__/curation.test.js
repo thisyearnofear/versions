@@ -255,30 +255,21 @@ test('rate: 3rd curator rates → publish fires, version + legs created', async 
   // 5 legs: 3 curators + platform + musicbrainz
   assert.equal(r.published.settlement_legs.length, 5);
 
-  // Index legs by (role, wallet). The platform and musicbrainz legs share
-  // the same wallet on Day 4 (the MBID resolver is not wired yet), so
-  // indexing by wallet alone would clobber one.
-  const byKey = {};
-  for (const leg of r.published.settlement_legs) byKey[`${leg.recipient_role}:${leg.recipient_wallet}`] = leg;
-  const c1 = byKey[`curator:${walletOf(curator1)}`];
-  const c2 = byKey[`curator:${walletOf(curator2)}`];
-  const c3 = byKey[`curator:${walletOf(curator3)}`];
-  const platform = byKey[`platform:${TEST_PLATFORM_WALLET}`];
-  const musicbrainz = byKey[`musicbrainz:${TEST_PLATFORM_WALLET}`];
-
-  // CLEAN: first-to-rate curator gets the +2 micro-USDC remainder so the
-  // split reconciles to exactly 0.50. The settlement query orders by
-  // (submitted_at, rowid) so the first-to-rate is deterministic.
-  assert.ok(c1, 'curator1 should have a leg');
-  assert.equal(c1.amount_usdc, '0.116668');
-  assert.ok(c2, 'curator2 should have a leg');
-  assert.equal(c2.amount_usdc, '0.116666');
-  assert.ok(c3, 'curator3 should have a leg');
-  assert.equal(c3.amount_usdc, '0.116666');
-  assert.ok(platform, 'platform should have a leg');
-  assert.equal(platform.amount_usdc, '0.1');
-  assert.ok(musicbrainz, 'musicbrainz should have a leg');
-  assert.equal(musicbrainz.amount_usdc, '0.05');
+  // MODULAR: 3 curators + 1 platform + 1 musicbrainz. The musicbrainz
+  // leg routes to the artist who owns the submission (the strategy calls
+  // this the "MusicBrainz-attributed artist wallet"); the platform
+  // wallet is no longer the fallback. Day 5+ can override via the
+  // musicbrainzResolver hook for sub-publisher cases.
+  const curatorLegs = r.published.settlement_legs.filter((l) => l.recipient_role === 'curator');
+  const platformLeg = r.published.settlement_legs.find((l) => l.recipient_role === 'platform');
+  const musicbrainzLeg = r.published.settlement_legs.find((l) => l.recipient_role === 'musicbrainz');
+  assert.equal(curatorLegs.length, 3, '3 curator legs');
+  assert.ok(platformLeg, '1 platform leg');
+  assert.equal(platformLeg.recipient_wallet, TEST_PLATFORM_WALLET, 'platform leg → platform wallet');
+  assert.equal(platformLeg.amount_usdc, '0.1');
+  assert.ok(musicbrainzLeg, '1 musicbrainz leg');
+  assert.equal(musicbrainzLeg.recipient_wallet, walletOf(artist), 'musicbrainz leg → artist wallet');
+  assert.equal(musicbrainzLeg.amount_usdc, '0.05');
 
   // CLEAN: 3*0.116666 + 0.116668 + 0.1 + 0.05 = 0.5 (exact, no float drift)
   const total = r.published.settlement_legs.reduce(

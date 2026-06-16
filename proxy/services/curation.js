@@ -121,6 +121,12 @@ function createCurationService({ settlement }) {
     // MODULAR: legs are inserted as 'pending' inside the transaction so
     // publish + leg creation is atomic. The actual arc.sendTransfer calls
     // happen after commit (see submitRating → settleLegsAsync).
+    //
+    // CLEAN: the musicbrainz leg routes to the artist's own wallet —
+    // the submission already has artist_wallet, so there's no extra
+    // lookup. The Day 3 musicbrainzResolver hook remains available for
+    // sub-publisher overrides (e.g. a label wallet), but defaults to
+    // the artist's address.
     const sub_after = db.prepare('SELECT * FROM submissions WHERE id = ?').get(id);
     const distinctCurators = db.prepare(`
       SELECT curator_wallet FROM (
@@ -133,7 +139,7 @@ function createCurationService({ settlement }) {
       submissionId: id,
       feeQuoteUsdc: sub_after.fee_quote_usdc,
       curatorWallets: distinctCurators.map((r) => r.curator_wallet),
-      musicbrainzWallet: null  // Day 5 web client + musicbrainz resolver not wired yet
+      musicbrainzWallet: sub_after.artist_wallet
     });
 
     return { alreadyPublished: false, legIds: legs.map((l) => l.id) };
