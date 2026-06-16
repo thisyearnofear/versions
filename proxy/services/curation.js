@@ -87,13 +87,14 @@ function createCurationService({ settlement }) {
     WHERE id = ?
   `);
 
-  // CLEAN: the publish transaction wraps the SQL writes; settlement.splitFee
-  // is also a SQL-only stub in Day 4 so it can sit inside the transaction.
-  // In Day 5 the network calls will move outside the transaction.
+  // CLEAN: the publish transaction wraps the SQL writes; settlement's
+  // leg insertion runs inside the same transaction (it's pure SQL) so the
+  // publish + legs are atomic. The arc transfers run AFTER the commit
+  // via settlement.settleLegsAsync — never inside the DB transaction.
   const publishTx = db.transaction((id) => {
     const sub = db.prepare('SELECT * FROM submissions WHERE id = ?').get(id);
     if (!sub) throw new Error('Submission not found');
-    if (sub.status === 'published') return { alreadyPublished: true, submission: sub };
+    if (sub.status === 'published') return { alreadyPublished: true, legIds: [] };
 
     const ratings = db.prepare('SELECT * FROM ratings WHERE submission_id = ?').all(id);
     const agg = aggregateRatings(ratings);
@@ -117,12 +118,25 @@ function createCurationService({ settlement }) {
 
     markPublishedStmt.run(id);
 
-    const settlementResult = settlement.splitFee(id);
-    if (!settlementResult.ok) {
-      throw new Error('Settlement failed: ' + settlementResult.error);
-    }
+    // MODULAR: legs are inserted as 'pending' inside the transaction so
+    // publish + leg creation is atomic. The actual arc.sendTransfer calls
+    // happen after commit (see submitRating → settleLegsAsync).
+    const sub_after = db.prepare('SELECT * FROM submissions WHERE id = ?').get(id);
+    const distinctCurators = db.prepare(`
+      SELECT curator_wallet FROM (
+        SELECT curator_wallet, MIN(submitted_at) AS first_at, MIN(rowid) AS first_rowid
+        FROM ratings WHERE submission_id = ?
+        GROUP BY curator_wallet
+      ) ORDER BY first_at, first_rowid
+    `).all(id);
+    const legs = settlement.insertLegsAtomic({
+      submissionId: id,
+      feeQuoteUsdc: sub_after.fee_quote_usdc,
+      curatorWallets: distinctCurators.map((r) => r.curator_wallet),
+      musicbrainzWallet: null  // Day 5 web client + musicbrainz resolver not wired yet
+    });
 
-    return { alreadyPublished: false, submission: sub, settlement_legs: settlementResult.legs };
+    return { alreadyPublished: false, legIds: legs.map((l) => l.id) };
   });
 
   return {
@@ -164,7 +178,7 @@ function createCurationService({ settlement }) {
       return { ok: true, released: info.changes > 0 };
     },
 
-    submitRating({ submissionId, curatorWallet, signature, rating }) {
+    async submitRating({ submissionId, curatorWallet, signature, rating }) {
       const sigCheck = verifyWalletSignature({ message: RATE_MESSAGE, wallet: curatorWallet, signature });
       if (!sigCheck.ok) return { ok: false, error: sigCheck.error };
 
@@ -214,14 +228,21 @@ function createCurationService({ settlement }) {
       const refreshed = db.prepare('SELECT rating_count FROM submissions WHERE id = ?').get(submissionId);
       let published = null;
       if (refreshed.rating_count >= PUBLISH_THRESHOLD) {
-        const pubResult = publishTx(submissionId);
-        if (pubResult.alreadyPublished) {
+        // CLEAN: publish is one DB transaction (no network). Settlement
+        // runs after commit so a slow chain can't hold a write lock.
+        const publishResult = publishTx(submissionId);
+        if (publishResult.alreadyPublished) {
           published = { alreadyPublished: true };
         } else {
+          // Day 5: drive each pending leg to settled via arc.
+          const settleResults = await settlement.settleLegsAsync(
+            publishResult.legIds
+          );
           published = {
             alreadyPublished: false,
             version: db.prepare('SELECT * FROM published_versions WHERE submission_id = ?').get(submissionId),
-            settlement_legs: pubResult.settlement_legs
+            settlement_legs: settlement.getLegsForSubmission(submissionId),
+            settle_results: settleResults
           };
         }
       }

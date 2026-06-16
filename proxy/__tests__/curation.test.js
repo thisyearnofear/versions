@@ -166,7 +166,7 @@ test('claim: rejected for unknown submission', async () => {
 // ---------- rate flow ----------
 
 test('rate: rejected when there is no claim', async () => {
-  const r = curation.submitRating({
+  const r = await curation.submitRating({
     submissionId,
     curatorWallet: walletOf(curator2),
     signature: sign('VERSIONS_LEPTON_RATE', curator2.secretKey),
@@ -177,7 +177,7 @@ test('rate: rejected when there is no claim', async () => {
 });
 
 test('rate: invalid rating values are rejected', async () => {
-  const r = curation.submitRating({
+  const r = await curation.submitRating({
     submissionId,
     curatorWallet: walletOf(curator1),
     signature: sign('VERSIONS_LEPTON_RATE', curator1.secretKey),
@@ -188,7 +188,7 @@ test('rate: invalid rating values are rejected', async () => {
 });
 
 test('rate: valid rating is recorded, count increments, no publish yet', async () => {
-  const r = curation.submitRating({
+  const r = await curation.submitRating({
     submissionId,
     curatorWallet: walletOf(curator1),
     signature: sign('VERSIONS_LEPTON_RATE', curator1.secretKey),
@@ -200,7 +200,7 @@ test('rate: valid rating is recorded, count increments, no publish yet', async (
 });
 
 test('rate: same curator cannot rate twice', async () => {
-  const r = curation.submitRating({
+  const r = await curation.submitRating({
     submissionId,
     curatorWallet: walletOf(curator1),
     signature: sign('VERSIONS_LEPTON_RATE', curator1.secretKey),
@@ -220,7 +220,7 @@ test('rate: 2nd curator rates, still no publish', async () => {
   });
   assert.equal(claim2.ok, true);
 
-  const r = curation.submitRating({
+  const r = await curation.submitRating({
     submissionId,
     curatorWallet: walletOf(curator2),
     signature: sign('VERSIONS_LEPTON_RATE', curator2.secretKey),
@@ -239,7 +239,7 @@ test('rate: 3rd curator rates → publish fires, version + legs created', async 
   });
   assert.equal(claim3.ok, true);
 
-  const r = curation.submitRating({
+  const r = await curation.submitRating({
     submissionId,
     curatorWallet: walletOf(curator3),
     signature: sign('VERSIONS_LEPTON_RATE', curator3.secretKey),

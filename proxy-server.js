@@ -24,13 +24,14 @@ const { createMusicBrainzAdapter } = require('./proxy/adapters/musicbrainz');
 const { createSubmissionsService } = require('./proxy/services/submissions');
 const { createSettlementService } = require('./proxy/services/settlement');
 const { createCurationService } = require('./proxy/services/curation');
+const { createFeedService } = require('./proxy/services/feed');
 // AUDIUS adapter is reused (ENHANCEMENT FIRST) for musicbrainz wallet hints.
 const { createAudiusAdapter } = require('./proxy/adapters/audius');
 
 const PORT = Number(getEnv('PORT', '8080'));
 const HOST = getEnv('HOST', '0.0.0.0');
 const SERVICE = 'lepton-proxy';
-const VERSION = '0.4.0-day4';
+const VERSION = '0.5.0-day5';
 
 // MODULAR: single per-process instance. Reuse across requests.
 const ARC_RPC_URL = getEnv('ARC_RPC_URL', '');
@@ -70,6 +71,7 @@ submissions = createSubmissionsService({ arc, platformWallet: PLATFORM_WALLET ||
 // CLEAN: a single direction — services depend on adapters, not the other way.
 const settlement = createSettlementService({ arc, platformWallet: PLATFORM_WALLET || null });
 const curation = createCurationService({ settlement });
+const feed = createFeedService();
 
 // ---------- helpers ----------
 
@@ -337,7 +339,10 @@ async function handleSubmissionsRate(req, res, requestId, submissionId) {
   if (!body || !body.curatorWallet || !body.signature || !body.rating) {
     return errorResponse(res, requestId, 400, 'MISSING_FIELD', 'curatorWallet, signature, and rating are required');
   }
-  const r = curation.submitRating({
+  // MODULAR: submitRating is async (it drives settlement via arc after
+  // publish). The route awaits the full path so settle_results land in
+  // the response.
+  const r = await curation.submitRating({
     submissionId,
     curatorWallet: body.curatorWallet,
     signature: body.signature,
@@ -367,6 +372,41 @@ async function handleArtistProfile(req, res, requestId, wallet) {
   return jsonResponse(res, 200, { success: true, data: profile }, requestId);
 }
 
+// ---------- Day 5: feed + version detail ----------
+
+function parseQuery(url) {
+  // MODULAR: small inline parser. Returns {} when no query string.
+  const q = (url || '').split('?')[1];
+  if (!q) return {};
+  const out = {};
+  for (const part of q.split('&')) {
+    const [k, v] = part.split('=');
+    if (k) out[decodeURIComponent(k)] = v == null ? '' : decodeURIComponent(v);
+  }
+  return out;
+}
+
+async function handleFeed(req, res, requestId) {
+  const q = parseQuery(req.url);
+  const result = feed.listPublished({
+    limit: q.limit,
+    offset: q.offset,
+    mood: q.mood,
+    energy: q.energy,
+    tempo: q.tempo,
+    minSolo: q.minSolo != null ? Number(q.minSolo) : undefined,
+    maxSolo: q.maxSolo != null ? Number(q.maxSolo) : undefined,
+    artistWallet: q.artist
+  });
+  return jsonResponse(res, 200, { success: true, data: result }, requestId);
+}
+
+async function handleVersionGet(req, res, requestId, submissionId) {
+  const result = feed.getVersion(submissionId);
+  if (!result) return errorResponse(res, requestId, 404, 'NOT_FOUND', 'Version not found');
+  return jsonResponse(res, 200, { success: true, data: result }, requestId);
+}
+
 // ---------- router ----------
 
 const ROUTES = [
@@ -391,7 +431,12 @@ const ROUTES = [
   { method: 'GET',    match: (p) => /^\/api\/v1\/curators\/[^/]+$/.test(p),
             handler: (req, res, rid, p) => handleCuratorProfile(req, res, rid, p.split('/')[4]) },
   { method: 'GET',    match: (p) => /^\/api\/v1\/artists\/[^/]+$/.test(p),
-            handler: (req, res, rid, p) => handleArtistProfile(req, res, rid, p.split('/')[4]) }
+            handler: (req, res, rid, p) => handleArtistProfile(req, res, rid, p.split('/')[4]) },
+  // Day 5: feed + version detail. The /api/v1/versions/:id route must
+  // not collide with /api/v1/submissions/:id, so we keep them apart.
+  { method: 'GET',    match: (p) => p === '/api/v1/feed',                              handler: handleFeed },
+  { method: 'GET',    match: (p) => /^\/api\/v1\/versions\/[^/]+$/.test(p),
+            handler: (req, res, rid, p) => handleVersionGet(req, res, rid, p.split('/')[4]) }
 ];
 
 const server = http.createServer(async (req, res) => {

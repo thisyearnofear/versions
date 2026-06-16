@@ -2,38 +2,137 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>VERSIONS — Lepton Submission Marketplace</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    :root { color-scheme: dark; }
-    body {
-      margin: 0; min-height: 100vh;
-      display: grid; place-items: center;
-      background: #0e1116; color: #e6edf3;
-      font: 16px/1.5 -apple-system, system-ui, "Segoe UI", sans-serif;
-    }
-    main { max-width: 640px; padding: 32px; text-align: center; }
-    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0.02em; }
-    .tag { margin: 0 0 24px; color: #8b949e; }
-    a { color: #58a6ff; }
-    code { background: #161b22; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
-    footer { margin-top: 32px; color: #6e7681; font-size: 13px; }
-  </style>
+  <title>VERSIONS — Lepton Submission Marketplace</title>
+  <link rel="stylesheet" href="/styles/main.css">
 </head>
 <body>
-  <main>
-    <h1>Lepton Submission Marketplace</h1>
-    <p class="tag">⚛️ Build in progress — Day 1 placeholder.</p>
-    <p>
-      The submission, curation, and settlement UI is being built per
-      <a href="../docs/LEPTON_IMPLEMENTATION_PLAN.md">docs/LEPTON_IMPLEMENTATION_PLAN.md</a>.
-    </p>
-    <p>
-      Run <code>node proxy-server.js</code> on <code>:8080</code> and
-      <code>python3 -m http.server 3000</code> in <code>web/</code> for the
-      placeholders.
-    </p>
-    <footer>Day 1 — placeholder. Routes land Day 3.</footer>
+  <header class="app-header">
+    <div class="brand">
+      <div class="logo">VERSIONS</div>
+      <div class="tagline">⚛️ Lepton Submission Marketplace</div>
+    </div>
+    <div class="wallet-area">
+      <button class="btn btn-ghost" id="walletBtn">Connect wallet</button>
+      <span class="wallet-address" id="walletAddress"></span>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="artist" role="tab">Submit</button>
+    <button class="tab" data-tab="curator" role="tab">Curate</button>
+    <button class="tab" data-tab="feed" role="tab">Feed</button>
+  </nav>
+
+  <main class="app-main">
+    <!-- ARTIST: submit a version -->
+    <section class="view" id="view-artist" data-view="artist">
+      <h2>Submit a version</h2>
+      <p class="muted">Upload an audio file and metadata. Pay a 0.50 USDC submission fee on Arc L1; the fee pool is split 70/20/10 between curators, the platform, and MusicBrainz attribution.</p>
+      <form id="submitForm" class="card">
+        <div class="grid">
+          <label>Title<input name="title" required maxlength="200" placeholder="Acoustic Demo"></label>
+          <label>Artist name<input name="artistName" required maxlength="100" placeholder="Your name"></label>
+          <label>Version type
+            <select name="versionType" required>
+              <option value="demo">Demo</option>
+              <option value="live">Live</option>
+              <option value="acoustic">Acoustic</option>
+              <option value="remix">Remix</option>
+              <option value="remaster">Remaster</option>
+              <option value="studio">Studio</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>Genre<input name="genre" maxlength="50" placeholder="Folk"></label>
+          <label>Mood (artist-declared)<input name="mood" maxlength="100" placeholder="Intimate"></label>
+          <label class="span-2">Description<textarea name="description" maxlength="1000" rows="2" placeholder="Recorded in a bedroom, 3am."></textarea></label>
+          <label class="span-2">Audio file (mp3, wav, ogg, flac, m4a)
+            <input name="audio" type="file" accept="audio/*" required>
+          </label>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn btn-primary" id="submitBtn">Submit (0.50 USDC)</button>
+          <span class="muted" id="submitStatus"></span>
+        </div>
+      </form>
+    </section>
+
+    <!-- CURATOR: claim + rate + publish flow -->
+    <section class="view hidden" id="view-curator" data-view="curator">
+      <h2>Curate submissions</h2>
+      <p class="muted">Claim a submission, listen, and rate on the five structured dimensions. After three ratings the version is published and the fee pool settles.</p>
+      <div class="curator-grid">
+        <div class="card">
+          <h3>Queue</h3>
+          <button class="btn btn-ghost" id="refreshQueueBtn">Refresh</button>
+          <ul class="queue-list" id="queueList"></ul>
+        </div>
+        <div class="card" id="rateCard">
+          <h3>Rate</h3>
+          <p class="muted" id="rateHint">Select a submission from the queue to begin.</p>
+          <form id="rateForm" class="hidden">
+            <div class="grid">
+              <label class="span-2"><b id="rateTitle"></b><br><span class="muted" id="rateMeta"></span></label>
+              <label>Solo intensity (1-10)<input type="range" name="solo_intensity" min="1" max="10" value="5"></label>
+              <label>Vocal quality (1-10)<input type="range" name="vocal_quality" min="1" max="10" value="5"></label>
+              <label>Energy vs studio
+                <select name="energy_vs_studio">
+                  <option value="same">Same</option>
+                  <option value="lower">Lower</option>
+                  <option value="higher">Higher</option>
+                </select>
+              </label>
+              <label>Tempo feel
+                <select name="tempo_feel">
+                  <option value="locked">Locked</option>
+                  <option value="dragging">Dragging</option>
+                  <option value="rushing">Rushing</option>
+                </select>
+              </label>
+              <label class="span-2">Mood tags (comma-separated)<input name="mood_tags" placeholder="Bluesy, Raw, Euphoric"></label>
+              <label class="span-2">Notes (optional)<textarea name="notes" rows="2" maxlength="1000"></textarea></label>
+            </div>
+            <div class="actions">
+              <button type="submit" class="btn btn-primary" id="rateBtn">Submit rating</button>
+              <button type="button" class="btn btn-ghost" id="releaseClaimBtn">Release claim</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEED: published versions -->
+    <section class="view hidden" id="view-feed" data-view="feed">
+      <h2>Published feed</h2>
+      <p class="muted">Versions that have cleared the publish gate (≥3 ratings). Filter the taste graph to find your kind of take.</p>
+      <form id="feedFilter" class="card filter-bar">
+        <label>Mood<input name="mood" placeholder="Bluesy"></label>
+        <label>Energy
+          <select name="energy">
+            <option value="">Any</option>
+            <option value="lower">Lower</option>
+            <option value="same">Same</option>
+            <option value="higher">Higher</option>
+          </select>
+        </label>
+        <label>Tempo
+          <select name="tempo">
+            <option value="">Any</option>
+            <option value="dragging">Dragging</option>
+            <option value="locked">Locked</option>
+            <option value="rushing">Rushing</option>
+          </select>
+        </label>
+        <label>Min solo<input type="number" name="minSolo" min="1" max="10"></label>
+        <button type="submit" class="btn btn-ghost">Filter</button>
+      </form>
+      <ul class="feed-list" id="feedList"></ul>
+    </section>
   </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
