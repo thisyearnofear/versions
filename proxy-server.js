@@ -147,6 +147,27 @@ function readJsonBody(req, maxBytes) {
   });
 }
 
+function readRawBody(req, maxBytes) {
+  // MODULAR: read the body as a Buffer (no JSON parse). Used by
+  // the multipart upload route. The body-size limit applies
+  // before the parser runs.
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    req.on('data', (chunk) => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        req.destroy();
+        reject(Object.assign(new Error('Body too large'), { status: 413, code: 'BODY_TOO_LARGE' }));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', (err) => reject(Object.assign(err, { status: 400, code: 'BODY_READ_ERROR' })));
+  });
+}
+
 function requestContext(req) {
   const incoming = req.headers['x-request-id'];
   return (typeof incoming === 'string' && incoming.trim()) ? incoming.trim() : crypto.randomUUID();
@@ -198,40 +219,83 @@ async function handleArcInfo(req, res, requestId) {
 }
 
 async function handleSubmissionsCreate(req, res, requestId) {
-  let body;
-  try {
-    body = await readJsonBody(req, SUBMISSION_BODY_LIMIT);
-  } catch (err) {
-    return errorResponse(res, requestId, err.status || 400, err.code || 'BAD_REQUEST', err.message);
+  // MODULAR: support two request shapes. The legacy JSON shape is
+  // (audio as { base64, contentType }). The new multipart shape is
+  // (audio as a file part, metadata as a JSON string part). Both
+  // land in the same service call; the smoke test exercises both
+  // paths during the migration window.
+  const contentType = req.headers['content-type'] || '';
+  let metadata = null;
+  let signature = null;
+  let artistWallet = null;
+  let audioBuffer = null;
+  let audioContentType = 'audio/mpeg';
+  let audiusTrackId = null;
+
+  if (contentType.startsWith('multipart/form-data')) {
+    let raw;
+    try {
+      raw = await readRawBody(req, SUBMISSION_BODY_LIMIT);
+    } catch (err) {
+      return errorResponse(res, requestId, err.status || 400, err.code || 'BAD_REQUEST', err.message);
+    }
+    try {
+      const { parseMultipart } = require('./proxy/runtime/multipart');
+      parseMultipart({
+        contentType,
+        body: raw,
+        onField(name, value) {
+          if (name === 'signature') signature = value;
+          else if (name === 'artistWallet') artistWallet = value;
+          else if (name === 'audiusTrackId') audiusTrackId = value || null;
+          else if (name === 'metadata') {
+            try { metadata = JSON.parse(value); }
+            catch (err) { throw new Error('metadata is not valid JSON: ' + err.message); }
+          }
+        },
+        onFile(name, filename, ct, data) {
+          if (name !== 'audio') return;
+          audioBuffer = data;
+          audioContentType = ct;
+        }
+      });
+    } catch (err) {
+      return errorResponse(res, requestId, 400, 'INVALID_MULTIPART', err.message);
+    }
+  } else {
+    let body;
+    try {
+      body = await readJsonBody(req, SUBMISSION_BODY_LIMIT);
+    } catch (err) {
+      return errorResponse(res, requestId, err.status || 400, err.code || 'BAD_REQUEST', err.message);
+    }
+    metadata = body && body.metadata;
+    signature = body && body.signature;
+    artistWallet = body && body.artistWallet;
+    audiusTrackId = body && body.metadata && body.metadata.audiusTrackId;
+    if (body && body.audio && body.audio.base64) {
+      try { audioBuffer = Buffer.from(body.audio.base64, 'base64'); }
+      catch (err) { return errorResponse(res, requestId, 400, 'INVALID_AUDIO', 'audio.base64 could not be decoded'); }
+      audioContentType = body.audio.contentType || 'audio/mpeg';
+    }
   }
 
-  const metadata = body && body.metadata;
   const validation = validateSubmissionMetadata(metadata);
   if (!validation.ok) {
     return errorResponse(res, requestId, 400, 'INVALID_METADATA', 'metadata validation failed', validation.errors);
   }
-  if (!body.artistWallet) {
+  if (!artistWallet) {
     return errorResponse(res, requestId, 400, 'MISSING_FIELD', 'artistWallet is required');
   }
-  if (!body.signature) {
+  if (!signature) {
     return errorResponse(res, requestId, 400, 'MISSING_FIELD', 'signature is required');
   }
-  if (!body.audio || typeof body.audio !== 'object' || !body.audio.base64) {
-    return errorResponse(res, requestId, 400, 'MISSING_FIELD', 'audio.base64 is required');
+  if (!audioBuffer || audioBuffer.length === 0) {
+    return errorResponse(res, requestId, 400, 'MISSING_FIELD', 'audio file is required');
   }
 
-  // MODULAR: decode + write the audio file. Routes handle I/O; service handles DB.
-  let audioBuffer;
-  try {
-    audioBuffer = Buffer.from(body.audio.base64, 'base64');
-  } catch (err) {
-    return errorResponse(res, requestId, 400, 'INVALID_AUDIO', 'audio.base64 could not be decoded');
-  }
-  if (audioBuffer.length === 0) {
-    return errorResponse(res, requestId, 400, 'INVALID_AUDIO', 'audio is empty');
-  }
-
-  const ext = (body.audio.contentType || 'audio/mpeg')
+  // MODULAR: pick a sane extension from the audio's MIME type.
+  const ext = (audioContentType || 'audio/mpeg')
     .replace(/^audio\//, '')
     .replace(/[^a-z0-9]/gi, '') || 'mp3';
   const filename = `${crypto.randomUUID()}.${ext}`;
@@ -244,12 +308,12 @@ async function handleSubmissionsCreate(req, res, requestId) {
 
   const result = submissions.createSubmission({
     audioPath,
-    contentType: body.audio.contentType || 'audio/mpeg',
+    contentType: audioContentType,
     sizeBytes: audioBuffer.length,
-    durationSeconds: body.audio.durationSeconds || null,
-    metadata: { ...metadata, audiusTrackId: body.audio.audiusTrackId },
-    artistWallet: body.artistWallet,
-    signature: body.signature
+    durationSeconds: null,
+    metadata: { ...metadata, audiusTrackId },
+    artistWallet,
+    signature
   });
 
   if (!result.ok) {
