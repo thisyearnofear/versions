@@ -67,7 +67,43 @@ h4 { font-size: 18px; line-height: 1.25; font-weight: 500; }
 a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--rust); text-underline-offset: 3px; }
 a:hover { color: var(--rust); }
 
-/* ---------- shell ---------- */
+/* MODULAR: payment retry state machine UI (Step 2). The retry
+   block sits below the submit button; the state machine in
+   app.js populates it with the right copy + actions. */
+.submit-retry {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--rust);
+  background: var(--paper-2);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.submit-retry .retry-info {
+  display: flex; flex-direction: column; gap: 4px;
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--ink);
+}
+.submit-retry .retry-info strong {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--rust);
+}
+.submit-retry .retry-info code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--paper);
+  padding: 1px 6px;
+  border: 1px solid var(--hair-strong);
+}
+.submit-retry .retry-info span { color: var(--ink-2); }
+.submit-retry .retry-actions {
+  display: flex; gap: 12px; align-items: center;
+}
+.submit-retry .retry-actions .btn { font-size: 11px; }
+
+/* ---------- mobile pass ---------- */
 
 .app-header {
   display: flex; align-items: flex-end; justify-content: space-between;
