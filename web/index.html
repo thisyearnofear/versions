@@ -88,29 +88,26 @@
           <h3>Scorecard</h3>
           <p class="muted" id="rateHint">Select a submission from the queue to begin.</p>
           <form id="rateForm" class="hidden">
+            <header class="rate-header">
+              <h4 id="rateTitle"></h4>
+              <div class="feed-meta" id="rateMeta"></div>
+            </header>
+            <div class="rate-radar-wrap">
+              <div class="rate-radar" id="interactiveRadar" aria-label="Taste graph (drag the four points to rate)"></div>
+              <div class="rate-readout" id="rateReadout">
+                <div class="rate-readout-row"><span class="rate-readout-label">SOLO</span><span class="rate-readout-value" data-out="solo">5</span></div>
+                <div class="rate-readout-row"><span class="rate-readout-label">VOCAL</span><span class="rate-readout-value" data-out="vocal">5</span></div>
+                <div class="rate-readout-row"><span class="rate-readout-label">ENERGY</span><span class="rate-readout-value" data-out="energy">SAME</span></div>
+                <div class="rate-readout-row"><span class="rate-readout-label">TEMPO</span><span class="rate-readout-value" data-out="tempo">LOCKED</span></div>
+              </div>
+              <button type="button" class="rate-reset" id="rateReset">Reset to 5 / Same / Locked</button>
+            </div>
             <div class="grid">
-              <label class="span-2"><b id="rateTitle"></b><br><span class="muted" id="rateMeta"></span></label>
-              <label>Solo intensity (1-10)<input type="range" name="solo_intensity" min="1" max="10" value="5"></label>
-              <label>Vocal quality (1-10)<input type="range" name="vocal_quality" min="1" max="10" value="5"></label>
-              <label>Energy vs studio
-                <select name="energy_vs_studio">
-                  <option value="same">Same</option>
-                  <option value="lower">Lower</option>
-                  <option value="higher">Higher</option>
-                </select>
-              </label>
-              <label>Tempo feel
-                <select name="tempo_feel">
-                  <option value="locked">Locked</option>
-                  <option value="dragging">Dragging</option>
-                  <option value="rushing">Rushing</option>
-                </select>
-              </label>
               <label class="span-2">Mood tags (comma-separated)
                 <input name="mood_tags" placeholder="Bluesy, Raw, Euphoric">
               </label>
               <label class="span-2">Notes (optional)
-                <textarea name="notes" rows="2" maxlength="1000"></textarea>
+                <textarea name="notes" rows="3" maxlength="1000" placeholder="What you heard, what struck you."></textarea>
               </label>
             </div>
             <div class="actions">

@@ -124,6 +124,7 @@ a:hover { color: var(--rust); }
   margin: 0 auto;
 }
 .view.hidden { display: none; }
+.hidden { display: none; }
 
 .view h2 { margin-bottom: 4px; }
 .view > p.muted { margin-top: 0; margin-bottom: 24px; max-width: 60ch; }
@@ -288,6 +289,85 @@ textarea { resize: vertical; min-height: 64px; }
   margin: 24px 0;
 }
 
+/* ---------- rate form (the curator's scorecard) ---------- */
+
+.rate-header { margin-bottom: 24px; }
+.rate-header h4 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0 0 4px;
+}
+.rate-header .feed-meta { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.18em; color: var(--ink-2); }
+
+/* MODULAR: the radar is on the left, the readouts on the right. The
+   wrap is one unit, separated from the rest of the form by a hairline
+   above. On mobile it stacks. */
+.rate-radar-wrap {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 32px;
+  align-items: center;
+  padding: 28px 0;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  margin: 0 0 24px;
+}
+.rate-radar {
+  /* CLEAN: the SVG inside scales to its own viewBox, so the wrap just
+     needs a width and a centred alignment. */
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+}
+.rate-radar svg { width: 100%; height: auto; display: block; }
+
+.rate-readout {
+  display: flex; flex-direction: column;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  border-left: 1px solid var(--hair-strong);
+  padding-left: 24px;
+}
+.rate-readout-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.rate-readout-row:last-child { border-bottom: none; }
+.rate-readout-label { color: var(--ink-2); font-weight: 600; }
+.rate-readout-value {
+  font-feature-settings: 'tnum' 1;
+  color: var(--ink);
+  font-weight: 500;
+  min-width: 96px;
+  text-align: right;
+}
+
+.rate-reset {
+  grid-column: 1 / -1;
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  background: none;
+  border: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  padding: 8px 0;
+  text-align: left;
+  border-top: 1px solid var(--hair);
+  margin-top: 8px;
+}
+.rate-reset:hover { color: var(--rust); }
+
 /* ---------- audio (custom; browser default is too generic) ---------- */
 
 .audio-player { display: flex; align-items: center; gap: 14px; padding: 8px 0; }
@@ -368,32 +448,117 @@ textarea { resize: vertical; min-height: 64px; }
 }
 .empty-state .hint { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; margin-top: 12px; color: var(--ink-3); }
 
-/* ---------- page-load: one orchestrated reveal (Drop 3) ---------- */
+/* ---------- page-load: one orchestrated reveal (Drop 1) + header bleed-in (Drop 3) ---------- */
 
+.view .eyebrow,
+.view h2,
+.view > p.muted,
+.view .filter-bar,
+.view .curator-grid,
 .feed-list .feed-item,
 .queue-list .queue-item {
   opacity: 0;
   transform: translateY(8px);
-  animation: revealRow 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  animation: revealRow 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
 }
-.feed-list .feed-item:nth-child(1), .queue-list .queue-item:nth-child(1) { animation-delay: 0.04s; }
-.feed-list .feed-item:nth-child(2), .queue-list .queue-item:nth-child(2) { animation-delay: 0.10s; }
-.feed-list .feed-item:nth-child(3), .queue-list .queue-item:nth-child(3) { animation-delay: 0.16s; }
-.feed-list .feed-item:nth-child(4), .queue-list .queue-item:nth-child(4) { animation-delay: 0.22s; }
-.feed-list .feed-item:nth-child(5), .queue-list .queue-item:nth-child(5) { animation-delay: 0.28s; }
-.feed-list .feed-item:nth-child(n+6), .queue-list .queue-item:nth-child(n+6) { animation-delay: 0.32s; }
+
+.view .eyebrow          { animation-delay: 0.04s; }
+.view h2                { animation-delay: 0.10s; }
+.view > p.muted         { animation-delay: 0.16s; }
+.view .filter-bar       { animation-delay: 0.22s; }
+.view .curator-grid     { animation-delay: 0.22s; }
+.feed-list .feed-item:nth-child(1), .queue-list .queue-item:nth-child(1) { animation-delay: 0.30s; }
+.feed-list .feed-item:nth-child(2), .queue-list .queue-item:nth-child(2) { animation-delay: 0.36s; }
+.feed-list .feed-item:nth-child(3), .queue-list .queue-item:nth-child(3) { animation-delay: 0.42s; }
+.feed-list .feed-item:nth-child(4), .queue-list .queue-item:nth-child(4) { animation-delay: 0.48s; }
+.feed-list .feed-item:nth-child(5), .queue-list .queue-item:nth-child(5) { animation-delay: 0.54s; }
+.feed-list .feed-item:nth-child(n+6), .queue-list .queue-item:nth-child(n+6) { animation-delay: 0.58s; }
 @keyframes revealRow { to { opacity: 1; transform: translateY(0); } }
 
-/* ---------- mobile pass ---------- */
+/* MODULAR: one orchestrated view-bleed on every tab change. The
+   view itself fades in (180ms), then the h2 + paragraph + form
+   stagger in at 80ms apart. CSS-only. */
+.view {
+  animation: viewBleed 0.24s ease-out;
+}
+.view .eyebrow { animation: viewBleedItem 0.32s 0.05s ease-out both; }
+.view h2      { animation: viewBleedItem 0.32s 0.10s ease-out both; }
+.view > p.muted { animation: viewBleedItem 0.32s 0.15s ease-out both; }
+.view .filter-bar,
+.view .grid,
+.view .curator-grid,
+.view .empty-state { animation: viewBleedItem 0.32s 0.20s ease-out both; }
+@keyframes viewBleed {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes viewBleedItem {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- rate form: the radar is the hero ---------- */
+
+.rate-header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--ink); }
+.rate-header h4 { font-size: 24px; font-weight: 500; margin-bottom: 4px; }
+
+.rate-radar {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  margin: 8px 0 24px;
+  padding: 24px 0;
+  border-top: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+}
+.rate-radar svg.radar-svg { display: block; max-width: 100%; height: auto; }
+.rate-radar .radar-hint {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--ink-3);
+  margin: 0;
+}
+.rate-radar .radar-handle:hover { cursor: grab; }
+.rate-radar .radar-handle circle:nth-child(2) {
+  transition: r 0.1s ease, stroke-width 0.1s ease;
+}
+.rate-radar .radar-handle:hover circle:nth-child(2) { r: 9; }
+.rate-radar .radar-handle[data-dragging="true"] circle:nth-child(2) { r: 10; }
+
+.radar-readout {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 320px;
+  margin-top: 4px;
+}
+.radar-readout span {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.06em;
+}
+.radar-readout span b {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--ink-3);
+  letter-spacing: 0.2em;
+}
+
+/* CLEAN: mobile pass. The 2-col grid cramps below 720px. */
 @media (max-width: 720px) {
   html, body { font-size: 16px; }
   h1 { font-size: 36px; } h2 { font-size: 28px; } h4 { font-size: 22px; }
   .app-header, .tabs, .app-main { padding-left: 20px; padding-right: 20px; }
-  .grid, .filter-bar, .curator-grid { grid-template-columns: 1fr; }
+  .grid, .filter-bar, .curator-grid, .rate-radar-wrap { grid-template-columns: 1fr; }
   .feed-item { grid-template-columns: 1fr; }
   .feed-graph { display: none; }
   .curator-grid > .card + .card { border-left: none; border-top: 1px solid var(--ink); padding-left: 0; padding-top: 24px; }
   .curator-grid > .card { padding-right: 0; }
+  .rate-readout { border-left: none; padding-left: 0; }
   .app-header { flex-wrap: wrap; }
   .tabs { overflow-x: auto; }
 }

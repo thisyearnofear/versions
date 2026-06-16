@@ -158,10 +158,10 @@ let currentQueue = [];
 let selectedSubmission = null;
 
 async function refreshQueue() {
-  if (!currentAddress) {
-    document.getElementById('queueList').innerHTML = '<li class="muted">Connect your wallet to curate.</li>';
-    return;
-  }
+  // MODULAR: the queue is readable without a wallet — it's just a
+  // public list. The wallet check happens on claim/rate, not on read.
+  // ENHANCEMENT FIRST: showing the queue to anyone makes the demo land
+  // (curators see what's in the inbox before connecting).
   try {
     const r = await api.get('/api/v1/submissions/queue?limit=50');
     currentQueue = r || [];
@@ -183,6 +183,7 @@ function renderQueue() {
   for (const sub of currentQueue) {
     const li = document.createElement('li');
     li.className = 'queue-item' + (selectedSubmission && selectedSubmission.id === sub.id ? ' selected' : '');
+    li.dataset.id = sub.id;
     li.innerHTML = `
       <div style="font-family: var(--serif); font-size: 17px; font-weight: 500;">${escapeHtml(sub.title)}</div>
       <div class="feed-meta">${escapeHtml(sub.artist_name)} · ${escapeHtml(sub.version_type)}</div>
@@ -190,6 +191,54 @@ function renderQueue() {
     li.addEventListener('click', () => selectSubmission(sub));
     ul.appendChild(li);
   }
+}
+
+// MODULAR: snap the continuous radar values to the discrete energy /
+// tempo strings the server validates. The bands are centred on 2/5/8
+// with a ±1.7 half-width so the snap matches what the user sees
+// on the radar (the L/S/H + D/L/R dots).
+const ENERGY_SNAP = [
+  { max: 3.4, value: 'lower'  },
+  { max: 6.7, value: 'same'   },
+  { max: 11,  value: 'higher' }
+];
+const TEMPO_SNAP = [
+  { max: 3.4, value: 'dragging' },
+  { max: 6.7, value: 'locked'   },
+  { max: 11,  value: 'rushing'  }
+];
+const ENERGY_VALUE_TO_LABEL = { lower: 'LOWER', same: 'SAME', higher: 'HIGHER' };
+const TEMPO_VALUE_TO_LABEL  = { dragging: 'DRAGGING', locked: 'LOCKED', rushing: 'RUSHING' };
+
+function snapEnergy(v) { return ENERGY_SNAP.find((s) => v < s.max).value; }
+function snapTempo(v)  { return TEMPO_SNAP.find((s)  => v < s.max).value; }
+
+// MODULAR: one radar instance, mounted on submission select, queried
+// on rating submit. The radar is the source of truth for the four
+// quantitative dimensions; the form inputs only carry the free-text
+// bits (mood tags, notes).
+let rateRadar = null;
+
+function setReadout(values) {
+  const v = values || (rateRadar && rateRadar.getValues()) || { solo: 5, vocal: 5, energy: 5, tempo: 5 };
+  for (const el of document.querySelectorAll('[data-out]')) {
+    const key = el.getAttribute('data-out');
+    if (key === 'solo' || key === 'vocal') el.textContent = Math.round(v[key]).toString();
+    else if (key === 'energy') el.textContent = ENERGY_VALUE_TO_LABEL[snapEnergy(v.energy)];
+    else if (key === 'tempo')  el.textContent = TEMPO_VALUE_TO_LABEL[snapTempo(v.tempo)];
+  }
+}
+
+function mountRateRadar(initial) {
+  // MODULAR: tear down any prior radar before mounting a new one.
+  // The radar is owned by the closure; this single instance lives for
+  // the duration of the rating session.
+  const target = document.getElementById('interactiveRadar');
+  if (!target || !window.renderInteractiveRadar) return null;
+  target.innerHTML = '';
+  rateRadar = window.renderInteractiveRadar(target, initial || { solo: 5, vocal: 5, energy: 5, tempo: 5 }, setReadout);
+  setReadout();
+  return rateRadar;
 }
 
 function selectSubmission(sub) {
@@ -200,14 +249,20 @@ function selectSubmission(sub) {
   form.classList.remove('hidden');
   document.getElementById('rateTitle').textContent = sub.title;
   document.getElementById('rateMeta').textContent = `${sub.artist_name} · ${sub.version_type} · ${sub.genre || ''}`;
+  // CLEAN: clear the form's free-text inputs (mood + notes) between
+  // submissions; the radar resets to 5/5/5/5.
+  form.querySelector('input[name="mood_tags"]').value = '';
+  form.querySelector('textarea[name="notes"]').value = '';
+  mountRateRadar({ solo: 5, vocal: 5, energy: 5, tempo: 5 });
 }
+
+document.getElementById('rateReset').addEventListener('click', () => {
+  mountRateRadar({ solo: 5, vocal: 5, energy: 5, tempo: 5 });
+  showToast('Radar reset.', 'info', 1500);
+});
 
 document.getElementById('releaseClaimBtn').addEventListener('click', async () => {
   if (!selectedSubmission) return;
-  try {
-    await api.post(`/api/v1/submissions/${selectedSubmission.id}/claim`, { curatorWallet: currentAddress, _method: 'DELETE' });
-  } catch (_) { /* best-effort */ }
-  // Use the actual DELETE route via fetch.
   try {
     await fetch(`${baseUrl}/api/v1/submissions/${selectedSubmission.id}/claim`, {
       method: 'DELETE',
@@ -217,6 +272,7 @@ document.getElementById('releaseClaimBtn').addEventListener('click', async () =>
   } catch (_) { /* best-effort */ }
   showToast('Claim released.', 'info');
   selectedSubmission = null;
+  rateRadar = null;
   document.getElementById('rateForm').classList.add('hidden');
   document.getElementById('rateHint').classList.remove('hidden');
   await refreshQueue();
@@ -228,11 +284,15 @@ document.getElementById('rateForm').addEventListener('submit', async (e) => {
   const form = e.currentTarget;
   const fd = new FormData(form);
   const mood = (fd.get('mood_tags') || '').split(',').map((s) => s.trim()).filter(Boolean);
+  // CLEAN: the radar owns the 4 quantitative dimensions. mood_tags +
+  // notes come from the form. Energy/tempo snap from continuous to
+  // discrete at submit time.
+  const r = rateRadar ? rateRadar.getValues() : { solo: 5, vocal: 5, energy: 5, tempo: 5 };
   const rating = {
-    solo_intensity: Number(fd.get('solo_intensity')),
-    vocal_quality: Number(fd.get('vocal_quality')),
-    energy_vs_studio: fd.get('energy_vs_studio'),
-    tempo_feel: fd.get('tempo_feel'),
+    solo_intensity: Math.round(r.solo),
+    vocal_quality:  Math.round(r.vocal),
+    energy_vs_studio: snapEnergy(r.energy),
+    tempo_feel:     snapTempo(r.tempo),
     mood_tags: mood,
     notes: fd.get('notes') || null
   };
@@ -247,16 +307,17 @@ document.getElementById('rateForm').addEventListener('submit', async (e) => {
     }
     // Sign + rate.
     const { signature: rateSig } = await signAs(messages.RATE_MESSAGE, currentAddress);
-    const r = await api.post(`/api/v1/submissions/${selectedSubmission.id}/rate`, {
+    const resp = await api.post(`/api/v1/submissions/${selectedSubmission.id}/rate`, {
       curatorWallet: currentAddress, signature: rateSig, rating
     });
-    if (r.published && !r.published.alreadyPublished) {
+    if (resp.published && !resp.published.alreadyPublished) {
       showToast('🎉 Version published! Fee pool settled.', 'success', 6000);
     } else {
-      showToast(`Rating recorded (${r.rating_count}/3 needed for publish).`, 'info');
+      showToast(`Rating recorded (${resp.rating_count}/3 needed for publish).`, 'info');
     }
     form.reset();
     selectedSubmission = null;
+    rateRadar = null;
     document.getElementById('rateForm').classList.add('hidden');
     document.getElementById('rateHint').classList.remove('hidden');
     await refreshQueue();
