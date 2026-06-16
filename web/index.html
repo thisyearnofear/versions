@@ -34,6 +34,14 @@
       <h2>Submit a version.</h2>
       <p class="muted">A demo, a live take, the cut your label told you to bury. Upload the file and the metadata. The 0.50 USDC submission fee funds the curator pool — split 70/20/10 between the curators who rate your take, the platform, and your own MusicBrainz attribution. <strong>Need a wallet?</strong> Install <a href="https://phantom.app" target="_blank" rel="noopener">Phantom (Solana)</a> to sign submissions; payments can be confirmed in <a href="https://metamask.io" target="_blank" rel="noopener">MetaMask</a> when the proxy is wired to real Arc testnet.</p>
 
+      <div id="artistDashboard" class="card" hidden>
+        <div class="dashboard-header">
+          <h3>Your versions</h3>
+          <span class="feed-meta" id="dashboardCount"></span>
+        </div>
+        <ul class="version-list" id="versionList"></ul>
+      </div>
+
       <form id="submitForm">
         <div class="grid">
           <label class="span-2">Title
@@ -61,6 +69,9 @@
           </label>
           <label class="span-2">Description
             <textarea name="description" maxlength="1000" rows="2" placeholder="Recorded in a bedroom, 3am. Mics are warm."></textarea>
+          </label>
+          <label>MusicBrainz recording ID <span class="muted" style="font-weight: normal; text-transform: none; letter-spacing: 0;">(optional, 32 hex chars)</span>
+            <input name="musicbrainz_id" maxlength="36" pattern="[0-9a-f-]{32,36}" placeholder="e.g. 1b8df96b-4d61-4a76-aa70-0c5c0d6e9b3a">
           </label>
           <label class="span-2">Audio file
             <input name="audio" type="file" accept="audio/*" required>
@@ -94,26 +105,20 @@
               <h4 id="rateTitle"></h4>
               <div class="feed-meta" id="rateMeta"></div>
             </header>
-            <div class="rate-radar-wrap">
-              <div class="rate-radar" id="interactiveRadar" aria-label="Taste graph (drag the four points to rate)"></div>
-              <div class="rate-readout" id="rateReadout">
-                <div class="rate-readout-row"><span class="rate-readout-label">SOLO</span><span class="rate-readout-value" data-out="solo">5</span></div>
-                <div class="rate-readout-row"><span class="rate-readout-label">VOCAL</span><span class="rate-readout-value" data-out="vocal">5</span></div>
-                <div class="rate-readout-row"><span class="rate-readout-label">ENERGY</span><span class="rate-readout-value" data-out="energy">SAME</span></div>
-                <div class="rate-readout-row"><span class="rate-readout-label">TEMPO</span><span class="rate-readout-value" data-out="tempo">LOCKED</span></div>
-              </div>
-              <button type="button" class="rate-reset" id="rateReset">Reset to 5 / Same / Locked</button>
+            <div class="rate-radar">
+              <div id="interactiveRadar"></div>
+              <p class="radar-hint">Drag the four points. Tap the center to reset.</p>
             </div>
             <div class="grid">
               <label class="span-2">Mood tags (comma-separated)
                 <input name="mood_tags" placeholder="Bluesy, Raw, Euphoric">
               </label>
               <label class="span-2">Notes (optional)
-                <textarea name="notes" rows="3" maxlength="1000" placeholder="What you heard, what struck you."></textarea>
+                <textarea name="notes" rows="2" maxlength="1000"></textarea>
               </label>
             </div>
             <div class="actions">
-              <button type="button" class="btn btn-ghost" id="releaseClaimBtn">Release claim</button>
+              <button type="button" class="btn btn-ghost" id="releaseClaimBtn">I'm not rating this — release my claim</button>
             </div>
             <button type="submit" class="btn btn-primary" id="rateBtn">Submit rating</button>
           </form>

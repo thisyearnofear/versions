@@ -102,6 +102,9 @@ document.getElementById('submitForm').addEventListener('submit', async (e) => {
   status.textContent = 'Uploading…';
   let submissionId;
   try {
+    // MODULAR: the optional MBID is read from the form (Phase 5). The
+    // server validates it; the leg routing doesn't change.
+    const mbid = (fd.get('musicbrainz_id') || '').trim() || null;
     const r = await api.post('/api/v1/submissions', {
       artistWallet: currentAddress,
       signature,
@@ -111,7 +114,8 @@ document.getElementById('submitForm').addEventListener('submit', async (e) => {
         versionType: fd.get('versionType'),
         genre: fd.get('genre') || null,
         mood: fd.get('mood') || null,
-        description: fd.get('description') || null
+        description: fd.get('description') || null,
+        musicbrainzId: mbid
       },
       audio: { contentType: audioFile.type || 'audio/mpeg', base64, durationSeconds: null }
     });
@@ -463,6 +467,52 @@ function escapeHtml(s) {
     .replace(/'/g, '&#039;');
 }
 
+// ---------- ARTIST: dashboard (Phase 5) ----------
+
+// MODULAR: per-artist dashboard. Calls /api/v1/artists/:wallet/versions
+// and renders a 2-column table (title + status badge + rating count
+// when in curation, or aggregated taste graph when published).
+async function refreshArtistDashboard() {
+  const dash = document.getElementById('artistDashboard');
+  const list = document.getElementById('versionList');
+  const count = document.getElementById('dashboardCount');
+  if (!currentAddress) {
+    dash.hidden = true;
+    return;
+  }
+  try {
+    const r = await api.get(`/api/v1/artists/${encodeURIComponent(currentAddress)}/versions?limit=20`);
+    if (!r.rows || r.rows.length === 0) {
+      dash.hidden = true;
+      return;
+    }
+    dash.hidden = false;
+    count.textContent = `${r.total} total`;
+    list.innerHTML = '';
+    for (const v of r.rows) {
+      const li = document.createElement('li');
+      li.className = 'version-item';
+      li.innerHTML = `
+        <div>
+          <h4>${escapeHtml(v.title)}</h4>
+          <div class="feed-meta">${escapeHtml(v.artist_name)} · ${escapeHtml(v.version_type)} · ${escapeHtml(v.genre || '')}</div>
+          <div class="version-status">
+            <span class="version-badge version-badge--${v.status}">${v.status.replace('_', ' ')}</span>
+            ${v.status === 'in_curation' ? `<span class="version-progress">${v.rating_count} / 3 curators</span>` : ''}
+            ${v.status === 'awaiting_curation' ? `<span class="version-progress">${v.rating_count} / 3 curators</span>` : ''}
+            ${v.published ? `<span class="version-progress">solo ${v.published.avg_solo_intensity.toFixed(1)} · vocal ${v.published.avg_vocal_quality.toFixed(1)} · ${escapeHtml(v.published.energy_consensus)} · ${escapeHtml(v.published.tempo_consensus)}</span>` : ''}
+          </div>
+        </div>
+      `;
+      list.appendChild(li);
+    }
+  } catch (err) {
+    // ENHANCEMENT FIRST: dashboard is best-effort. If the API is
+    // down, just hide the card — the form still works.
+    dash.hidden = true;
+  }
+}
+
 // ---------- init ----------
 
 (async function init() {
@@ -473,6 +523,7 @@ function escapeHtml(s) {
   }
   await refreshQueue();
   await refreshFeed();
+  await refreshArtistDashboard();
   // MODULAR: the first-visit tour starts on boot if the cookie is
   // absent; the ? trigger in the bottom-left restarts it on demand.
   startTour(false);

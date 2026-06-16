@@ -402,6 +402,20 @@ async function handleArtistProfile(req, res, requestId, wallet) {
   return jsonResponse(res, 200, { success: true, data: profile }, requestId);
 }
 
+async function handleArtistVersions(req, res, requestId, wallet) {
+  // MODULAR: the artist's version list (Phase 5). Returns the
+  // same shape as the feed (total + limit + offset + rows) so
+  // the dashboard can render a paginated list. The handler is
+  // a sibling of handleArtistProfile, not a replacement — the
+  // profile is the aggregates; this is the per-version detail.
+  const q = parseQuery(req.url);
+  const result = curation.listArtistVersions(wallet, {
+    limit: q.limit ? Math.min(Number(q.limit) || 20, 100) : 20,
+    offset: q.offset ? Number(q.offset) || 0 : 0
+  });
+  return jsonResponse(res, 200, { success: true, data: result }, requestId);
+}
+
 // ---------- Day 5: feed + version detail ----------
 
 function parseQuery(url) {
@@ -526,6 +540,11 @@ const ROUTES = [
             handler: (req, res, rid, p) => handleCuratorProfile(req, res, rid, p.split('/')[4]) },
   { method: 'GET',    match: (p) => /^\/api\/v1\/artists\/[^/]+$/.test(p),
             handler: (req, res, rid, p) => handleArtistProfile(req, res, rid, p.split('/')[4]) },
+  // Phase 5: per-artist version list. Sibling of the profile endpoint;
+  // returns paginated rows with status + rating_count + (when
+  // published) the aggregated taste graph.
+  { method: 'GET',    match: (p) => /^\/api\/v1\/artists\/[^/]+\/versions$/.test(p),
+            handler: (req, res, rid, p) => handleArtistVersions(req, res, rid, p.split('/')[4]) },
   // Day 5: feed + version detail. The /api/v1/versions/:id route must
   // not collide with /api/v1/submissions/:id, so we keep them apart.
   { method: 'GET',    match: (p) => p === '/api/v1/feed',                              handler: handleFeed },

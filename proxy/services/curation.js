@@ -292,6 +292,50 @@ function createCurationService({ settlement }) {
         recent_submissions: submissions_,
         recent_published: published
       };
+    },
+
+    // MODULAR: per-artist version list. Each row carries the status
+    // (pending_payment, awaiting_curation, in_curation, published,
+    // rejected) + the rating_count + the published_version's
+    // aggregated taste graph when status='published'. The dashboard
+    // renders this list as a 2-column table: title + status badge.
+    listArtistVersions(wallet, { limit = 50, offset = 0 } = {}) {
+      const submissions_ = db.prepare(`
+        SELECT * FROM submissions WHERE artist_wallet = ?
+        ORDER BY submitted_at DESC LIMIT ? OFFSET ?
+      `).all(wallet, limit, offset);
+      // MODULAR: enrich each row with its rating_count + (if
+      // published) the published_version's aggregated fields.
+      const ratingCount = db.prepare(
+        'SELECT COUNT(*) AS c FROM ratings WHERE submission_id = ?'
+      );
+      const published = db.prepare(
+        'SELECT * FROM published_versions WHERE submission_id = ?'
+      );
+      const enriched = submissions_.map((s) => {
+        const out = {
+          ...s,
+          rating_count: ratingCount.get(s.id).c
+        };
+        if (s.status === 'published') {
+          const pv = published.get(s.id);
+          if (pv) {
+            out.published = {
+              avg_solo_intensity: pv.avg_solo_intensity,
+              avg_vocal_quality: pv.avg_vocal_quality,
+              energy_consensus: pv.energy_consensus,
+              tempo_consensus: pv.tempo_consensus,
+              aggregated_mood_tags: JSON.parse(pv.aggregated_mood_tags || '[]'),
+              published_at: pv.published_at
+            };
+          }
+        }
+        return out;
+      });
+      const total = db.prepare(
+        'SELECT COUNT(*) AS c FROM submissions WHERE artist_wallet = ?'
+      ).get(wallet).c;
+      return { total, limit, offset, rows: enriched };
     }
   };
 }
