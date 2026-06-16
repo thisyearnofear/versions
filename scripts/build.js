@@ -55,6 +55,9 @@ function main() {
     for (const name of fs.readdirSync(dir)) {
       const src = path.join(dir, name);
       if (fs.statSync(src).isDirectory()) continue;
+      // MODULAR: skip OS metadata files (Mac .DS_Store, Windows
+      // Thumbs.db, etc.) — they have no business in a web build.
+      if (name === '.DS_Store' || name === 'Thumbs.db') continue;
       const ext = path.extname(name).toLowerCase();
       let destName = name;
       if (ASSET_RE.test(name)) {
