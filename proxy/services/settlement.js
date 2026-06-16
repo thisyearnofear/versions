@@ -6,6 +6,13 @@
 //      touches that table.
 // CLEAN: arc calls are outside the DB transaction so a slow chain doesn't
 //        hold a write lock.
+//
+// CONSOLIDATION (Phase 1): the musicbrainz leg routes to the
+// submission's artist_wallet. The musicbrainzResolver hook is
+// removed; the musicbrainz adapter is no longer imported; the audius
+// adapter is gone. The leg label stays 'musicbrainz' so the audit
+// trail reads "this was the artist's attribution leg" — the routing
+// is just simpler.
 
 'use strict';
 
@@ -38,11 +45,12 @@ function fromMicroUsdc(micro) {
 function buildLegs({ submissionId, feeQuoteUsdc, curatorWallets, platformWallet, musicbrainzWallet }) {
   if (!submissionId) throw new Error('submissionId is required');
   if (!platformWallet) throw new Error('platformWallet is required');
+  if (!musicbrainzWallet) throw new Error('musicbrainzWallet is required');
   const feeMicro = toMicroUsdc(feeQuoteUsdc);
 
   const curatorMicroTotal = feeMicro * BigInt(Math.floor(SPLITS.curator * 1_000_000)) / 1_000_000n;
   const platformMicro = feeMicro * BigInt(Math.floor(SPLITS.platform * 1_000_000)) / 1_000_000n;
-  const musicbrainzMicro = feeMicro - curatorMicroTotal - platformMicro;  // remainder to MusicBrainz
+  const musicbrainzMicro = feeMicro - curatorMicroTotal - platformMicro;  // remainder to musicbrainz leg
 
   const legs = [];
   if (curatorWallets.length > 0) {
@@ -71,7 +79,7 @@ function buildLegs({ submissionId, feeQuoteUsdc, curatorWallets, platformWallet,
   legs.push({
     id: crypto.randomUUID(),
     submission_id: submissionId,
-    recipient_wallet: musicbrainzWallet || platformWallet,
+    recipient_wallet: musicbrainzWallet,
     recipient_role: 'musicbrainz',
     amount_usdc: fromMicroUsdc(musicbrainzMicro),
     status: 'pending'
@@ -79,7 +87,7 @@ function buildLegs({ submissionId, feeQuoteUsdc, curatorWallets, platformWallet,
   return legs;
 }
 
-function createSettlementService({ arc = null, platformWallet = null, musicbrainzResolver = null } = {}) {
+function createSettlementService({ arc = null, platformWallet = null } = {}) {
   const db = openDb();
 
   const insertLeg = db.prepare(`
@@ -106,8 +114,11 @@ function createSettlementService({ arc = null, platformWallet = null, musicbrain
     /**
      * Sync: insert the legs for a submission as 'pending'. Safe to call
      * inside a SQL transaction (no network I/O). Returns the leg rows.
+     * CLEAN: musicbrainzWallet is required (the caller must compute it
+     * from the submission's artist_wallet before calling).
      */
     insertLegsAtomic({ submissionId, feeQuoteUsdc, curatorWallets, musicbrainzWallet }) {
+      if (!musicbrainzWallet) throw new Error('musicbrainzWallet is required (pass submission.artist_wallet)');
       const sub = db.prepare('SELECT * FROM submissions WHERE id = ?').get(submissionId);
       if (!sub) throw new Error('Submission not found');
       const legs = buildLegs({
@@ -156,11 +167,6 @@ function createSettlementService({ arc = null, platformWallet = null, musicbrain
     /**
      * Backwards-compat: full splitFee (insertLegsAtomic + settleLegsAsync).
      * NOT safe to call inside a DB transaction (it does network I/O).
-     *
-     * CLEAN: the musicbrainz leg is routed to the submission's
-     * artist_wallet directly — that IS the MusicBrainz-attributed
-     * artist wallet. The musicbrainzResolver hook is kept for future
-     * off-platform overrides (e.g. a label wallet for a sub-publisher).
      */
     async splitFee(submissionId) {
       const sub = db.prepare('SELECT * FROM submissions WHERE id = ?').get(submissionId);
@@ -175,19 +181,11 @@ function createSettlementService({ arc = null, platformWallet = null, musicbrain
           GROUP BY curator_wallet
         ) ORDER BY first_at, first_rowid
       `).all(submissionId);
-      const curatorWallets = ratings.map((r) => r.curator_wallet);
-      const mbWallet = musicbrainzResolver
-        ? musicbrainzResolver({ submissionId, mbid: sub.musicbrainz_id, artistName: sub.artist_name })
-        : null;
       const legs = this.insertLegsAtomic({
         submissionId,
         feeQuoteUsdc: sub.fee_quote_usdc,
-        curatorWallets,
-        // MODULAR: the musicbrainz leg goes to the artist who owns the
-        // submission. The resolver hook above can override this for
-        // sub-publisher cases. The platform wallet is the last-resort
-        // fallback if neither is set.
-        musicbrainzWallet: mbWallet || sub.artist_wallet
+        curatorWallets: ratings.map((r) => r.curator_wallet),
+        musicbrainzWallet: sub.artist_wallet
       });
       const settleResults = await this.settleLegsAsync(legs.map((l) => l.id));
       return { ok: true, legs: this.getLegsForSubmission(submissionId), settle_results: settleResults };

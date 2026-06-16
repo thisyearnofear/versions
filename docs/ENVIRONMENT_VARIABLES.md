@@ -10,7 +10,7 @@ service constructors. Anything not listed here is not read.
 |---------------------|------------------------------------------------------------------------------------------|----------------------------------------|
 | `ARC_RPC_URL`       | JSON-RPC endpoint for Arc L1. Omit to run in mock-first mode.                            | `https://rpc.arc.testnet.arcscan.xyz`  |
 | `ARC_USDC_CONTRACT` | Address of the USDC contract on Arc. Returned in `/api/v1/arc/info`.                     | `0xUSDC...`                            |
-| `PLATFORM_WALLET`   | Recipient of the 20% platform leg and the 10% MusicBrainz fallback leg.                 | `0xPlat...`                            |
+| `PLATFORM_WALLET`   | Recipient of the 20% platform leg. The 10% musicbrainz leg routes to the submission's `artist_wallet` (no separate lookup). | `0xPlat...`                            |
 
 > **Mock-first policy** — When `ARC_RPC_URL` is missing or unreachable, the
 > proxy falls back to a deterministic mock (`scripts/smoke-day4.js` works
@@ -21,7 +21,6 @@ service constructors. Anything not listed here is not read.
 
 | Variable            | Purpose                                                                                  | Default |
 |---------------------|------------------------------------------------------------------------------------------|---------|
-| `AUDIUS_API_KEY`    | Enables the MusicBrainz→Audius wallet hint (Day 5 stub; the actual MBID→wallet lookup lands via the web client's connected wallet). | unset   |
 | `MOCK_ARC=1`        | Forces mock mode even if `ARC_RPC_URL` is reachable. Useful for demos.                   | unset   |
 
 ## Server / Network
@@ -32,7 +31,7 @@ service constructors. Anything not listed here is not read.
 | `HOST`                 | Bind address.                                                             | `0.0.0.0` |
 | `ALLOWED_ORIGINS`      | Comma-separated CORS allowlist. Empty = allow all (dev only).            | empty     |
 | `JSON_BODY_LIMIT`      | Default request body cap. Submissions route gets a separate 70 MB cap.    | `256kb`   |
-| `UPSTREAM_TIMEOUT_MS`  | Timeout for outbound calls (Audius, MusicBrainz, Arc).                   | `12000`   |
+| `UPSTREAM_TIMEOUT_MS`  | Timeout for outbound calls (Arc).                                          | `12000`   |
 
 ## Rate Limiting
 

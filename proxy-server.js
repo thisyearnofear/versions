@@ -20,13 +20,10 @@ const {
   validateArcTxHash
 } = require('./proxy/runtime/validation');
 const { createArcAdapter } = require('./proxy/adapters/arc');
-const { createMusicBrainzAdapter } = require('./proxy/adapters/musicbrainz');
 const { createSubmissionsService } = require('./proxy/services/submissions');
 const { createSettlementService } = require('./proxy/services/settlement');
 const { createCurationService } = require('./proxy/services/curation');
 const { createFeedService } = require('./proxy/services/feed');
-// AUDIUS adapter is reused (ENHANCEMENT FIRST) for musicbrainz wallet hints.
-const { createAudiusAdapter } = require('./proxy/adapters/audius');
 
 const PORT = Number(getEnv('PORT', '8080'));
 const HOST = getEnv('HOST', '0.0.0.0');
@@ -37,16 +34,21 @@ const VERSION = '0.5.0-day5';
 const ARC_RPC_URL = getEnv('ARC_RPC_URL', '');
 const ARC_USDC_CONTRACT = getEnv('ARC_USDC_CONTRACT', '');
 const PLATFORM_WALLET = getEnv('PLATFORM_WALLET', '');
-const AUDIUS_API_KEY = getEnv('AUDIUS_API_KEY', '');
 const UPLOAD_DIR = path.resolve(__dirname, 'data', 'uploads');
-const SUBMISSION_BODY_LIMIT = 70 * 1024 * 1024;   // ~50MB binary as base64
+// MODULAR: the JSON body cap is the *post-base64* size of the audio
+// bytes, because clients post audio as { base64: '...' } in JSON.
+// 70MB JSON ≈ 52MB raw audio (base64 expands by 4/3). Day 5 web
+// client posts the file this way; Phase 3's multipart upload will
+// let us raise the audio cap without the base64 overhead.
+const JSON_BODY_LIMIT = 70 * 1024 * 1024;
+const SUBMISSION_BODY_LIMIT = JSON_BODY_LIMIT;
 const DEFAULT_BODY_LIMIT = 256 * 1024;            // 256KB
 
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 // CLEAN: schema must exist before the service prepares its statements.
 // Migrate first, then build services, then start listening.
-let arc, musicbrainz, audius, submissions;
+let arc, submissions, settlement, curation, feed;
 try {
   const result = runMigrations(openDb());
   if (result.applied.length > 0) {
@@ -58,20 +60,17 @@ try {
   console.error('[lepton] migration failed:', err.message);
   process.exit(1);
 }
-
 arc = createArcAdapter({
   rpcUrl: ARC_RPC_URL || null,
   usdcContract: ARC_USDC_CONTRACT || null,
   platformWallet: PLATFORM_WALLET || null
 });
-audius = createAudiusAdapter({ apiKey: AUDIUS_API_KEY || null, requestTimeoutMs: 8000 });
-musicbrainz = createMusicBrainzAdapter({ requestTimeoutMs: 8000, audius });
-submissions = createSubmissionsService({ arc, platformWallet: PLATFORM_WALLET || null });
 // MODULAR: settlement depends on arc; curation depends on settlement.
 // CLEAN: a single direction — services depend on adapters, not the other way.
-const settlement = createSettlementService({ arc, platformWallet: PLATFORM_WALLET || null });
-const curation = createCurationService({ settlement });
-const feed = createFeedService();
+submissions = createSubmissionsService({ arc, platformWallet: PLATFORM_WALLET || null });
+settlement = createSettlementService({ arc, platformWallet: PLATFORM_WALLET || null });
+curation = createCurationService({ settlement });
+feed = createFeedService();
 
 // ---------- helpers ----------
 
@@ -157,7 +156,7 @@ async function handleHealthReady(req, res, requestId) {
       status: 'ready',
       service: SERVICE,
       version: VERSION,
-      providers: { arc: { mock: !ARC_RPC_URL }, musicbrainz: true, audius: Boolean(AUDIUS_API_KEY) }
+      providers: { arc: { mock: !ARC_RPC_URL } }
     }
   }, requestId);
 }
@@ -556,5 +555,5 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 server.listen(PORT, HOST, () => {
   console.log(`[lepton] listening on http://${HOST}:${PORT} (${VERSION})`);
-  console.log(`[lepton] arc: ${ARC_RPC_URL ? 'real' : 'mock'}, audius: ${AUDIUS_API_KEY ? 'configured' : 'no-key'}, uploads: ${UPLOAD_DIR}`);
+  console.log(`[lepton] arc: ${ARC_RPC_URL ? 'real' : 'mock'}, uploads: ${UPLOAD_DIR}`);
 });
