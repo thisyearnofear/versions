@@ -22,13 +22,15 @@ const {
 const { createArcAdapter } = require('./proxy/adapters/arc');
 const { createMusicBrainzAdapter } = require('./proxy/adapters/musicbrainz');
 const { createSubmissionsService } = require('./proxy/services/submissions');
+const { createSettlementService } = require('./proxy/services/settlement');
+const { createCurationService } = require('./proxy/services/curation');
 // AUDIUS adapter is reused (ENHANCEMENT FIRST) for musicbrainz wallet hints.
 const { createAudiusAdapter } = require('./proxy/adapters/audius');
 
 const PORT = Number(getEnv('PORT', '8080'));
 const HOST = getEnv('HOST', '0.0.0.0');
 const SERVICE = 'lepton-proxy';
-const VERSION = '0.3.0-day3';
+const VERSION = '0.4.0-day4';
 
 // MODULAR: single per-process instance. Reuse across requests.
 const ARC_RPC_URL = getEnv('ARC_RPC_URL', '');
@@ -64,6 +66,10 @@ arc = createArcAdapter({
 audius = createAudiusAdapter({ apiKey: AUDIUS_API_KEY || null, requestTimeoutMs: 8000 });
 musicbrainz = createMusicBrainzAdapter({ requestTimeoutMs: 8000, audius });
 submissions = createSubmissionsService({ arc, platformWallet: PLATFORM_WALLET || null });
+// MODULAR: settlement depends on arc; curation depends on settlement.
+// CLEAN: a single direction — services depend on adapters, not the other way.
+const settlement = createSettlementService({ arc, platformWallet: PLATFORM_WALLET || null });
+const curation = createCurationService({ settlement });
 
 // ---------- helpers ----------
 
@@ -280,6 +286,87 @@ async function handleUploadGet(req, res, requestId, filename) {
   fs.createReadStream(safe).pipe(res);
 }
 
+// ---------- Day 4: curation routes ----------
+
+async function handleSubmissionsClaim(req, res, requestId, submissionId) {
+  let body;
+  try {
+    body = await readJsonBody(req, DEFAULT_BODY_LIMIT);
+  } catch (err) {
+    return errorResponse(res, requestId, err.status || 400, err.code || 'BAD_REQUEST', err.message);
+  }
+  if (!body || !body.curatorWallet || !body.signature) {
+    return errorResponse(res, requestId, 400, 'MISSING_FIELD', 'curatorWallet and signature are required');
+  }
+  const r = curation.claimSubmission({
+    submissionId,
+    curatorWallet: body.curatorWallet,
+    signature: body.signature
+  });
+  if (!r.ok) {
+    const status = r.error === 'Submission not found' ? 404 : 400;
+    return errorResponse(res, requestId, status, 'CLAIM_REJECTED', r.error);
+  }
+  return jsonResponse(res, 201, { success: true, data: r.claim, claim_message: 'VERSIONS_LEPTON_CLAIM' }, requestId);
+}
+
+async function handleSubmissionsRelease(req, res, requestId, submissionId) {
+  let body;
+  try {
+    body = await readJsonBody(req, DEFAULT_BODY_LIMIT);
+  } catch (err) {
+    // DELETE may carry no body; treat empty as {}
+    if (err.code === 'INVALID_JSON' || err.code === 'BODY_READ_ERROR') body = {};
+    else return errorResponse(res, requestId, err.status || 400, err.code || 'BAD_REQUEST', err.message);
+  }
+  const curatorWallet = (body && body.curatorWallet) || '';
+  if (!curatorWallet) {
+    return errorResponse(res, requestId, 400, 'MISSING_FIELD', 'curatorWallet is required');
+  }
+  const r = curation.releaseClaim({ submissionId, curatorWallet });
+  return jsonResponse(res, 200, { success: true, data: { released: r.released } }, requestId);
+}
+
+async function handleSubmissionsRate(req, res, requestId, submissionId) {
+  let body;
+  try {
+    body = await readJsonBody(req, DEFAULT_BODY_LIMIT);
+  } catch (err) {
+    return errorResponse(res, requestId, err.status || 400, err.code || 'BAD_REQUEST', err.message);
+  }
+  if (!body || !body.curatorWallet || !body.signature || !body.rating) {
+    return errorResponse(res, requestId, 400, 'MISSING_FIELD', 'curatorWallet, signature, and rating are required');
+  }
+  const r = curation.submitRating({
+    submissionId,
+    curatorWallet: body.curatorWallet,
+    signature: body.signature,
+    rating: body.rating
+  });
+  if (!r.ok) {
+    const status = r.error === 'Submission not found' ? 404 : 400;
+    return errorResponse(res, requestId, status, 'RATE_REJECTED', r.error);
+  }
+  return jsonResponse(res, 201, {
+    success: true,
+    data: {
+      rating_id: r.rating_id,
+      rating_count: r.rating_count,
+      published: r.published
+    }
+  }, requestId);
+}
+
+async function handleCuratorProfile(req, res, requestId, wallet) {
+  const profile = curation.getCuratorProfile(wallet);
+  return jsonResponse(res, 200, { success: true, data: profile }, requestId);
+}
+
+async function handleArtistProfile(req, res, requestId, wallet) {
+  const profile = curation.getArtistProfile(wallet);
+  return jsonResponse(res, 200, { success: true, data: profile }, requestId);
+}
+
 // ---------- router ----------
 
 const ROUTES = [
@@ -288,12 +375,23 @@ const ROUTES = [
   { method: 'GET',    match: (p) => p === '/api/v1/arc/info',                          handler: handleArcInfo },
   { method: 'POST',   match: (p) => p === '/api/v1/submissions',                       handler: handleSubmissionsCreate },
   { method: 'GET',    match: (p) => p === '/api/v1/submissions/queue',                  handler: handleSubmissionsQueue },
+  // Day 4: claim/release/rate must come BEFORE the bare :id pattern.
+  { method: 'POST',   match: (p) => /^\/api\/v1\/submissions\/[^/]+\/claim$/.test(p),
+            handler: (req, res, rid, p) => handleSubmissionsClaim(req, res, rid, p.split('/')[4]) },
+  { method: 'DELETE', match: (p) => /^\/api\/v1\/submissions\/[^/]+\/claim$/.test(p),
+            handler: (req, res, rid, p) => handleSubmissionsRelease(req, res, rid, p.split('/')[4]) },
+  { method: 'POST',   match: (p) => /^\/api\/v1\/submissions\/[^/]+\/rate$/.test(p),
+            handler: (req, res, rid, p) => handleSubmissionsRate(req, res, rid, p.split('/')[4]) },
   { method: 'POST',   match: (p) => /^\/api\/v1\/submissions\/[^/]+\/verify-payment$/.test(p),
             handler: (req, res, rid, p) => handleSubmissionsVerifyPayment(req, res, rid, p.split('/')[4]) },
   { method: 'GET',    match: (p) => /^\/api\/v1\/submissions\/[^/]+$/.test(p),
             handler: (req, res, rid, p) => handleSubmissionsGet(req, res, rid, p.split('/')[4]) },
   { method: 'GET',    match: (p) => /^\/api\/v1\/uploads\/[^/]+$/.test(p),
-            handler: (req, res, rid, p) => handleUploadGet(req, res, rid, p.split('/')[4]) }
+            handler: (req, res, rid, p) => handleUploadGet(req, res, rid, p.split('/')[4]) },
+  { method: 'GET',    match: (p) => /^\/api\/v1\/curators\/[^/]+$/.test(p),
+            handler: (req, res, rid, p) => handleCuratorProfile(req, res, rid, p.split('/')[4]) },
+  { method: 'GET',    match: (p) => /^\/api\/v1\/artists\/[^/]+$/.test(p),
+            handler: (req, res, rid, p) => handleArtistProfile(req, res, rid, p.split('/')[4]) }
 ];
 
 const server = http.createServer(async (req, res) => {

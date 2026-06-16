@@ -69,13 +69,60 @@ function validateArcTxHash(hash) {
   return null;
 }
 
+const VALID_ENERGY = new Set(['lower', 'same', 'higher']);
+const VALID_TEMPO = new Set(['dragging', 'locked', 'rushing']);
+const MAX_MOOD_TAGS = 10;
+const MAX_MOOD_TAG_LEN = 50;
+const MAX_NOTES_LEN = 1000;
+
+function validateRating(input) {
+  if (!input || typeof input !== 'object') {
+    return { ok: false, errors: ['rating object is required'] };
+  }
+  const errors = [];
+  const { solo_intensity, vocal_quality, energy_vs_studio, tempo_feel, mood_tags, notes } = input;
+
+  const intField = (name, value) => {
+    if (!Number.isInteger(value)) errors.push(`${name} must be an integer`);
+    else if (value < 1 || value > 10) errors.push(`${name} must be between 1 and 10`);
+  };
+  intField('solo_intensity', solo_intensity);
+  intField('vocal_quality', vocal_quality);
+
+  if (!energy_vs_studio || !VALID_ENERGY.has(energy_vs_studio)) {
+    errors.push('energy_vs_studio must be one of: lower, same, higher');
+  }
+  if (!tempo_feel || !VALID_TEMPO.has(tempo_feel)) {
+    errors.push('tempo_feel must be one of: dragging, locked, rushing');
+  }
+
+  if (mood_tags != null) {
+    if (!Array.isArray(mood_tags)) errors.push('mood_tags must be an array');
+    else if (mood_tags.length > MAX_MOOD_TAGS) errors.push(`mood_tags must be ${MAX_MOOD_TAGS} or fewer`);
+    else for (const t of mood_tags) {
+      if (typeof t !== 'string' || !t.trim()) errors.push('mood_tags entries must be non-empty strings');
+      else if (t.length > MAX_MOOD_TAG_LEN) errors.push(`mood_tags entries must be ${MAX_MOOD_TAG_LEN} characters or less`);
+    }
+  }
+
+  if (notes != null && (typeof notes !== 'string' || notes.length > MAX_NOTES_LEN)) {
+    errors.push(`notes must be a string of ${MAX_NOTES_LEN} characters or less`);
+  }
+
+  if (errors.length > 0) return { ok: false, errors };
+  return { ok: true };
+}
+
 module.exports = {
   parsePositiveInt,
   validateMode,
   validatePromptText,
   validateSubmissionMetadata,
   validateArcTxHash,
-  VALID_VERSION_TYPES
+  validateRating,
+  VALID_VERSION_TYPES,
+  VALID_ENERGY,
+  VALID_TEMPO
 };
 
 function parsePositiveInt(value, fallback) {
