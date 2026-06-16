@@ -175,14 +175,58 @@ input:focus, select:focus, textarea:focus {
 }
 input[type="range"] { padding: 0; border: none; }
 input[type="file"] {
-  font-family: var(--mono);
-  font-size: 12px;
-  border: 1px dashed var(--hair-strong);
-  padding: 16px;
-  cursor: pointer;
-  background: var(--paper-tint);
+  /* MODULAR: the native file input is hidden inside the dropzone.
+     The dropzone CSS owns the visual. The native input is still
+     keyboard-accessible (focus + space) for screen readers. */
+  position: absolute;
+  width: 1px; height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 textarea { resize: vertical; min-height: 64px; }
+
+/* MODULAR: custom audio dropzone (Phase 6). The hidden input is
+   inside a <label> for keyboard focus, but visually the dropzone
+   is what the user sees. Dashed border, mono placeholder, file
+   metadata block on selection. */
+.dropzone {
+  position: relative;
+  display: block;
+  border: 1px dashed var(--hair-strong);
+  padding: 24px;
+  cursor: pointer;
+  background: var(--paper-tint);
+  font-family: var(--mono);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.dropzone:hover { border-color: var(--ink); background: var(--paper-2); }
+.dropzone.is-drag { border-color: var(--rust); border-style: solid; background: var(--paper-2); }
+.dropzone:focus-within { border-color: var(--ink); border-style: solid; }
+.dropzone-placeholder { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--ink-2); }
+.dropzone-placeholder strong {
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.dropzone-placeholder .muted { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; }
+.dropzone-info {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.dropzone-info .dropzone-filename { font-family: var(--serif); font-size: 17px; font-weight: 500; }
+.dropzone-info .muted { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; }
+.dropzone-remove {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  background: transparent;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.dropzone-remove:hover { background: var(--ink); color: var(--paper); }
 
 .actions { display: flex; gap: 16px; align-items: center; margin-top: 8px; }
 
@@ -538,8 +582,8 @@ textarea { resize: vertical; min-height: 64px; }
 .rate-radar .radar-handle circle:nth-child(2) {
   transition: r 0.1s ease, stroke-width 0.1s ease;
 }
-.rate-radar .radar-handle:hover circle:nth-child(2) { r: 9; }
-.rate-radar .radar-handle[data-dragging="true"] circle:nth-child(2) { r: 10; }
+.rate-radar .radar-handle:hover circle:nth-child(2) { r: 10; }
+.rate-radar .radar-handle[data-dragging="true"] circle:nth-child(2) { r: 12; }
 
 .rate-readout {
   display: grid;

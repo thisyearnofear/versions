@@ -151,10 +151,16 @@ export function renderInteractiveRadar(target, initialValues, onChange) {
       parts.push(`<text x="${(tx + dx).toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" font-family="JetBrains Mono, monospace" font-size="10" letter-spacing="0.18em" font-weight="600" fill="rgba(26,26,26,0.85)">${a.label}</text>`);
     }
 
-    // Draggable handles
+    // MODULAR: draggable handles. Each handle is a pair — a
+    // transparent 36px hit-area (Apple HIG 44pt minimum, scaled
+    // down) + a visible 8px dot. The hit-area is what receives
+    // pointer events; the visible dot follows it. Both share the
+    // data-handle attr so querySelectorAll('[data-handle]') finds
+    // both, and the click target is the larger one.
     for (const a of INTERACTIVE_AXES) {
       const [x, y] = point(a, values[a.id]);
-      parts.push(`<circle data-handle="${a.id}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="9" fill="var(--paper, #f4efe5)" stroke="var(--rust, #c84a1f)" stroke-width="2" style="cursor: grab;"/>`);
+      parts.push(`<circle data-handle="${a.id}" data-hit="1" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="36" fill="transparent" style="cursor: grab;"/>`);
+      parts.push(`<circle data-handle="${a.id}" data-dot="1" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8" fill="var(--paper, #f4efe5)" stroke="var(--rust, #c84a1f)" stroke-width="2" pointer-events="none"/>`);
     }
 
     target.innerHTML = `<svg viewBox="-32 -32 384 384" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Taste graph (drag the dots to rate)">${parts.join('')}</svg>`;

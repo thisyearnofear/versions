@@ -12,6 +12,7 @@ import {
 import { showToast } from './lib/toast.js';
 import { playFile } from './lib/audio-player.js';
 import { startTour, mountTourTrigger } from './lib/tour.js';
+import { mountDropzone } from './lib/dropzone.js';
 // ---------- wallet state ----------
 
 let currentAddress = null;
@@ -514,6 +515,12 @@ async function refreshArtistDashboard() {
 }
 
 // ---------- init ----------
+
+// MODULAR: mount the audio dropzone. The hidden <input> stays
+// keyboard-accessible; the dropzone owns the visual + drag/drop.
+const audioInput = document.getElementById('audioInput');
+const audioDropzone = document.getElementById('audioDropzone');
+if (audioInput && audioDropzone) mountDropzone(audioInput, audioDropzone);
 
 (async function init() {
   currentAddress = wallet();

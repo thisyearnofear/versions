@@ -74,7 +74,20 @@
             <input name="musicbrainz_id" maxlength="36" pattern="[0-9a-f-]{32,36}" placeholder="e.g. 1b8df96b-4d61-4a76-aa70-0c5c0d6e9b3a">
           </label>
           <label class="span-2">Audio file
-            <input name="audio" type="file" accept="audio/*" required>
+            <div class="dropzone" id="audioDropzone">
+              <input name="audio" type="file" accept="audio/*" required id="audioInput">
+              <div class="dropzone-placeholder">
+                <strong>Drop an audio file here</strong>
+                <span class="muted">or click to browse · mp3, wav, ogg, flac, m4a · up to 50 MB</span>
+              </div>
+              <div class="dropzone-info" hidden>
+                <div>
+                  <strong class="dropzone-filename">filename.mp3</strong>
+                  <span class="muted"><span class="dropzone-size">—</span> · <span class="dropzone-duration">—</span></span>
+                </div>
+                <button type="button" class="dropzone-remove" id="audioRemove">Remove</button>
+              </div>
+            </div>
           </label>
         </div>
         <div class="actions">
@@ -166,5 +179,6 @@
   <script type="module" src="/app.js"></script>
   <script type="module" src="/lib/taste-graph.js"></script>
   <script type="module" src="/lib/tour.js"></script>
+  <script type="module" src="/lib/dropzone.js"></script>
 </body>
 </html>
