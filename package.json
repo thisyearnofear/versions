@@ -9,6 +9,7 @@
     "dev": "node proxy-server.js",
     "migrate": "node proxy/migrate.js",
     "seed": "node scripts/seed-demo.js",
+    "build": "node scripts/build.js",
     "test": "node --test proxy/__tests__/*.test.js"
   },
   "dependencies": {

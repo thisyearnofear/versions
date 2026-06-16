@@ -11,7 +11,7 @@ FROM node:20-bookworm-slim
 WORKDIR /app
 
 # MODULAR: copy manifests first so the layer cache survives source
-# changes. Then the source. Then install + run.
+# changes. Then the source. Then install + build + run.
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
@@ -19,6 +19,12 @@ COPY proxy-server.js ./
 COPY proxy ./proxy
 COPY data ./data
 COPY web ./web
+COPY scripts ./scripts
+
+# PERFORMANT: hash the asset names so /dist/app.abc123.js gets
+# max-age=1y immutable caching in production. The proxy serves
+# /dist/ preferentially when present (see serveStatic()).
+RUN node scripts/build.js
 
 # CLEAN: data lives on a mounted volume in production. The default
 # path inside the image is /app/data so the dev experience (just

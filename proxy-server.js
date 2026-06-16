@@ -481,6 +481,10 @@ function serveStatic(targetPath) {
   // CLEAN: path resolution refuses anything that escapes WEB_DIR. The
   // user can never read /etc/passwd via the web route.
   const decoded = decodeURIComponent(targetPath.split('?')[0]);
+  // MODULAR: resolve as a path under WEB_DIR. The build script puts
+  // hashed assets under WEB_DIR + /dist/, so /dist/app.abc.js maps
+  // to WEB_DIR/dist/app.abc.js naturally. In dev mode (no build),
+  // the same path resolves to WEB_DIR/lib/api.js etc.
   let resolved = path.resolve(WEB_DIR, '.' + decoded);
   if (!resolved.startsWith(WEB_DIR)) return null;
   // MODULAR: if the path is a directory, serve its index.html. If
@@ -496,7 +500,13 @@ function serveStatic(targetPath) {
     const stat = fs.statSync(candidate);
     if (!stat.isFile()) return null;
     const ext = path.extname(candidate).toLowerCase();
-    return { path: candidate, mime: STATIC_MIME[ext] || 'application/octet-stream' };
+    // MODULAR: hashed assets in /dist/ get an immutable
+    // max-age=1y cache. Everything else (index.html, dev mode
+    // assets) gets no-cache so updates are picked up immediately.
+    const cacheControl = candidate.includes(path.sep + 'dist' + path.sep)
+      ? 'public, max-age=31536000, immutable'
+      : 'no-cache';
+    return { path: candidate, mime: STATIC_MIME[ext] || 'application/octet-stream', cacheControl };
   } catch (_) {
     return null;
   }
@@ -510,10 +520,10 @@ function handleStatic(req, res, rid, p) {
     // /api/* and /health/* (which are matched before this route).
     const idx = serveStatic('/index.html');
     if (!idx) return errorResponse(res, rid, 404, 'NOT_FOUND', 'No web files at ' + p);
-    res.writeHead(200, { 'Content-Type': idx.mime, 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { 'Content-Type': idx.mime, 'Cache-Control': idx.cacheControl });
     return fs.createReadStream(idx.path).pipe(res);
   }
-  res.writeHead(200, { 'Content-Type': file.mime, 'Cache-Control': 'no-cache' });
+  res.writeHead(200, { 'Content-Type': file.mime, 'Cache-Control': file.cacheControl });
   return fs.createReadStream(file.path).pipe(res);
 }
 
