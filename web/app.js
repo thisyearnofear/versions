@@ -11,6 +11,7 @@ import {
 } from './lib/wallet.js';
 import { showToast } from './lib/toast.js';
 import { playFile } from './lib/audio-player.js';
+import { startTour, mountTourTrigger } from './lib/tour.js';
 // ---------- wallet state ----------
 
 let currentAddress = null;
@@ -20,12 +21,28 @@ async function refreshWalletButton() {
   const addr = document.getElementById('walletAddress');
   if (currentAddress) {
     btn.textContent = 'Disconnect';
-    addr.textContent = `${currentAddress.slice(0, 4)}…${currentAddress.slice(-4)}`;
+    // ENHANCEMENT FIRST: the persistent wallet chip lives in the
+    // header (was a tiny 12px mono address in the corner). The full
+    // address is in the title attribute for copy-on-hover.
+    const short = `${currentAddress.slice(0, 6)}…${currentAddress.slice(-4)}`;
+    addr.textContent = short;
+    addr.title = `${currentAddress} (click to copy)`;
+    addr.classList.add('wallet-address--connected');
   } else {
     btn.textContent = 'Connect wallet';
     addr.textContent = '';
+    addr.classList.remove('wallet-address--connected');
   }
 }
+
+document.getElementById('walletAddress').addEventListener('click', () => {
+  if (currentAddress) {
+    navigator.clipboard.writeText(currentAddress).then(
+      () => showToast('Address copied', 'success', 1500),
+      () => showToast('Copy failed', 'error', 2000)
+    );
+  }
+});
 
 document.getElementById('walletBtn').addEventListener('click', async () => {
   if (currentAddress) {
@@ -456,4 +473,8 @@ function escapeHtml(s) {
   }
   await refreshQueue();
   await refreshFeed();
+  // MODULAR: the first-visit tour starts on boot if the cookie is
+  // absent; the ? trigger in the bottom-left restarts it on demand.
+  startTour(false);
+  mountTourTrigger();
 })();

@@ -92,6 +92,22 @@ a:hover { color: var(--rust); }
 }
 .wallet-area { display: flex; align-items: center; gap: 14px; }
 .wallet-address { font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
+.wallet-address--connected {
+  /* MODULAR: when the wallet is connected, the address becomes a
+     chip — 1px border, paper background, rust underline on hover.
+     Clicking copies the full address to the clipboard. */
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-2);
+  border: 1px solid var(--ink);
+  padding: 6px 12px;
+  cursor: pointer;
+  user-select: none;
+  letter-spacing: 0.02em;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.wallet-address--connected:hover { background: var(--ink); color: var(--paper); }
 
 /* MODULAR: nav is a horizontal rule with mono-uppercase labels. No
    boxed-in tab bar — the active state is just a thicker underline. */

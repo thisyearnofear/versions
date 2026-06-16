@@ -4,15 +4,17 @@
 // MODULAR: the proxy serves the web client AND the API on the same
 // origin (Docker is single-port). The "localhost" override below is
 // the dev-mode escape hatch for the case where the web is served by
-// a separate python http.server on :3000 while the proxy runs on
-// :8080. In any other deployment, just use the current origin.
+// a separate python http.server on a port other than 8080 while the
+// proxy runs on :8080. In any other deployment, just use the
+// current origin.
 
 'use strict';
 
+const API_PORT = '8080';   // default; can be overridden via meta tag in production
 const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 const port = location.port;
-const isDevMode = isLocalhost && port && port !== '8080';
-const baseUrl = isDevMode ? 'http://localhost:8080' : `${location.protocol}//${location.host}`;
+const isDevMode = isLocalhost && port && port !== API_PORT;
+const baseUrl = isDevMode ? `http://localhost:${API_PORT}` : `${location.protocol}//${location.host}`;
 
 async function request(method, path, body) {
   const res = await fetch(`${baseUrl}${path}`, {
