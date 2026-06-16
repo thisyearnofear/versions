@@ -94,8 +94,6 @@ export function renderInteractiveRadar(target, initialValues, onChange) {
   const cy = size / 2;
   const r = (size / 2) - 32;
   const rings = [0.25, 0.5, 0.75, 1];
-
-  // CLEAN: values are stored on the closure. The radar owns the state.
   // External callers read via the returned getter, or subscribe via onChange.
   const values = {
     solo:   clamp(initialValues && initialValues.solo,   0, 10, 5),
@@ -159,13 +157,14 @@ export function renderInteractiveRadar(target, initialValues, onChange) {
       parts.push(`<circle data-handle="${a.id}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="9" fill="var(--paper, #f4efe5)" stroke="var(--rust, #c84a1f)" stroke-width="2" style="cursor: grab;"/>`);
     }
 
-    target.innerHTML = `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Taste graph (drag the dots to rate)">${parts.join('')}</svg>`;
+    target.innerHTML = `<svg viewBox="-32 -32 384 384" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Taste graph (drag the dots to rate)">${parts.join('')}</svg>`;
     attachHandlers();
   }
 
   // MODULAR: pointer events work for mouse + touch. The axis is a unit
   // vector from the center; the new value is the projection of the
   // pointer's offset onto the axis, clamped to [0, 10].
+  const VIEWBOX_W = 384, VIEWBOX_H = 384, VIEWBOX_OX = -32, VIEWBOX_OY = -32;
   function attachHandlers() {
     const svg = target.querySelector('svg');
     if (!svg) return;
@@ -176,12 +175,14 @@ export function renderInteractiveRadar(target, initialValues, onChange) {
 
       const onPointerMove = (ev) => {
         const rect = svg.getBoundingClientRect();
-        const x = ((ev.clientX - rect.left) / rect.width) * size - cx;
-        const y = ((ev.clientY - rect.top) / rect.height) * size - cy;
+        // MODULAR: convert client coords to viewBox coords. The SVG
+        // width/height is `size` but the viewBox is 384x384 starting
+        // at (-32, -32), so there's a 32-unit margin on each side.
+        const vbX = ((ev.clientX - rect.left) / rect.width) * VIEWBOX_W + VIEWBOX_OX;
+        const vbY = ((ev.clientY - rect.top)  / rect.height) * VIEWBOX_H + VIEWBOX_OY;
+        const x = vbX - cx;
+        const y = vbY - cy;
         const proj = x * Math.cos(axis.angle) + y * Math.sin(axis.angle);
-        // PERFORMANT: the radar's radius in viewBox units is r, but the
-        // visual scale depends on getBoundingClientRect. Convert by
-        // (size/r) before mapping to 0-10.
         const value = clamp((proj / r) * 10, 0, 10);
         values[id] = value;
         updateHandle(axis);
