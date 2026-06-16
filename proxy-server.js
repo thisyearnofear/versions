@@ -14,7 +14,9 @@ const crypto = require('crypto');
 
 const { runMigrations } = require('./proxy/migrate');
 const { openDb, closeDb, DEFAULT_DB_PATH } = require('./proxy/db');
-const { getEnv } = require('./proxy/runtime/config');
+const { getEnv, getServerConfig } = require('./proxy/runtime/config');
+const log = require('./proxy/runtime/logger').log;
+const { createRateLimiter } = require('./proxy/runtime/rate-limit');
 const {
   validateSubmissionMetadata,
   validateArcTxHash
@@ -24,6 +26,7 @@ const { createSubmissionsService } = require('./proxy/services/submissions');
 const { createSettlementService } = require('./proxy/services/settlement');
 const { createCurationService } = require('./proxy/services/curation');
 const { createFeedService } = require('./proxy/services/feed');
+const { createSweeper } = require('./proxy/services/settlement-sweeper');
 
 const PORT = Number(getEnv('PORT', '8080'));
 const HOST = getEnv('HOST', '0.0.0.0');
@@ -46,18 +49,43 @@ const DEFAULT_BODY_LIMIT = 256 * 1024;            // 256KB
 
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+// MODULAR: rate limiters. The audio route (submissions POST + verify-payment)
+// gets a tighter limit; everything else gets a higher default. The
+// env-var names are documented in ENVIRONMENT_VARIABLES.md.
+const serverConfig = getServerConfig();
+const audioLimiter = createRateLimiter({
+  windowMs: serverConfig.rateLimitWindowMs,
+  max: serverConfig.rateLimitAudioMax,
+  label: 'audio'
+});
+const generalLimiter = createRateLimiter({
+  windowMs: serverConfig.rateLimitWindowMs,
+  max: serverConfig.rateLimitAudioMax * 4,
+  label: 'general'
+});
+
+// MODULAR: per-route request timeout. Submissions can be slow (70MB
+// JSON body); everything else is fast. A timeout surfaces a 504 to
+// the client rather than tying up the event loop on a slow client.
+const ROUTE_TIMEOUTS = {
+  'POST:/api/v1/submissions':           30_000,
+  'POST:/api/v1/submissions/*/verify-payment': 30_000,
+  'GET:/api/v1/uploads/*':              10_000
+};
+const DEFAULT_ROUTE_TIMEOUT_MS = 10_000;
+
 // CLEAN: schema must exist before the service prepares its statements.
 // Migrate first, then build services, then start listening.
-let arc, submissions, settlement, curation, feed;
+let arc, submissions, settlement, curation, feed, sweeper;
 try {
   const result = runMigrations(openDb());
   if (result.applied.length > 0) {
-    console.log(`[lepton] applied ${result.applied.length} migration(s): ${result.applied.join(', ')}`);
+    log.info('migrations applied', { count: result.applied.length, files: result.applied });
   } else {
-    console.log(`[lepton] schema up to date (${result.skipped.length} migration(s))`);
+    log.info('schema up to date', { migrations: result.skipped.length });
   }
 } catch (err) {
-  console.error('[lepton] migration failed:', err.message);
+  log.error('migration failed', { err: err.message });
   process.exit(1);
 }
 arc = createArcAdapter({
@@ -71,6 +99,9 @@ submissions = createSubmissionsService({ arc, platformWallet: PLATFORM_WALLET ||
 settlement = createSettlementService({ arc, platformWallet: PLATFORM_WALLET || null });
 curation = createCurationService({ settlement });
 feed = createFeedService();
+// CLEAN: sweeper takes the same db + settlement the rest of the
+// proxy uses. No new state; reads existing rows.
+sweeper = createSweeper({ db: openDb(), settlement });
 
 // ---------- helpers ----------
 
@@ -508,14 +539,43 @@ const ROUTES = [
             handler: handleStatic }
 ];
 
+// MODULAR: in-flight request tracking for graceful shutdown. The Set
+// is bounded by the request rate; each request adds itself on entry
+// and removes itself on completion.
+const inFlight = new Set();
+let shuttingDown = false;
+
 const server = http.createServer(async (req, res) => {
+  // PERFORMANT: refuse new requests immediately when shutting down.
+  if (shuttingDown) {
+    res.writeHead(503, { 'Content-Type': 'application/json', 'Connection': 'close' });
+    res.end(JSON.stringify({ success: false, error: { code: 'SHUTTING_DOWN', message: 'Server is shutting down' } }));
+    return;
+  }
+
   const requestId = requestContext(req);
   const url = (req.url || '/').split('?')[0];
+  inFlight.add(requestId);
+  // PERFORMANT: per-route timeout. The request is aborted if the
+  // handler doesn't return within the budget. The budget is computed
+  // by matching the route + method against ROUTE_TIMEOUTS.
+  const timeoutKey = `${req.method}:${url.replace(/\/[^/]+$/, '/*')}`;
+  const timeoutMs = ROUTE_TIMEOUTS[timeoutKey] || ROUTE_TIMEOUTS[`${req.method}:${url}`] || DEFAULT_ROUTE_TIMEOUT_MS;
+  const timer = setTimeout(() => {
+    log.warn('request timeout', { request_id: requestId, method: req.method, url, timeoutMs });
+    if (!res.headersSent) {
+      res.writeHead(504, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: { code: 'TIMEOUT', message: `Request exceeded ${timeoutMs}ms`, requestId } }));
+    }
+    try { req.destroy(); } catch (_) { /* noop */ }
+  }, timeoutMs);
 
   // MODULAR: CORS preflight + actual CORS headers. Manual because the
   // proxy is raw http (no express). Without these, the web client on
   // :3000 can't call the proxy on :8080 from a browser.
   if (req.method === 'OPTIONS') {
+    clearTimeout(timer);
+    inFlight.delete(requestId);
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
@@ -529,31 +589,78 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Vary', 'Origin');
 
+  // MODULAR: rate limit check. The audio routes get the tighter
+  // bucket; everything else gets the general bucket. Both limits
+  // are per-IP and rate-limited to 429 with the standard envelope.
+  const isAudioRoute = (url === '/api/v1/submissions' ||
+                       /^\/api\/v1\/submissions\/[^/]+\/verify-payment$/.test(url) ||
+                       /^\/api\/v1\/uploads\/[^/]+$/.test(url));
+  const limiter = isAudioRoute ? audioLimiter : generalLimiter;
+  if (!limiter.allow(req)) {
+    clearTimeout(timer);
+    inFlight.delete(requestId);
+    res.setHeader('Retry-After', '60');
+    return errorResponse(res, requestId, 429, 'RATE_LIMITED', 'Too many requests — try again in 60s');
+  }
+
+  const startMs = Date.now();
   try {
     for (const r of ROUTES) {
       if (r.method !== req.method) continue;
-      if (r.match(url)) return await r.handler(req, res, requestId, url);
+      if (r.match(url)) {
+        const out = await r.handler(req, res, requestId, url);
+        log.info('request', { request_id: requestId, method: req.method, url, duration_ms: Date.now() - startMs, status: res.statusCode });
+        return out;
+      }
     }
-    return errorResponse(res, requestId, 404, 'NOT_FOUND', `No route for ${req.method} ${url}`);
+    const out = errorResponse(res, requestId, 404, 'NOT_FOUND', `No route for ${req.method} ${url}`);
+    log.info('request', { request_id: requestId, method: req.method, url, duration_ms: Date.now() - startMs, status: 404 });
+    return out;
   } catch (err) {
-    console.error(`[lepton] ${req.method} ${url} failed:`, err);
-    return errorResponse(res, requestId, 500, 'INTERNAL', err.message);
+    log.error('handler failed', { request_id: requestId, method: req.method, url, err: err.message, stack: err.stack });
+    if (!res.headersSent) return errorResponse(res, requestId, 500, 'INTERNAL', err.message);
+  } finally {
+    clearTimeout(timer);
+    inFlight.delete(requestId);
   }
 });
 
-// ---------- shutdown + boot ----------
-
+// MODULAR: graceful shutdown. On SIGTERM/SIGINT, stop accepting new
+// requests (shuttingDown flag), wait up to 10s for the in-flight set
+// to drain, stop the sweeper, close the DB, then exit. The structured
+// logger is the last thing to run so a final 'shutdown complete'
+// line lands in the log aggregator.
+let shutdownInProgress = null;
 function shutdown(signal) {
-  console.log(`[lepton] ${signal} received, closing`);
-  server.close(() => {
+  if (shutdownInProgress) return shutdownInProgress;
+  shutdownInProgress = (async () => {
+    log.info('shutdown initiated', { signal, in_flight: inFlight.size });
+    shuttingDown = true;
+    // CLEAN: server.close() stops accepting new connections; existing
+    // ones are allowed to finish. The 10s cap protects against a
+    // stuck client holding the process open.
+    await new Promise((resolve) => {
+      const closeTimer = setTimeout(() => {
+        log.warn('shutdown timeout — forcing close', { in_flight: inFlight.size });
+        resolve();
+      }, 10_000);
+      server.close(() => { clearTimeout(closeTimer); resolve(); });
+    });
+    sweeper.stop();
     closeDb();
+    log.info('shutdown complete');
     process.exit(0);
-  });
+  })();
+  return shutdownInProgress;
 }
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
+sweeper.start({ intervalMs: 60_000 });
+log.info('proxy listening', { host: HOST, port: PORT, version: VERSION, arc: ARC_RPC_URL ? 'real' : 'mock' });
+
 server.listen(PORT, HOST, () => {
-  console.log(`[lepton] listening on http://${HOST}:${PORT} (${VERSION})`);
-  console.log(`[lepton] arc: ${ARC_RPC_URL ? 'real' : 'mock'}, uploads: ${UPLOAD_DIR}`);
+  // Boot line. The structured log above is the canonical record;
+  // this one is for human greps of stdout.
+  process.stdout.write(`[lepton] listening on http://${HOST}:${PORT} (${VERSION})\n`);
 });

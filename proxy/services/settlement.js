@@ -64,7 +64,8 @@ function buildLegs({ submissionId, feeQuoteUsdc, curatorWallets, platformWallet,
         recipient_wallet: wallet,
         recipient_role: 'curator',
         amount_usdc: fromMicroUsdc(amount),
-        status: 'pending'
+        status: 'pending',
+        created_at: new Date().toISOString()
       });
     });
   }
@@ -74,7 +75,8 @@ function buildLegs({ submissionId, feeQuoteUsdc, curatorWallets, platformWallet,
     recipient_wallet: platformWallet,
     recipient_role: 'platform',
     amount_usdc: fromMicroUsdc(platformMicro),
-    status: 'pending'
+    status: 'pending',
+    created_at: new Date().toISOString()
   });
   legs.push({
     id: crypto.randomUUID(),
@@ -82,7 +84,8 @@ function buildLegs({ submissionId, feeQuoteUsdc, curatorWallets, platformWallet,
     recipient_wallet: musicbrainzWallet,
     recipient_role: 'musicbrainz',
     amount_usdc: fromMicroUsdc(musicbrainzMicro),
-    status: 'pending'
+    status: 'pending',
+    created_at: new Date().toISOString()
   });
   return legs;
 }
@@ -92,9 +95,9 @@ function createSettlementService({ arc = null, platformWallet = null } = {}) {
 
   const insertLeg = db.prepare(`
     INSERT INTO settlement_legs
-      (id, submission_id, recipient_wallet, recipient_role, amount_usdc, status)
+      (id, submission_id, recipient_wallet, recipient_role, amount_usdc, status, created_at)
     VALUES
-      (@id, @submission_id, @recipient_wallet, @recipient_role, @amount_usdc, @status)
+      (@id, @submission_id, @recipient_wallet, @recipient_role, @amount_usdc, @status, @created_at)
   `);
   const getLeg = db.prepare('SELECT * FROM settlement_legs WHERE id = ?');
   const markSettled = db.prepare(`
