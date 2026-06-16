@@ -409,6 +409,70 @@ async function handleVersionGet(req, res, requestId, submissionId) {
 
 // ---------- router ----------
 
+// ---------- static file serving ----------
+// MODULAR: serves the web client from the same process so Docker is
+// single-port. Matched AFTER all API routes so /api/* + /health/*
+// win, and any other path under / tries to serve ./web/<path>.
+const WEB_DIR = path.resolve(__dirname, 'web');
+const STATIC_MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js':   'text/javascript; charset=utf-8',
+  '.mjs':  'text/javascript; charset=utf-8',
+  '.css':  'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg':  'image/svg+xml',
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif':  'image/gif',
+  '.ico':  'image/x-icon',
+  '.wav':  'audio/wav',
+  '.mp3':  'audio/mpeg',
+  '.ogg':  'audio/ogg',
+  '.woff2': 'font/woff2',
+  '.txt':  'text/plain; charset=utf-8'
+};
+
+function serveStatic(targetPath) {
+  // CLEAN: path resolution refuses anything that escapes WEB_DIR. The
+  // user can never read /etc/passwd via the web route.
+  const decoded = decodeURIComponent(targetPath.split('?')[0]);
+  let resolved = path.resolve(WEB_DIR, '.' + decoded);
+  if (!resolved.startsWith(WEB_DIR)) return null;
+  // MODULAR: if the path is a directory, serve its index.html. If
+  // the path has no extension, try appending .html (for /styles/main).
+  let candidate = resolved;
+  try {
+    const stat = fs.statSync(candidate);
+    if (stat.isDirectory()) candidate = path.join(candidate, 'index.html');
+  } catch (_) {
+    if (!path.extname(candidate)) candidate = candidate + '.html';
+  }
+  try {
+    const stat = fs.statSync(candidate);
+    if (!stat.isFile()) return null;
+    const ext = path.extname(candidate).toLowerCase();
+    return { path: candidate, mime: STATIC_MIME[ext] || 'application/octet-stream' };
+  } catch (_) {
+    return null;
+  }
+}
+
+function handleStatic(req, res, rid, p) {
+  const file = serveStatic(p === '/' ? '/index.html' : p);
+  if (!file) {
+    // MODULAR: fall back to index.html so client-side routing in the
+    // SPA still works for unknown paths. The API 404 only fires for
+    // /api/* and /health/* (which are matched before this route).
+    const idx = serveStatic('/index.html');
+    if (!idx) return errorResponse(res, rid, 404, 'NOT_FOUND', 'No web files at ' + p);
+    res.writeHead(200, { 'Content-Type': idx.mime, 'Cache-Control': 'no-cache' });
+    return fs.createReadStream(idx.path).pipe(res);
+  }
+  res.writeHead(200, { 'Content-Type': file.mime, 'Cache-Control': 'no-cache' });
+  return fs.createReadStream(file.path).pipe(res);
+}
+
 const ROUTES = [
   { method: 'GET',    match: (p) => p === '/health/live',                              handler: handleHealthLive },
   { method: 'GET',    match: (p) => p === '/health/ready',                             handler: handleHealthReady },
@@ -436,7 +500,13 @@ const ROUTES = [
   // not collide with /api/v1/submissions/:id, so we keep them apart.
   { method: 'GET',    match: (p) => p === '/api/v1/feed',                              handler: handleFeed },
   { method: 'GET',    match: (p) => /^\/api\/v1\/versions\/[^/]+$/.test(p),
-            handler: (req, res, rid, p) => handleVersionGet(req, res, rid, p.split('/')[4]) }
+            handler: (req, res, rid, p) => handleVersionGet(req, res, rid, p.split('/')[4]) },
+  // MODULAR: static-file fallback. Anything not matched above is
+  // served from ./web/. Unknown paths fall through to index.html so
+  // the SPA can take over (we have no client-side router yet, but
+  // this keeps the door open).
+  { method: 'GET',    match: (p) => !p.startsWith('/api/') && !p.startsWith('/health/'),
+            handler: handleStatic }
 ];
 
 const server = http.createServer(async (req, res) => {

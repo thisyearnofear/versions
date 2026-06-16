@@ -1,10 +1,18 @@
 // MODULAR: API client. Single base URL + JSON helpers.
 // DRY: every fetch goes through this; no raw fetch() anywhere else.
+//
+// MODULAR: the proxy serves the web client AND the API on the same
+// origin (Docker is single-port). The "localhost" override below is
+// the dev-mode escape hatch for the case where the web is served by
+// a separate python http.server on :3000 while the proxy runs on
+// :8080. In any other deployment, just use the current origin.
 
 'use strict';
 
 const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-const baseUrl = isLocalhost ? 'http://localhost:8080' : `${location.protocol}//${location.host}`;
+const port = location.port;
+const isDevMode = isLocalhost && port && port !== '8080';
+const baseUrl = isDevMode ? 'http://localhost:8080' : `${location.protocol}//${location.host}`;
 
 async function request(method, path, body) {
   const res = await fetch(`${baseUrl}${path}`, {
