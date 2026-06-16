@@ -1,0 +1,14 @@
+# Generated / runtime data
+versions.db
+versions.db-journal
+versions.db-wal
+versions.db-shm
+
+# Test databases (created by node:test)
+test-*.db
+test-*.db-journal
+test-*.db-wal
+test-*.db-shm
+
+# User-uploaded audio (created at runtime)
+uploads/

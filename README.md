@@ -1,61 +1,62 @@
-# 🎭 VERSIONS
+# ⚛️ VERSIONS — Lepton Submission Marketplace
 
-**⚛️ Lepton Agents Hackathon 2026 - The Marketplace for Alternate Takes**
+**Hackathon target:** Lepton Agents (June 15–29, 2026).
+**Submission:** See **[`docs/LEPTON_IMPLEMENTATION_PLAN.md`](docs/LEPTON_IMPLEMENTATION_PLAN.md)** for the single build plan and **[`docs/LEPTON_STRATEGY.md`](docs/LEPTON_STRATEGY.md)** for the vision.
 
-**Monetizing the creative process through a human-powered taste graph and Arc L1 nanopayments.**
+This repo is on a single track: the **Lepton Submission Marketplace**. Every doc, script, and code path serves that one goal. Anything that does not is removed.
 
----
+## Mechanic (Phase 1 MVP)
 
-## 🏆 Current Focus: Lepton Hackathon (June 15-29, 2026)
+- **Artists** submit a version (audio + metadata). They pay a USDC submission fee on **Arc L1**; funds are escrowed.
+- **Curators** claim a submission and submit a structured rating (solo intensity, vocal quality, energy vs studio, tempo feel, mood tags).
+- **N=3 ratings** unlocks publish. The fee pool splits **70 / 20 / 10**: curators (equal share) / platform / MusicBrainz-attributed artist wallet.
+- **Discovery** is the feed of published versions, filterable by the taste graph.
 
-VERSIONS is building a **SubmitHub-style marketplace** for demos, live recordings, and alternate takes. We solve the discovery problem for "rare" music while bootstrapping a creator economy via instant USDC settlement on the **Arc L1**.
+## Quick start
 
-**[⚛️ Lepton Strategy & Roadmap](docs/LEPTON_STRATEGY.md)** | **[📺 Watch 3-Minute Demo Video](#)**
+```bash
+# 1. Install deps
+npm install
 
-### The MVP Mechanic (Phase 1)
-- **Active Submission**: Artists pay a USDC fee to have their alternate takes curated.
-- **Paid Curation**: Listeners (Curators) earn USDC for providing structured, subjective ratings.
-- **Taste Graph**: Curation generates high-signal metadata (solo intensity, energy, mood) that makes the catalog discoverable.
+# 2. Run the placeholder proxy (Day 1 — only /health/live is wired)
+node proxy-server.js
 
----
+# 3. In another terminal, serve the web client
+cd web && python3 -m http.server 3000
+# open http://localhost:3000
+```
 
-## 💡 The Concept
+The full build sequence (schema → submissions → curation → settlement → UI → tests) lives in `docs/LEPTON_IMPLEMENTATION_PLAN.md`.
 
-Music is not a static product; it is a process. Artists like John Mayer or The Grateful Dead play the same song differently every night. 
-
-### The Problem
-- **Passive Value**: Demos and live takes are "dead" assets because they lack structured metadata and efficient payment rails.
-- **The $2.00 Floor**: Traditional payment systems can't handle the micro-rewards required for curators and micro-royalties for artists.
-
-### The Solution
-1.  **Human-Powered Taste Graph**: Structured subjective ratings (1-10 on specific dimensions) create a discovery layer that algorithms can't touch.
-2.  **Nanopayment Settlement**: Arc L1 allows for instant, sub-cent rewards for curators and artists, settled in native USDC.
-
----
-
-## ✨ Features (Hackathon MVP)
-
-✅ **Submission Queue** - Artists pay to enter; Curators get paid to rate.  
-✅ **Structured Rating Engine** - Mapping solo intensity, energy, and tempo feel.  
-✅ **Arc L1 Settlement** - Instant USDC payouts for every curation event.  
-✅ **Version Catalog** - "Published" takes become discoverable once curated.  
-✅ **Farcaster Social Layer** - Share your best "finds" to the social graph.  
-
----
-
-## 🏗️ Architecture: The Marketplace Model
+## Repository layout
 
 ```
-┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
-│      ARTIST      │          │     VERSIONS     │          │     CURATOR      │
-│ (Uploads Version)│          │   MARKETPLACE    │          │ (Rates Version)  │
-└────────┬─────────┘          └────────┬─────────┘          └────────┬─────────┘
-         │                             │                             │
-    (Pays USDC) ──────────────────────►│◄────────────────────── (Earns USDC)
-         │                             │                             │
-         ▼                             ▼                             ▼
-┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
-│     Arc L1       │◄────────►│   Taste Graph    │◄────────►│   Catalog        │
-│  (Settlement)    │          │   (Metadata)     │          │ (Discovery)      │
-└──────────────────┘          └──────────────────┘          └──────────────────┘
+/
+├── proxy-server.js            # Node entry (Day 1 placeholder; full routes land Day 3)
+├── proxy/
+│   ├── runtime/               # cross-cutting: config, http, errors, middleware, validation, cache
+│   ├── adapters/              # audius.js (kept), arc.js (Day 3), musicbrainz.js (Day 3)
+│   └── services/              # submissions, curation, taste-graph, settlement, feed (Day 3–5)
+├── data/                      # SQLite at versions.db, uploads/, migrations/ (Day 2)
+├── web/                       # entry shell, views, lib, styles (Day 5 rebuild)
+├── scripts/                   # doctor.sh (Day 5 rewrite)
+└── docs/
+    ├── LEPTON_STRATEGY.md
+    ├── LEPTON_IMPLEMENTATION_PLAN.md
+    └── llms.txt               # Farcaster reference
 ```
+
+## Core Principles (applied to every change)
+
+1. **ENHANCEMENT FIRST** — extend the existing proxy + adapter pattern; never fork a parallel app.
+2. **CONSOLIDATION** — delete legacy code; no deprecation warnings, no `_v2` shims.
+3. **PREVENT BLOAT** — no feature without a removal that pays for it.
+4. **DRY** — one config, one HTTP client, one DB client, one SettlementProvider, one wallet abstraction.
+5. **CLEAN** — routes are thin; domain logic in services; services depend only on adapters.
+6. **MODULAR** — every adapter has a documented interface; every service is testable without HTTP.
+7. **PERFORMANT** — TTL cache, body-size cap, request id, rate limit, paginated feed.
+8. **ORGANIZED** — domain folders: `runtime/`, `adapters/`, `services/`.
+
+## License
+
+Dual-licensed under MIT and GPLv3. See `LICENSE_MIT` and `LICENSE_GPLv3`.

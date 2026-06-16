@@ -1,45 +1,16 @@
-# 🔧 VERSIONS - Scripts Directory
+# 🔧 scripts/
 
-## **Development Scripts**
+Day 1: this directory contains a single check.
 
-### **Build & Verification**
-- **`verify_build.sh`** - Verify all components build correctly
-- **`build_termusic.sh`** - Legacy build script (use Makefile instead)
+- **`doctor.sh`** — environment + readiness check (rewritten in full on Day 5 with the Lepton env var list).
 
-### **Testing**
-- **`test_server.sh`** - Test all API endpoints
-- **`test_api.sh`** - Legacy API testing (use test_server.sh)
-- **`doctor.sh`** - Production readiness check (env + health endpoints)
+## Usage
 
-## **Usage**
-
-### **Quick Development Workflow**
 ```bash
-# 1. Verify build
-./scripts/verify_build.sh
-
-# 2. Test API
-./scripts/test_server.sh
-
-# 3. Run production doctor checks
-./scripts/doctor.sh --skip-http
+# Confirm the placeholder proxy is up
+./scripts/doctor.sh
 ```
 
-### **Recommended Workflow**
-```bash
-# Use Makefile for builds
-make build
-make test
-
-# Use scripts for verification
-./scripts/verify_build.sh
-./scripts/test_server.sh
-```
-
-## **Script Guidelines**
-
-Following our **Core Principles**:
-- **CLEAN**: Each script has single responsibility
-- **ORGANIZED**: Predictable naming and structure
-- **PERFORMANT**: Efficient execution with clear output
-- **DRY**: Avoid duplicating Makefile functionality
+The other helper scripts (start-demo, test-api, verify-build, test-server)
+are being added on Day 5 of `docs/LEPTON_IMPLEMENTATION_PLAN.md` once the
+proxy has real routes to test.

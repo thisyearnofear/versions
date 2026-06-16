@@ -1,543 +1,329 @@
 #!/usr/bin/env node
-// Simple proxy server for VERSIONS hackathon demo
-// Securely proxies API requests to hide API keys from frontend
+// MODULAR: Lepton proxy entry. Owns HTTP listener + route registration.
+// CLEAN: routes are thin; domain logic lives in services/.
+// DRY: one runtime, one db, one config, one SettlementProvider (arc).
+// PERFORMANT: idempotent migrate on boot; JSON body parsing with per-route
+//             size cap; standard error envelope with request id.
 
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const sqlite3 = require('sqlite3');
-const { open } = require('sqlite');
-const { getServerConfig, providerStatus } = require('./proxy/runtime/config');
-const { sendError } = require('./proxy/runtime/errors');
-const { createTtlCache } = require('./proxy/runtime/cache');
-const { attachRequestContext, createRateLimitMiddleware } = require('./proxy/runtime/middleware');
-const { parsePositiveInt, validateMode, validatePromptText } = require('./proxy/runtime/validation');
-const { createAudiusAdapter } = require('./proxy/adapters/audius');
-const { createHeliusAdapter } = require('./proxy/adapters/solana');
-const { createTurbopufferAdapter } = require('./proxy/adapters/turbopuffer');
-const { createElevenLabsAdapter, AUDIO_DIR } = require('./proxy/adapters/elevenlabs');
+'use strict';
+
+const http = require('http');
+const fs = require('fs');
 const path = require('path');
-const { createAudioComposeService } = require('./proxy/services/audio-compose');
+const crypto = require('crypto');
 
-const app = express();
-const PORT = process.env.SERVER_PORT || 8080;
-const serverConfig = getServerConfig();
+const { runMigrations } = require('./proxy/migrate');
+const { openDb, closeDb, DEFAULT_DB_PATH } = require('./proxy/db');
+const { getEnv } = require('./proxy/runtime/config');
+const {
+  validateSubmissionMetadata,
+  validateArcTxHash
+} = require('./proxy/runtime/validation');
+const { createArcAdapter } = require('./proxy/adapters/arc');
+const { createMusicBrainzAdapter } = require('./proxy/adapters/musicbrainz');
+const { createSubmissionsService } = require('./proxy/services/submissions');
+// AUDIUS adapter is reused (ENHANCEMENT FIRST) for musicbrainz wallet hints.
+const { createAudiusAdapter } = require('./proxy/adapters/audius');
 
-const semanticCache = createTtlCache({ ttlMs: serverConfig.semanticCacheTtlMs, maxEntries: 200 });
-const audioCache = createTtlCache({ ttlMs: serverConfig.audioCacheTtlMs, maxEntries: 120 });
+const PORT = Number(getEnv('PORT', '8080'));
+const HOST = getEnv('HOST', '0.0.0.0');
+const SERVICE = 'lepton-proxy';
+const VERSION = '0.3.0-day3';
 
-const audius = createAudiusAdapter({ apiKey: process.env.AUDIUS_API_KEY, requestTimeoutMs: serverConfig.requestTimeoutMs });
-const helius = createHeliusAdapter({ apiKey: process.env.HELIUS_API_KEY, requestTimeoutMs: serverConfig.requestTimeoutMs });
-const turbopuffer = createTurbopufferAdapter({ apiKey: process.env.TURBOPUFFER_API_KEY, requestTimeoutMs: serverConfig.requestTimeoutMs });
-const elevenlabs = createElevenLabsAdapter({ apiKey: process.env.ELEVENLABS_API_KEY, requestTimeoutMs: serverConfig.requestTimeoutMs });
-const composeService = createAudioComposeService({
-  vectorIndex: turbopuffer,
-  audioGenerator: elevenlabs
-});
+// MODULAR: single per-process instance. Reuse across requests.
+const ARC_RPC_URL = getEnv('ARC_RPC_URL', '');
+const ARC_USDC_CONTRACT = getEnv('ARC_USDC_CONTRACT', '');
+const PLATFORM_WALLET = getEnv('PLATFORM_WALLET', '');
+const AUDIUS_API_KEY = getEnv('AUDIUS_API_KEY', '');
+const UPLOAD_DIR = path.resolve(__dirname, 'data', 'uploads');
+const SUBMISSION_BODY_LIMIT = 70 * 1024 * 1024;   // ~50MB binary as base64
+const DEFAULT_BODY_LIMIT = 256 * 1024;            // 256KB
 
-// Database setup
-let db;
-let dbReady = false;
-async function initDb() {
-    db = await open({
-        filename: './data/versions.db',
-        driver: sqlite3.Database
-    });
-    
-    // Create tables if they don't exist (Relational Layer)
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS track_relationships (
-            parent_id TEXT NOT NULL,
-            version_id TEXT NOT NULL,
-            version_type TEXT,
-            artist_id TEXT,
-            PRIMARY KEY (parent_id, version_id)
-        );
-        
-        CREATE TABLE IF NOT EXISTS version_metadata (
-            track_id TEXT PRIMARY KEY,
-            rarity_tier TEXT DEFAULT 'Standard',
-            serial_prefix TEXT DEFAULT 'VER',
-            rarity_score INTEGER DEFAULT 0
-        );
-    `);
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-    dbReady = true;
-    
-    console.log('✅ SQLite Database initialized');
-}
-
-initDb().catch(err => console.error('❌ DB Init failed:', err));
-
-// Middleware
-app.use(attachRequestContext);
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || serverConfig.allowedOrigins.length === 0 || serverConfig.allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    return callback(new Error('CORS origin not allowed'));
+// CLEAN: schema must exist before the service prepares its statements.
+// Migrate first, then build services, then start listening.
+let arc, musicbrainz, audius, submissions;
+try {
+  const result = runMigrations(openDb());
+  if (result.applied.length > 0) {
+    console.log(`[lepton] applied ${result.applied.length} migration(s): ${result.applied.join(', ')}`);
+  } else {
+    console.log(`[lepton] schema up to date (${result.skipped.length} migration(s))`);
   }
-}));
-app.use(express.json({ limit: serverConfig.bodyLimit }));
-
-const audioRateLimit = createRateLimitMiddleware({
-  windowMs: serverConfig.rateLimitWindowMs,
-  maxRequests: serverConfig.rateLimitAudioMax,
-  label: 'audio-api'
-});
-
-function cacheKey(parts) {
-  return JSON.stringify(parts);
+} catch (err) {
+  console.error('[lepton] migration failed:', err.message);
+  process.exit(1);
 }
 
-function fail(res, req, status, message, details, code) {
-  return sendError(res, status, message, details, code, req.requestId);
-}
-
-function ensureDatabaseReady(req, res) {
-  if (dbReady) {
-    return true;
-  }
-
-  fail(res, req, 503, 'Database not ready', null, 'DB_NOT_READY');
-  return false;
-}
-
-// Relationship Endpoints
-app.get('/api/v1/relationships/:parent_id', async (req, res) => {
-  try {
-        if (!ensureDatabaseReady(req, res)) {
-            return;
-        }
-        const { parent_id } = req.params;
-        const relations = await db.all('SELECT * FROM track_relationships WHERE parent_id = ?', [parent_id]);
-        res.json({ success: true, data: relations });
-    } catch (error) {
-        fail(res, req, 500, 'Failed to fetch relationships', error.message, 'RELATIONSHIP_FETCH_FAILED');
-    }
+arc = createArcAdapter({
+  rpcUrl: ARC_RPC_URL || null,
+  usdcContract: ARC_USDC_CONTRACT || null,
+  platformWallet: PLATFORM_WALLET || null
 });
+audius = createAudiusAdapter({ apiKey: AUDIUS_API_KEY || null, requestTimeoutMs: 8000 });
+musicbrainz = createMusicBrainzAdapter({ requestTimeoutMs: 8000, audius });
+submissions = createSubmissionsService({ arc, platformWallet: PLATFORM_WALLET || null });
 
-app.post('/api/v1/relationships/link', async (req, res) => {
-    try {
-        if (!ensureDatabaseReady(req, res)) {
-            return;
-        }
-        const { parent_id, version_id, version_type, artist_id } = req.body;
-        if (!parent_id || !version_id) {
-            return fail(res, req, 400, 'parent_id and version_id are required', null, 'INVALID_INPUT');
-        }
+// ---------- helpers ----------
 
-        await db.run(
-            'INSERT OR REPLACE INTO track_relationships (parent_id, version_id, version_type, artist_id) VALUES (?, ?, ?, ?)',
-            [parent_id, version_id, version_type, artist_id]
-        );
-        res.json({ success: true, message: 'Relationship linked', requestId: req.requestId });
-    } catch (error) {
-        fail(res, req, 500, 'Failed to link relationship', error.message, 'RELATIONSHIP_LINK_FAILED');
-    }
-});
-
-app.get('/api/v1/relationships', async (req, res) => {
-    try {
-        if (!ensureDatabaseReady(req, res)) {
-            return;
-        }
-        const relations = await db.all('SELECT * FROM track_relationships');
-        res.json({ success: true, data: relations });
-    } catch (error) {
-        fail(res, req, 500, 'Failed to fetch relationships', error.message, 'RELATIONSHIP_FETCH_FAILED');
-    }
-});
-
-// Health check
-app.get('/api/v1/health/live', (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      status: 'live',
-      service: 'versions-proxy',
-      requestId: req.requestId,
-      timestamp: new Date().toISOString()
-    }
+function jsonResponse(res, status, body, requestId) {
+  const payload = JSON.stringify(body);
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': Buffer.byteLength(payload),
+    'x-request-id': requestId
   });
-});
+  res.end(payload);
+}
 
-app.get('/api/v1/health/ready', (req, res) => {
-  const providers = providerStatus();
-  const ready = dbReady;
+function errorResponse(res, requestId, status, code, message, details) {
+  return jsonResponse(res, status, {
+    success: false,
+    error: { code, message, details: details || null, requestId }
+  }, requestId);
+}
 
-  if (!ready) {
-    return fail(res, req, 503, 'Service is not ready', { dbReady, providers }, 'NOT_READY');
-  }
+function readJsonBody(req, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    req.on('data', (chunk) => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        req.destroy();
+        reject(Object.assign(new Error('Body too large'), { status: 413, code: 'BODY_TOO_LARGE' }));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      try {
+        const body = Buffer.concat(chunks).toString('utf8');
+        resolve(body ? JSON.parse(body) : null);
+      } catch (err) {
+        reject(Object.assign(new Error('Invalid JSON: ' + err.message), { status: 400, code: 'INVALID_JSON' }));
+      }
+    });
+    req.on('error', (err) => reject(Object.assign(err, { status: 400, code: 'BODY_READ_ERROR' })));
+  });
+}
 
-  return res.json({
+function requestContext(req) {
+  const incoming = req.headers['x-request-id'];
+  return (typeof incoming === 'string' && incoming.trim()) ? incoming.trim() : crypto.randomUUID();
+}
+
+const MIME = {
+  '.mp3': 'audio/mpeg',
+  '.mpeg': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.flac': 'audio/flac',
+  '.m4a': 'audio/mp4',
+  '.webm': 'audio/webm'
+};
+
+function safeUploadPath(filename) {
+  // path.basename + reject ".." so traversal cannot escape UPLOAD_DIR.
+  const base = path.basename(filename);
+  if (!base || base.includes('..') || base.includes('/') || base.includes('\\')) return null;
+  return path.join(UPLOAD_DIR, base);
+}
+
+// ---------- route table (CLEAN: thin handlers) ----------
+
+async function handleHealthLive(req, res, requestId) {
+  return jsonResponse(res, 200, {
+    success: true,
+    data: { status: 'ok', service: SERVICE, version: VERSION }
+  }, requestId);
+}
+
+async function handleHealthReady(req, res, requestId) {
+  // PERFORMANT: cheap reachability probe. The migrations on boot guarantee
+  // the schema is up to date; the live check is just "are we listening".
+  return jsonResponse(res, 200, {
     success: true,
     data: {
       status: 'ready',
-      dbReady,
-      providers,
-      requestId: req.requestId,
-      timestamp: new Date().toISOString()
+      service: SERVICE,
+      version: VERSION,
+      providers: { arc: { mock: !ARC_RPC_URL }, musicbrainz: true, audius: Boolean(AUDIUS_API_KEY) }
     }
-  });
-});
+  }, requestId);
+}
 
-app.get('/api/v1/health', (req, res) => {
-  res.json({
+async function handleArcInfo(req, res, requestId) {
+  const info = await arc.getInfo();
+  return jsonResponse(res, 200, { success: true, data: info }, requestId);
+}
+
+async function handleSubmissionsCreate(req, res, requestId) {
+  let body;
+  try {
+    body = await readJsonBody(req, SUBMISSION_BODY_LIMIT);
+  } catch (err) {
+    return errorResponse(res, requestId, err.status || 400, err.code || 'BAD_REQUEST', err.message);
+  }
+
+  const metadata = body && body.metadata;
+  const validation = validateSubmissionMetadata(metadata);
+  if (!validation.ok) {
+    return errorResponse(res, requestId, 400, 'INVALID_METADATA', 'metadata validation failed', validation.errors);
+  }
+  if (!body.artistWallet) {
+    return errorResponse(res, requestId, 400, 'MISSING_FIELD', 'artistWallet is required');
+  }
+  if (!body.signature) {
+    return errorResponse(res, requestId, 400, 'MISSING_FIELD', 'signature is required');
+  }
+  if (!body.audio || typeof body.audio !== 'object' || !body.audio.base64) {
+    return errorResponse(res, requestId, 400, 'MISSING_FIELD', 'audio.base64 is required');
+  }
+
+  // MODULAR: decode + write the audio file. Routes handle I/O; service handles DB.
+  let audioBuffer;
+  try {
+    audioBuffer = Buffer.from(body.audio.base64, 'base64');
+  } catch (err) {
+    return errorResponse(res, requestId, 400, 'INVALID_AUDIO', 'audio.base64 could not be decoded');
+  }
+  if (audioBuffer.length === 0) {
+    return errorResponse(res, requestId, 400, 'INVALID_AUDIO', 'audio is empty');
+  }
+
+  const ext = (body.audio.contentType || 'audio/mpeg')
+    .replace(/^audio\//, '')
+    .replace(/[^a-z0-9]/gi, '') || 'mp3';
+  const filename = `${crypto.randomUUID()}.${ext}`;
+  const audioPath = `data/uploads/${filename}`;
+  try {
+    fs.writeFileSync(path.join(UPLOAD_DIR, filename), audioBuffer);
+  } catch (err) {
+    return errorResponse(res, requestId, 500, 'UPLOAD_FAILED', err.message);
+  }
+
+  const result = submissions.createSubmission({
+    audioPath,
+    contentType: body.audio.contentType || 'audio/mpeg',
+    sizeBytes: audioBuffer.length,
+    durationSeconds: body.audio.durationSeconds || null,
+    metadata: { ...metadata, audiusTrackId: body.audio.audiusTrackId },
+    artistWallet: body.artistWallet,
+    signature: body.signature
+  });
+
+  if (!result.ok) {
+    // Clean up the orphan file on auth/validation failure.
+    try { fs.unlinkSync(path.join(UPLOAD_DIR, filename)); } catch (_) { /* ignore */ }
+    return errorResponse(res, requestId, 400, 'SUBMISSION_REJECTED', result.error);
+  }
+
+  return jsonResponse(res, 201, {
     success: true,
     data: {
-      status: dbReady ? 'healthy' : 'starting',
-      service: 'versions-proxy',
-      dbReady,
-      providers: providerStatus(),
-      requestId: req.requestId,
-      timestamp: new Date().toISOString()
+      id: result.submission.id,
+      fee_quote_usdc: result.submission.fee_quote_usdc,
+      payment_address: PLATFORM_WALLET || null,
+      status: result.submission.status,
+      audio_url: `/api/v1/uploads/${filename}`,
+      submission_message: 'VERSIONS_LEPTON_SUBMIT'
     }
+  }, requestId);
+}
+
+async function handleSubmissionsQueue(req, res, requestId) {
+  const limit = Number(req.url.split('?')[1]?.match(/limit=(\d+)/)?.[1]) || 20;
+  const offset = Number(req.url.split('?')[1]?.match(/offset=(\d+)/)?.[1]) || 0;
+  const rows = submissions.listQueue({ limit, offset });
+  return jsonResponse(res, 200, { success: true, data: rows }, requestId);
+}
+
+async function handleSubmissionsGet(req, res, requestId, id) {
+  const row = submissions.getSubmission(id);
+  if (!row) return errorResponse(res, requestId, 404, 'NOT_FOUND', 'Submission not found');
+  return jsonResponse(res, 200, { success: true, data: row }, requestId);
+}
+
+async function handleSubmissionsVerifyPayment(req, res, requestId, id) {
+  let body;
+  try {
+    body = await readJsonBody(req, DEFAULT_BODY_LIMIT);
+  } catch (err) {
+    return errorResponse(res, requestId, err.status || 400, err.code || 'BAD_REQUEST', err.message);
+  }
+  const txError = validateArcTxHash(body && body.txHash);
+  if (txError) {
+    return errorResponse(res, requestId, 400, 'INVALID_TX_HASH', txError);
+  }
+  const r = await submissions.verifyPayment(id, body.txHash);
+  if (!r.ok) {
+    const status = r.error === 'Submission not found' ? 404 : 400;
+    return errorResponse(res, requestId, status, 'VERIFY_PAYMENT_FAILED', r.error);
+  }
+  return jsonResponse(res, 200, { success: true, data: r.submission }, requestId);
+}
+
+async function handleUploadGet(req, res, requestId, filename) {
+  // CLEAN: uploads are unguessable UUIDs. Day 3 keeps the gate loose so the
+  // demo flow works; Day 5 wires a proper claim/owner check.
+  const safe = safeUploadPath(filename);
+  if (!safe) return errorResponse(res, requestId, 400, 'BAD_FILENAME', 'Invalid filename');
+  if (!fs.existsSync(safe)) return errorResponse(res, requestId, 404, 'NOT_FOUND', 'Audio not found');
+  const ext = path.extname(safe).toLowerCase();
+  res.writeHead(200, {
+    'Content-Type': MIME[ext] || 'application/octet-stream',
+    'Cache-Control': 'public, max-age=86400',
+    'x-request-id': requestId
   });
-});
+  fs.createReadStream(safe).pipe(res);
+}
 
-app.get('/api/v1/providers', (req, res) => {
-  res.json({ success: true, data: providerStatus(), requestId: req.requestId });
-});
+// ---------- router ----------
 
-// Proxy Audius coins list
-app.get('/api/v1/audius/coins', async (req, res) => {
+const ROUTES = [
+  { method: 'GET',    match: (p) => p === '/health/live',                              handler: handleHealthLive },
+  { method: 'GET',    match: (p) => p === '/health/ready',                             handler: handleHealthReady },
+  { method: 'GET',    match: (p) => p === '/api/v1/arc/info',                          handler: handleArcInfo },
+  { method: 'POST',   match: (p) => p === '/api/v1/submissions',                       handler: handleSubmissionsCreate },
+  { method: 'GET',    match: (p) => p === '/api/v1/submissions/queue',                  handler: handleSubmissionsQueue },
+  { method: 'POST',   match: (p) => /^\/api\/v1\/submissions\/[^/]+\/verify-payment$/.test(p),
+            handler: (req, res, rid, p) => handleSubmissionsVerifyPayment(req, res, rid, p.split('/')[4]) },
+  { method: 'GET',    match: (p) => /^\/api\/v1\/submissions\/[^/]+$/.test(p),
+            handler: (req, res, rid, p) => handleSubmissionsGet(req, res, rid, p.split('/')[4]) },
+  { method: 'GET',    match: (p) => /^\/api\/v1\/uploads\/[^/]+$/.test(p),
+            handler: (req, res, rid, p) => handleUploadGet(req, res, rid, p.split('/')[4]) }
+];
+
+const server = http.createServer(async (req, res) => {
+  const requestId = requestContext(req);
+  const url = (req.url || '/').split('?')[0];
   try {
-    const limit = parsePositiveInt(req.query.limit, 100);
-    if (limit === null || limit > 200) {
-      return fail(res, req, 400, 'limit must be an integer between 1 and 200', null, 'INVALID_INPUT');
+    for (const r of ROUTES) {
+      if (r.method !== req.method) continue;
+      if (r.match(url)) return await r.handler(req, res, requestId, url);
     }
-
-    const data = await audius.getCoins(limit);
-    res.json(data);
-  } catch (error) {
-    console.error('Audius coins error:', error.message);
-    fail(res, req, 500, 'Failed to fetch coins', error.message, 'AUDIUS_COINS_FAILED');
+    return errorResponse(res, requestId, 404, 'NOT_FOUND', `No route for ${req.method} ${url}`);
+  } catch (err) {
+    console.error(`[lepton] ${req.method} ${url} failed:`, err);
+    return errorResponse(res, requestId, 500, 'INTERNAL', err.message);
   }
 });
 
-// Proxy Audius Resolve (Handle to ID)
-app.get('/api/v1/audius/resolve', async (req, res) => {
-  try {
-    const { url } = req.query;
-    if (!url) {
-      return fail(res, req, 400, 'URL parameter is required', null, 'INVALID_INPUT');
-    }
+// ---------- shutdown + boot ----------
 
-    const data = await audius.resolve(url);
-    res.json(data);
-  } catch (error) {
-    console.error('Audius resolve error:', error.message);
-    fail(res, req, 500, 'Failed to resolve Audius URL', error.message, 'AUDIUS_RESOLVE_FAILED');
-  }
-});
+function shutdown(signal) {
+  console.log(`[lepton] ${signal} received, closing`);
+  server.close(() => {
+    closeDb();
+    process.exit(0);
+  });
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-// Proxy Audius trending tracks
-app.get('/api/v1/audius/trending', async (req, res) => {
-  try {
-    const data = await audius.getTrending();
-    res.json(data);
-  } catch (error) {
-    console.error('Audius trending error:', error.message);
-    fail(res, req, 500, 'Failed to fetch trending tracks', error.message, 'AUDIUS_TRENDING_FAILED');
-  }
-});
-
-// Proxy Audius user coins
-app.get('/api/v1/audius/user/:user_id/coins', async (req, res) => {
-  try {
-    const { user_id } = req.params;
-    const data = await audius.getUserCoins(user_id);
-    res.json(data);
-  } catch (error) {
-    console.error('Audius coins error:', error.message);
-    fail(res, req, 500, 'Failed to fetch user coins', error.message, 'AUDIUS_USER_COINS_FAILED');
-  }
-});
-
-// Proxy Audius track search
-app.get('/api/v1/audius/search', async (req, res) => {
-  try {
-    const query = req.query.q || '';
-    const limit = parsePositiveInt(req.query.limit, undefined);
-    if (limit === null || (typeof limit === 'number' && limit > 100)) {
-      return fail(res, req, 400, 'limit must be an integer between 1 and 100', null, 'INVALID_INPUT');
-    }
-
-    const data = await audius.searchTracks(query, limit);
-    res.json(data);
-  } catch (error) {
-    console.error('Audius search error:', error.message);
-    fail(res, req, 500, 'Failed to search tracks', error.message, 'AUDIUS_SEARCH_FAILED');
-  }
-});
-
-// Proxy Audius track by ID
-app.get('/api/v1/audius/track/:track_id', async (req, res) => {
-  try {
-    const { track_id } = req.params;
-    const data = await audius.getTrack(track_id);
-    res.json(data);
-  } catch (error) {
-    console.error('Audius track error:', error.message);
-    fail(res, req, 500, 'Failed to fetch track', error.message, 'AUDIUS_TRACK_FAILED');
-  }
-});
-
-// Proxy Audius track access info (gating status)
-app.get('/api/v1/audius/track/:track_id/access-info', async (req, res) => {
-  try {
-    const { track_id } = req.params;
-    const data = await audius.getTrackAccessInfo(track_id);
-    res.json(data);
-  } catch (error) {
-    console.error('Track access info error:', error.message);
-    fail(res, req, 500, 'Failed to fetch track access info', error.message, 'AUDIUS_ACCESS_INFO_FAILED');
-  }
-});
-
-// Proxy Audius track streaming
-app.get('/api/v1/audius/stream/:track_id', async (req, res) => {
-  try {
-    const { track_id } = req.params;
-    const response = await audius.streamTrack(track_id);
-    
-    // Stream the audio data through
-    res.setHeader('Content-Type', response.headers.get('content-type') || 'audio/mpeg');
-    res.setHeader('Accept-Ranges', 'bytes');
-    
-    // Pipe the response
-    const buffer = await response.arrayBuffer();
-    res.send(Buffer.from(buffer));
-  } catch (error) {
-    console.error('Audius stream error:', error.message);
-    fail(res, req, 500, 'Failed to stream track', error.message, 'AUDIUS_STREAM_FAILED');
-  }
-});
-
-// Proxy Solana RPC requests through Helius
-app.post('/api/v1/solana/rpc', async (req, res) => {
-  try {
-    const data = await helius.rpc(req.body);
-    res.json(data);
-  } catch (error) {
-    console.error('Solana RPC error:', error.message);
-    return res.status(500).json({
-      jsonrpc: '2.0',
-      error: { code: -32603, message: error.message || 'RPC request failed' },
-      id: req.body.id,
-      requestId: req.requestId
-    });
-  }
-});
-
-// ARTIST ENDPOINTS
-
-// Get artist's tracks
-app.get('/api/v1/artist/:user_id/tracks', async (req, res) => {
-  try {
-    const { user_id } = req.params;
-    const data = await audius.getArtistTracks(user_id);
-    res.json(data);
-  } catch (error) {
-    console.error('Artist tracks error:', error.message);
-    fail(res, req, 500, 'Failed to fetch artist tracks', error.message, 'ARTIST_TRACKS_FAILED');
-  }
-});
-
-// Get artist info
-app.get('/api/v1/artist/:user_id', async (req, res) => {
-  try {
-    const { user_id } = req.params;
-    const data = await audius.getArtist(user_id);
-    res.json(data);
-  } catch (error) {
-    console.error('Artist info error:', error.message);
-    fail(res, req, 500, 'Failed to fetch artist info', error.message, 'ARTIST_INFO_FAILED');
-  }
-});
-
-app.post('/api/v1/semantic/search', async (req, res) => {
-  try {
-    const { query, topK = 5, namespace } = req.body || {};
-    const queryError = validatePromptText(query, 'query');
-    if (queryError) {
-      return fail(res, req, 400, queryError, null, 'INVALID_INPUT');
-    }
-
-    const validatedTopK = parsePositiveInt(topK, 5);
-    if (validatedTopK === null || validatedTopK > 20) {
-      return fail(res, req, 400, 'topK must be an integer between 1 and 20', null, 'INVALID_INPUT');
-    }
-
-    const trimmedQuery = query.trim();
-    const key = cacheKey(['semantic', trimmedQuery, validatedTopK, namespace || null]);
-    const cached = semanticCache.get(key);
-    if (cached) {
-      return res.json({ success: true, data: cached, meta: { cached: true }, requestId: req.requestId });
-    }
-
-    const data = await turbopuffer.semanticSearch({
-      query: trimmedQuery,
-      topK: validatedTopK,
-      namespace
-    });
-
-    semanticCache.set(key, data);
-
-    res.json({ success: true, data, meta: { cached: false }, requestId: req.requestId });
-  } catch (error) {
-    console.error('Semantic search error:', error.message);
-    fail(res, req, 500, 'Semantic search failed', error.message, 'SEMANTIC_SEARCH_FAILED');
-  }
-});
-
-app.post('/api/v1/audio/generate', audioRateLimit, async (req, res) => {
-  try {
-    const { mode = 'music', prompt, durationSeconds } = req.body || {};
-    const promptError = validatePromptText(prompt, 'prompt');
-    if (promptError) {
-      return fail(res, req, 400, promptError, null, 'INVALID_INPUT');
-    }
-
-    if (!validateMode(mode)) {
-      return fail(res, req, 400, 'mode must be one of: music, sfx', null, 'INVALID_INPUT');
-    }
-
-    const validatedDurationSeconds = parsePositiveInt(durationSeconds, 10);
-    if (validatedDurationSeconds === null || validatedDurationSeconds > 120) {
-      return fail(res, req, 400, 'durationSeconds must be between 1 and 120', null, 'INVALID_INPUT');
-    }
-
-    const trimmedPrompt = prompt.trim();
-    const key = cacheKey(['generate', mode, trimmedPrompt, validatedDurationSeconds]);
-    const cached = audioCache.get(key);
-    if (cached) {
-      return res.json({ success: true, data: cached, meta: { cached: true }, requestId: req.requestId });
-    }
-
-    const data = await elevenlabs.generate({
-      mode,
-      prompt: trimmedPrompt,
-      durationSeconds: validatedDurationSeconds
-    });
-
-    audioCache.set(key, data);
-
-    res.json({ success: true, data, meta: { cached: false }, requestId: req.requestId });
-  } catch (error) {
-    console.error('Audio generation error:', error.message);
-    fail(res, req, 500, 'Audio generation failed', error.message, 'AUDIO_GENERATE_FAILED');
-  }
-});
-
-app.post('/api/v1/audio/compose', audioRateLimit, async (req, res) => {
-  try {
-    const { query, mode = 'music', topK = 5, durationSeconds, trackContext } = req.body || {};
-    const queryError = validatePromptText(query, 'query');
-    if (queryError) {
-      return fail(res, req, 400, queryError, null, 'INVALID_INPUT');
-    }
-
-    if (!validateMode(mode)) {
-      return fail(res, req, 400, 'mode must be one of: music, sfx', null, 'INVALID_INPUT');
-    }
-
-    const validatedTopK = parsePositiveInt(topK, 5);
-    if (validatedTopK === null || validatedTopK > 20) {
-      return fail(res, req, 400, 'topK must be an integer between 1 and 20', null, 'INVALID_INPUT');
-    }
-
-    const validatedDurationSeconds = parsePositiveInt(durationSeconds, 10);
-    if (validatedDurationSeconds === null || validatedDurationSeconds > 120) {
-      return fail(res, req, 400, 'durationSeconds must be between 1 and 120', null, 'INVALID_INPUT');
-    }
-
-    const trimmedQuery = query.trim();
-    const key = cacheKey(['compose', mode, trimmedQuery, validatedTopK, validatedDurationSeconds]);
-    const cached = audioCache.get(key);
-    if (cached) {
-      return res.json({ success: true, data: cached, meta: { cached: true }, requestId: req.requestId });
-    }
-
-    const data = await composeService.compose({
-      query: trimmedQuery,
-      mode,
-      topK: validatedTopK,
-      durationSeconds: validatedDurationSeconds,
-      trackContext: trackContext || null
-    });
-
-    audioCache.set(key, data);
-
-    res.json({ success: true, data, meta: { cached: false }, requestId: req.requestId });
-  } catch (error) {
-    console.error('Audio compose error:', error.message);
-    fail(res, req, 500, 'Audio compose failed', error.message, 'AUDIO_COMPOSE_FAILED');
-  }
-});
-
-// Serve generated audio files
-app.get('/api/v1/audio/files/:filename', (req, res) => {
-  const filename = path.basename(req.params.filename);
-  const filepath = path.join(AUDIO_DIR, filename);
-  const fs = require('fs');
-  if (!fs.existsSync(filepath)) {
-    return fail(res, req, 404, 'Audio file not found', null, 'FILE_NOT_FOUND');
-  }
-  const ext = path.extname(filename).slice(1);
-  const mimeMap = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg' };
-  res.setHeader('Content-Type', mimeMap[ext] || 'audio/mpeg');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  fs.createReadStream(filepath).pipe(res);
-});
-
-// Upsert vectors into turbopuffer namespace
-app.post('/api/v1/vectors/upsert', async (req, res) => {
-  try {
-    const { vectors, namespace } = req.body || {};
-    if (!Array.isArray(vectors) || vectors.length === 0) {
-      return fail(res, req, 400, 'vectors must be a non-empty array', null, 'INVALID_INPUT');
-    }
-    const data = await turbopuffer.upsert({ vectors, namespace });
-    res.json({ success: true, data, count: vectors.length, requestId: req.requestId });
-  } catch (error) {
-    console.error('Vector upsert error:', error.message);
-    fail(res, req, 500, 'Vector upsert failed', error.message, 'VECTOR_UPSERT_FAILED');
-  }
-});
-
-app.use('/api/v1', (req, res) => {
-  fail(res, req, 404, 'Route not found', req.path, 'NOT_FOUND');
-});
-
-app.use((error, req, res, next) => {
-  if (!error) {
-    return next();
-  }
-
-  if (error.message === 'CORS origin not allowed') {
-    return fail(res, req, 403, 'Origin not allowed', null, 'CORS_DENIED');
-  }
-
-  console.error('Unhandled error:', error);
-  return fail(res, req, 500, 'Unhandled server error', error.message, 'UNHANDLED_ERROR');
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log('🚀 VERSIONS Proxy Server');
-  console.log('========================');
-  console.log(`✅ Server running on http://localhost:${PORT}`);
-  console.log(`✅ Health check: http://localhost:${PORT}/api/v1/health`);
-  console.log('');
-  console.log('📋 Environment:');
-  console.log(`   AUDIUS_API_KEY: ${process.env.AUDIUS_API_KEY ? '✓ Set' : '✗ Missing'}`);
-  console.log(`   HELIUS_API_KEY: ${process.env.HELIUS_API_KEY ? '✓ Set' : '✗ Missing'}`);
-  console.log(`   TURBOPUFFER_API_KEY: ${process.env.TURBOPUFFER_API_KEY ? '✓ Set' : '✗ Missing'}`);
-  console.log(`   ELEVENLABS_API_KEY: ${process.env.ELEVENLABS_API_KEY ? '✓ Set' : '✗ Missing'}`);
-  console.log('');
-  console.log('🌐 Frontend should be at: http://localhost:3000');
+server.listen(PORT, HOST, () => {
+  console.log(`[lepton] listening on http://${HOST}:${PORT} (${VERSION})`);
+  console.log(`[lepton] arc: ${ARC_RPC_URL ? 'real' : 'mock'}, audius: ${AUDIUS_API_KEY ? 'configured' : 'no-key'}, uploads: ${UPLOAD_DIR}`);
 });
