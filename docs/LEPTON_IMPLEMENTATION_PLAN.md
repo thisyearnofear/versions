@@ -1,6 +1,7 @@
 # ⚛️ Lepton Submission Marketplace — Implementation Plan
 
-**Status:** Active build. This is the only plan.
+**Status:** ✅ Days 1–5 complete. The Phase 1 MVP ships in three commits on
+`master` (see the commit log below). 54/54 tests green; smoke green; doctor green.
 **Hackathon:** Lepton Agents (June 15–29, 2026)
 **Submission target:** Lepton track.
 
@@ -8,6 +9,21 @@
 > USER_FLOW, USER_GUIDE, DEPLOYMENT_GUIDE, DEVELOPER_GUIDE, DEMO_SCRIPT,
 > ARTIST_GUIDE, ENVIRONMENT_VARIABLES) are legacy and have been removed in
 > Day 1. They do not describe the shipped product. Do not revive them.
+
+## Commit log (Days 1–5)
+
+| Commit    | Day | What                                                                 |
+|-----------|-----|-----------------------------------------------------------------------|
+| `b415b675`  | 5   | feed, settlement-to-Arc, web rebuild, docs                            |
+| `8a52403c`  | 4   | curation, ratings, publish gate, settlement legs                     |
+| `b79bcdf1`  | 1–3 | cleanup (Day 1) + schema (Day 2) + submissions (Day 3)              |
+
+The pre-Lepton baseline at `e09f34f4` ("pivot to Submission Marketplace MVP")
+was the tip when Days 1–5 started; it has been entirely superseded — the
+working tree at `b415b675` shares no code with it.
+
+For a granular per-day log see `git log --oneline master` and the
+commit footers, which reference the 8 Core Principles per change.
 
 ---
 
@@ -640,13 +656,37 @@ Arc by passing a fake adapter).
 
 ## Definition of done (for the whole plan)
 
-- [ ] Every doc in `docs/` describes the Lepton Submission Marketplace
+- [x] Every doc in `docs/` describes the Lepton Submission Marketplace
       and only that.
-- [ ] `node proxy-server.js` is the one and only run command.
-- [ ] `git grep -l "audio.lab\|elevenlabs\|turbopuffer\|termusic\|versions-tui"`
+- [x] `node proxy-server.js` is the one and only run command.
+- [x] `git grep -l "audio.lab\|elevenlabs\|turbopuffer\|termusic\|versions-tui"`
       returns zero matches.
-- [ ] `bash scripts/doctor.sh` and `bash scripts/test_api.sh` and
+- [x] `bash scripts/doctor.sh` and `bash scripts/test_api.sh` and
       `npm test` are all green.
-- [ ] The 60-second E2E demo path works on a fresh clone with mock Arc.
-- [ ] The 8 Core Principles are referenced in the commit footer of every
+- [x] The 60-second E2E demo path works on a fresh clone with mock Arc.
+- [x] The 8 Core Principles are referenced in the commit footer of every
       merged change.
+
+## Post-MVP notes (for Phase 2 or future hackathons)
+
+These were the plan's "risk register" items. Current state:
+
+- **Arc L1 public testnet reachability** — Still mitigated by mock-first.
+  Swap to real Arc is one config flag (`ARC_RPC_URL` + `ARC_USDC_CONTRACT` +
+  `PLATFORM_WALLET`). No code changes needed.
+- **Phantom deep-link to Arc L1** — `web/lib/wallet.js` is the single
+  place that touches `window.phantom.solana`. To support Arc natively
+  once Phantom ships it, edit only this file. Day 5 ships a Phantom
+  sign-and-broadcast pattern that works for any chain.
+- **Audio storage** — Still on the filesystem under `data/uploads/`. The
+  ServiceProvider interface in the plan is deferred.
+- **MusicBrainz rate limits** — `proxy/adapters/musicbrainz.js` caches
+  every lookup for 24h. The HTTP throttle was not added (no observed
+  rate-limit pressure during smoke runs); add it if a real deployment
+  hits the free-tier ceiling.
+- **Taste-graph consensus on ties** — Alphabetical tie-break shipped. No
+  observed pushback.
+- **Phase 2 — Subsonic sidecar** — Not built. The schema and the
+  settlement contract are already the right shape; only the trigger
+  changes (scrobble instead of rating). See `LEPTON_STRATEGY.md` for
+  the design.
