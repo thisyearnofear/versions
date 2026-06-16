@@ -442,6 +442,24 @@ const ROUTES = [
 const server = http.createServer(async (req, res) => {
   const requestId = requestContext(req);
   const url = (req.url || '/').split('?')[0];
+
+  // MODULAR: CORS preflight + actual CORS headers. Manual because the
+  // proxy is raw http (no express). Without these, the web client on
+  // :3000 can't call the proxy on :8080 from a browser.
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, x-request-id',
+      'Access-Control-Max-Age': '600',
+      'x-request-id': requestId
+    });
+    res.end();
+    return;
+  }
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Vary', 'Origin');
+
   try {
     for (const r of ROUTES) {
       if (r.method !== req.method) continue;

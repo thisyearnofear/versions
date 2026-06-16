@@ -11,7 +11,6 @@ import {
 } from './lib/wallet.js';
 import { showToast } from './lib/toast.js';
 import { playFile } from './lib/audio-player.js';
-
 // ---------- wallet state ----------
 
 let currentAddress = null;
@@ -177,7 +176,7 @@ document.getElementById('refreshQueueBtn').addEventListener('click', refreshQueu
 function renderQueue() {
   const ul = document.getElementById('queueList');
   if (currentQueue.length === 0) {
-    ul.innerHTML = '<li class="empty-state"><strong>Queue is empty.</strong>No submissions awaiting curation. The first artist to submit will appear here.</li>';
+    ul.innerHTML = '<li class="empty-state"><strong>The queue is empty.</strong>No submissions awaiting curation right now.<div class="hint">Try seeding the catalog with <code>npm run seed</code></div></li>';
     return;
   }
   ul.innerHTML = '';
@@ -185,8 +184,8 @@ function renderQueue() {
     const li = document.createElement('li');
     li.className = 'queue-item' + (selectedSubmission && selectedSubmission.id === sub.id ? ' selected' : '');
     li.innerHTML = `
-      <b>${escapeHtml(sub.title)}</b>
-      <div class="feed-meta">${escapeHtml(sub.artist_name)} · ${escapeHtml(sub.version_type)} · ${escapeHtml(sub.genre || '')}</div>
+      <div style="font-family: var(--serif); font-size: 17px; font-weight: 500;">${escapeHtml(sub.title)}</div>
+      <div class="feed-meta">${escapeHtml(sub.artist_name)} · ${escapeHtml(sub.version_type)}</div>
     `;
     li.addEventListener('click', () => selectSubmission(sub));
     ul.appendChild(li);
@@ -292,10 +291,49 @@ document.getElementById('feedFilter').addEventListener('submit', async (e) => {
   }
 });
 
+// MODULAR: Custom audio widget. Uses the .audio-player + .audio-play +
+// .audio-wave + .audio-meta styles in main.css so the player is on-brand
+// rather than the browser's default <audio controls>. The wave is a
+// decorative element that animates while audio is playing.
+function audioWidget(v) {
+  const audioUrl = `${baseUrl}/api/v1/uploads/${v.audio_path.split('/').pop()}`;
+  const playId = `play-${v.submission_id}`;
+  const waveId = `wave-${v.submission_id}`;
+  // 24 bars; deterministic heights so the wave is stable between plays.
+  const bars = Array.from({ length: 24 }, (_, i) => 30 + ((i * 7) % 17) + ((i * i) % 23));
+  return `
+    <div class="audio-player">
+      <button class="audio-play" id="${playId}" data-src="${audioUrl}" aria-label="Play ${escapeHtml(v.title)}">▶</button>
+      <div class="audio-meta">
+        <div class="title">${escapeHtml(v.title)}</div>
+        <div class="by">${escapeHtml(v.artist_name)}</div>
+      </div>
+      <div class="audio-wave" id="${waveId}">${bars.map((h) => `<div class="bar" style="height:${h}%"></div>`).join('')}</div>
+    </div>
+  `;
+}
+
+function bindAudioWidgets() {
+  // MODULAR: one delegated handler. Each play button toggles a wave
+  // animation and starts/stops the underlying audio.
+  for (const btn of document.querySelectorAll('.audio-play')) {
+    if (btn.dataset.bound) continue;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => {
+      const url = btn.dataset.src;
+      const wave = document.getElementById(btn.id.replace('play-', 'wave-'));
+      const audio = playFile(url, btn.getAttribute('aria-label') || '');
+      audio.addEventListener('play', () => { wave.classList.add('playing'); btn.textContent = '❚❚'; });
+      audio.addEventListener('pause', () => { wave.classList.remove('playing'); btn.textContent = '▶'; });
+      audio.addEventListener('ended', () => { wave.classList.remove('playing'); btn.textContent = '▶'; });
+    });
+  }
+}
+
 function renderFeed(rows) {
   const ul = document.getElementById('feedList');
   if (rows.length === 0) {
-    ul.innerHTML = '<li class="empty-state"><strong>No published versions yet.</strong>Once 3 curators rate a submission it lands here. Run <code>npm run seed</code> to populate the feed for the demo.</li>';
+    ul.innerHTML = '<li class="empty-state"><strong>The feed is empty.</strong>Once 3 curators rate a submission it lands here.<div class="hint">Seed the catalog with <code>npm run seed</code></div></li>';
     return;
   }
   ul.innerHTML = '';
@@ -303,16 +341,36 @@ function renderFeed(rows) {
     const li = document.createElement('li');
     li.className = 'feed-item';
     const tags = JSON.parse(v.aggregated_mood_tags || '[]');
-    const audioUrl = `${baseUrl}/api/v1/uploads/${v.audio_path.split('/').pop()}`;
     li.innerHTML = `
-      <h4>${escapeHtml(v.title)}</h4>
-      <div class="feed-meta">${escapeHtml(v.artist_name)} · ${escapeHtml(v.version_type)}</div>
-      <div class="feed-meta">solo ${v.avg_solo_intensity?.toFixed?.(1) || '-'} · vocal ${v.avg_vocal_quality?.toFixed?.(1) || '-'} · energy ${escapeHtml(v.energy_consensus || '-')} · tempo ${escapeHtml(v.tempo_consensus || '-')} · ${v.rating_count} ratings</div>
-      <div class="feed-tags">${tags.map((t) => `<span class="feed-tag">${escapeHtml(t)}</span>`).join('')}</div>
-      <div class="audio-player"><audio controls preload="none" src="${audioUrl}"></audio></div>
+      <div>
+        <h4>${escapeHtml(v.title)}</h4>
+        <div class="feed-meta">${escapeHtml(v.artist_name)} · ${escapeHtml(v.version_type)}</div>
+        <div class="feed-meta" style="margin-top:6px;">solo ${(v.avg_solo_intensity || 0).toFixed(1)} · vocal ${(v.avg_vocal_quality || 0).toFixed(1)} · ${escapeHtml(v.energy_consensus || '-')} · ${escapeHtml(v.tempo_consensus || '-')} · ${v.rating_count} ratings</div>
+        <div class="feed-tags">${tags.map((t) => `<span class="feed-tag">${escapeHtml(t)}</span>`).join('')}</div>
+      </div>
+      <div class="feed-graph" id="graph-${v.submission_id}" aria-label="Taste graph"></div>
+      <div class="feed-audio">${audioWidget(v)}</div>
     `;
     ul.appendChild(li);
+    // MODULAR: render the taste-graph radar inside the placeholder.
+    const graphEl = li.querySelector(`#graph-${v.submission_id}`);
+    if (graphEl && window.renderTasteGraph) {
+      window.renderTasteGraph(graphEl, {
+        solo: v.avg_solo_intensity || 0,
+        vocal: v.avg_vocal_quality || 0,
+        energy: energyToNumber(v.energy_consensus),
+        tempo: tempoToNumber(v.tempo_consensus)
+      });
+    }
   }
+  bindAudioWidgets();
+}
+
+function energyToNumber(s) {
+  return s === 'higher' ? 8 : s === 'lower' ? 2 : 5;
+}
+function tempoToNumber(s) {
+  return s === 'rushing' ? 8 : s === 'dragging' ? 2 : 5;
 }
 
 // ---------- helpers ----------
