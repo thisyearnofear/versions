@@ -1,5 +1,15 @@
-# API redirects to backend server
-/api/* https://versions.thisyearnofear.com/api/:splat 200
+# MODULAR: Netlify redirect rules. The first set covers
+# SPA-style fallback; the favicon block makes sure the
+# crawler doesn't 404 even if the .ico is missing from
+# the deploy.
 
-# SPA routing - all other routes serve index.html
-/* /index.html 200
+# SPA fallback: any unknown path under / falls through to
+# index.html so the static deploy behaves like the proxy.
+/*    /index.html   200
+
+# MODULAR: emoji favicon. /favicon.ico is the legacy default
+# that browsers + crawlers still ask for; redirect to the
+# SVG (which the link tag in index.html declares as primary).
+# If the .ico file is present in the deploy, the redirect is
+# a no-op; if it's missing, the redirect is the safety net.
+/favicon.ico  /favicon.svg  301

@@ -48,8 +48,14 @@ function main() {
 
   // MODULAR: walk web/ + web/lib/ + web/styles/, hash the
   // fingerprintable assets, copy everything else as-is.
+  // The static-fingerprinted set (.css / .js / .mjs) gets
+  // hashed; everything else (favicon, .ico, .html, etc.)
+  // is copied unchanged. The proxy serves these under the
+  // /favicon.* paths AND the build output is mirrored to
+  // /dist/ for the same path.
   const hashMap = {};
-  for (const sub of ['.', 'lib', 'styles']) {
+  const ASSET_DIRS = ['.', 'lib', 'styles'];
+  for (const sub of ASSET_DIRS) {
     const dir = path.join(SRC, sub);
     if (!fs.existsSync(dir)) continue;
     for (const name of fs.readdirSync(dir)) {
@@ -68,6 +74,21 @@ function main() {
       }
       copyFile(src, path.join(DEST, sub, destName));
     }
+  }
+  // MODULAR: copy root-level static files (favicon.svg,
+  // favicon.ico, etc.) that aren't under lib/ or styles/.
+  // These are served at the URL root. We skip .js / .css
+  // / .mjs at the root because the hashed versions live
+  // under /lib/ and /styles/; copying the un-hashed root
+  // .js would create a duplicate that confuses the cache.
+  for (const name of fs.readdirSync(SRC)) {
+    if (name === 'lib' || name === 'styles' || name === 'dist') continue;
+    const src = path.join(SRC, name);
+    if (fs.statSync(src).isDirectory()) continue;
+    if (name === '.DS_Store' || name === 'Thumbs.db') continue;
+    if (path.extname(name).toLowerCase() === '.html') continue;
+    if (ASSET_RE.test(name)) continue;
+    copyFile(src, path.join(DEST, name));
   }
 
   // MODULAR: rewrite index.html to point at the hashed assets.
