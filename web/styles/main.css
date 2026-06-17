@@ -679,6 +679,63 @@ textarea { resize: vertical; min-height: 64px; }
 .version-badge--pending_payment { border-style: dashed; color: var(--ink-2); }
 .version-progress { font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
 
+/* MODULAR: earnings dashboard (Step 5). The by-role breakdown
+   is a 3-column row: label, bar, amount. The bar is a 1px
+   rust-on-paper-2 bar with a percentage-width filled span. */
+.earnings-by-role {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--hair);
+}
+.earnings-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 100px;
+  align-items: center;
+  gap: 12px;
+}
+.earnings-row-label {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.earnings-role {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--ink);
+}
+.earnings-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+}
+.earnings-bar {
+  height: 6px;
+  background: var(--paper-2);
+  position: relative;
+}
+.earnings-bar span {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: var(--rust);
+  display: block;
+}
+.earnings-amount {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+  text-align: right;
+}
+.earnings-subhead {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 12px;
+  color: var(--ink-2);
+}
+
 /* CLEAN: mobile pass. The 2-col grid cramps below 720px. */
 @media (max-width: 720px) {
   html, body { font-size: 16px; }

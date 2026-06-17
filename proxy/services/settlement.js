@@ -205,6 +205,46 @@ function createSettlementService({ arc = null, platformWallet = null } = {}) {
         WHERE recipient_wallet = ? AND status = 'settled'
       `).get(wallet);
       return row ? row.total : 0;
+    },
+
+    // MODULAR: per-wallet earnings breakdown. The same wallet
+    // can earn in multiple roles: as an artist (the 10% musicbrainz
+    // leg on their own submissions), as a curator (one of the
+    // equal-share legs on submissions they rated), or as the
+    // platform (the 20% platform leg). The dashboard surfaces
+    // this so the artist can see where the 0.50 USDC submission
+    // fees are actually flowing.
+    listEarnings(wallet, { limit = 50 } = {}) {
+      // MODULAR: one query per role. The 'role' column is the
+      // settlement_legs.recipient_role; the legs are pre-split
+      // at publish time, so aggregation is just a GROUP BY.
+      const byRole = db.prepare(`
+        SELECT recipient_role AS role, COALESCE(SUM(CAST(amount_usdc AS REAL)), 0) AS total,
+               COUNT(*) AS leg_count
+        FROM settlement_legs
+        WHERE recipient_wallet = ? AND status = 'settled'
+        GROUP BY recipient_role
+        ORDER BY total DESC
+      `).all(wallet);
+      const totalRow = db.prepare(`
+        SELECT COALESCE(SUM(CAST(amount_usdc AS REAL)), 0) AS total
+        FROM settlement_legs
+        WHERE recipient_wallet = ? AND status = 'settled'
+      `).get(wallet);
+      const total = totalRow ? totalRow.total : 0;
+      // MODULAR: most recent legs (across all roles) with the
+      // submission title for context. The artist can see "I
+      // earned 0.05 USDC from <My Song Title> as musicbrainz".
+      const recent = db.prepare(`
+        SELECT sl.id, sl.submission_id, sl.recipient_role AS role,
+               sl.amount_usdc AS amount, sl.settled_at,
+               s.title AS submission_title, s.artist_name
+        FROM settlement_legs sl
+        LEFT JOIN submissions s ON s.id = sl.submission_id
+        WHERE sl.recipient_wallet = ? AND sl.status = 'settled'
+        ORDER BY sl.settled_at DESC LIMIT ?
+      `).all(wallet, limit);
+      return { wallet, total, by_role: byRole, recent };
     }
   };
 }

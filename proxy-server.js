@@ -480,6 +480,17 @@ async function handleArtistVersions(req, res, requestId, wallet) {
   return jsonResponse(res, 200, { success: true, data: result }, requestId);
 }
 
+async function handleEarnings(req, res, requestId, wallet) {
+  // MODULAR: per-wallet earnings (Step 5). The same endpoint
+  // works for artists + curators — a wallet can be both. The
+  // data is the same shape regardless of who the caller is.
+  const q = parseQuery(req.url);
+  const result = settlement.listEarnings(wallet, {
+    limit: q.limit ? Math.min(Number(q.limit) || 50, 200) : 50
+  });
+  return jsonResponse(res, 200, { success: true, data: result }, requestId);
+}
+
 // ---------- Day 5: feed + version detail ----------
 
 function parseQuery(url) {
@@ -619,6 +630,11 @@ const ROUTES = [
   // published) the aggregated taste graph.
   { method: 'GET',    match: (p) => /^\/api\/v1\/artists\/[^/]+\/versions$/.test(p),
             handler: (req, res, rid, p) => handleArtistVersions(req, res, rid, p.split('/')[4]) },
+  // Step 5: per-wallet earnings. Works for artists + curators
+  // (a wallet can be both). Returns total + by_role breakdown +
+  // recent settled legs.
+  { method: 'GET',    match: (p) => /^\/api\/v1\/artists\/[^/]+\/earnings$/.test(p),
+            handler: (req, res, rid, p) => handleEarnings(req, res, rid, p.split('/')[4]) },
   // Day 5: feed + version detail. The /api/v1/versions/:id route must
   // not collide with /api/v1/submissions/:id, so we keep them apart.
   { method: 'GET',    match: (p) => p === '/api/v1/feed',                              handler: handleFeed },

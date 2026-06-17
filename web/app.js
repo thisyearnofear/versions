@@ -672,6 +672,64 @@ async function refreshArtistDashboard() {
   }
 }
 
+// MODULAR: per-wallet earnings card. The same wallet can earn in
+// multiple roles (artist + curator + platform) — the breakdown
+// surfaces the marketplace's economic story.
+async function refreshEarnings() {
+  const card = document.getElementById('earningsCard');
+  const totalEl = document.getElementById('earningsTotal');
+  const byRoleEl = document.getElementById('earningsByRole');
+  const recentEl = document.getElementById('earningsRecent');
+  if (!currentAddress) {
+    card.hidden = true;
+    return;
+  }
+  try {
+    const r = await api.get(`/api/v1/artists/${encodeURIComponent(currentAddress)}/earnings?limit=20`);
+    if (!r.recent || r.recent.length === 0) {
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
+    totalEl.textContent = `${r.total.toFixed(4)} USDC earned`;
+    // MODULAR: by-role breakdown. Each role has a label + a tiny
+    // mono total + a per-leg hint. The bars are pure CSS.
+    byRoleEl.innerHTML = (r.by_role || []).map((row) => {
+      const pct = r.total > 0 ? Math.round((row.total / r.total) * 100) : 0;
+      return `
+        <div class="earnings-row">
+          <div class="earnings-row-label">
+            <span class="earnings-role">${escapeHtml(row.role)}</span>
+            <span class="earnings-count">${row.leg_count} leg${row.leg_count === 1 ? '' : 's'}</span>
+          </div>
+          <div class="earnings-bar"><span style="width: ${pct}%"></span></div>
+          <div class="earnings-amount">${row.total.toFixed(4)} USDC</div>
+        </div>
+      `;
+    }).join('');
+    // MODULAR: the recent-legs list. Each row shows the role +
+    // amount + the submission title it came from. The artist
+    // can see "I earned 0.05 USDC from <My Song Title> as musicbrainz".
+    recentEl.innerHTML = '';
+    for (const leg of r.recent) {
+      const li = document.createElement('li');
+      li.className = 'version-item';
+      li.innerHTML = `
+        <div>
+          <h4>${escapeHtml(leg.submission_title || leg.submission_id.slice(0, 8))}</h4>
+          <div class="feed-meta">${escapeHtml(leg.artist_name || '')} · <span class="version-badge version-badge--${leg.role}">${leg.role}</span></div>
+          <div class="version-status">
+            <span class="version-progress">${parseFloat(leg.amount).toFixed(4)} USDC · settled ${leg.settled_at ? leg.settled_at.slice(0, 16).replace('T', ' ') : 'recently'}</span>
+          </div>
+        </div>
+      `;
+      recentEl.appendChild(li);
+    }
+  } catch (err) {
+    card.hidden = true;
+  }
+}
+
 // ---------- init ----------
 
 // MODULAR: mount the audio dropzone. The hidden <input> stays
@@ -689,6 +747,7 @@ if (audioInput && audioDropzone) mountDropzone(audioInput, audioDropzone);
   await refreshQueue();
   await refreshFeed();
   await refreshArtistDashboard();
+  await refreshEarnings();
   // MODULAR: the first-visit tour starts on boot if the cookie is
   // absent; the ? trigger in the bottom-left restarts it on demand.
   startTour(false);
