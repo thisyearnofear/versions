@@ -1,0 +1,56 @@
+# MODULAR: Netlify deployment config. The static web client
+# is published from `web/`; the build step runs the asset-
+# hasher (scripts/build.js) so /dist/ is up-to-date on every
+# deploy. CORS is forwarded to ALLOWED_ORIGINS at runtime
+# (the proxy handles CORS, not the static host).
+#
+# Reference: https://docs.netlify.com/configure-builds/file-based-configuration/
+
+# Build + publish. The build command produces web/dist/
+# (the hashed-asset tree the proxy serves preferentially
+# when present; Netlify serves the same files here).
+[build]
+  command = "node scripts/build.js"
+  publish = "web"
+  # MODULAR: the build only needs Node; the lockfile
+  # picks up the right deps. Skip npm install for speed.
+  # (Netlify will still install if the lockfile is missing.)
+
+# Security headers. These apply to every static response
+# (HTML, CSS, JS, SVG, ICO, audio uploads served at
+# /uploads/* by the proxy — though those are not on
+# Netlify). Same headers are also in web/_headers so the
+# config is portable to any other static host (Vercel,
+# Cloudflare Pages, plain S3 + CloudFront).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+
+# CORS-friendly headers for the audio upload responses
+# (Netlify is not the API host, but these help when the
+# web client is served from Netlify and the API lives
+# somewhere else with CORS configured).
+[[headers]]
+  for = "/dist/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# MODULAR: redirects. The SPA fallback is the critical
+# one — without it, /curate and /feed return Netlify's
+# 404 page. The order matters: specific routes first,
+# then the catch-all.
+[[redirects]]
+  from = "/favicon.ico"
+  to = "/favicon.svg"
+  status = 301
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = false

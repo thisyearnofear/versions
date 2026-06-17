@@ -11,7 +11,7 @@ This repo is on a single track: the **Lepton Submission Marketplace**. Every doc
 | [`docs/LEPTON_IMPLEMENTATION_PLAN.md`](docs/LEPTON_IMPLEMENTATION_PLAN.md) | The 5-day build plan and its execution log.  |
 | [`docs/LEPTON_API.md`](docs/LEPTON_API.md)                     | The wire contract: every route, body, error. |
 | [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md)     | The env contract: every var the proxy reads. |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)                     | One-process Docker / Railway / Fly.io / VPS. |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)                     | One-process Docker / Railway / Fly.io / VPS, plus Netlify one-click for the static web client. |
 | [`docs/DEMO_WALKTHROUGH.md`](docs/DEMO_WALKTHROUGH.md)             | A 90-second walkthrough, with screenshots. |
 | [`docs/VIDEO_SCRIPT.md`](docs/VIDEO_SCRIPT.md)                   | A 9-shot demo video script (60s + 30s alt). |
 | [`docs/llms.txt`](docs/llms.txt)                       | Farcaster reference (kept; unused at the moment). |

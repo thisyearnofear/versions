@@ -23,6 +23,39 @@ warning and falls back to deterministic mock Arc — every settlement
 leg gets a synthesised `tx_hash` and the demo runs end-to-end with
 no keys.
 
+## Netlify (static web client)
+
+The repo is configured for a one-click Netlify deploy of
+the static web client. Netlify reads three config files:
+
+- `netlify.toml` at the project root (build command, publish
+  dir, security headers, redirects)
+- `web/_redirects` for SPA fallback + favicon redirect
+- `web/_headers` for cache control + security headers (the
+  same headers are also in `netlify.toml`; the duplication
+  is intentional so a deploy to Vercel / Cloudflare / plain
+  S3 + CloudFront works the same way)
+
+The build step is `node scripts/build.js`; the publish dir
+is `web/`. The build produces `web/dist/` (hashed assets)
+which Netlify serves alongside the rest of `web/`.
+
+To deploy:
+
+1. Connect the GitHub repo at
+   https://app.netlify.com/start/deploy?repository=...
+2. Netlify reads `netlify.toml` and the build starts.
+3. Once the deploy succeeds, the live URL is on
+   `https://<project-name>.netlify.app/`. Deep links
+   (`/curate`, `/feed`) work via the SPA fallback in
+   `web/_redirects`.
+
+The Node proxy is a separate service (Railway / Fly.io /
+Docker / bare VPS) and is NOT part of the Netlify deploy.
+The web client calls the proxy at the API base URL the
+user configures; the default same-origin path works when
+the web is served by the proxy itself.
+
 ## One-command deploy (`npm run deploy`)
 
 If you just want the whole product running locally (Docker

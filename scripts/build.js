@@ -53,12 +53,20 @@ function main() {
   // is copied unchanged. The proxy serves these under the
   // /favicon.* paths AND the build output is mirrored to
   // /dist/ for the same path.
+  //
+  // MODULAR: _redirects + _headers are Netlify-specific
+  // config files that the static host reads from the
+  // publish root (web/), NOT from web/dist/. Skipping
+  // them here + below means the dist tree is a pure
+  // runtime asset bundle, not a config dump.
   const hashMap = {};
   const ASSET_DIRS = ['.', 'lib', 'styles'];
+  const SKIP_AT_ROOT = new Set(['_redirects', '_headers']);
   for (const sub of ASSET_DIRS) {
     const dir = path.join(SRC, sub);
     if (!fs.existsSync(dir)) continue;
     for (const name of fs.readdirSync(dir)) {
+      if (sub === '.' && SKIP_AT_ROOT.has(name)) continue;
       const src = path.join(dir, name);
       if (fs.statSync(src).isDirectory()) continue;
       // MODULAR: skip OS metadata files (Mac .DS_Store, Windows
@@ -83,6 +91,7 @@ function main() {
   // .js would create a duplicate that confuses the cache.
   for (const name of fs.readdirSync(SRC)) {
     if (name === 'lib' || name === 'styles' || name === 'dist') continue;
+    if (SKIP_AT_ROOT.has(name)) continue;
     const src = path.join(SRC, name);
     if (fs.statSync(src).isDirectory()) continue;
     if (name === '.DS_Store' || name === 'Thumbs.db') continue;
