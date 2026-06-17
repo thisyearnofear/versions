@@ -13,6 +13,7 @@ This repo is on a single track: the **Lepton Submission Marketplace**. Every doc
 | [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md)     | The env contract: every var the proxy reads. |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)                     | One-process Docker / Railway / Fly.io / VPS. |
 | [`docs/DEMO_WALKTHROUGH.md`](docs/DEMO_WALKTHROUGH.md)             | A 90-second walkthrough, with screenshots. |
+| [`docs/VIDEO_SCRIPT.md`](docs/VIDEO_SCRIPT.md)                   | A 9-shot demo video script (60s + 30s alt). |
 | [`docs/llms.txt`](docs/llms.txt)                       | Farcaster reference (kept; unused at the moment). |
 
 ## See it in action
