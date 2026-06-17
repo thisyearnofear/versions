@@ -26,7 +26,7 @@ function validateSubmissionMetadata(input) {
     return { ok: false, errors: ['metadata object is required'] };
   }
   const errors = [];
-  const { title, artistName, versionType, genre, mood, description, audiusTrackId, musicbrainzId } = input;
+  const { title, artistName, versionType, genre, mood, description, audiusTrackId, musicbrainzId, coverSvg } = input;
 
   if (!title || typeof title !== 'string' || !title.trim()) errors.push('title is required');
   else if (title.length > 200) errors.push('title must be 200 characters or less');
@@ -55,6 +55,16 @@ function validateSubmissionMetadata(input) {
     if (typeof musicbrainzId !== 'string' || !mbidRe.test(musicbrainzId)) {
       errors.push('musicbrainzId must be a valid MBID');
     }
+  }
+  // MODULAR: Move 3 — cover_svg is an optional string. The
+  // client generates it client-side (decodeAudioData → peaks
+  // → SVG). We only sanity-check the shape: must be a string
+  // that starts with <svg, max 16KB. The server doesn't try
+  // to parse it; the feed renders it as-is.
+  if (coverSvg != null) {
+    if (typeof coverSvg !== 'string') errors.push('coverSvg must be a string');
+    else if (!coverSvg.startsWith('<svg')) errors.push('coverSvg must start with <svg');
+    else if (coverSvg.length > 16384) errors.push('coverSvg must be 16KB or less');
   }
 
   if (errors.length > 0) return { ok: false, errors };

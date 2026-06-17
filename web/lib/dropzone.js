@@ -7,8 +7,15 @@
 // the underlying input's value is cleared + the change event fires,
 // so any code reading `fd.get('audio')` from a FormData sees the
 // right thing.
+//
+// Move 3: the dropzone also pre-computes a waveform cover
+// (lib/cover.js) on file selection. The SVG is shown as a
+// preview AND stored on the input's dataset so the submit
+// handler can include it in the metadata without re-decoding.
 
 'use strict';
+
+import { generateCoverSvg } from './cover.js';
 
 function fmtSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -41,7 +48,12 @@ export function mountDropzone(input, dropzone) {
   // HTMLAudioElement to extract the duration (the only browser
   // API that exposes decoded audio metadata). No upload happens
   // here — the form's submit handler reads input.files[0].
-  function showFile(file) {
+  //
+  // Move 3: also pre-compute the waveform cover. The cover is
+  // stored on input.dataset.coverSvg so the submit handler can
+  // include it in the metadata without re-decoding. A preview
+  // is shown in the .dropzone-cover element if it exists.
+  async function showFile(file) {
     if (!file) return;
     fileName.textContent = file.name;
     fileSize.textContent = fmtSize(file.size);
@@ -61,12 +73,43 @@ export function mountDropzone(input, dropzone) {
     probe.addEventListener('error', () => {
       fileDuration.textContent = '?';
     });
+    // MODULAR: Move 3 — generate the cover. Best-effort. If
+    // the browser can't decode the format, the cover just
+    // isn't generated (and isn't submitted). The form still
+    // works without it.
+    const coverTarget = dropzone.querySelector('.dropzone-cover');
+    if (coverTarget) {
+      coverTarget.innerHTML = '<span class="dropzone-cover-label">Building cover…</span>';
+    }
+    try {
+      const svg = await generateCoverSvg(file, { size: 96 });
+      input.dataset.coverSvg = svg;
+      if (coverTarget) {
+        coverTarget.innerHTML = svg;
+        coverTarget.classList.add('has-cover');
+      }
+    } catch (err) {
+      // MODULAR: graceful fallback. The submit will proceed
+      // without a cover; the feed row will fall back to the
+      // radar-only layout.
+      if (coverTarget) {
+        coverTarget.innerHTML = '';
+        coverTarget.classList.remove('has-cover');
+      }
+      delete input.dataset.coverSvg;
+    }
   }
 
   function clearFile() {
     input.value = '';
+    delete input.dataset.coverSvg;
     placeholder.hidden = false;
     fileInfo.hidden = true;
+    const coverTarget = dropzone.querySelector('.dropzone-cover');
+    if (coverTarget) {
+      coverTarget.innerHTML = '';
+      coverTarget.classList.remove('has-cover');
+    }
     // CLEAN: a fresh change event so any code listening on
     // 'change' sees the clear.
     input.dispatchEvent(new Event('change', { bubbles: true }));

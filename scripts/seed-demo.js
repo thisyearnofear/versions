@@ -50,9 +50,48 @@ function randHex(n) { return '0x' + crypto.randomBytes(n).toString('hex'); }
 
 // MODULAR: minimal WAV (PCM 8 kHz, 8-bit mono, 0.25s silence). The
 // browser's <audio> handles it; nothing else cares.
-function makeWav(seedByte) {
+// MODULAR: deterministic waveform cover. Given a seed byte,
+// produces a 64-peak waveform. Different seed bytes give
+// different covers, so the 4 demo submissions each have a
+// distinct visual identity. This mirrors what the browser
+// does for real uploads (decodeAudioData → 64 peaks → SVG).
+function generateCoverSvg(seedByte, size) {
+  size = size || 200;
+  const peaks = [];
+  for (let i = 0; i < 64; i++) {
+    // MODULAR: a 2D Lissajous-ish curve plus a small random
+    // perturbation keyed by seed. Deterministic so the
+    // covers are stable across reseeds.
+    const t = (i / 63) * Math.PI * 4;
+    const v = Math.abs(Math.sin(t + seedByte * 0.7) * Math.cos(t * 0.5 + seedByte * 0.3));
+    peaks.push(v);
+  }
+  // MODULAR: normalise to [0, 1].
+  let max = 0;
+  for (const p of peaks) if (p > max) max = p;
+  for (let i = 0; i < peaks.length; i++) peaks[i] = peaks[i] / max;
+  const mid = size / 2;
+  const inset = size * 0.04;
+  const drawW = size - inset * 2;
+  const upper = [];
+  for (let i = 0; i < peaks.length; i++) {
+    const x = inset + (i / 63) * drawW;
+    const h = peaks[i] * (mid - inset);
+    upper.push(`${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${(mid - h).toFixed(1)}`);
+  }
+  const lower = [];
+  for (let i = 0; i < peaks.length; i++) {
+    const x = inset + (i / 63) * drawW;
+    const h = peaks[i] * (mid - inset);
+    lower.push(`${x.toFixed(1)},${(mid + h).toFixed(1)}`);
+  }
+  const path = upper.concat(lower.slice().reverse()).join(' ');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Waveform"><rect width="${size}" height="${size}" fill="#f4efe5"/><line x1="0" y1="${mid}" x2="${size}" y2="${mid}" stroke="#c84a1f" stroke-opacity="0.15" stroke-width="0.5"/><path d="${path} Z" fill="#c84a1f" fill-opacity="0.30" stroke="#c84a1f" stroke-width="1"/></svg>`;
+}
+
+function buildWav(seedByte) {
   const sampleRate = 8000;
-  const numSamples = sampleRate / 4;  // 0.25s
+  const numSamples = sampleRate;  // 1s of audio
   const dataSize = numSamples;
   const buf = Buffer.alloc(44 + dataSize);
   buf.write('RIFF', 0);
@@ -72,7 +111,9 @@ function makeWav(seedByte) {
   return buf;
 }
 
-async function submitAndPublish(meta, ratingsSpec, audio) {
+const makeWav = buildWav;
+
+async function submitAndPublish(meta, ratingsSpec, audio, coverSvg) {
   const artist = nacl.sign.keyPair();
   const curators = [nacl.sign.keyPair(), nacl.sign.keyPair(), nacl.sign.keyPair()];
 
@@ -80,7 +121,7 @@ async function submitAndPublish(meta, ratingsSpec, audio) {
   const sub = await request('POST', '/api/v1/submissions', {
     artistWallet: walletOf(artist),
     signature: sign('VERSIONS_LEPTON_SUBMIT', artist.secretKey),
-    metadata: meta,
+    metadata: { ...meta, coverSvg: coverSvg || null },
     audio: { contentType: 'audio/wav', base64: audio.toString('base64'), durationSeconds: 1 }
   });
   if (sub.status !== 201) throw new Error(`submit failed: ${sub.status} ${JSON.stringify(sub.body)}`);
@@ -157,8 +198,13 @@ async function main() {
   ];
 
   for (let i = 0; i < fixtures.length; i++) {
-    const audio = makeWav(i * 17);
-    await submitAndPublish(fixtures[i].meta, fixtures[i].ratings, audio);
+    const seedByte = i * 17;
+    const audio = makeWav(seedByte);
+    // MODULAR: Move 3 — each demo submission gets a unique
+    // cover derived from its seed byte. Stable across
+    // reseeds (deterministic).
+    const coverSvg = generateCoverSvg(seedByte);
+    await submitAndPublish(fixtures[i].meta, fixtures[i].ratings, audio, coverSvg);
   }
 
   console.log(`\nDone. The feed now has ${fixtures.length} published versions.`);

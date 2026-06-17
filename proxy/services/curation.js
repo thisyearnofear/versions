@@ -71,12 +71,12 @@ function createCurationService({ settlement }) {
   const insertPublishedStmt = db.prepare(`
     INSERT INTO published_versions (
       submission_id, artist_wallet, title, artist_name, version_type,
-      audio_path, musicbrainz_id,
+      audio_path, musicbrainz_id, cover_svg,
       avg_solo_intensity, avg_vocal_quality, energy_consensus, tempo_consensus,
       aggregated_mood_tags, rating_count, published_at
     ) VALUES (
       @submission_id, @artist_wallet, @title, @artist_name, @version_type,
-      @audio_path, @musicbrainz_id,
+      @audio_path, @musicbrainz_id, @cover_svg,
       @avg_solo_intensity, @avg_vocal_quality, @energy_consensus, @tempo_consensus,
       @aggregated_mood_tags, @rating_count, @published_at
     )
@@ -107,6 +107,7 @@ function createCurationService({ settlement }) {
       version_type: sub.version_type,
       audio_path: sub.audio_path,
       musicbrainz_id: sub.musicbrainz_id,
+      cover_svg: sub.cover_svg,
       avg_solo_intensity: agg.avg_solo_intensity,
       avg_vocal_quality: agg.avg_vocal_quality,
       energy_consensus: agg.energy_consensus,

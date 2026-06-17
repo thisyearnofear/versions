@@ -274,7 +274,11 @@ document.getElementById('submitForm').addEventListener('submit', async (e) => {
       genre: fd.get('genre') || null,
       mood: fd.get('mood') || null,
       description: fd.get('description') || null,
-      musicbrainzId: mbid
+      musicbrainzId: mbid,
+      // MODULAR: Move 3 — pass the cover_svg if the dropzone
+      // generated one. The dropzone stores it on the input's
+      // dataset.coverSvg after pre-computing the waveform.
+      coverSvg: document.getElementById('audioInput').dataset.coverSvg || null
     };
     const fd2 = new FormData();
     fd2.set('signature', signature);
@@ -639,6 +643,7 @@ function renderFeed(rows) {
       </div>
       <div class="feed-graph" id="graph-${v.submission_id}" aria-label="Taste graph"></div>
       <div class="feed-audio">${audioWidget(v)}</div>
+      ${v.cover_svg ? `<div class="feed-cover" aria-label="Waveform cover">${v.cover_svg}</div>` : ''}
     `;
     ul.appendChild(li);
     // MODULAR: render the taste-graph radar inside the placeholder.

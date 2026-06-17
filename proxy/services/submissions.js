@@ -77,12 +77,12 @@ function createSubmissionsService({ arc, platformWallet }) {
       id, artist_wallet, audius_track_id, musicbrainz_id,
       title, artist_name, version_type, genre, artist_mood, description,
       audio_path, audio_duration_seconds, audio_size_bytes, content_type,
-      fee_quote_usdc, status
+      fee_quote_usdc, cover_svg, status
     ) VALUES (
       @id, @artist_wallet, @audius_track_id, @musicbrainz_id,
       @title, @artist_name, @version_type, @genre, @artist_mood, @description,
       @audio_path, @audio_duration_seconds, @audio_size_bytes, @content_type,
-      @fee_quote_usdc, 'pending_payment'
+      @fee_quote_usdc, @cover_svg, 'pending_payment'
     )
   `);
 
@@ -118,7 +118,8 @@ function createSubmissionsService({ arc, platformWallet }) {
         audio_duration_seconds: durationSeconds || null,
         audio_size_bytes: sizeBytes,
         content_type: contentType,
-        fee_quote_usdc: FEE_QUOTE_USDC
+        fee_quote_usdc: FEE_QUOTE_USDC,
+        cover_svg: metadata.coverSvg || null
       });
       const submission = rowToSubmission(db.prepare('SELECT * FROM submissions WHERE id = ?').get(id));
       return { ok: true, submission };
