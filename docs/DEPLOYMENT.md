@@ -23,6 +23,28 @@ warning and falls back to deterministic mock Arc — every settlement
 leg gets a synthesised `tx_hash` and the demo runs end-to-end with
 no keys.
 
+## One-command deploy (`npm run deploy`)
+
+If you just want the whole product running locally (Docker
+required) for a demo or smoke test:
+
+```bash
+cp .env.example .env.production    # fill in the optional values
+npm run deploy                     # builds the image + runs the container
+```
+
+The deploy script (`scripts/deploy.sh`) uses the same
+Dockerfile Railway / Fly.io would use. It:
+  - builds the image if it's not present (or use `--rebuild`),
+  - mounts `./data` to `/app/data` for the SQLite db + uploads,
+  - forwards every env var from `.env.production` to the container,
+  - waits for `/health/ready` to return 200 (up to 30s),
+  - prints the URL + the next-step commands.
+
+Subcommands: `./scripts/deploy.sh 8080 --logs` to tail,
+`--stop` to stop. The default port is 8080; pass any
+port as the first arg.
+
 ## Docker (anywhere)
 
 ```bash
