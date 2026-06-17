@@ -597,7 +597,24 @@ function bindAudioWidgets() {
 function renderFeed(rows) {
   const ul = document.getElementById('feedList');
   if (rows.length === 0) {
-    ul.innerHTML = '<li class="empty-state"><strong>The feed is empty.</strong>Once 3 curators rate a submission it lands here.<div class="hint">Seed the catalog with <code>npm run seed</code></div></li>';
+    // MODULAR: Move 4 — editorial pull-quote on the empty Feed.
+    // The quote activates the editorial typography (Fraunces,
+    // hairline) and gives the empty Feed something to do
+    // besides 'no published versions yet'. The quotes are a
+    // small JSON file in web/data/featured-quotes.json. One
+    // is picked at random per page load (no localStorage
+    // stickiness — refreshing the page gets a new one).
+    const quote = pickQuote();
+    ul.innerHTML = `
+      <li class="empty-state">
+        <strong>The feed is empty.</strong>
+        Once 3 curators rate a submission it lands here.
+        <div class="hint">Seed the catalog with <code>npm run seed</code></div>
+        <blockquote class="featured-quote">
+          <p>${escapeHtml(quote.text)}</p>
+          <footer>— <cite>${escapeHtml(quote.by)}</cite> <span class="featured-role">${escapeHtml(quote.role)}</span></footer>
+        </blockquote>
+      </li>`;
     return;
   }
   ul.innerHTML = '';
@@ -646,6 +663,45 @@ function tempoToNumber(s) {
 }
 
 // ---------- helpers ----------
+
+// MODULAR: Move 4 — load the featured-quotes JSON. Lazy + cached
+// (one fetch per page load). If the fetch fails (no network, or
+// the file is missing), return a built-in fallback quote so
+// the empty Feed still has editorial copy.
+let quotesCache = null;
+async function loadQuotes() {
+  if (quotesCache) return quotesCache;
+  try {
+    const res = await fetch('/data/featured-quotes.json');
+    if (!res.ok) throw new Error('not ok');
+    const list = await res.json();
+    if (Array.isArray(list) && list.length > 0) {
+      quotesCache = list;
+      return list;
+    }
+  } catch (_) { /* fall through */ }
+  // Fallback quote: hand-rolled so the empty Feed has copy
+  // even if /data/featured-quotes.json is missing.
+  return [{
+    id: 'fallback',
+    text: "We're not in the singles business; we're in the take business.",
+    by: 'house rule',
+    role: 'taste maker'
+  }];
+}
+function pickQuote() {
+  // MODULAR: synchronous picker for the empty-Feed render. If
+  // quotesCache is still null (the fetch is still in flight),
+  // return the fallback. Once the fetch resolves, the next
+  // render will use a real quote.
+  const list = quotesCache && quotesCache.length
+    ? quotesCache
+    : [{ id: 'fallback', text: "We're not in the singles business; we're in the take business.", by: 'house rule', role: 'taste maker' }];
+  return list[Math.floor(Math.random() * list.length)];
+}
+// Fire-and-forget the fetch so quotesCache is warm by the time
+// the user lands on the empty Feed.
+loadQuotes();
 
 function escapeHtml(s) {
   if (s == null) return '';

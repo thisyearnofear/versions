@@ -59,8 +59,13 @@ function main() {
   // publish root (web/), NOT from web/dist/. Skipping
   // them here + below means the dist tree is a pure
   // runtime asset bundle, not a config dump.
+  // MODULAR: walk web/ + web/lib/ + web/styles/ + web/data/,
+  // hash the fingerprintable assets, copy everything else
+  // as-is. web/data/ is for small JSON resources (e.g. the
+  // Move-4 featured-quotes file) that ship in the bundle.
+  // The proxy serves them at /data/<file>.
   const hashMap = {};
-  const ASSET_DIRS = ['.', 'lib', 'styles'];
+  const ASSET_DIRS = ['.', 'lib', 'styles', 'data'];
   const SKIP_AT_ROOT = new Set(['_redirects', '_headers']);
   for (const sub of ASSET_DIRS) {
     const dir = path.join(SRC, sub);

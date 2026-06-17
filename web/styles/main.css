@@ -394,6 +394,44 @@ textarea { resize: vertical; min-height: 64px; }
   color: var(--ink);
   font-weight: 500;
 }
+
+/* MODULAR: Move 4 — editorial pull-quote on the empty Feed.
+   The quote is rendered as a <blockquote> with a large italic
+   Fraunces, the cite in mono small-caps, the role in lighter
+   mono. The blockquote sits below the empty-state copy with
+   a 1px hairline above. The italic + hairlines activate the
+   editorial register the typography is built for. */
+.featured-quote {
+  margin: 32px 0 0;
+  padding: 24px 0 0;
+  border-top: 1px solid var(--hair-strong);
+  max-width: 60ch;
+}
+.featured-quote p {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 22px;
+  line-height: 1.45;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 400;
+}
+.featured-quote footer {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--ink-2);
+}
+.featured-quote cite {
+  font-style: normal;
+  color: var(--ink);
+  font-weight: 500;
+}
+.featured-quote .featured-role {
+  margin-left: 8px;
+  color: var(--ink-2);
+}
 .feed-meta {
   font-family: var(--mono);
   font-size: 10px;
