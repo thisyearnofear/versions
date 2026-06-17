@@ -23,29 +23,54 @@
   --mono:  'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
+html, body { min-height: 100vh; }
+
 * { box-sizing: border-box; }
 
-html, body {
+body {
   margin: 0; padding: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--serif);
-  font-size: 17px;
-  line-height: 1.55;
-  font-feature-settings: 'kern' 1, 'liga' 1, 'onum' 1;
-  -webkit-font-smoothing: antialiased;
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 16px;
+  line-height: 1.6;
+  font-feature-settings: "kern", "liga";
   text-rendering: optimizeLegibility;
+  position: relative;
 }
 
-/* MODULAR: a 1% noise grain across the whole page. One tiled SVG via
-   feTurbulence. Adds depth without changing the palette. */
-body {
-  background-image:
-    radial-gradient(ellipse at top, rgba(255, 255, 255, 0.5), transparent 60%),
-    url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: auto, 200px 200px;
-  background-attachment: fixed, fixed;
+/* MODULAR: page atmosphere (Move 1). The two grain overlays
+   use SVG <feTurbulence> filters defined in index.html. The
+   mix-blend-mode:multiply darkens the cream subtly without
+   obscuring the content. The vignette is a radial gradient
+   that darkens the corners. pointer-events:none on all three
+   so they don't block any UI underneath. Tuned to be felt,
+   not seen: the page reads as 'paper' rather than 'flat'. */
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: multiply;
+  opacity: 0.05;
 }
+.grain-overlay.grain-fine { filter: url(#grain-fine); }
+.grain-overlay.grain-coarse { filter: url(#grain-coarse); opacity: 0.04; }
+.vignette-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(ellipse at center,
+    transparent 35%,
+    rgba(26, 26, 26, 0.10) 75%,
+    rgba(26, 26, 26, 0.18) 100%);
+}
+/* MODULAR: the actual content sits above the atmosphere
+   overlays. Without this z-index, the grain would dim the
+   text. The toast container, tour overlay, and rate-form
+   input fields all stay above. */
+.app-header, .app-main, .app-footer, .toast-container, .tour-overlay { position: relative; z-index: 3; }
 
 /* ---------- typography ---------- */
 
