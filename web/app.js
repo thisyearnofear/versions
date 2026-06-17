@@ -536,15 +536,25 @@ document.getElementById('feedFilter').addEventListener('submit', async (e) => {
 // .audio-wave + .audio-meta styles in main.css so the player is on-brand
 // rather than the browser's default <audio controls>. The wave is a
 // decorative element that animates while audio is playing.
+//
+// Move 2: the play button carries the radar target + the baseline
+// values (curator consensus) on data-* attributes so bindAudioWidgets()
+// can wire the audio-reactive loop without re-looking them up.
 function audioWidget(v) {
   const audioUrl = `${baseUrl}/api/v1/uploads/${v.audio_path.split('/').pop()}`;
   const playId = `play-${v.submission_id}`;
   const waveId = `wave-${v.submission_id}`;
+  const graphId = `graph-${v.submission_id}`;
   // 24 bars; deterministic heights so the wave is stable between plays.
   const bars = Array.from({ length: 24 }, (_, i) => 30 + ((i * 7) % 17) + ((i * i) % 23));
   return `
     <div class="audio-player">
-      <button class="audio-play" id="${playId}" data-src="${audioUrl}" aria-label="Play ${escapeHtml(v.title)}">▶</button>
+      <button class="audio-play" id="${playId}" data-src="${audioUrl}" aria-label="Play ${escapeHtml(v.title)}"
+        data-radar-id="${graphId}"
+        data-baseline-solo="${v.avg_solo_intensity || 0}"
+        data-baseline-vocal="${v.avg_vocal_quality || 0}"
+        data-baseline-energy="${escapeHtml(v.energy_consensus || 'same')}"
+        data-baseline-tempo="${escapeHtml(v.tempo_consensus || 'locked')}">▶</button>
       <div class="audio-meta">
         <div class="title">${escapeHtml(v.title)}</div>
         <div class="by">${escapeHtml(v.artist_name)}</div>
@@ -556,14 +566,27 @@ function audioWidget(v) {
 
 function bindAudioWidgets() {
   // MODULAR: one delegated handler. Each play button toggles a wave
-  // animation and starts/stops the underlying audio.
+  // animation and starts/stops the underlying audio. The
+  // audio-reactive radar loop is wired in playFile() (audio-player.js)
+  // via the data-radar-id + data-baseline-* attributes the
+  // audioWidget() rendered.
   for (const btn of document.querySelectorAll('.audio-play')) {
     if (btn.dataset.bound) continue;
     btn.dataset.bound = '1';
     btn.addEventListener('click', () => {
       const url = btn.dataset.src;
       const wave = document.getElementById(btn.id.replace('play-', 'wave-'));
-      const audio = playFile(url, btn.getAttribute('aria-label') || '');
+      const radarTarget = btn.dataset.radarId
+        ? document.getElementById(btn.dataset.radarId)
+        : null;
+      const baselineValues = radarTarget ? {
+        solo:   Number(btn.dataset.baselineSolo)   || 0,
+        vocal:  Number(btn.dataset.baselineVocal)  || 0,
+        energy: energyToNumber(btn.dataset.baselineEnergy),
+        tempo:  tempoToNumber(btn.dataset.baselineTempo)
+      } : null;
+      const audio = playFile(url, btn.getAttribute('aria-label') || '',
+        radarTarget && baselineValues ? { radarTarget, baselineValues } : undefined);
       audio.addEventListener('play', () => { wave.classList.add('playing'); btn.textContent = '❚❚'; });
       audio.addEventListener('pause', () => { wave.classList.remove('playing'); btn.textContent = '▶'; });
       audio.addEventListener('ended', () => { wave.classList.remove('playing'); btn.textContent = '▶'; });

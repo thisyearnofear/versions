@@ -68,10 +68,16 @@ export function renderTasteGraph(target, values) {
     parts.push(`<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(26,26,26,0.18)" stroke-width="0.5"/>`);
   }
   const valuePts = MINI_AXES.map((a) => point(a, valueAt(a)).map((n) => n.toFixed(1)).join(','));
-  parts.push(`<polygon points="${valuePts}" fill="rgba(200,74,31,0.18)" stroke="var(--rust, #c84a1f)" stroke-width="1.5" stroke-linejoin="round"/>`);
+  // MODULAR: the value polygon gets data-axis="value" so the
+  // reactive-mode updater can find it without iterating the
+  // SVG. The fill attribute uses the rust colour so the
+  // updater can also key off the rust-rgba substring.
+  parts.push(`<polygon data-tg-polygon="1" points="${valuePts}" fill="rgba(200,74,31,0.18)" stroke="var(--rust, #c84a1f)" stroke-width="1.5" stroke-linejoin="round"/>`);
   for (const a of MINI_AXES) {
     const [x, y] = point(a, valueAt(a));
-    parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2" fill="var(--rust, #c84a1f)"/>`);
+    // MODULAR: each handle gets data-tg-axis="<id>" so the
+    // reactive-mode updater can find it by id.
+    parts.push(`<circle data-tg-handle="1" data-tg-axis="${a.id}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2" fill="var(--rust, #c84a1f)"/>`);
   }
   for (const a of MINI_AXES) {
     const [x, y] = point(a, 1.18);
@@ -79,6 +85,37 @@ export function renderTasteGraph(target, values) {
   }
 
   target.innerHTML = `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Taste graph">${parts.join('')}</svg>`;
+}
+
+// MODULAR: efficient in-place update of a mini radar. The full
+// render() regenerates the whole SVG; this only mutates the
+// polygon points + the 4 handle positions. The audio-reactive
+// loop in audio-player.js calls this ~60 times per second.
+export function updateTasteGraphValues(target, values) {
+  const svg = target && target.querySelector && target.querySelector('svg');
+  if (!svg) return;
+  const size = +(svg.getAttribute('width') || 120);
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = (size / 2) - 14;
+  const valueAt = (axis) => {
+    const v = Number(values && values[axis.id]) || 0;
+    return Math.max(0, Math.min(10, v)) / 10;
+  };
+  const point = (axis, scale) => [cx + Math.cos(axis.angle) * r * scale, cy + Math.sin(axis.angle) * r * scale];
+
+  const polygon = svg.querySelector('[data-tg-polygon="1"]');
+  if (polygon) {
+    const pts = MINI_AXES.map((a) => point(a, valueAt(a)).map((n) => n.toFixed(1)).join(','));
+    polygon.setAttribute('points', pts.join(' '));
+  }
+  for (const a of MINI_AXES) {
+    const handle = svg.querySelector(`[data-tg-axis="${a.id}"]`);
+    if (!handle) continue;
+    const [x, y] = point(a, valueAt(a));
+    handle.setAttribute('cx', x.toFixed(1));
+    handle.setAttribute('cy', y.toFixed(1));
+  }
 }
 
 // MODULAR: large interactive radar. The user drags a polygon vertex
@@ -243,6 +280,8 @@ function clamp(v, min, max, fallback) {
 
 // MODULAR: expose both renderers on window. The feed calls
 // window.renderTasteGraph; the rate scorecard calls
-// window.renderInteractiveRadar.
+// window.renderInteractiveRadar; the audio-reactive loop
+// calls window.updateTasteGraphValues ~60 times/sec.
 window.renderTasteGraph = renderTasteGraph;
 window.renderInteractiveRadar = renderInteractiveRadar;
+window.updateTasteGraphValues = updateTasteGraphValues;
