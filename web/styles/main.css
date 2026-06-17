@@ -373,6 +373,27 @@ textarea { resize: vertical; min-height: 64px; }
   line-height: 1.1;
   margin: 0 0 8px;
 }
+
+/* MODULAR: Edition No + Pressed date (Move 5). The mono caption
+   sits above the title, like a record sleeve's catalog mark.
+   Small uppercase mono, ink-2, with the values (edition hex,
+   ISO date) in ink. Activates the record-release frame the
+   "alternate takes" thesis implies, without changing the
+   design language. */
+.feed-edition {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--ink-2);
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hair);
+}
+.feed-edition span {
+  color: var(--ink);
+  font-weight: 500;
+}
 .feed-meta {
   font-family: var(--mono);
   font-size: 10px;

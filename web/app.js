@@ -582,8 +582,16 @@ function renderFeed(rows) {
     const li = document.createElement('li');
     li.className = 'feed-item';
     const tags = JSON.parse(v.aggregated_mood_tags || '[]');
+    // MODULAR: Edition No (first 4 hex of the submission id,
+    // capitalized) + Pressed date (YYYY-MM-DD from
+    // published_at). Both come from the published_versions
+    // row; no extra work needed. The Mono small-caps treatment
+    // activates the 'record release' frame.
+    const edition = (v.submission_id || '').replace(/-/g, '').slice(0, 4).toUpperCase();
+    const pressed = (v.published_at || '').slice(0, 10);
     li.innerHTML = `
       <div>
+        <div class="feed-edition">Edition No <span>${escapeHtml(edition)}</span> · Pressed <span>${escapeHtml(pressed)}</span></div>
         <h4>${escapeHtml(v.title)}</h4>
         <div class="feed-meta">${escapeHtml(v.artist_name)} · ${escapeHtml(v.version_type)}</div>
         <div class="feed-meta" style="margin-top:6px;">solo ${(v.avg_solo_intensity || 0).toFixed(1)} · vocal ${(v.avg_vocal_quality || 0).toFixed(1)} · ${escapeHtml(v.energy_consensus || '-')} · ${escapeHtml(v.tempo_consensus || '-')} · ${v.rating_count} ratings</div>
