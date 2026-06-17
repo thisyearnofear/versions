@@ -1,72 +1,54 @@
-# ORGANIZED: Comprehensive .gitignore for VERSIONS
+# MODULAR: comprehensive .gitignore for the Lepton Submission
+# Marketplace. Organized by category. The proxy is the only
+# runtime; there is no Rust / Cargo / Vercel / Next.js in
+# this repo. Anything that smells like those is dead.
 
-# Rust
-/target
-**/target/
-**/*.rs.bk
+# ---------- runtime / build artefacts ----------
 
-# Build artifacts
-*.diff
-*.orig
-*.rej
+# web client: hashed assets in web/dist/ are produced by
+# `npm run build` and the Dockerfile's RUN layer; never
+# checked in.
+web/dist/
 
-# Cargo configuration
-.cargo/
+# tests: sqlite dbs from node:test's lifecycle
+data/test-*.db
+data/test-*.db-*
 
-# IDE and Editor files
+# runtime: sqlite dbs + uploads
+data/versions.db
+data/versions.db-*
+data/uploads/
+
+# node deps + lock-of-a-lock
+node_modules/
+package-lock.json.bak
+
+# compiled output (defensive — we don't transpile)
+*.js.map
+*.d.ts
+*.tsbuildinfo
+
+# ---------- secrets + env ----------
+
+.env
+.env.local
+.env.*.local
+.env.production
+config.js
+secrets.js
+
+# ---------- IDE / editor / OS ----------
+
+# VS Code, JetBrains, Sublime
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
-Thumbs.db
+.project
+.classpath
 
-# Audio files (user content)
-audio_files/*.mp3
-audio_files/*.flac
-audio_files/*.wav
-audio_files/*.m4a
-audio_files/*.ogg
-audio_files/*.aiff
-!audio_files/README.md
-
-# Logs
-*.log
-/tmp/
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# API Keys
-config.js
-secrets.js files
-.env
-.env.local
-.env.*.local
-
-# Node.js (for web development)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Web build artifacts
-web/dist/
-web/src/
-web/node_modules/
-web/package*.json
-web/tsconfig.json
-web/vercel.json
-*.js.map
-*.d.ts
-
-# TypeScript build cache
-*.tsbuildinfo
-
-# OS generated files
+# Mac / Windows OS metadata
 .DS_Store
 .DS_Store?
 ._*
@@ -74,7 +56,31 @@ web/vercel.json
 .Trashes
 ehthumbs.db
 Thumbs.db
-.qodo
+
+# Personal CLI tool caches (leave the user's .junie/
+# .qodo/ .blackboxcli/ on disk; never commit)
 .junie/
+.qodo/
 .blackboxcli/
-web/dist/
+
+# ---------- patch artefacts (defensive) ----------
+
+*.diff
+*.orig
+*.rej
+
+# ---------- logs + temp ----------
+
+*.log
+*.log.*
+logs/
+tmp/
+temp/
+
+# ---------- benchmark / coverage (defensive) ----------
+
+coverage/
+.nyc_output/
+*.lcov
+bench/
+*.bench

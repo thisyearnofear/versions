@@ -1,0 +1,17 @@
+# MODULAR: .gitignore for proxy/. The proxy is a Node service;
+# any compiled output, dev-time caches, or local-only data
+# belong here rather than at the repo root (which is shared
+# with the web client + scripts + docs).
+#
+# ORGANIZED: the repo-root .gitignore is the single source
+# of truth for the project's ignore list. This file is
+# a complement for files that only make sense inside
+# proxy/ — e.g. node --test's per-file db files, or
+# generated API clients (none today; the file is forward-
+# looking).
+
+*.js.map
+*.d.ts
+node_modules/
+coverage/
+.cache/
