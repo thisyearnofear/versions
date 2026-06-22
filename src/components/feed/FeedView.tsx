@@ -214,7 +214,9 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
         </button>
       </form>
 
-      {rows.length === 0 ? (
+      {loading && rows.length === 0 ? (
+        <FeedSkeleton count={5} />
+      ) : rows.length === 0 ? (
         <div className="border-t border-b border-[var(--color-hair)] py-10 font-serif text-[var(--color-ink-2)]">
           <strong className="block text-[var(--color-ink)] font-medium mb-1">
             The feed is empty.
@@ -241,6 +243,49 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
         </ul>
       )}
     </>
+  );
+}
+
+// ── Skeleton ────────────────────────────────────────────
+
+function FeedSkeleton({ count = 5 }: { count?: number }) {
+  return (
+    <ul className="flex flex-col">
+      {Array.from({ length: count }).map((_, i) => (
+        <li
+          key={i}
+          className="grid md:grid-cols-[1fr_auto] gap-6 md:gap-8 py-8 border-t border-[var(--color-hair)] last:border-b"
+        >
+          <div className="min-w-0 space-y-3">
+            <div className="skel h-[12px] w-[230px]" />
+            <div className="skel h-[32px] w-full max-w-[420px]" />
+            <div className="skel h-[12px] w-[200px]" />
+            <div className="skel h-[12px] w-[330px]" />
+            <div className="flex gap-2">
+              <div className="skel h-[22px] w-[52px]" />
+              <div className="skel h-[22px] w-[64px]" />
+              <div className="skel h-[22px] w-[46px]" />
+            </div>
+            <div className="flex items-center gap-4 pt-2">
+              <div className="skel h-20 w-20 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="skel h-[10px] w-full max-w-[300px]" />
+                <div className="skel h-[10px] w-[160px]" />
+              </div>
+            </div>
+          </div>
+          <div className="flex items-start justify-center md:justify-end">
+            <svg width={120} height={120} viewBox="-10 -10 140 140" aria-hidden="true">
+              <polygon
+                points="60,5 110,60 60,115 10,60"
+                className="skel"
+                opacity="0.08"
+              />
+            </svg>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 

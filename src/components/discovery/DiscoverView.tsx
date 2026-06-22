@@ -72,12 +72,14 @@ export function DiscoverView() {
         </button>
       </div>
 
-      {playlists.length === 0 ? (
+      {loading && playlists.length === 0 ? (
+        <DiscoverSkeleton count={2} />
+      ) : playlists.length === 0 ? (
         <div className="border-t border-b border-[var(--color-hair)] py-10 font-serif text-[var(--color-ink-2)] text-center">
           <strong className="block text-[var(--color-ink)] font-medium mb-1">
             No playlists yet.
           </strong>
-          Click "Generate playlists" to let the A&amp;R agent curate from the published catalog.
+          Click &quot;Generate playlists&quot; to let the A&amp;R agent curate from the published catalog.
         </div>
       ) : (
         <div className="flex flex-col gap-8">
@@ -177,5 +179,47 @@ function PlaylistCard({
         })}
       </ul>
     </article>
+  );
+}
+
+// ── Skeleton ────────────────────────────────────────────
+
+function DiscoverSkeleton({ count = 2 }: { count?: number }) {
+  return (
+    <div className="flex flex-col gap-8">
+      {Array.from({ length: count }).map((_, i) => (
+        <article key={i} className="border-t border-[var(--color-ink)] pt-6">
+          <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
+            <div className="space-y-2 flex-1">
+              <div className="skel h-[28px] w-full max-w-[300px]" />
+              <div className="skel h-[12px] w-[180px]" />
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <div className="skel h-[10px] w-[50px]" />
+              <div className="skel h-[10px] w-[90px]" />
+              <div className="skel h-[10px] w-[70px]" />
+            </div>
+          </div>
+          <div className="skel h-[16px] w-full max-w-[420px] mb-4" />
+          <div className="border-t border-[var(--color-hair)]">
+            {Array.from({ length: 3 }).map((_, j) => (
+              <div
+                key={j}
+                className="flex items-center justify-between gap-3 py-3 border-b border-[var(--color-hair)]"
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="skel h-8 w-8 shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="skel h-[10px] w-full max-w-[240px]" />
+                    <div className="skel h-[10px] w-[140px]" />
+                  </div>
+                </div>
+                <div className="skel h-[24px] w-[100px] shrink-0" />
+              </div>
+            ))}
+          </div>
+        </article>
+      ))}
+    </div>
   );
 }

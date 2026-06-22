@@ -15,7 +15,7 @@ import {
   placementBriefs as briefsTable,
   publishedVersions as pvTable,
 } from '../lib/schema';
-import { aggregateRatings, type RatingRowLike } from './taste-graph';
+import { publishSubmission } from './publish';
 import type { LlmAdapter } from '../adapters/llm';
 import type { SettlementService } from './settlement';
 import type { AgentName } from '../lib/types';
@@ -351,7 +351,21 @@ export function createAgentService({
 
       let published: PublishedSummary | null = null;
       if ((refreshed?.ratingCount ?? 0) >= PUBLISH_THRESHOLD) {
-        published = (await tryPublish(submissionId, sub, settlement)) as PublishedSummary;
+        const publishResult = await publishSubmission(submissionId, settlement);
+        if (!publishResult.alreadyPublished) {
+          const settleResults = await settlement.settleLegsAsync(publishResult.legIds);
+          const { settlementLegs: legsTable } = await import('../lib/schema');
+          const finalLegs = await db.select().from(legsTable).where(eq(legsTable.submissionId, submissionId));
+          const [version] = await db.select().from(pvTable).where(eq(pvTable.submissionId, submissionId)).limit(1);
+          published = {
+            alreadyPublished: false,
+            version,
+            settlement_legs: finalLegs,
+            settle_results: settleResults,
+          };
+        } else {
+          published = { alreadyPublished: true };
+        }
       }
 
       return { ok: true as const, reviews, brief, rating_count: refreshed?.ratingCount ?? 0, published };
@@ -386,66 +400,4 @@ export function createAgentService({
   };
 }
 
-async function tryPublish(
-  submissionId: string,
-  sub: typeof submissionsTable.$inferSelect,
-  settlement: SettlementService,
-) {
-  if (sub.status === 'published') return { alreadyPublished: true };
 
-  const ratings = (await db
-    .select()
-    .from(ratingsTable)
-    .where(eq(ratingsTable.submissionId, submissionId))) as unknown as RatingRowLike[];
-  const agg = aggregateRatings(ratings);
-
-  await db
-    .insert(pvTable)
-    .values({
-      submissionId: sub.id,
-      artistWallet: sub.artistWallet,
-      title: sub.title,
-      artistName: sub.artistName,
-      versionType: sub.versionType,
-      audioPath: sub.audioPath,
-      musicbrainzId: sub.musicbrainzId,
-      coverSvg: sub.coverSvg,
-      avgSoloIntensity: agg.avg_solo_intensity,
-      avgVocalQuality: agg.avg_vocal_quality,
-      energyConsensus: agg.energy_consensus,
-      tempoConsensus: agg.tempo_consensus,
-      aggregatedMoodTags: agg.aggregated_mood_tags,
-      ratingCount: agg.rating_count,
-      publishedAt: new Date(),
-    })
-    .onConflictDoNothing({ target: pvTable.submissionId });
-
-  await db
-    .update(submissionsTable)
-    .set({ status: 'published', publishedAt: new Date() })
-    .where(eq(submissionsTable.id, submissionId));
-
-  const distinctCurators = await db
-    .select({ curator_wallet: ratingsTable.curatorWallet })
-    .from(ratingsTable)
-    .where(eq(ratingsTable.submissionId, submissionId))
-    .groupBy(ratingsTable.curatorWallet);
-
-  const legs = await settlement.insertLegsAtomic({
-    submissionId,
-    feeQuoteUsdc: sub.feeQuoteUsdc,
-    curatorWallets: distinctCurators.map((r) => r.curator_wallet),
-    musicbrainzWallet: sub.artistWallet,
-  });
-
-  const settleResults = await settlement.settleLegsAsync(legs.map((l) => l.id));
-  const [version] = await db.select().from(pvTable).where(eq(pvTable.submissionId, submissionId)).limit(1);
-  const { settlementLegs: legsTable } = await import('../lib/schema');
-  const finalLegs = await db.select().from(legsTable).where(eq(legsTable.submissionId, submissionId));
-  return {
-    alreadyPublished: false,
-    version,
-    settlement_legs: finalLegs,
-    settle_results: settleResults,
-  };
-}

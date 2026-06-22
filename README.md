@@ -59,7 +59,7 @@ PINATA_API_KEY=...                  # IPFS audio uploads
 | --- | --- |
 | `/` | Brand-forward landing with 4-section nav |
 | `/submit` | Submit a version (audio upload + metadata + 0.50 USDC fee) |
-| `/curate` | Curator queue + scorecard + taste-graph radar |
+| `/agents` | Agent monitor — watch AI agents review the queue in real time |
 | `/feed` | Published versions with mood/energy/tempo filters |
 | `/discover` | A&R agent playlists with per-play micro-payments |
 | `/api/health` | Service health probe |
@@ -89,7 +89,7 @@ src/
 │   ├── api/                  # Route handlers
 │   │   ├── v1/               # Versioned API surface
 │   │   └── events/           # SSE endpoint
-│   ├── curate/               # Curator queue page
+│   ├── agents/               # Agent monitor dashboard
 │   ├── discover/             # A&R playlists page
 │   ├── feed/                 # Published feed page
 │   ├── submit/               # Submission form page
@@ -101,7 +101,7 @@ src/
 ├── components/
 │   ├── audio/                # AudioPlayer
 │   ├── cover/                # Cover SVG rendering
-│   ├── curation/             # CurateConsole, TasteGraph, etc.
+│   ├── curation/             # AgentMonitor, TasteGraph, etc.
 │   ├── discovery/            # DiscoverView (A&R playlists)
 │   ├── feed/                 # FeedView
 │   ├── submit/               # SubmitForm

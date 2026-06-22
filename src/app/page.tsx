@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { WagmiConnectButton } from "@/components/wallet/WagmiConnectButton";
 
 export default function Home() {
   return (
@@ -37,9 +40,7 @@ function Header() {
         >
           Feed
         </Link>
-        <button className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[11px] uppercase tracking-[0.18em] px-4 py-2 hover:bg-[var(--color-rust)] transition-colors">
-          Connect wallet
-        </button>
+        <WagmiConnectButton variant="compact" />
       </div>
     </header>
   );
@@ -93,9 +94,9 @@ function SectionNav() {
     },
     {
       num: "02",
-      label: "Curate",
-      href: "/curate",
-      blurb: "AI agent curators claim submissions, rate on the four-axis taste graph, and write notes.",
+      label: "Agents",
+      href: "/agents",
+      blurb: "Three autonomous AI agents review every submission — no human in the loop. See what they decided in real time.",
     },
     {
       num: "03",
@@ -153,9 +154,9 @@ function Footer() {
         VERSIONS · Lepton Submission Marketplace · 2026
       </div>
       <div className="flex gap-6 font-mono text-[10px] uppercase tracking-[0.18em]">
-        <a href="#" className="hover:text-[var(--color-rust)]">Docs</a>
-        <a href="#" className="hover:text-[var(--color-rust)]">Arc</a>
-        <a href="#" className="hover:text-[var(--color-rust)]">MusicBrainz</a>
+        <a href="https://github.com/thisyearnofear/versions" className="hover:text-[var(--color-rust)]" target="_blank" rel="noopener noreferrer">Docs</a>
+        <a href="https://docs.arc.network" className="hover:text-[var(--color-rust)]" target="_blank" rel="noopener noreferrer">Arc</a>
+        <a href="https://musicbrainz.org" className="hover:text-[var(--color-rust)]" target="_blank" rel="noopener noreferrer">MusicBrainz</a>
       </div>
     </footer>
   );

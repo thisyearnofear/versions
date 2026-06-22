@@ -19,6 +19,7 @@ import {
 } from '../lib/schema';
 import { aggregateRatings, type RatingRowLike } from './taste-graph';
 import { validateRating } from '../lib/validation';
+import { publishSubmission } from './publish';
 import type { SettlementService } from './settlement';
 
 export const CLAIM_MESSAGE = 'VERSIONS_LEPTON_CLAIM';
@@ -302,7 +303,7 @@ export function createCurationService({ settlement }: { settlement: SettlementSe
 
       let published: SubmitRatingResult extends { published: infer P } ? P : never = null as never;
       if ((refreshed?.ratingCount ?? 0) >= PUBLISH_THRESHOLD) {
-        const publishResult = await publishTx(submissionId, settlement);
+        const publishResult = await publishSubmission(submissionId, settlement);
         if (publishResult.alreadyPublished) {
           published = { alreadyPublished: true } as never;
         } else {
@@ -342,7 +343,8 @@ export function createCurationService({ settlement }: { settlement: SettlementSe
     },
 
     async publish(submissionId: string) {
-      return publishTx(submissionId, settlement);
+      const result = await publishSubmission(submissionId, settlement);
+      return { alreadyPublished: result.alreadyPublished, legIds: result.legIds };
     },
 
     async getCuratorProfile(wallet: string) {
@@ -459,71 +461,4 @@ export function createCurationService({ settlement }: { settlement: SettlementSe
   };
 }
 
-/**
- * Publish is logically one transaction. On Neon HTTP we can't BEGIN/COMMIT,
- * but the operations are still sequential and we use a UNIQUE constraint
- * on published_versions(submission_id) to make double-publish a no-op.
- */
-async function publishTx(
-  submissionId: string,
-  settlement: SettlementService,
-): Promise<{ alreadyPublished: true; legIds: [] } | { alreadyPublished: false; legIds: string[] }> {
-  const [sub] = await db
-    .select()
-    .from(submissionsTable)
-    .where(eq(submissionsTable.id, submissionId))
-    .limit(1);
-  if (!sub) throw new Error('Submission not found');
-  if (sub.status === 'published') return { alreadyPublished: true, legIds: [] };
 
-  const ratings = (await db
-    .select()
-    .from(ratingsTable)
-    .where(eq(ratingsTable.submissionId, submissionId))) as unknown as RatingRowLike[];
-  const agg = aggregateRatings(ratings);
-
-  await db
-    .insert(pvTable)
-    .values({
-      submissionId: sub.id,
-      artistWallet: sub.artistWallet,
-      title: sub.title,
-      artistName: sub.artistName,
-      versionType: sub.versionType,
-      audioPath: sub.audioPath,
-      musicbrainzId: sub.musicbrainzId,
-      coverSvg: sub.coverSvg,
-      avgSoloIntensity: agg.avg_solo_intensity,
-      avgVocalQuality: agg.avg_vocal_quality,
-      energyConsensus: agg.energy_consensus,
-      tempoConsensus: agg.tempo_consensus,
-      aggregatedMoodTags: agg.aggregated_mood_tags,
-      ratingCount: agg.rating_count,
-      publishedAt: new Date(),
-    })
-    .onConflictDoNothing({ target: pvTable.submissionId });
-
-  await db
-    .update(submissionsTable)
-    .set({ status: 'published', publishedAt: new Date() })
-    .where(eq(submissionsTable.id, submissionId));
-
-  const distinctCurators = await db
-    .select({
-      curator_wallet: ratingsTable.curatorWallet,
-      first_at: sql<Date>`MIN(${ratingsTable.submittedAt})`,
-    })
-    .from(ratingsTable)
-    .where(eq(ratingsTable.submissionId, submissionId))
-    .groupBy(ratingsTable.curatorWallet)
-    .orderBy(sql`MIN(${ratingsTable.submittedAt}), MIN(${ratingsTable.id})`);
-
-  const legs = await settlement.insertLegsAtomic({
-    submissionId,
-    feeQuoteUsdc: sub.feeQuoteUsdc,
-    curatorWallets: distinctCurators.map((r) => r.curator_wallet),
-    musicbrainzWallet: sub.artistWallet,
-  });
-
-  return { alreadyPublished: false, legIds: legs.map((l) => l.id) };
-}

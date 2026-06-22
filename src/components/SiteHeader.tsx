@@ -7,10 +7,10 @@
 import Link from "next/link";
 import { WagmiConnectButton } from "@/components/wallet/WagmiConnectButton";
 
-export function SiteHeader({ active }: { active?: "submit" | "curate" | "feed" | "discover" }) {
+export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" | "discover" }) {
   const tabs = [
     { id: "submit", label: "Submit", href: "/submit" },
-    { id: "curate", label: "Curate", href: "/curate" },
+    { id: "agents", label: "Agents", href: "/agents" },
     { id: "feed", label: "Feed", href: "/feed" },
     { id: "discover", label: "Discover", href: "/discover" },
   ] as const;
