@@ -88,6 +88,33 @@ their `tx_hash` and `settled_at`.
 | GET    | `/api/v1/curators/:wallet`        | `{ wallet, ratings_count, total_earned_usdc, recent_ratings: [...] }`     |
 | GET    | `/api/v1/artists/:wallet`         | `{ wallet, submissions_count, published_count, total_received_usdc, recent_submissions, recent_published }` |
 
+## Agent Reviews (Phase 2)
+
+| Method | Path                                            | Body | Returns |
+|--------|-------------------------------------------------|------|---------|
+| POST   | `/api/v1/submissions/:id/review`                | —    | `{ reviews: [...], brief: {...}, rating_count, published }` |
+| GET    | `/api/v1/submissions/:id/reviews`               | —    | `[{ id, agent_name, solo_intensity, vocal_quality, energy_vs_studio, tempo_feel, mood_tags, notes }]` |
+| GET    | `/api/v1/submissions/:id/brief`                 | —    | `{ venues, youtube_channels, influencers, draft_emails, audience_summary }` |
+
+Agent review is auto-triggered after `verify-payment` succeeds. The POST
+endpoint allows manual re-runs. Three agents (production, performance,
+market) each produce a structured taste-graph rating. The market agent
+additionally produces a placement brief with venues, YouTube channels,
+influencers, and draft outreach emails.
+
+## A&R Agent (Phase 3)
+
+| Method | Path                                            | Body | Returns |
+|--------|-------------------------------------------------|------|---------|
+| GET    | `/api/v1/ar/playlists`                          | —    | `[{ id, name, genre, mood, track_count, tracks: [...] }]` |
+| GET    | `/api/v1/ar/playlists/:id`                      | —    | playlist detail with tracks + `{ stats: { total_plays, total_revenue_usdc, total_paid_to_artists_usdc, ar_margin_usdc } }` |
+| POST   | `/api/v1/ar/playlists/generate`                 | —    | `{ generated: N, playlists: [...] }` |
+| POST   | `/api/v1/ar/play`                               | `{ playlistId, versionId, listenerWallet }` | `{ id, listener_fee_usdc, artist_payout_usdc, listener_tx_hash, artist_tx_hash, status }` |
+
+The A&R agent autonomously curates playlists from the published catalog.
+Each play settles two legs on Arc: listener pays A&R agent $0.001, A&R
+agent pays artist $0.0005. The $0.0005 difference is the A&R margin.
+
 ## Feed
 
 | Method | Path                                                              | Returns                                                                                |
@@ -117,6 +144,8 @@ whose `aggregated_mood_tags` JSON array contains `"Bluesy"`). `energy` and
 | `CLAIM_REJECTED`           | 400  | Claim failed (artist self-claim, double-claim, wrong status). |
 | `RATE_REJECTED`            | 400  | Rate failed (no claim, expired, double-rate, invalid rating).  |
 | `VERIFY_PAYMENT_FAILED`    | 400  | `verify-payment` rejected (unknown submission, bad tx).       |
+| `REVIEW_FAILED`            | 400  | Agent review rejected (already published, wrong status).     |
+| `PLAY_FAILED`              | 400  | A&R play rejected (unknown playlist/version, payment failed). |
 | `BAD_FILENAME`             | 400  | Upload path-traversal attempt.                                |
 | `BODY_TOO_LARGE`           | 413  | Request body exceeded the route's size cap.                  |
 | `NOT_FOUND`                | 404  | Submission / version / route not found.                       |

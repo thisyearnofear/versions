@@ -29,6 +29,7 @@ const { createFeedService } = require('./proxy/services/feed');
 const { createSweeper } = require('./proxy/services/settlement-sweeper');
 const { createLlmAdapter } = require('./proxy/adapters/llm');
 const { createAgentService } = require('./proxy/services/agents');
+const { createArService } = require('./proxy/services/ar');
 
 const PORT = Number(getEnv('PORT', '8080'));
 const HOST = getEnv('HOST', '0.0.0.0');
@@ -49,6 +50,9 @@ const AGENT_WALLETS = [
   getEnv('AGENT_WALLET_2', '') || 'agent_performance_' + crypto.createHash('sha256').update('performance').digest('hex').slice(0, 30),
   getEnv('AGENT_WALLET_3', '') || 'agent_market_' + crypto.createHash('sha256').update('market').digest('hex').slice(0, 34)
 ];
+// MODULAR: A&R agent wallet. The A&R agent earns from listener
+// recommendations and pays artists per play.
+const AR_WALLET = getEnv('AR_WALLET', '') || 'ar_agent_' + crypto.createHash('sha256').update('ar').digest('hex').slice(0, 35);
 const UPLOAD_DIR = path.resolve(__dirname, 'data', 'uploads');
 // MODULAR: the JSON body cap is the *post-base64* size of the audio
 // bytes, because clients post audio as { base64: '...' } in JSON.
@@ -119,6 +123,9 @@ sweeper = createSweeper({ db: openDb(), settlement });
 // empty. The agent service depends on the LLM adapter and settlement.
 const llm = createLlmAdapter({ apiUrl: LLM_API_URL || null, apiKey: LLM_API_KEY || null, model: LLM_MODEL });
 const agents = createAgentService({ llm, settlement, agentWallets: AGENT_WALLETS });
+// MODULAR: A&R agent service. Autonomous playlist curation +
+// agent-to-agent economics. Depends on arc + settlement.
+const ar = createArService({ arc, settlement, arWallet: AR_WALLET });
 
 // ---------- helpers ----------
 
@@ -520,6 +527,49 @@ async function handleEarnings(req, res, requestId, wallet) {
   return jsonResponse(res, 200, { success: true, data: result }, requestId);
 }
 
+// ---------- Phase 3: A&R agent routes ----------
+
+async function handleArPlaylists(req, res, requestId) {
+  const playlists = ar.listPlaylists();
+  return jsonResponse(res, 200, { success: true, data: playlists }, requestId);
+}
+
+async function handleArPlaylist(req, res, requestId, playlistId) {
+  const playlist = ar.getPlaylist(playlistId);
+  if (!playlist) return errorResponse(res, requestId, 404, 'NOT_FOUND', 'Playlist not found');
+  const stats = ar.getPlaylistStats(playlistId);
+  return jsonResponse(res, 200, { success: true, data: { ...playlist, stats } }, requestId);
+}
+
+async function handleArGenerate(req, res, requestId) {
+  const playlists = ar.generatePlaylists();
+  return jsonResponse(res, 200, {
+    success: true,
+    data: { generated: playlists.length, playlists }
+  }, requestId);
+}
+
+async function handleArPlay(req, res, requestId) {
+  let body;
+  try {
+    body = await readJsonBody(req, DEFAULT_BODY_LIMIT);
+  } catch (err) {
+    return errorResponse(res, requestId, err.status || 400, err.code || 'BAD_REQUEST', err.message);
+  }
+  if (!body || !body.playlistId || !body.versionId || !body.listenerWallet) {
+    return errorResponse(res, requestId, 400, 'MISSING_FIELD', 'playlistId, versionId, and listenerWallet are required');
+  }
+  const result = await ar.recordPlay({
+    playlistId: body.playlistId,
+    versionId: body.versionId,
+    listenerWallet: body.listenerWallet
+  });
+  if (!result.ok) {
+    return errorResponse(res, requestId, 400, 'PLAY_FAILED', result.error);
+  }
+  return jsonResponse(res, 200, { success: true, data: result.play }, requestId);
+}
+
 // ---------- Phase 2: agent review routes ----------
 
 async function handleAgentReview(req, res, requestId, submissionId) {
@@ -705,6 +755,15 @@ const ROUTES = [
             handler: (req, res, rid, p) => handleAgentReviews(req, res, rid, p.split('/')[4]) },
   { method: 'GET',    match: (p) => /^\/api\/v1\/submissions\/[^/]+\/brief$/.test(p),
             handler: (req, res, rid, p) => handlePlacementBrief(req, res, rid, p.split('/')[4]) },
+  // Phase 3: A&R agent routes. GET /playlists lists all curated
+  // playlists. GET /playlists/:id gets one with tracks + stats.
+  // POST /playlists/generate triggers autonomous playlist generation.
+  // POST /play records a play event + settles agent-to-agent payments.
+  { method: 'GET',    match: (p) => p === '/api/v1/ar/playlists',                     handler: handleArPlaylists },
+  { method: 'POST',   match: (p) => p === '/api/v1/ar/playlists/generate',            handler: handleArGenerate },
+  { method: 'POST',   match: (p) => p === '/api/v1/ar/play',                          handler: handleArPlay },
+  { method: 'GET',    match: (p) => /^\/api\/v1\/ar\/playlists\/[^/]+$/.test(p),
+            handler: (req, res, rid, p) => handleArPlaylist(req, res, rid, p.split('/')[5]) },
   // Day 5: feed + version detail. The /api/v1/versions/:id route must
   // not collide with /api/v1/submissions/:id, so we keep them apart.
   { method: 'GET',    match: (p) => p === '/api/v1/feed',                              handler: handleFeed },

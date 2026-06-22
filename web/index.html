@@ -49,6 +49,7 @@
     <button class="tab active" data-tab="artist" role="tab">01 · Submit</button>
     <button class="tab" data-tab="curator" role="tab">02 · Curate</button>
     <button class="tab" data-tab="feed" role="tab">03 · Feed</button>
+    <button class="tab" data-tab="discover" role="tab">04 · Discover</button>
   </nav>
 
   <main class="app-main">
@@ -212,6 +213,20 @@
         <button type="submit" class="btn">Filter</button>
       </form>
       <ul class="feed-list" id="feedList"></ul>
+    </section>
+
+    <!-- DISCOVER: A&R agent curated playlists -->
+    <section class="view hidden" id="view-discover" data-view="discover">
+      <p class="eyebrow">Section 04 — Agent Economy</p>
+      <h2>Discover.</h2>
+      <p class="muted">The A&R agent curates playlists from the published catalog. Each play pays the artist $0.0005 USDC on Arc — agent-to-agent economics, settled instantly.</p>
+
+      <div class="discover-actions">
+        <button class="btn" id="generatePlaylistsBtn">Generate playlists</button>
+        <button class="btn btn-ghost" id="refreshPlaylistsBtn">Refresh</button>
+      </div>
+
+      <div id="playlistList" class="playlist-list"></div>
     </section>
   </main>
 

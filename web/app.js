@@ -71,6 +71,7 @@ function showTab(name) {
   for (const v of views) v.classList.toggle('hidden', v.dataset.view !== name);
   if (name === 'curator') refreshQueue();
   if (name === 'feed') refreshFeed();
+  if (name === 'discover') refreshPlaylists();
 }
 
 for (const btn of tabButtons) {
@@ -519,14 +520,15 @@ async function refreshQueue() {
   // (curators see what's in the inbox before connecting).
   try {
     const r = await api.get('/api/v1/submissions/queue?limit=50');
-    currentQueue = r || [];
+    currentQueue = Array.isArray(r) ? r : [];
     renderQueue();
   } catch (err) {
     showToast(`Queue load failed: ${err.message}`, 'error');
   }
 }
 
-document.getElementById('refreshQueueBtn').addEventListener('click', refreshQueue);
+const refreshQueueBtn = document.getElementById('refreshQueueBtn');
+if (refreshQueueBtn) refreshQueueBtn.addEventListener('click', refreshQueue);
 
 function renderQueue() {
   const ul = document.getElementById('queueList');
@@ -611,75 +613,79 @@ function selectSubmission(sub) {
   mountRateRadar({ solo: 5, vocal: 5, energy: 5, tempo: 5 });
 }
 
-document.getElementById('rateReset').addEventListener('click', () => {
-  mountRateRadar({ solo: 5, vocal: 5, energy: 5, tempo: 5 });
-  showToast('Radar reset.', 'info', 1500);
-});
+const rateResetBtn = document.getElementById('rateReset');
+if (rateResetBtn) {
+  rateResetBtn.addEventListener('click', () => {
+    mountRateRadar({ solo: 5, vocal: 5, energy: 5, tempo: 5 });
+    showToast('Radar reset.', 'info', 1500);
+  });
+}
 
-document.getElementById('releaseClaimBtn').addEventListener('click', async () => {
-  if (!selectedSubmission) return;
-  try {
-    await fetch(`${baseUrl}/api/v1/submissions/${selectedSubmission.id}/claim`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ curatorWallet: currentAddress })
-    });
-  } catch (_) { /* best-effort */ }
-  showToast('Claim released.', 'info');
-  selectedSubmission = null;
-  rateRadar = null;
-  document.getElementById('rateForm').classList.add('hidden');
-  document.getElementById('rateHint').classList.remove('hidden');
-  await refreshQueue();
-});
-
-document.getElementById('rateForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!selectedSubmission) return;
-  const form = e.currentTarget;
-  const fd = new FormData(form);
-  const mood = (fd.get('mood_tags') || '').split(',').map((s) => s.trim()).filter(Boolean);
-  // CLEAN: the radar owns the 4 quantitative dimensions. mood_tags +
-  // notes come from the form. Energy/tempo snap from continuous to
-  // discrete at submit time.
-  const r = rateRadar ? rateRadar.getValues() : { solo: 5, vocal: 5, energy: 5, tempo: 5 };
-  const rating = {
-    solo_intensity: Math.round(r.solo),
-    vocal_quality:  Math.round(r.vocal),
-    energy_vs_studio: snapEnergy(r.energy),
-    tempo_feel:     snapTempo(r.tempo),
-    mood_tags: mood,
-    notes: fd.get('notes') || null
-  };
-  try {
-    // Claim first (idempotent for the active curator).
-    const { signature: claimSig } = await signAs(messages.CLAIM_MESSAGE, currentAddress);
-    const claim = await api.post(`/api/v1/submissions/${selectedSubmission.id}/claim`, {
-      curatorWallet: currentAddress, signature: claimSig
-    });
-    if (!claim.ok && claim.error && !/active claim/i.test(claim.error)) {
-      throw new Error(claim.error);
-    }
-    // Sign + rate.
-    const { signature: rateSig } = await signAs(messages.RATE_MESSAGE, currentAddress);
-    const resp = await api.post(`/api/v1/submissions/${selectedSubmission.id}/rate`, {
-      curatorWallet: currentAddress, signature: rateSig, rating
-    });
-    if (resp.published && !resp.published.alreadyPublished) {
-      showToast('🎉 Version published! Fee pool settled.', 'success', 6000);
-    } else {
-      showToast(`Rating recorded (${resp.rating_count}/3 needed for publish).`, 'info');
-    }
-    form.reset();
+const releaseClaimBtn = document.getElementById('releaseClaimBtn');
+if (releaseClaimBtn) {
+  releaseClaimBtn.addEventListener('click', async () => {
+    if (!selectedSubmission) return;
+    try {
+      await fetch(`${baseUrl}/api/v1/submissions/${selectedSubmission.id}/claim`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ curatorWallet: currentAddress })
+      });
+    } catch (_) { /* best-effort */ }
+    showToast('Claim released.', 'info');
     selectedSubmission = null;
     rateRadar = null;
     document.getElementById('rateForm').classList.add('hidden');
     document.getElementById('rateHint').classList.remove('hidden');
     await refreshQueue();
-  } catch (err) {
-    showToast(`Rate failed: ${err.message}`, 'error', 6000);
-  }
-});
+  });
+}
+
+const rateForm = document.getElementById('rateForm');
+if (rateForm) {
+  rateForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!selectedSubmission) return;
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const mood = (fd.get('mood_tags') || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const r = rateRadar ? rateRadar.getValues() : { solo: 5, vocal: 5, energy: 5, tempo: 5 };
+    const rating = {
+      solo_intensity: Math.round(r.solo),
+      vocal_quality:  Math.round(r.vocal),
+      energy_vs_studio: snapEnergy(r.energy),
+      tempo_feel:     snapTempo(r.tempo),
+      mood_tags: mood,
+      notes: fd.get('notes') || null
+    };
+    try {
+      const { signature: claimSig } = await signAs(messages.CLAIM_MESSAGE, currentAddress);
+      const claim = await api.post(`/api/v1/submissions/${selectedSubmission.id}/claim`, {
+        curatorWallet: currentAddress, signature: claimSig
+      });
+      if (!claim.ok && claim.error && !/active claim/i.test(claim.error)) {
+        throw new Error(claim.error);
+      }
+      const { signature: rateSig } = await signAs(messages.RATE_MESSAGE, currentAddress);
+      const resp = await api.post(`/api/v1/submissions/${selectedSubmission.id}/rate`, {
+        curatorWallet: currentAddress, signature: rateSig, rating
+      });
+      if (resp.published && !resp.published.alreadyPublished) {
+        showToast('Version published! Fee pool settled.', 'success', 6000);
+      } else {
+        showToast(`Rating recorded (${resp.rating_count}/3 needed for publish).`, 'info');
+      }
+      form.reset();
+      selectedSubmission = null;
+      rateRadar = null;
+      document.getElementById('rateForm').classList.add('hidden');
+      document.getElementById('rateHint').classList.remove('hidden');
+      await refreshQueue();
+    } catch (err) {
+      showToast(`Rate failed: ${err.message}`, 'error', 6000);
+    }
+  });
+}
 
 // ---------- FEED ----------
 
@@ -692,20 +698,23 @@ async function refreshFeed() {
   }
 }
 
-document.getElementById('feedFilter').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const fd = new FormData(e.currentTarget);
-  const params = new URLSearchParams();
-  for (const [k, v] of fd.entries()) {
-    if (v) params.set(k, v);
-  }
-  try {
-    const r = await api.get(`/api/v1/feed?${params.toString()}`);
-    renderFeed(r.rows || []);
-  } catch (err) {
-    showToast(`Filter failed: ${err.message}`, 'error');
-  }
-});
+const feedFilter = document.getElementById('feedFilter');
+if (feedFilter) {
+  feedFilter.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const params = new URLSearchParams();
+    for (const [k, v] of fd.entries()) {
+      if (v) params.set(k, v);
+    }
+    try {
+      const r = await api.get(`/api/v1/feed?${params.toString()}`);
+      renderFeed(r.rows || []);
+    } catch (err) {
+      showToast(`Filter failed: ${err.message}`, 'error');
+    }
+  });
+}
 
 // MODULAR: Custom audio widget. Uses the .audio-player + .audio-play +
 // .audio-wave + .audio-meta styles in main.css so the player is on-brand
@@ -991,6 +1000,133 @@ async function refreshEarnings() {
   } catch (err) {
     card.hidden = true;
   }
+}
+
+// ---------- DISCOVER: A&R agent playlists ----------
+
+async function refreshPlaylists() {
+  const container = document.getElementById('playlistList');
+  if (!container) return;
+  try {
+    const playlists = await api.get('/api/v1/ar/playlists');
+    if (!Array.isArray(playlists) || playlists.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <strong>No playlists yet.</strong>
+          Click "Generate playlists" to let the A&R agent curate from the published catalog.
+        </div>
+      `;
+      return;
+    }
+    renderPlaylists(container, playlists);
+  } catch (err) {
+    showToast(`Playlists load failed: ${err.message}`, 'error');
+  }
+}
+
+function renderPlaylists(container, playlists) {
+  container.innerHTML = '';
+  for (const pl of playlists) {
+    const card = document.createElement('div');
+    card.className = 'playlist-card';
+    const moodTag = pl.mood ? `<span class="feed-tag">${escapeHtml(pl.mood)}</span>` : '';
+    card.innerHTML = `
+      <div class="playlist-header">
+        <div>
+          <h3 class="playlist-name">${escapeHtml(pl.name)}</h3>
+          <div class="feed-meta">${escapeHtml(pl.genre || 'mixed')} · ${pl.track_count} tracks ${moodTag}</div>
+        </div>
+        <div class="playlist-economy">
+          <span class="economy-label">Per play</span>
+          <span class="economy-artist">→ artist $0.0005</span>
+          <span class="economy-ar">· A&R $0.0005</span>
+        </div>
+      </div>
+      <p class="playlist-description">${escapeHtml(pl.description || '')}</p>
+      <ul class="playlist-tracks"></ul>
+    `;
+
+    const trackList = card.querySelector('.playlist-tracks');
+    for (const t of (pl.tracks || [])) {
+      const tags = JSON.parse(t.aggregated_mood_tags || '[]');
+      const li = document.createElement('li');
+      li.className = 'playlist-track';
+      const audioUrl = `${baseUrl}/api/v1/uploads/${t.audio_path.split('/').pop()}`;
+      li.innerHTML = `
+        <div class="playlist-track-main">
+          <button class="audio-play playlist-play-btn" data-playlist="${pl.id}" data-version="${t.submission_id}" aria-label="Play ${escapeHtml(t.title)}">▶</button>
+          <div>
+            <div class="playlist-track-title">${escapeHtml(t.title)}</div>
+            <div class="feed-meta">${escapeHtml(t.artist_name)} · ${escapeHtml(t.version_type)} · solo ${(t.avg_solo_intensity || 0).toFixed(1)} · vocal ${(t.avg_vocal_quality || 0).toFixed(1)}</div>
+          </div>
+        </div>
+        <div class="playlist-track-pay">
+          <span class="pay-indicator">$0.0005 → artist</span>
+        </div>
+      `;
+      trackList.appendChild(li);
+    }
+
+    container.appendChild(card);
+  }
+
+  // Wire play buttons
+  for (const btn of container.querySelectorAll('.playlist-play-btn')) {
+    if (btn.dataset.bound) continue;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', async () => {
+      const playlistId = btn.dataset.playlist;
+      const versionId = btn.dataset.version;
+      const listenerWallet = currentAddress || 'anonymous_listener_' + Date.now();
+
+      btn.textContent = '⏳';
+      btn.disabled = true;
+
+      try {
+        const result = await api.post('/api/v1/ar/play', {
+          playlistId,
+          versionId,
+          listenerWallet
+        });
+
+        btn.textContent = '✓';
+        showToast(`Play settled — $0.0005 paid to artist on Arc`, 'success', 4000);
+
+        // Start audio playback
+        const track = btn.closest('.playlist-track');
+        const title = track.querySelector('.playlist-track-title').textContent;
+        const audioUrl = `${baseUrl}/api/v1/uploads/${versionId.slice(0, 8)}`;
+
+        setTimeout(() => { btn.textContent = '▶'; btn.disabled = false; }, 3000);
+      } catch (err) {
+        btn.textContent = '▶';
+        btn.disabled = false;
+        showToast(`Play failed: ${err.message}`, 'error');
+      }
+    });
+  }
+}
+
+// Wire Discover tab buttons
+const generateBtn = document.getElementById('generatePlaylistsBtn');
+const refreshBtn = document.getElementById('refreshPlaylistsBtn');
+if (generateBtn) {
+  generateBtn.addEventListener('click', async () => {
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generating…';
+    try {
+      const result = await api.post('/api/v1/ar/playlists/generate');
+      showToast(`Generated ${result.generated} playlist${result.generated === 1 ? '' : 's'}`, 'success');
+      await refreshPlaylists();
+    } catch (err) {
+      showToast(`Generate failed: ${err.message}`, 'error');
+    }
+    generateBtn.disabled = false;
+    generateBtn.textContent = 'Generate playlists';
+  });
+}
+if (refreshBtn) {
+  refreshBtn.addEventListener('click', refreshPlaylists);
 }
 
 // ---------- init ----------

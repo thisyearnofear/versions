@@ -1,7 +1,7 @@
 # VERSIONS — Lepton Submission Marketplace
 
 **Hackathon target:** Lepton Agents (June 15–29, 2026).
-**Status:** Phase 1 MVP shipped. Phase 2 (AI Agent Curators) in progress.
+**Status:** All three phases shipped. Phase 1 (marketplace), Phase 2 (AI agent curators), Phase 3 (A&R agent economy). 114 tests green.
 
 This repo is on a single track: the **Lepton Submission Marketplace**. Every doc, script, and code path serves that one goal. Anything that does not was removed in Day 1.
 
@@ -29,6 +29,7 @@ A three-frame walkthrough with screenshots is in
   - **Market Agent** — genre fit, audience analysis, and a **Placement Brief** with specific venues, YouTube channels, and influencers to pitch
 - **N=3 ratings** unlocks publish. The fee pool splits **70 / 20 / 10**: agents (equal share) / platform / artist attribution wallet.
 - **Discovery** is the feed of published versions, filterable by mood, energy, tempo, solo intensity, and artist.
+- **A&R Agent** autonomously curates playlists from the published catalog. Listeners pay $0.001 per play to the A&R agent, which pays the artist $0.0005 — agent-to-agent economics settled on Arc.
 
 The whole marketplace runs on **mock-first**: when `ARC_RPC_URL` is missing or unreachable, every settlement call returns a synthesised `tx_hash` and the `mock: true` flag is set on every response. When `LLM_API_KEY` is missing, the LLM adapter returns deterministic mock reviews so the demo runs without any external service. Switching to real Arc or a real LLM is a single config flag — no code changes.
 

@@ -70,6 +70,33 @@ pre-signed transaction and returns the tx hash.
 |---------------------|------------------------------------------------------------------------------------------|---------|
 | `MOCK_ARC=1`        | Forces mock mode even if `ARC_RPC_URL` is reachable. Useful for demos.                   | unset   |
 
+## LLM Agent Reviews (Phase 2)
+
+| Variable            | Purpose                                                                                  | Default         |
+|---------------------|------------------------------------------------------------------------------------------|-----------------|
+| `LLM_API_URL`       | OpenAI-compatible chat completions endpoint URL. Omit for mock reviews.                  | (empty = mock)  |
+| `LLM_API_KEY`       | Bearer token for the LLM endpoint. Omit for mock reviews.                                | (empty = mock)  |
+| `LLM_MODEL`         | Model name to request.                                                                    | `gpt-4o-mini`   |
+| `AGENT_WALLET_1`    | Production agent wallet. Auto-generated if empty.                                         | auto-generated  |
+| `AGENT_WALLET_2`    | Performance agent wallet. Auto-generated if empty.                                       | auto-generated  |
+| `AGENT_WALLET_3`    | Market agent wallet. Auto-generated if empty.                                             | auto-generated  |
+
+**Mock-first policy** — When `LLM_API_KEY` is missing, the LLM adapter
+returns deterministic reviews with genre-specific venue/channel/influencer
+data. The demo runs without any external LLM provider. The `mock: true`
+flag on every review response tells the UI to label reviews as "AI
+generated (mock)".
+
+## A&R Agent (Phase 3)
+
+| Variable            | Purpose                                                                                  | Default         |
+|---------------------|------------------------------------------------------------------------------------------|-----------------|
+| `AR_WALLET`         | A&R agent wallet. Receives listener payments and pays artists per play. Auto-generated if empty. | auto-generated  |
+
+The A&R agent charges listeners $0.001 per play and pays artists $0.0005.
+The $0.0005 margin goes to the A&R wallet. Both legs settle on Arc via
+the existing adapter (mock-first when `ARC_RPC_URL` is empty).
+
 ## Server / Network
 
 | Variable               | Purpose                                                                  | Default   |

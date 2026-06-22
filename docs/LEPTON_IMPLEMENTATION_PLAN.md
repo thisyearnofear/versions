@@ -1,7 +1,7 @@
 # Lepton Implementation Plan
 
 **Hackathon:** Lepton Agents (June 15–29, 2026)
-**Status:** Phase 1 shipped. Phase 2 (AI Agent Curators) shipped. Phase 3 (A&R Agent) next.
+**Status:** Phase 1 shipped. Phase 2 (AI Agent Curators) shipped. Phase 3 (A&R Agent) shipped.
 
 ## Phase 1 — Submission Marketplace (shipped, Days 1–5)
 

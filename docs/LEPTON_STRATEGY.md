@@ -63,7 +63,7 @@ The A&R tier is what makes judges lean forward. Agents are paying each other —
 
 ---
 
-## What's next (Phase 3 — A&R Agent + Agent-to-Agent Economy)
+## What's next (Phase 3 — A&R Agent + Agent-to-Agent Economy) — shipped
 
 ### The insight
 

@@ -1219,3 +1219,141 @@ textarea { resize: vertical; min-height: 64px; }
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
+
+/* MODULAR: Discover tab — A&R agent playlists + per-play economy. */
+
+.discover-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.playlist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.playlist-card {
+  border-top: 1px solid var(--ink);
+  padding-top: 24px;
+}
+
+.playlist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.playlist-name {
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+.playlist-description {
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--ink-2);
+  line-height: 1.5;
+  margin: 0 0 16px;
+  max-width: 60ch;
+}
+
+.playlist-economy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  flex-shrink: 0;
+}
+
+.economy-label {
+  color: var(--ink-3);
+  margin-bottom: 2px;
+}
+
+.economy-artist {
+  color: var(--rust);
+  font-weight: 600;
+}
+
+.economy-ar {
+  color: var(--ink-2);
+}
+
+.playlist-tracks {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid var(--hair);
+}
+
+.playlist-track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--hair);
+  gap: 16px;
+}
+
+.playlist-track-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.playlist-play-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.playlist-play-btn:hover {
+  background: var(--rust);
+  border-color: var(--rust);
+  color: var(--paper);
+}
+
+.playlist-play-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.playlist-track-title {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.playlist-track-pay {
+  flex-shrink: 0;
+}
+
+.pay-indicator {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--rust);
+  border: 1px solid var(--rust);
+  padding: 4px 8px;
+}
