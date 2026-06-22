@@ -140,9 +140,10 @@ function setSubmitState(state) {
   if (state.phase === 'verified') {
     btn.textContent = 'Submitted';
     btn.disabled = true;
-    status.textContent = 'Submission live in the queue.';
+    status.textContent = 'Submission live. AI agents reviewing…';
     if (submitCopy) submitCopy.hidden = true;
     if (retryArea) retryArea.hidden = true;
+    pollAgentReviews(state.submissionId);
     return;
   }
   if (state.phase === 'failed') {
@@ -335,6 +336,176 @@ document.getElementById('submitForm').addEventListener('submit', async (e) => {
     setSubmitState(submitState);
   }
 });
+
+// ---------- AGENT REVIEWS ----------
+
+// MODULAR: poll for agent reviews after submission verification. The
+// auto-review runs asynchronously on the server; this polls every
+// 1.5s until 3 reviews appear or 30s elapses. Renders inline below
+// the submit status.
+async function pollAgentReviews(submissionId) {
+  const container = document.getElementById('agentReviewPanel');
+  if (!container) return;
+  container.hidden = false;
+
+  // Show agent avatar status bar while reviewing
+  container.innerHTML = `
+    <div class="agent-status-bar">
+      <div class="agent-avatar is-reviewing" id="avatar-production">
+        <div class="agent-avatar-icon">🎛️</div>
+        <span>Production</span>
+      </div>
+      <div class="agent-avatar is-reviewing" id="avatar-performance">
+        <div class="agent-avatar-icon">🎤</div>
+        <span>Performance</span>
+      </div>
+      <div class="agent-avatar is-reviewing" id="avatar-market">
+        <div class="agent-avatar-icon">📊</div>
+        <span>Market</span>
+      </div>
+    </div>
+    <div class="agent-loading" id="agentStatusText">AI agents analyzing track…</div>
+  `;
+
+  const deadline = Date.now() + 30000;
+  let lastCount = 0;
+  const doneAgents = new Set();
+
+  while (Date.now() < deadline) {
+    try {
+      const reviews = await api.get(`/api/v1/submissions/${submissionId}/reviews`);
+      if (Array.isArray(reviews)) {
+        // Light up avatars as agents finish
+        for (const r of reviews) {
+          if (!doneAgents.has(r.agent_name)) {
+            doneAgents.add(r.agent_name);
+            const avatar = document.getElementById(`avatar-${r.agent_name}`);
+            if (avatar) {
+              avatar.classList.remove('is-reviewing');
+              avatar.classList.add('is-done');
+            }
+          }
+        }
+        const statusText = document.getElementById('agentStatusText');
+        if (statusText && reviews.length > lastCount) {
+          lastCount = reviews.length;
+          if (reviews.length < 3) {
+            statusText.textContent = `${reviews.length}/3 agents finished reviewing…`;
+          }
+        }
+        if (reviews.length >= 3) {
+          renderAgentReviews(container, submissionId, reviews);
+          return;
+        }
+      }
+    } catch (_) { /* retry */ }
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  container.innerHTML = '<div class="agent-loading">Review still in progress. Check back shortly.</div>';
+}
+
+const AGENT_LABELS = {
+  production: { icon: '🎛️', name: 'Production Agent' },
+  performance: { icon: '🎤', name: 'Performance Agent' },
+  market: { icon: '📊', name: 'Market Agent' }
+};
+
+const ENERGY_LABELS = { lower: 'LOWER', same: 'SAME', higher: 'HIGHER' };
+const TEMPO_LABELS = { dragging: 'DRAGGING', locked: 'LOCKED', rushing: 'RUSHING' };
+
+function renderAgentReviews(container, submissionId, reviews) {
+  let html = '<div class="agent-reviews"><h3 class="agent-reviews-title">AI Agent Reviews</h3>';
+
+  reviews.forEach((r, idx) => {
+    const agent = AGENT_LABELS[r.agent_name] || { icon: '🤖', name: r.agent_name };
+    const tags = (r.mood_tags || []).map(t => `<span class="feed-tag">${escapeHtml(t)}</span>`).join('');
+    const delay = (idx * 0.15).toFixed(2);
+    html += `
+      <div class="agent-review" style="animation-delay: ${delay}s">
+        <div class="agent-review-header">
+          <span class="agent-icon">${agent.icon}</span>
+          <strong>${escapeHtml(agent.name)}</strong>
+        </div>
+        <div class="agent-scores" style="animation-delay: ${delay}s">
+          <span>Solo <strong style="animation-delay: ${(parseFloat(delay) + 0.2).toFixed(2)}s">${r.solo_intensity}</strong>/10</span>
+          <span>Vocal <strong style="animation-delay: ${(parseFloat(delay) + 0.25).toFixed(2)}s">${r.vocal_quality}</strong>/10</span>
+          <span>Energy <strong style="animation-delay: ${(parseFloat(delay) + 0.3).toFixed(2)}s">${ENERGY_LABELS[r.energy_vs_studio] || r.energy_vs_studio}</strong></span>
+          <span>Tempo <strong style="animation-delay: ${(parseFloat(delay) + 0.35).toFixed(2)}s">${TEMPO_LABELS[r.tempo_feel] || r.tempo_feel}</strong></span>
+        </div>
+        <div class="feed-tags">${tags}</div>
+        <p class="agent-notes">${escapeHtml(r.notes || '')}</p>
+      </div>
+    `;
+  });
+
+  html += `<button class="btn btn-ghost" id="showBriefBtn" style="margin-top:12px;">View Placement Brief</button>`;
+  html += '</div>';
+  container.innerHTML = html;
+
+  const briefBtn = document.getElementById('showBriefBtn');
+  if (briefBtn) {
+    briefBtn.addEventListener('click', () => loadPlacementBrief(submissionId, container));
+  }
+}
+
+async function loadPlacementBrief(submissionId, container) {
+  const briefArea = document.createElement('div');
+  briefArea.className = 'placement-brief';
+  briefArea.innerHTML = '<div class="agent-loading">Loading placement brief…</div>';
+  container.appendChild(briefArea);
+
+  try {
+    const brief = await api.get(`/api/v1/submissions/${submissionId}/brief`);
+    let html = '<h3 class="agent-reviews-title">📋 Placement Brief</h3>';
+    html += `<p class="brief-summary">${escapeHtml(brief.audience_summary)}</p>`;
+
+    html += '<div class="brief-section"><h4>🎪 Venues to Pitch</h4><ul>';
+    for (const v of (brief.venues || [])) {
+      html += `<li><strong>${escapeHtml(v.name)}</strong><br><span class="brief-reason">${escapeHtml(v.reason)}</span>`;
+      if (v.contact) html += `<br><code>${escapeHtml(v.contact)}</code>`;
+      html += '</li>';
+    }
+    html += '</ul></div>';
+
+    html += '<div class="brief-section"><h4>📺 YouTube Channels</h4><ul>';
+    for (const ch of (brief.youtube_channels || [])) {
+      html += `<li><strong>${escapeHtml(ch.name)}</strong> <span class="brief-followers">${escapeHtml(ch.followers || '')}</span><br><span class="brief-reason">${escapeHtml(ch.reason)}</span></li>`;
+    }
+    html += '</ul></div>';
+
+    html += '<div class="brief-section"><h4>📱 Influencers</h4><ul>';
+    for (const inf of (brief.influencers || [])) {
+      html += `<li><strong>${escapeHtml(inf.name)}</strong> <span class="brief-platform">${escapeHtml(inf.platform || '')}</span><br><span class="brief-reason">${escapeHtml(inf.reason)}</span></li>`;
+    }
+    html += '</ul></div>';
+
+    html += '<div class="brief-section"><h4>✉️ Draft Outreach Emails</h4>';
+    for (const email of (brief.draft_emails || [])) {
+      html += `
+        <div class="brief-email">
+          <div class="brief-email-to"><strong>To:</strong> ${escapeHtml(email.to)}</div>
+          <div class="brief-email-subject"><strong>Subject:</strong> ${escapeHtml(email.subject)}</div>
+          <pre class="brief-email-body">${escapeHtml(email.body)}</pre>
+          <button class="btn btn-ghost brief-copy-btn" data-email="${escapeHtml(email.body)}">Copy to clipboard</button>
+        </div>
+      `;
+    }
+    html += '</div>';
+
+    briefArea.innerHTML = html;
+
+    for (const btn of briefArea.querySelectorAll('.brief-copy-btn')) {
+      btn.addEventListener('click', () => {
+        navigator.clipboard.writeText(btn.dataset.email).then(
+          () => { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 2000); },
+          () => showToast('Copy failed', 'error', 2000)
+        );
+      });
+    }
+  } catch (err) {
+    briefArea.innerHTML = `<p class="brief-error">Placement brief not available yet.</p>`;
+  }
+}
 
 // ---------- CURATOR: queue + rate ----------
 
@@ -612,7 +783,7 @@ function renderFeed(rows) {
     ul.innerHTML = `
       <li class="empty-state">
         <strong>The feed is empty.</strong>
-        Once 3 curators rate a submission it lands here.
+        Once 3 AI agent curators review a submission it lands here.
         <div class="hint">Seed the catalog with <code>npm run seed</code></div>
         <blockquote class="featured-quote">
           <p>${escapeHtml(quote.text)}</p>
@@ -638,7 +809,7 @@ function renderFeed(rows) {
         <div class="feed-edition">Edition No <span>${escapeHtml(edition)}</span> · Pressed <span>${escapeHtml(pressed)}</span></div>
         <h4>${escapeHtml(v.title)}</h4>
         <div class="feed-meta">${escapeHtml(v.artist_name)} · ${escapeHtml(v.version_type)}</div>
-        <div class="feed-meta" style="margin-top:6px;">solo ${(v.avg_solo_intensity || 0).toFixed(1)} · vocal ${(v.avg_vocal_quality || 0).toFixed(1)} · ${escapeHtml(v.energy_consensus || '-')} · ${escapeHtml(v.tempo_consensus || '-')} · ${v.rating_count} ratings</div>
+        <div class="feed-meta" style="margin-top:6px;">solo ${(v.avg_solo_intensity || 0).toFixed(1)} · vocal ${(v.avg_vocal_quality || 0).toFixed(1)} · ${escapeHtml(v.energy_consensus || '-')} · ${escapeHtml(v.tempo_consensus || '-')} · ${v.rating_count} ratings <span class="feed-agents-label">· AI agents</span></div>
         <div class="feed-tags">${tags.map((t) => `<span class="feed-tag">${escapeHtml(t)}</span>`).join('')}</div>
       </div>
       <div class="feed-graph" id="graph-${v.submission_id}" aria-label="Taste graph"></div>

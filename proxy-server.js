@@ -27,6 +27,8 @@ const { createSettlementService } = require('./proxy/services/settlement');
 const { createCurationService } = require('./proxy/services/curation');
 const { createFeedService } = require('./proxy/services/feed');
 const { createSweeper } = require('./proxy/services/settlement-sweeper');
+const { createLlmAdapter } = require('./proxy/adapters/llm');
+const { createAgentService } = require('./proxy/services/agents');
 
 const PORT = Number(getEnv('PORT', '8080'));
 const HOST = getEnv('HOST', '0.0.0.0');
@@ -37,6 +39,16 @@ const VERSION = '0.5.0-day5';
 const ARC_RPC_URL = getEnv('ARC_RPC_URL', '');
 const ARC_USDC_CONTRACT = getEnv('ARC_USDC_CONTRACT', '');
 const PLATFORM_WALLET = getEnv('PLATFORM_WALLET', '');
+const LLM_API_URL = getEnv('LLM_API_URL', '');
+const LLM_API_KEY = getEnv('LLM_API_KEY', '');
+const LLM_MODEL = getEnv('LLM_MODEL', 'gpt-4o-mini');
+// MODULAR: agent wallets. Deterministic from env or auto-generated.
+// Each agent gets its own wallet so settlement can pay them individually.
+const AGENT_WALLETS = [
+  getEnv('AGENT_WALLET_1', '') || 'agent_production_' + crypto.createHash('sha256').update('production').digest('hex').slice(0, 32),
+  getEnv('AGENT_WALLET_2', '') || 'agent_performance_' + crypto.createHash('sha256').update('performance').digest('hex').slice(0, 30),
+  getEnv('AGENT_WALLET_3', '') || 'agent_market_' + crypto.createHash('sha256').update('market').digest('hex').slice(0, 34)
+];
 const UPLOAD_DIR = path.resolve(__dirname, 'data', 'uploads');
 // MODULAR: the JSON body cap is the *post-base64* size of the audio
 // bytes, because clients post audio as { base64: '...' } in JSON.
@@ -70,6 +82,7 @@ const generalLimiter = createRateLimiter({
 const ROUTE_TIMEOUTS = {
   'POST:/api/v1/submissions':           30_000,
   'POST:/api/v1/submissions/*/verify-payment': 30_000,
+  'POST:/api/v1/submissions/*/review':  60_000,
   'GET:/api/v1/uploads/*':              10_000
 };
 const DEFAULT_ROUTE_TIMEOUT_MS = 10_000;
@@ -102,6 +115,10 @@ feed = createFeedService();
 // CLEAN: sweeper takes the same db + settlement the rest of the
 // proxy uses. No new state; reads existing rows.
 sweeper = createSweeper({ db: openDb(), settlement });
+// MODULAR: LLM adapter + agent service. Mock-first when LLM_API_KEY is
+// empty. The agent service depends on the LLM adapter and settlement.
+const llm = createLlmAdapter({ apiUrl: LLM_API_URL || null, apiKey: LLM_API_KEY || null, model: LLM_MODEL });
+const agents = createAgentService({ llm, settlement, agentWallets: AGENT_WALLETS });
 
 // ---------- helpers ----------
 
@@ -208,7 +225,10 @@ async function handleHealthReady(req, res, requestId) {
       status: 'ready',
       service: SERVICE,
       version: VERSION,
-      providers: { arc: { mock: !ARC_RPC_URL } }
+      providers: {
+        arc: { mock: !ARC_RPC_URL },
+        llm: { mock: !LLM_API_KEY, model: LLM_MODEL }
+      }
     }
   }, requestId);
 }
@@ -364,6 +384,15 @@ async function handleSubmissionsVerifyPayment(req, res, requestId, id) {
     const status = r.error === 'Submission not found' ? 404 : 400;
     return errorResponse(res, requestId, status, 'VERIFY_PAYMENT_FAILED', r.error);
   }
+  // MODULAR: auto-trigger agent review after payment verification.
+  // The review runs asynchronously — the response returns immediately
+  // with the payment status. The artist can poll /reviews to see when
+  // agent reviews are ready.
+  if (r.submission && r.submission.status === 'awaiting_curation') {
+    agents.reviewSubmission(id).catch(err => {
+      log.error('auto-review failed', { request_id: requestId, submission_id: id, err: err.message });
+    });
+  }
   return jsonResponse(res, 200, { success: true, data: r.submission }, requestId);
 }
 
@@ -489,6 +518,38 @@ async function handleEarnings(req, res, requestId, wallet) {
     limit: q.limit ? Math.min(Number(q.limit) || 50, 200) : 50
   });
   return jsonResponse(res, 200, { success: true, data: result }, requestId);
+}
+
+// ---------- Phase 2: agent review routes ----------
+
+async function handleAgentReview(req, res, requestId, submissionId) {
+  // MODULAR: manually trigger agent review. Usually auto-triggered by
+  // verify-payment, but this endpoint allows re-runs and testing.
+  const result = await agents.reviewSubmission(submissionId);
+  if (!result.ok) {
+    const status = result.error === 'Submission not found' ? 404 : 400;
+    return errorResponse(res, requestId, status, 'REVIEW_FAILED', result.error);
+  }
+  return jsonResponse(res, 200, {
+    success: true,
+    data: {
+      reviews: result.reviews,
+      brief: result.brief,
+      rating_count: result.rating_count,
+      published: result.published
+    }
+  }, requestId);
+}
+
+async function handleAgentReviews(req, res, requestId, submissionId) {
+  const reviews = agents.getReviews(submissionId);
+  return jsonResponse(res, 200, { success: true, data: reviews }, requestId);
+}
+
+async function handlePlacementBrief(req, res, requestId, submissionId) {
+  const brief = agents.getBrief(submissionId);
+  if (!brief) return errorResponse(res, requestId, 404, 'NOT_FOUND', 'Placement brief not found');
+  return jsonResponse(res, 200, { success: true, data: brief }, requestId);
 }
 
 // ---------- Day 5: feed + version detail ----------
@@ -635,6 +696,15 @@ const ROUTES = [
   // recent settled legs.
   { method: 'GET',    match: (p) => /^\/api\/v1\/artists\/[^/]+\/earnings$/.test(p),
             handler: (req, res, rid, p) => handleEarnings(req, res, rid, p.split('/')[4]) },
+  // Phase 2: agent review routes. POST /review triggers the full
+  // multi-agent pipeline. GET /reviews lists completed reviews.
+  // GET /brief returns the Market Agent's placement brief.
+  { method: 'POST',   match: (p) => /^\/api\/v1\/submissions\/[^/]+\/review$/.test(p),
+            handler: (req, res, rid, p) => handleAgentReview(req, res, rid, p.split('/')[4]) },
+  { method: 'GET',    match: (p) => /^\/api\/v1\/submissions\/[^/]+\/reviews$/.test(p),
+            handler: (req, res, rid, p) => handleAgentReviews(req, res, rid, p.split('/')[4]) },
+  { method: 'GET',    match: (p) => /^\/api\/v1\/submissions\/[^/]+\/brief$/.test(p),
+            handler: (req, res, rid, p) => handlePlacementBrief(req, res, rid, p.split('/')[4]) },
   // Day 5: feed + version detail. The /api/v1/versions/:id route must
   // not collide with /api/v1/submissions/:id, so we keep them apart.
   { method: 'GET',    match: (p) => p === '/api/v1/feed',                              handler: handleFeed },

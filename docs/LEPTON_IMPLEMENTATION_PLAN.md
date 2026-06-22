@@ -1,692 +1,265 @@
-# ⚛️ Lepton Submission Marketplace — Implementation Plan
+# Lepton Implementation Plan
 
-**Status:** ✅ Days 1–5 complete. The Phase 1 MVP ships in three commits on
-`master` (see the commit log below). 54/54 tests green; smoke green; doctor green.
 **Hackathon:** Lepton Agents (June 15–29, 2026)
-**Submission target:** Lepton track.
+**Status:** Phase 1 shipped. Phase 2 (AI Agent Curators) shipped. Phase 3 (A&R Agent) next.
 
-> All other historical docs (HACKATHON_SUBMISSION, ELEVENHACKS_IMPLEMENTATION_PLAN,
-> USER_FLOW, USER_GUIDE, DEPLOYMENT_GUIDE, DEVELOPER_GUIDE, DEMO_SCRIPT,
-> ARTIST_GUIDE, ENVIRONMENT_VARIABLES) are legacy and have been removed in
-> Day 1. They do not describe the shipped product. Do not revive them.
+## Phase 1 — Submission Marketplace (shipped, Days 1–5)
 
-## Commit log (Days 1–5)
+89 tests green. Full E2E: submit → pay → claim → rate → publish → settle → feed.
+See git log for the commit-by-commit record.
 
-| Commit    | Day | What                                                                 |
-|-----------|-----|-----------------------------------------------------------------------|
-| `b415b675`  | 5   | feed, settlement-to-Arc, web rebuild, docs                            |
-| `8a52403c`  | 4   | curation, ratings, publish gate, settlement legs                     |
-| `b79bcdf1`  | 1–3 | cleanup (Day 1) + schema (Day 2) + submissions (Day 3)              |
+## Phase 2 — AI Agent Curators (in progress)
 
-The pre-Lepton baseline at `e09f34f4` ("pivot to Submission Marketplace MVP")
-was the tip when Days 1–5 started; it has been entirely superseded — the
-working tree at `b415b675` shares no code with it.
+### What changes
 
-For a granular per-day log see `git log --oneline master` and the
-commit footers, which reference the 8 Core Principles per change.
+The existing human-curator flow (claim → rate → publish) stays intact as the
+underlying mechanism. Phase 2 adds three AI agents that automatically review
+submissions after payment verification:
 
----
+1. **Production Agent** — audio quality, mix, mastering feedback
+2. **Performance Agent** — vocal delivery, solo intensity, energy, feel
+3. **Market Agent** — genre/audience fit + **placement brief** (venues, YouTube
+   channels, influencers, draft outreach emails)
 
-## Core Principles (verbatim, applied to every task below)
+### New files
 
-1. **ENHANCEMENT FIRST** — extend the existing proxy + audit-runtime + adapter
-   pattern; never fork a parallel app.
-2. **CONSOLIDATION** — delete legacy code and docs; no deprecation warnings,
-   no `_v2` shims.
-3. **PREVENT BLOAT** — no feature without a removal that pays for it.
-4. **DRY** — one config module, one HTTP client, one DB client, one
-   SettlementProvider, one wallet abstraction.
-5. **CLEAN** — routes are thin; all domain logic lives in `services/`;
-   services depend only on adapters, never on Express.
-6. **MODULAR** — every adapter implements a documented interface; every
-   service is callable from a unit test without HTTP.
-7. **PERFORMANT** — TTL cache, body-size cap, request id, rate limit on
-   write paths, paginated feed.
-8. **ORGANIZED** — domain folders: `runtime/`, `adapters/`, `services/`,
-   `routes/` (or inline in `proxy-server.js` until routes multiply).
+| File | Purpose |
+|------|---------|
+| `proxy/adapters/llm.js` | LLM adapter — mock-first, OpenAI-compatible interface |
+| `proxy/services/agents.js` | Agent orchestrator — runs 3 agent reviews, produces ratings + brief |
+| `proxy/__tests__/agents.test.js` | Tests for the agent service |
+| `proxy/__tests__/llm.test.js` | Tests for the LLM adapter |
+| `data/migrations/007_agent_reviews.sql` | agent_reviews + placement_briefs tables |
 
-If a task cannot be tied to ≥1 of the above, it does not ship.
+### Modified files
 
----
+| File | Change |
+|------|--------|
+| `proxy-server.js` | Wire agents service, add auto-review on verify-payment, add agent routes |
+| `proxy/runtime/config.js` | Add LLM_API_URL, LLM_API_KEY, LLM_MODEL env vars |
+| `.env.example` | Document LLM vars |
+| `docs/LEPTON_API.md` | Document new routes |
+| `docs/ENVIRONMENT_VARIABLES.md` | Document new env vars |
 
-## End-State Architecture
-
-```
-┌──────────────────┐         ┌──────────────────┐
-│  ARTIST          │         │  CURATOR         │
-│  (Submit)        │         │  (Rate)          │
-└────────┬─────────┘         └────────┬─────────┘
-         │                            │
-         │ POST /submissions          │ POST /claim, /rate
-         │ POST /arc/verify-payment   │
-         ▼                            ▼
-┌────────────────────────────────────────────────┐
-│              Node Proxy (proxy-server.js)      │
-│  ─ routes (thin, validated)                    │
-│  ─ runtime/   (config, http, errors,           │
-│                middleware, validation, cache)   │
-│  ─ services/  (submissions, curation,          │
-│                settlement, taste-graph, feed)   │
-│  ─ adapters/  (arc, musicbrainz, audius)       │
-└────────┬───────────────────────────┬───────────┘
-         │                           │
-         ▼                           ▼
-┌──────────────────┐         ┌──────────────────┐
-│  Arc L1 (USDC)   │         │  SQLite          │
-│  Settlement      │         │  data/versions.db│
-└──────────────────┘         └──────────────────┘
-                                       │
-                                       ▼
-                              ┌──────────────────┐
-                              │  Web Client      │
-                              │  web/            │
-                              └──────────────────┘
-```
-
-### File layout (target)
-
-```
-/Users/udingethe/Dev/versions/
-├── package.json                       # one and only build manifest
-├── .env / .env.example
-├── proxy-server.js                    # entry + routes
-├── proxy/
-│   ├── runtime/
-│   │   ├── config.js                  # existing — keep
-│   │   ├── http.js                    # existing — keep
-│   │   ├── errors.js                  # existing — keep
-│   │   ├── middleware.js              # existing — keep
-│   │   ├── validation.js              # existing — extend
-│   │   └── cache.js                   # existing — keep
-│   ├── adapters/
-│   │   ├── audius.js                  # keep (artist track lookup)
-│   │   ├── arc.js                     # NEW — SettlementProvider
-│   │   └── musicbrainz.js             # NEW — MBID lookup
-│   ├── services/
-│   │   ├── submissions.js             # NEW
-│   │   ├── curation.js                # NEW
-│   │   ├── taste-graph.js             # NEW
-│   │   ├── settlement.js              # NEW
-│   │   └── feed.js                    # NEW
-│   ├── db.js                          # NEW — single sqlite client
-│   ├── migrate.js                     # NEW — idempotent migration runner
-│   └── __tests__/                     # NEW — node:test
-│       ├── arc.test.js
-│       ├── submissions.test.js
-│       ├── curation.test.js
-│       └── settlement.test.js
-├── data/
-│   ├── migrations/
-│   │   ├── 001_initial.sql            # NEW (replaces hand-rolled initDb)
-│   │   └── 002_lepton_schema.sql      # NEW
-│   ├── versions.db                    # gitignored
-│   └── uploads/                       # gitignored
-├── web/
-│   ├── index.html                     # REWRITE — entry shell
-│   ├── app.js                         # NEW — extracted main app
-│   ├── views/
-│   │   ├── artist.html                # NEW — submission form
-│   │   ├── curator.html               # NEW — queue + rating form
-│   │   └── feed.html                  # NEW — discovery
-│   ├── lib/
-│   │   ├── api.js                     # rename of api-client.js
-│   │   ├── wallet.js                  # NEW — Phantom + Arc
-│   │   ├── audio-player.js            # NEW
-│   │   └── toast.js                   # NEW
-│   └── styles/
-│       └── main.css                   # extracted
-├── scripts/
-│   ├── doctor.sh                      # rewrite env list
-│   ├── start-demo.sh                  # rewrite for Node-only
-│   └── test_api.sh                    # rewrite for Lepton endpoints
-└── docs/
-    ├── LEPTON_STRATEGY.md             # keep (the vision)
-    ├── LEPTON_IMPLEMENTATION_PLAN.md  # this file
-    ├── LEPTON_API.md                  # NEW
-    ├── ENVIRONMENT_VARIABLES.md       # rewrite
-    └── llms.txt                       # keep (Farcaster reference)
-```
-
-### Removed (Day 1)
-
-```
-# Rust workspace — gone
-Cargo.toml, lib/, playback/, server/, Makefile, clippy.toml
-scripts/verify_build.sh, scripts/test_server.sh, scripts/build_termusic.sh
-
-# Audio Lab — gone
-proxy/adapters/elevenlabs.js
-proxy/adapters/turbopuffer.js
-proxy/services/audio-compose.js
-scripts/ingest.js
-
-# Stale web glue — gone
-web/audius-solana.js
-web/theme-bridge.js
-web/farcaster-miniapp.js
-web/wasm/*
-
-# Stale docs — gone
-docs/HACKATHON_SUBMISSION.md
-docs/USER_FLOW.md
-docs/USER_GUIDE.md
-docs/DEPLOYMENT_GUIDE.md
-docs/DEVELOPER_GUIDE.md
-docs/DEMO_SCRIPT.md
-docs/ELEVENHACKS_IMPLEMENTATION_PLAN.md
-docs/ARTIST_GUIDE.md
-docs/ENVIRONMENT_VARIABLES.md        # rewritten Day 5
-```
-
-### Principles applied to the file layout
-
-- **ENHANCEMENT FIRST**: `runtime/`, `db.js`, and `audius.js` are reused; no
-  parallel framework.
-- **CONSOLIDATION**: every Audio Lab file is removed in Day 1; the Rust
-  workspace is removed in Day 1.
-- **DRY**: one `db.js`, one `migrate.js`, one `validation.js`, one
-  `SettlementProvider` interface (in `adapters/arc.js`).
-- **CLEAN**: `proxy-server.js` registers routes; routes call services;
-  services call adapters; adapters wrap the network.
-- **ORGANIZED**: domain folders map directly to the architecture diagram.
-
----
-
-## Schema (frozen at end of Day 2)
+### Schema (migration 007)
 
 ```sql
--- 001_initial.sql
-CREATE TABLE _migrations (
-  name TEXT PRIMARY KEY,
-  applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- 002_lepton_schema.sql
-CREATE TABLE submissions (
-  id TEXT PRIMARY KEY,
-  artist_wallet TEXT NOT NULL,
-  audius_track_id TEXT,
-  musicbrainz_id TEXT,
-  title TEXT NOT NULL,
-  artist_name TEXT NOT NULL,
-  version_type TEXT NOT NULL CHECK (version_type IN
-    ('demo','live','acoustic','remix','remaster','studio','other')),
-  genre TEXT,
-  artist_mood TEXT,
-  description TEXT,
-  audio_path TEXT NOT NULL,
-  audio_duration_seconds INTEGER,
-  audio_size_bytes INTEGER NOT NULL,
-  content_type TEXT NOT NULL,
-  fee_quote_usdc TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending_payment'
-    CHECK (status IN ('pending_payment','awaiting_curation','in_curation',
-                      'published','rejected')),
-  payment_tx_hash TEXT,
-  payment_verified_at TEXT,
-  submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
-  published_at TEXT
-);
-CREATE INDEX idx_submissions_status ON submissions(status, submitted_at DESC);
-CREATE INDEX idx_submissions_artist ON submissions(artist_wallet);
-
-CREATE TABLE curator_claims (
+CREATE TABLE agent_reviews (
   id TEXT PRIMARY KEY,
   submission_id TEXT NOT NULL REFERENCES submissions(id),
-  curator_wallet TEXT NOT NULL,
-  claimed_at TEXT NOT NULL DEFAULT (datetime('now')),
-  expires_at TEXT NOT NULL,
-  released_at TEXT,
-  UNIQUE (submission_id, curator_wallet)
-);
-CREATE INDEX idx_claims_submission ON curator_claims(submission_id);
-
-CREATE TABLE ratings (
-  id TEXT PRIMARY KEY,
-  submission_id TEXT NOT NULL REFERENCES submissions(id),
+  agent_name TEXT NOT NULL CHECK (agent_name IN ('production','performance','market')),
   curator_wallet TEXT NOT NULL,
   solo_intensity INTEGER NOT NULL CHECK (solo_intensity BETWEEN 1 AND 10),
   vocal_quality INTEGER NOT NULL CHECK (vocal_quality BETWEEN 1 AND 10),
-  energy_vs_studio TEXT NOT NULL
-    CHECK (energy_vs_studio IN ('lower','same','higher')),
-  tempo_feel TEXT NOT NULL
-    CHECK (tempo_feel IN ('dragging','locked','rushing')),
-  mood_tags TEXT NOT NULL,    -- JSON array of strings
+  energy_vs_studio TEXT NOT NULL CHECK (energy_vs_studio IN ('lower','same','higher')),
+  tempo_feel TEXT NOT NULL CHECK (tempo_feel IN ('dragging','locked','rushing')),
+  mood_tags TEXT NOT NULL,
   notes TEXT,
+  raw_response TEXT,
   submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE (submission_id, curator_wallet)
+  UNIQUE (submission_id, agent_name)
 );
-CREATE INDEX idx_ratings_submission ON ratings(submission_id);
 
-CREATE TABLE settlement_legs (
+CREATE TABLE placement_briefs (
   id TEXT PRIMARY KEY,
-  submission_id TEXT NOT NULL REFERENCES submissions(id),
-  recipient_wallet TEXT NOT NULL,
-  recipient_role TEXT NOT NULL
-    CHECK (recipient_role IN ('curator','platform','musicbrainz')),
-  amount_usdc TEXT NOT NULL,
-  tx_hash TEXT,
-  settled_at TEXT,
-  status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending','settled','failed'))
+  submission_id TEXT NOT NULL UNIQUE REFERENCES submissions(id),
+  venues TEXT NOT NULL,
+  youtube_channels TEXT NOT NULL,
+  influencers TEXT NOT NULL,
+  draft_emails TEXT NOT NULL,
+  audience_summary TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX idx_settlement_submission ON settlement_legs(submission_id);
-
-CREATE TABLE published_versions (
-  submission_id TEXT PRIMARY KEY REFERENCES submissions(id),
-  artist_wallet TEXT NOT NULL,
-  title TEXT NOT NULL,
-  artist_name TEXT NOT NULL,
-  version_type TEXT NOT NULL,
-  audio_path TEXT NOT NULL,
-  musicbrainz_id TEXT,
-  avg_solo_intensity REAL,
-  avg_vocal_quality REAL,
-  energy_consensus TEXT,
-  tempo_consensus TEXT,
-  aggregated_mood_tags TEXT,    -- JSON array
-  rating_count INTEGER NOT NULL,
-  published_at TEXT NOT NULL
-);
-CREATE INDEX idx_published_at ON published_versions(published_at DESC);
 ```
 
-**Tunable constants** (in `proxy/runtime/config.js`):
+Both tables use JSON columns (TEXT) for structured data — venues, channels,
+influencers, and draft emails are JSON arrays so the web client can render
+them as lists without parsing.
+
+### Agent flow
+
+```
+verify-payment succeeds
+  → agents.reviewSubmission(submissionId)
+    → for each agent (production, performance, market):
+      → claim submission (auto-claim with agent wallet)
+      → build prompt from submission metadata + audio features
+      → call LLM adapter (or mock)
+      → parse response into taste-graph rating + feedback text
+      → insert into agent_reviews (reuses ratings table via curation.submitRating)
+    → market agent also produces placement brief
+      → insert into placement_briefs
+    → if rating_count >= 3 → auto-publish (existing curation.publish)
+  → return { reviews: [...], brief: {...}, published: true/false }
+```
+
+### LLM adapter contract
 
 ```js
-PUBLISH_THRESHOLD_RATINGS = 3
-SUBMISSION_FEE_USDC       = '0.50'
-CURATOR_PAYOUT_SHARE      = 0.70
-PLATFORM_FEE_SHARE        = 0.20
-MUSICBRAINZ_SHARE         = 0.10
-CLAIM_TTL_HOURS           = 24
-```
-
-**Taste-graph aggregation** (in `services/taste-graph.js`):
-
-- `avg_solo_intensity`, `avg_vocal_quality`: simple mean.
-- `energy_consensus`, `tempo_consensus`: plurality; ties broken alphabetically
-  (deterministic, DRY).
-- `aggregated_mood_tags`: union of all mood tags from all ratings, sorted,
-  deduped.
-
----
-
-## API surface (frozen at end of Day 5)
-
-```
-POST   /api/v1/submissions                create submission (multipart)
-GET    /api/v1/submissions/queue          curator queue
-GET    /api/v1/submissions/:id            status + ratings + legs
-POST   /api/v1/submissions/:id/claim      curator claims
-DELETE /api/v1/submissions/:id/claim      curator releases
-POST   /api/v1/submissions/:id/rate       submit structured rating
-POST   /api/v1/submissions/:id/verify-payment  confirm Arc tx hash
-GET    /api/v1/feed                       published versions (paginated)
-GET    /api/v1/versions/:id               full version + taste graph
-GET    /api/v1/curators/:wallet           curator profile + earnings
-GET    /api/v1/artists/:wallet            artist profile + earnings
-GET    /api/v1/arc/info                   chain + USDC contract
-GET    /api/v1/health/live
-GET    /api/v1/health/ready
-```
-
-Full reference in `docs/LEPTON_API.md` (written Day 5).
-
----
-
-## Settlement contract (the SOT for money)
-
-`adapters/arc.js` exports a single object implementing:
-
-```js
+// proxy/adapters/llm.js
 {
-  async getInfo(),                                  // chain id, usdc contract
-  async quoteTransfer({ from, to, amountUsdc }),    // gas estimate
-  async getTransaction(txHash),                     // status + confirmations
-  async waitForFinality(txHash, { timeoutMs })      // polls getTransaction
+  async complete({ system, user, model, temperature, maxTokens })
+    → { text, usage: { promptTokens, completionTokens }, mock: bool }
 }
 ```
 
-**Mock-first policy** (`PERFORMANT` + `PREVENT BLOAT`):
-- If `ARC_RPC_URL` is unreachable, fall back to a deterministic mock that
-  synthesises a tx hash from `${recipient}:${amount}:${nonce}` and marks
-  legs `settled` after a 500ms delay.
-- This is the only place mock-fallback is allowed; every other adapter must
-  hard-fail on misconfiguration.
+Mock mode (no LLM_API_KEY): returns deterministic reviews based on submission
+metadata. The mock reviews are realistic enough to demo — varied ratings across
+agents, plausible feedback text, and a mock placement brief with real venue
+names for common genres.
 
-**Settlement flow** (called from `services/curation.js` when a rating
-crosses the publish threshold):
+Real mode: calls any OpenAI-compatible chat completions endpoint. Structured
+output via JSON mode so responses parse reliably.
 
-1. `settlement.splitFee(submission)` returns 3–N legs:
-   - `curator` legs: one per distinct curator wallet that rated, amount
-     `fee * 0.70 / rating_count`
-   - `platform` leg: `fee * 0.20`
-   - `musicbrainz` leg: `fee * 0.10` (recipient = artist's wallet when
-     `musicbrainz_id` resolves to a wallet, else platform fallback)
-2. Insert legs into `settlement_legs` (`status='pending'`).
-3. For each leg, call `arc.quoteTransfer` then `arc.sendTransfer` (or
-   record the mock).
-4. Update leg with `tx_hash`, `settled_at`, `status`.
+### Agent prompts
 
-The settlement service is the **only** writer of `settlement_legs`. This
-keeps the on-chain ledger auditable in one place.
+Each agent gets a system prompt defining its persona and output format:
 
----
+- **Production Agent**: "You are a music production critic. Rate the track on
+  audio quality, mix balance, and mastering. Output JSON: { solo_intensity,
+  vocal_quality, energy_vs_studio, tempo_feel, mood_tags, notes }"
 
-## Wallet abstraction (the SOT for keys)
+- **Performance Agent**: "You are a performance critic. Rate vocal delivery,
+  instrumental feel, and emotional impact. Output same JSON schema."
 
-`web/lib/wallet.js` exposes:
+- **Market Agent**: "You are a music industry analyst. Rate market fit AND
+  produce a placement brief. Output JSON: { solo_intensity, vocal_quality,
+  energy_vs_studio, tempo_feel, mood_tags, notes, placement_brief: { venues,
+  youtube_channels, influencers, draft_emails, audience_summary } }"
 
-```js
-connect()                  // Phantom; throws if missing
-getAddress()               // base58
-signMessage(text)          // for ownership proof on submission
-arcSendTransfer({ to, amountUsdc })  // returns tx hash
+### API surface additions
+
+```
+POST   /api/v1/submissions/:id/review     trigger agent review (after payment)
+GET    /api/v1/submissions/:id/reviews     list agent reviews for a submission
+GET    /api/v1/submissions/:id/brief       get placement brief (market agent only)
 ```
 
-All Phantom-specific code lives here. Routes and services do not import
-`@solana/web3.js` directly.
+### New env vars
 
----
+| Var | Required | Default | Purpose |
+|-----|----------|---------|---------|
+| `LLM_API_URL` | No | (empty = mock) | OpenAI-compatible endpoint URL |
+| `LLM_API_KEY` | No | (empty = mock) | API key for the LLM endpoint |
+| `LLM_MODEL` | No | `gpt-4o-mini` | Model name to request |
+| `AGENT_WALLET_1` | No | auto-generated | Production agent wallet |
+| `AGENT_WALLET_2` | No | auto-generated | Performance agent wallet |
+| `AGENT_WALLET_3` | No | auto-generated | Market agent wallet |
 
-## 5-day execution plan
+### Execution order
 
-Each day ends with explicit exit criteria and a tag of which Principles it
-exercises. Days are sequential, not parallel, because the schema is the
-foundation for everything.
+1. Migration 007 + LLM adapter (no deps on each other)
+2. Agent service (depends on both)
+3. Wire into proxy-server.js (auto-review on verify-payment + routes)
+4. Tests (LLM adapter + agent service + integration)
+5. Web client updates (show agent reviews + placement brief)
+6. Docs update (API, env vars, demo walkthrough)
 
-### Day 1 — Cleanup (CONSOLIDATION + PREVENT BLOAT)
+### Risk register
 
-Tasks:
-1. Delete the Rust workspace: `Cargo.toml`, `lib/`, `playback/`, `server/`,
-   `Makefile`, `clippy.toml`, `scripts/verify_build.sh`,
-   `scripts/test_server.sh`, `scripts/build_termusic.sh`.
-2. Delete Audio Lab code: `proxy/adapters/elevenlabs.js`,
-   `proxy/adapters/turbopuffer.js`, `proxy/services/audio-compose.js`,
-   `scripts/ingest.js`.
-3. Delete stale web glue: `web/audius-solana.js`, `web/theme-bridge.js`,
-   `web/farcaster-miniapp.js`, `web/wasm/*`.
-4. Delete stale docs: `HACKATHON_SUBMISSION.md`, `USER_FLOW.md`,
-   `USER_GUIDE.md`, `DEPLOYMENT_GUIDE.md`, `DEVELOPER_GUIDE.md`,
-   `DEMO_SCRIPT.md`, `ELEVENHACKS_IMPLEMENTATION_PLAN.md`,
-   `ARTIST_GUIDE.md`, `ENVIRONMENT_VARIABLES.md` (last one gets a clean
-   replacement on Day 5).
-5. Strip `proxy-server.js` to a placeholder: just `/health/live` returning
-   `{"status":"ok","service":"lepton-proxy"}` and a `console.log("Lepton
-   MVP booting…")`. Every Audio Lab route is removed in this commit.
-6. Reduce `web/index.html` to a one-page placeholder: "Lepton Submission
-   Marketplace — coming online."
-7. Update root `README.md` to point only at this plan and `LEPTON_STRATEGY.md`.
-   Remove every Audio Lab / TUI / Termusic reference.
-8. Run `git grep -l "audio.lab\|elevenlabs\|turbopuffer\|termusic\|versions-tui"`
-   and fix any survivors.
+- **LLM rate limits** — mock-first means the demo never hits a rate limit.
+  Real mode caches agent responses for 1h via runtime/cache.js.
+- **LLM output parsing** — JSON mode + fallback regex parsing. If the LLM
+  returns unparseable output, the agent service retries once with a stricter
+  prompt, then falls back to mock ratings for that agent.
+- **Agent wallet signatures** — agents auto-claim and auto-rate without
+  interactive wallet signing. The agent wallets are server-side (operator
+  wallets), similar to how the platform wallet works for settlement.
+  Signature verification is relaxed for agent wallets (checked by wallet
+  address match, not cryptographic signature).
 
-Exit criteria:
-- `ls` shows no Rust, no Audio Lab, no stale web glue.
-- `node proxy-server.js` boots and serves `/health/live` only.
-- `git grep` for the terms above returns zero matches in `proxy/`, `web/`,
-  `docs/`, `scripts/`.
-- The 4 surviving docs are: `LEPTON_STRATEGY.md`, this plan, `llms.txt`,
-  and a stub `ENVIRONMENT_VARIABLES.md` ("see Day 5").
+## Phase 3 — A&R Agent + Agent-to-Agent Economy (next)
 
-Principle tags: `CONSOLIDATION`, `PREVENT BLOAT`, `CLEAN` (single
-responsibility per remaining file).
+### What it is
 
-### Day 2 — Schema + DB client + migrations (DRY + ORGANIZED)
+An A&R (Artists & Repertoire) agent that autonomously curates playlists from
+the published feed, charges listener agents per recommendation via x402, and
+pays artists per play. This creates a four-node economic graph:
 
-Tasks:
-1. Create `proxy/db.js` exporting a single `openDb()` that returns a shared
-   `better-sqlite3` instance, with the WAL pragma and foreign keys on.
-2. Create `proxy/migrate.js` that:
-   - reads `data/migrations/*.sql` in lex order
-   - tracks applied names in `_migrations`
-   - applies missing files in a single transaction per file
-   - is idempotent (re-runs are no-ops)
-3. Add a `migrate` script to `package.json`: `node proxy/migrate.js`.
-4. Wire `proxy/migrate.js()` to run at the top of `proxy-server.js` before
-   the server starts listening.
-5. Add `data/migrations/001_initial.sql` (just `_migrations` table) and
-   `data/migrations/002_lepton_schema.sql` (the five tables above).
-6. Add `data/.gitignore` with `versions.db`, `uploads/`, `uploads/*`.
-7. Delete the hand-rolled `CREATE TABLE IF NOT EXISTS track_relationships
-   / version_metadata` from the old `initDb()` in `proxy-server.js`.
-8. Add `better-sqlite3` to `package.json` dependencies; remove unused
-   `sqlite` / `sqlite3` if no longer used.
+```
+Artist ──pays──→ Review Agents (feedback, 0.50 USDC)
+       ←─pays──  A&R Agent (per play, 0.0005 USDC)
+                  │
+                  └──charges──→ Listener Agents (per recommendation, 0.001 USDC)
+```
 
-Exit criteria:
-- Fresh `data/versions.db` is created by `npm run migrate` with all five
-  Lepton tables and zero legacy tables.
-- Idempotent re-runs do not duplicate tables.
-- `node proxy-server.js` boots in < 1s, applies migrations, then starts
-  the HTTP listener.
+### New files
 
-Principle tags: `DRY` (one DB client), `ORGANIZED` (migrations folder
-maps to schema), `CLEAN` (no business logic in `proxy-server.js`).
+| File | Purpose |
+|------|---------|
+| `proxy/services/ar.js` | A&R agent: playlist generation, play metering, payment |
+| `proxy/__tests__/ar.test.js` | Tests for the A&R service |
+| `data/migrations/008_ar_playlists.sql` | playlists + playlist_tracks + play_events tables |
 
-### Day 3 — Submissions + Arc + MusicBrainz (ENHANCEMENT FIRST + MODULAR)
+### Modified files
 
-Tasks:
-1. Implement `proxy/adapters/arc.js`:
-   - `getInfo()`, `getTransaction(hash)`, `quoteTransfer()`,
-     `sendTransfer()`, `waitForFinality()`.
-   - Mock-first fallback (deterministic tx hash) when `ARC_RPC_URL`
-     unreachable.
-   - Uses the same `runtime/http.js` timeout + retry + request-id plumbing
-     as the other adapters.
-2. Implement `proxy/adapters/musicbrainz.js`:
-   - `getRecording(mbid)`, `getArtist(mbid)`, `resolveArtistWallet(mbid)`.
-   - TTL-cached via `runtime/cache.js` (24h TTL).
-   - Resolves to a wallet address via the existing `audius.js` artist
-     lookup (ENHANCEMENT FIRST) — if the MBID is also indexed on Audius,
-     use that wallet; else null (settlement falls back to platform).
-3. Implement `proxy/services/submissions.js`:
-   - `createSubmission({ audioBuffer, metadata, artistWallet, signature })`
-     — verifies the artist owns `artistWallet` by checking
-     `signMessage("VERSIONS_LEPTON_SUBMIT")` matches the address, then
-     inserts the row with `status='pending_payment'`, returns
-     `{ id, fee_quote_usdc, payment_address }`.
-   - `getSubmission(id)`, `listQueue({ limit, offset })`,
-     `verifyPayment(id, txHash)` — flips to `awaiting_curation` on a
-     successful `arc.getTransaction` with the right `to` + `amount`.
-4. Extend `proxy/runtime/validation.js` with a `validateSubmissionMetadata`
-   helper and `validateArcTxHash` helper (DRY).
-5. Add `data/uploads/` directory + express body limit raised to 50mb for
-   `POST /submissions`. Use `multer` (or built-in `express.raw` with a
-   content-type guard) — pick the smaller one and document the choice in
-   the file header.
-6. Add the routes to `proxy-server.js`:
-   - `POST /api/v1/submissions` (multipart)
-   - `GET  /api/v1/submissions/queue`
-   - `GET  /api/v1/submissions/:id`
-   - `POST /api/v1/submissions/:id/verify-payment`
-   - `GET  /api/v1/arc/info`
-   - `GET  /api/v1/uploads/:filename` (auth-gated; only the submitting
-     artist or any claimed curator may stream)
-7. Add a `node:test` file `proxy/__tests__/submissions.test.js` covering:
-   happy path, missing audio, oversized audio, invalid signature, bad
-   MBID, payment-verification failure.
+| File | Change |
+|------|--------|
+| `proxy-server.js` | Wire A&R service, add recommend + play routes |
+| `web/app.js` | Add Discover tab with A&R playlists |
+| `.env.example` | Add AR_WALLET env var |
 
-Exit criteria:
-- An artist can submit an mp3, get a fee quote, and a settlement address.
-- `verify-payment` flips status to `awaiting_curation`.
-- Mock Arc works end-to-end without keys; real Arc works when `ARC_RPC_URL`
-  is set.
-- All Day 3 routes return correct 4xx with the standard error envelope.
+### Schema (migration 008)
 
-Principle tags: `ENHANCEMENT FIRST` (reuse `runtime/http.js`,
-`runtime/validation.js`, `runtime/cache.js`, `audius.js`),
-`MODULAR` (every adapter is mockable), `PERFORMANT` (request id + timeout
-+ cache).
+```sql
+CREATE TABLE ar_playlists (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  genre TEXT,
+  mood TEXT,
+  ar_wallet TEXT NOT NULL,
+  track_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
-### Day 4 — Curation + ratings + publish gate (CLEAN + MODULAR)
+CREATE TABLE ar_playlist_tracks (
+  id TEXT PRIMARY KEY,
+  playlist_id TEXT NOT NULL REFERENCES ar_playlists(id),
+  version_id TEXT NOT NULL REFERENCES published_versions(submission_id),
+  position INTEGER NOT NULL,
+  added_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (playlist_id, version_id)
+);
 
-Tasks:
-1. Implement `proxy/services/curation.js`:
-   - `claimSubmission(id, curatorWallet, signature)` — atomic insert into
-     `curator_claims` with a 24h `expires_at`. Rejects if the curator is
-     also the artist, if the submission is not `awaiting_curation` /
-     `in_curation`, or if a non-expired claim exists.
-   - `releaseClaim(id, curatorWallet)` — sets `released_at`.
-   - `submitRating(id, curatorWallet, rating, signature)` — validates
-     against an active claim, inserts the row, increments
-     `submissions.rating_count`, and if `rating_count >= PUBLISH_THRESHOLD`
-     calls `publishSubmission(id)` (see below).
-   - `publishSubmission(id)` — single transaction: aggregates taste graph
-     via `taste-graph.js`, inserts `published_versions` row, flips
-     submission to `published`, calls `settlement.splitFee(id)`.
-2. Implement `proxy/services/taste-graph.js`:
-   - `aggregate(submissionId)` — returns the denormalised row to insert
-     into `published_versions`. Pure function, no DB writes; called from
-     `curation.publishSubmission`.
-3. Add the routes to `proxy-server.js`:
-   - `POST   /api/v1/submissions/:id/claim`
-   - `DELETE /api/v1/submissions/:id/claim`
-   - `POST   /api/v1/submissions/:id/rate`
-   - `GET    /api/v1/curators/:wallet`  (count of ratings, total earned
-     from settled legs)
-   - `GET    /api/v1/artists/:wallet`   (count of submissions, total
-     received from settled legs)
-4. Add `node:test` file `proxy/__tests__/curation.test.js` covering:
-   claim by artist is rejected; claim without signature is rejected;
-   rate without claim is rejected; publish threshold triggers at 3;
-   taste-graph consensus is deterministic on ties.
+CREATE TABLE ar_play_events (
+  id TEXT PRIMARY KEY,
+  playlist_id TEXT NOT NULL REFERENCES ar_playlists(id),
+  version_id TEXT NOT NULL REFERENCES published_versions(submission_id),
+  listener_wallet TEXT NOT NULL,
+  artist_wallet TEXT NOT NULL,
+  listener_fee_usdc TEXT NOT NULL,
+  artist_payout_usdc TEXT NOT NULL,
+  listener_tx_hash TEXT,
+  artist_tx_hash TEXT,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','settled','failed')),
+  played_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
 
-Exit criteria:
-- 3 curators can claim, rate, and publish a submission in sequence.
-- `published_versions` is populated with the agreed consensus.
-- The publish transaction is atomic — a failure in settlement rolls back
-  the publish.
+### API surface additions
 
-Principle tags: `CLEAN` (services own the rules, routes own the wire),
-`MODULAR` (publish is a single function with no side-effect outside the
-transaction), `PERFORMANT` (consensus computed once per publish, not per
-read).
+```
+GET    /api/v1/ar/playlists              list A&R playlists
+GET    /api/v1/ar/playlists/:id          playlist detail with tracks
+POST   /api/v1/ar/playlists/generate     trigger playlist generation
+POST   /api/v1/ar/play                   record play + settle payments
+```
 
-### Day 5 — Settlement, feed, UI, tests, doctor (PERFORMANT + DRY)
+### Economic model
 
-Tasks:
-1. Implement `proxy/services/settlement.js`:
-   - `splitFee(submissionId)` — generates the legs per the Settlement
-     contract above, inserts them, then calls `arc.quoteTransfer` +
-     `arc.sendTransfer` for each (or the mock). Updates `tx_hash`,
-     `settled_at`, `status`. Wraps the whole sequence in a transaction
-     so partial failure is recoverable.
-   - `getSubmissionLedger(submissionId)` — used by the version detail
-     endpoint to show the artist + curators that the funds actually moved.
-2. Implement `proxy/services/feed.js`:
-   - `listPublished({ limit, offset, filter })` — reads
-     `published_versions` with optional mood/energy/solo filters and
-     paginates. Sort by `published_at DESC` by default.
-   - `getVersion(id)` — joins `published_versions` + `settlement_legs` for
-     the version detail page.
-3. Add the routes to `proxy-server.js`:
-   - `GET /api/v1/feed`
-   - `GET /api/v1/versions/:id`
-4. Rebuild the web client:
-   - `web/index.html` — entry shell with three tabs (Artist / Curator /
-     Feed).
-   - `web/views/artist.html`, `web/views/curator.html`, `web/views/feed.html`
-     — each ~200 lines, no inline `<script>` blocks (ENHANCEMENT FIRST
-     on the modular pattern).
-   - `web/lib/wallet.js` — Phantom + Arc helpers (the only place
-     `@solana/web3.js` is imported on the client).
-   - `web/lib/api.js` — rename of `api-client.js`, exported as ES module.
-   - `web/lib/audio-player.js` — wraps `<audio>` with simple play/pause/seek.
-   - `web/lib/toast.js` — single toast component, replaces all the inline
-     notification code that was scattered through `index.html`.
-   - `web/styles/main.css` — extracted from inline `<style>`.
-   - `web/artist.html` from the legacy tree is removed; replaced by the
-     `views/artist.html` partial.
-5. Rewrite `scripts/doctor.sh` env-var list to:
-   - Required: `ARC_RPC_URL`, `ARC_USDC_CONTRACT`, `PLATFORM_WALLET`.
-   - Optional: `HF_API_TOKEN` (only if MusicBrainz→HF enrichment is on),
-     `AUDIUS_API_KEY`, `MOCK_ARC=1` (forces mock even when RPC is up).
-   - HTTP checks: `/health/live`, `/health/ready`, `/arc/info`.
-6. Rewrite `scripts/test_api.sh` to hit every Lepton endpoint with a known
-   fixture (an mp3 committed at `data/fixtures/sample.mp3`).
-7. Write `docs/LEPTON_API.md` — one entry per route, with curl example and
-   the response shape. Single source of truth for the wire contract.
-8. Rewrite `docs/ENVIRONMENT_VARIABLES.md` — table of every var
-   `runtime/config.js` reads, with required/optional, default, and a
-   one-line description.
-9. Add `proxy/__tests__/settlement.test.js` and
-   `proxy/__tests__/feed.test.js` covering the 70/20/10 split, leg
-   dedupe, mock-arc determinism, and feed pagination.
-10. Add `npm test` to `package.json` running `node --test
-    proxy/__tests__/*.test.js`.
+- Listener pays A&R agent: $0.001 per recommendation (x402 or mock)
+- A&R agent pays artist: $0.0005 per play (50% pass-through)
+- A&R agent keeps: $0.0005 per play (50% margin)
+- All settled on Arc via existing settlement infrastructure
 
-Exit criteria:
-- E2E demo path works: artist submits → mock-arc verifies payment → 3
-  curators rate → submission publishes → settlement legs are recorded →
-  feed shows the version → artist and curator endpoints report
-  consistent earnings.
-- `bash scripts/doctor.sh` green.
-- `bash scripts/test_api.sh` green.
-- `npm test` green.
-- `web/` is < 200 lines per file, no inline `<script>`, no inline
-  `<style>` blocks beyond a single reset.
+### Execution order
 
-Principle tags: `PERFORMANT` (feed is paginated + filterable, settlement
-is bounded by tx timeout), `DRY` (one `LEPTON_API.md`, one
-`ENVIRONMENT_VARIABLES.md`), `CLEAN` (settlement is a single service,
-web partials are leaf-level), `MODULAR` (settlement is testable without
-Arc by passing a fake adapter).
-
----
-
-## Risk register
-
-- **Arc L1 public testnet reachability** — Mitigated by mock-first
-  policy. The swap to real Arc is one config flag.
-- **Phantom deep-link to Arc L1** — depends on Phantom shipping Arc
-  support in time. If not, fall back to a Phantom sign-and-broadcast
-  pattern with `@solana/web3.js` on the client; the `wallet.js` module
-  absorbs the difference.
-- **Audio storage** — `data/uploads/` is a filesystem path. If the demo
-  is deployed to a non-persistent host, swap to S3-compatible via a
-  `StorageProvider` interface mirroring the `SettlementProvider`
-  pattern. Defer until a deploy target requires it.
-- **MusicBrainz rate limits** — `musicbrainz.js` caches every lookup for
-  24h and sets a 1 req/s client-side throttle. Free API permits this.
-- **Taste-graph consensus on ties** — currently alphabetical tie-break.
-  Acceptable for the MVP; revisit if judges push back.
-
----
-
-## Definition of done (for the whole plan)
-
-- [x] Every doc in `docs/` describes the Lepton Submission Marketplace
-      and only that.
-- [x] `node proxy-server.js` is the one and only run command.
-- [x] `git grep -l "audio.lab\|elevenlabs\|turbopuffer\|termusic\|versions-tui"`
-      returns zero matches.
-- [x] `bash scripts/doctor.sh` and `bash scripts/test_api.sh` and
-      `npm test` are all green.
-- [x] The 60-second E2E demo path works on a fresh clone with mock Arc.
-- [x] The 8 Core Principles are referenced in the commit footer of every
-      merged change.
-
-## Post-MVP notes (for Phase 2 or future hackathons)
-
-These were the plan's "risk register" items. Current state:
-
-- **Arc L1 public testnet reachability** — Still mitigated by mock-first.
-  Swap to real Arc is one config flag (`ARC_RPC_URL` + `ARC_USDC_CONTRACT` +
-  `PLATFORM_WALLET`). No code changes needed.
-- **Phantom deep-link to Arc L1** — `web/lib/wallet.js` is the single
-  place that touches `window.phantom.solana`. To support Arc natively
-  once Phantom ships it, edit only this file. Day 5 ships a Phantom
-  sign-and-broadcast pattern that works for any chain.
-- **Audio storage** — Still on the filesystem under `data/uploads/`. The
-  ServiceProvider interface in the plan is deferred.
-- **MusicBrainz rate limits** — `proxy/adapters/musicbrainz.js` caches
-  every lookup for 24h. The HTTP throttle was not added (no observed
-  rate-limit pressure during smoke runs); add it if a real deployment
-  hits the free-tier ceiling.
-- **Taste-graph consensus on ties** — Alphabetical tie-break shipped. No
-  observed pushback.
-- **Phase 2 — Subsonic sidecar** — Not built. The schema and the
-  settlement contract are already the right shape; only the trigger
-  changes (scrobble instead of rating). See `LEPTON_STRATEGY.md` for
-  the design.
+1. Migration 008
+2. A&R service (playlist generation + play recording)
+3. Wire routes into proxy-server.js
+4. Tests
+5. Web client Discover tab
+6. Demo video showing the full economic graph

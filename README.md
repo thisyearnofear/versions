@@ -1,36 +1,36 @@
-# ⚛️ VERSIONS — Lepton Submission Marketplace
+# VERSIONS — Lepton Submission Marketplace
 
 **Hackathon target:** Lepton Agents (June 15–29, 2026).
-**Status:** ✅ Phase 1 MVP shipped (Days 1–5 of `LEPTON_IMPLEMENTATION_PLAN.md` are complete; 54/54 tests green, demo smoke green).
+**Status:** Phase 1 MVP shipped. Phase 2 (AI Agent Curators) in progress.
 
 This repo is on a single track: the **Lepton Submission Marketplace**. Every doc, script, and code path serves that one goal. Anything that does not was removed in Day 1.
 
 | Doc                                          | Purpose                                       |
 |----------------------------------------------|-----------------------------------------------|
-| [`docs/LEPTON_STRATEGY.md`](docs/LEPTON_STRATEGY.md)               | The vision: why a marketplace for alternate takes. |
-| [`docs/LEPTON_IMPLEMENTATION_PLAN.md`](docs/LEPTON_IMPLEMENTATION_PLAN.md) | The 5-day build plan and its execution log.  |
+| [`docs/LEPTON_STRATEGY.md`](docs/LEPTON_STRATEGY.md)               | The vision: SubmitHub for AI agents. |
+| [`docs/LEPTON_IMPLEMENTATION_PLAN.md`](docs/LEPTON_IMPLEMENTATION_PLAN.md) | The build plan and execution log.  |
 | [`docs/LEPTON_API.md`](docs/LEPTON_API.md)                     | The wire contract: every route, body, error. |
 | [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md)     | The env contract: every var the proxy reads. |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)                     | One-process Docker / Railway / Fly.io / VPS, plus Netlify one-click for the static web client. |
 | [`docs/DEMO_WALKTHROUGH.md`](docs/DEMO_WALKTHROUGH.md)             | A 90-second walkthrough, with screenshots. |
 | [`docs/VIDEO_SCRIPT.md`](docs/VIDEO_SCRIPT.md)                   | A 9-shot demo video script (60s + 30s alt). |
-| [`docs/llms.txt`](docs/llms.txt)                       | Farcaster reference (kept; unused at the moment). |
 
 ## See it in action
 
 A three-frame walkthrough with screenshots is in
-[`docs/DEMO_WALKTHROUGH.md`](docs/DEMO_WALKTHROUGH.md). The frames
-are: submit a version, curate via the interactive taste-graph
-radar, and discover the feed.
+[`docs/DEMO_WALKTHROUGH.md`](docs/DEMO_WALKTHROUGH.md).
 
-## Mechanic (Phase 1 MVP — shipped)
+## Mechanic
 
-- **Artists** submit a version (audio + metadata). They pay a 0.50 USDC submission fee on **Arc L1**; funds are escrowed.
-- **Curators** claim a submission and submit a structured rating (solo intensity 1-10, vocal quality 1-10, energy vs studio, tempo feel, mood tags).
-- **N=3 ratings** unlocks publish. The fee pool splits **70 / 20 / 10**: curators (equal share) / platform / MusicBrainz-attributed artist wallet.
+- **Artists** submit a version (audio + metadata). They pay a **Submission Fee (USDC)** on **Arc L1**; funds are escrowed.
+- **AI Agent Curators** automatically claim and review submissions. Three specialized agents analyze each track:
+  - **Production Agent** — audio quality, mix, mastering, production choices
+  - **Performance Agent** — vocal delivery, solo intensity, energy, feel
+  - **Market Agent** — genre fit, audience analysis, and a **Placement Brief** with specific venues, YouTube channels, and influencers to pitch
+- **N=3 ratings** unlocks publish. The fee pool splits **70 / 20 / 10**: agents (equal share) / platform / artist attribution wallet.
 - **Discovery** is the feed of published versions, filterable by mood, energy, tempo, solo intensity, and artist.
 
-The whole marketplace runs on **mock-first**: when `ARC_RPC_URL` is missing or unreachable, every settlement call returns a synthesised `tx_hash` and the `mock: true` flag is set on every response. Switching to real Arc is a single config flag — no code changes.
+The whole marketplace runs on **mock-first**: when `ARC_RPC_URL` is missing or unreachable, every settlement call returns a synthesised `tx_hash` and the `mock: true` flag is set on every response. When `LLM_API_KEY` is missing, the LLM adapter returns deterministic mock reviews so the demo runs without any external service. Switching to real Arc or a real LLM is a single config flag — no code changes.
 
 ## Quick start
 
@@ -38,7 +38,7 @@ The whole marketplace runs on **mock-first**: when `ARC_RPC_URL` is missing or u
 # 1. Install
 npm install
 
-# 2. Run the proxy (defaults to :8080, mock Arc)
+# 2. Run the proxy (defaults to :8080, mock Arc + mock LLM)
 node proxy-server.js
 #  → /health/live, /health/ready, /api/v1/arc/info, /api/v1/feed, …
 #  → /             serves the web client (single-port mode)
@@ -50,16 +50,11 @@ npm run seed
 # 4. Open http://localhost:8080
 ```
 
-The web client + API share a single port. In dev, if you prefer the
-two-process mode (web on :3000 via `python3 -m http.server`, API on
-:8080 via `node proxy-server.js`), the API client auto-detects this
-and points the fetch at `http://localhost:8080` instead.
-
 To verify:
 ```bash
 bash scripts/doctor.sh             # env + readiness
 bash scripts/test_api.sh           # full E2E smoke (25 assertions)
-npm test                          # 54 node:test cases
+npm test                          # node:test cases
 ```
 
 To use real Arc testnet (verified live as of June 2026):
@@ -69,12 +64,18 @@ export ARC_RPC_URL=https://rpc.testnet.arc.network
 export ARC_USDC_CONTRACT=0xUSDC…              # ask the Arc team for the testnet USDC
 export PLATFORM_WALLET=0xPlat…               # your platform fee recipient
 node proxy-server.js
-#  → /api/v1/arc/info reports { chainId: "0x4cef52", mock: false }
 ```
 
-The mock-first policy is still the default: omit `ARC_RPC_URL` and the
-proxy generates deterministic tx hashes for every leg, so the entire
-demo flow runs end-to-end with zero keys.
+To use a real LLM (any OpenAI-compatible endpoint):
+
+```bash
+export LLM_API_KEY=sk-…
+export LLM_API_URL=https://api.openai.com/v1   # or any compatible endpoint
+export LLM_MODEL=gpt-4o-mini                    # default
+node proxy-server.js
+```
+
+The mock-first policy is still the default: omit both `ARC_RPC_URL` and `LLM_API_KEY` and the proxy generates deterministic tx hashes and mock reviews for every leg, so the entire demo flow runs end-to-end with zero keys.
 
 ## Repository layout
 
@@ -86,17 +87,17 @@ demo flow runs end-to-end with zero keys.
 ├── railway.toml                 # Railway auto-detects the Dockerfile
 ├── proxy/
 │   ├── runtime/                 # config, http, errors, middleware, validation, cache
-│   ├── adapters/                # arc (SettlementProvider), musicbrainz (TTL-cached), audius (legacy, kept for ENHANCEMENT FIRST)
-│   ├── services/                # submissions, curation, taste-graph, settlement, feed
+│   ├── adapters/                # arc (SettlementProvider), llm (mock-first LLM client)
+│   ├── services/                # submissions, curation, taste-graph, settlement, feed, agents
 │   ├── db.js                    # single sqlite client (WAL, foreign_keys, busy_timeout)
 │   ├── migrate.js               # idempotent migration runner
-│   └── __tests__/               # 54 node:test cases
+│   └── __tests__/               # node:test cases
 ├── data/
-│   ├── migrations/              # 001_initial, 002_lepton_schema, 003_add_rating_count
+│   ├── migrations/              # 001–007
 │   ├── .gitignore
 │   ├── versions.db              # local, gitignored
 │   └── uploads/                 # local, gitignored
-├── web/                         # 3-tab SPA (Submit / Curate / Feed)
+├── web/                         # SPA (Submit / Curate / Feed)
 │   ├── index.html
 │   ├── app.js                   # ES-module entry; tab + view logic
 │   ├── lib/{api,wallet,audio-player,toast,taste-graph}.js
@@ -115,6 +116,7 @@ demo flow runs end-to-end with zero keys.
     ├── ENVIRONMENT_VARIABLES.md
     ├── DEPLOYMENT.md
     ├── DEMO_WALKTHROUGH.md
+    ├── VIDEO_SCRIPT.md
     ├── screenshots/             # PNGs for the walkthrough
     └── llms.txt
 ```

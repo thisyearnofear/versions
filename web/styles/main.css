@@ -873,3 +873,349 @@ textarea { resize: vertical; min-height: 64px; }
   .app-header { flex-wrap: wrap; }
   .tabs { overflow-x: auto; }
 }
+
+/* MODULAR: Agent reviews panel. Appears below the submit form after
+   payment verification. Three review cards + placement brief.
+   Includes staggered reveal animations for the review moment. */
+
+/* Keyframes for staggered entrance */
+@keyframes agentSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes agentPulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+@keyframes agentDone {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@keyframes numberCount {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes briefUnfold {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    max-height: 2000px;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rustGlow {
+  0% { box-shadow: 0 0 0 0 rgba(200, 74, 31, 0.3); }
+  70% { box-shadow: 0 0 0 8px rgba(200, 74, 31, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(200, 74, 31, 0); }
+}
+
+/* Agent status indicators (shown during review) */
+.agent-status-bar {
+  display: flex;
+  gap: 16px;
+  padding: 20px 0;
+  margin-top: 16px;
+  border-top: 1px solid var(--hair);
+}
+
+.agent-avatar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  transition: color 0.3s ease;
+}
+
+.agent-avatar-icon {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--hair-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: var(--paper-2);
+  transition: all 0.3s ease;
+}
+
+.agent-avatar.is-reviewing .agent-avatar-icon {
+  animation: agentPulse 1.5s ease-in-out infinite;
+  border-color: var(--rust);
+}
+
+.agent-avatar.is-done .agent-avatar-icon {
+  animation: agentDone 0.4s ease;
+  border-color: var(--rust);
+  background: var(--rust);
+  color: var(--paper);
+}
+
+.agent-avatar.is-done {
+  color: var(--ink);
+}
+
+.agent-avatar.is-done .agent-avatar-icon {
+  animation: rustGlow 0.6s ease;
+}
+
+.agent-loading {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-2);
+  padding: 24px 0;
+  text-align: center;
+}
+
+.agent-reviews-title {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 500;
+  margin: 24px 0 16px;
+  padding-top: 24px;
+  border-top: 1px solid var(--hair-strong);
+}
+
+.agent-review {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--hair);
+  /* Staggered entrance: each review gets a delay set via inline style */
+  opacity: 0;
+  animation: agentSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.agent-review:last-of-type {
+  border-bottom: none;
+}
+
+.agent-review-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.agent-icon {
+  font-size: 16px;
+}
+
+.agent-scores {
+  display: flex;
+  gap: 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.agent-scores strong {
+  color: var(--ink);
+  display: inline-block;
+  min-width: 1.5em;
+  text-align: center;
+  /* Number entrance animation */
+  animation: numberCount 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: inherit;
+}
+
+.agent-notes {
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  margin: 8px 0 0;
+}
+
+/* MODULAR: Placement brief. Editorial magazine-spread treatment.
+   Unfolds with animation when revealed. */
+
+.placement-brief {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hair-strong);
+  animation: briefUnfold 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.brief-summary {
+  font-family: var(--serif);
+  font-size: 17px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--ink);
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  border-left: 2px solid var(--rust);
+  background: var(--paper-tint);
+}
+
+.brief-section {
+  margin-bottom: 28px;
+  /* Staggered entrance per section */
+  opacity: 0;
+  animation: agentSlideIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.brief-section:nth-child(2) { animation-delay: 0.1s; }
+.brief-section:nth-child(3) { animation-delay: 0.2s; }
+.brief-section:nth-child(4) { animation-delay: 0.3s; }
+.brief-section:nth-child(5) { animation-delay: 0.4s; }
+
+.brief-section h4 {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
+  color: var(--ink);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.brief-section h4::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--rust);
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+.brief-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.brief-section li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--hair);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.brief-section li:last-child {
+  border-bottom: none;
+}
+
+.brief-section li strong {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.brief-reason {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-family: var(--serif);
+}
+
+.brief-section li code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--rust);
+  background: var(--paper-tint);
+  padding: 2px 6px;
+  border: 1px solid var(--hair);
+}
+
+.brief-followers,
+.brief-platform {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  margin-left: 4px;
+}
+
+/* Draft emails styled as letter cards */
+.brief-email {
+  background: var(--paper);
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid var(--hair-strong);
+  position: relative;
+}
+
+.brief-email::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--rust);
+}
+
+.brief-email-to,
+.brief-email-subject {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-2);
+  margin-bottom: 4px;
+}
+
+.brief-email-subject {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.brief-email-body {
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin: 16px 0;
+  padding: 16px;
+  background: var(--paper-2);
+  border-left: 2px solid var(--hair-strong);
+}
+
+.brief-copy-btn {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+}
+
+.brief-error {
+  color: var(--rust);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+/* MODULAR: feed row update — show 'AI agents' label when all
+   3 ratings came from agents. */
+.feed-agents-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--rust);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}

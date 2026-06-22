@@ -133,8 +133,9 @@
           <span class="muted" id="submitStatus"></span>
         </div>
         <button type="submit" class="btn btn-primary" id="submitBtn">Submit for 0.50 USDC</button>
-        <p class="muted" id="submitCopy" style="font-size: 12px; margin-top: 16px; max-width: 60ch;">After you submit, your take enters the curator queue. Three curators rate it; the version publishes to the feed; the 0.50 USDC fee settles 70/20/10 to the curators, the platform, and your own attribution.</p>
+        <p class="muted" id="submitCopy" style="font-size: 12px; margin-top: 16px; max-width: 60ch;">After you submit, three AI agent curators analyze your track — Production, Performance, and Market. They rate it on the taste graph and the Market Agent generates a placement brief with venues, YouTube channels, and influencers to pitch. The 0.50 USDC fee settles on Arc.</p>
         <div class="submit-retry" id="submitRetry" hidden></div>
+        <div id="agentReviewPanel" hidden></div>
       </form>
     </section>
 
@@ -142,7 +143,7 @@
     <section class="view hidden" id="view-curator" data-view="curator">
       <p class="eyebrow">Section 02 — Curation</p>
       <h2>Curate the queue.</h2>
-      <p class="muted">Claim a submission, listen, and rate it across the five dimensions of the taste graph. After three ratings the version publishes and the fee pool settles.</p>
+      <p class="muted">Three AI agent curators review each submission automatically. See what the Production, Performance, and Market agents said about each track in the queue.</p>
 
       <div class="curator-grid">
         <div class="card">
