@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import { verifyMessage, isAddress, getAddress } from 'viem';
 import { and, eq, sql, desc } from 'drizzle-orm';
 import { db } from '../lib/db';
+import { emit } from '../lib/event-bus';
 import {
   submissions as submissionsTable,
   curatorClaims as claimsTable,
@@ -193,6 +194,14 @@ export function createCurationService({ settlement }: { settlement: SettlementSe
         curatorWallet,
         expiresAt,
       });
+
+      // MODULAR: notify SSE subscribers that a curator claimed a submission.
+      emit('queue-update', {
+        type: 'submission_claimed',
+        submissionId,
+        timestamp: new Date().toISOString(),
+      });
+
       return {
         ok: true as const,
         claim: { id, submission_id: submissionId, curator_wallet: curatorWallet, expires_at: expiresAt },
@@ -307,8 +316,23 @@ export function createCurationService({ settlement }: { settlement: SettlementSe
             settlement_legs: finalLegs,
             settle_results: settleResults,
           } as never;
+
+          // MODULAR: notify SSE subscribers that the feed has a new entry.
+          emit('feed-update', {
+            type: 'published',
+            submissionId,
+            timestamp: new Date().toISOString(),
+          });
         }
       }
+      // MODULAR: notify SSE subscribers that a rating was submitted.
+      // This fires on every rating regardless of publish threshold.
+      emit('queue-update', {
+        type: 'submission_rated',
+        submissionId,
+        timestamp: new Date().toISOString(),
+      });
+
       return {
         ok: true,
         rating_id: id,

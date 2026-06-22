@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import { verifyMessage, isAddress, getAddress } from 'viem';
 import { eq, inArray } from 'drizzle-orm';
 import { db } from '../lib/db';
+import { emit } from '../lib/event-bus';
 import { submissions as submissionsTable, ratings as ratingsTable, settlementLegs as legsTable } from '../lib/schema';
 import type { SubmissionStatus, VersionType } from '../lib/types';
 import type { ArcAdapter } from '../adapters/arc';
@@ -226,6 +227,15 @@ export function createSubmissionsService({
         .returning();
 
       if (!row) return { ok: false, error: 'Insert failed' };
+
+      // MODULAR: notify SSE subscribers that a new submission exists.
+      emit('submission-created', {
+        type: 'created',
+        submissionId: id,
+        artistWallet,
+        timestamp: new Date().toISOString(),
+      });
+
       return { ok: true, submission: rowToSubmission(row) };
     },
 
@@ -270,6 +280,14 @@ export function createSubmissionsService({
 
       const submission = await fetchSubmissionWithExtras(id);
       if (!submission) return { ok: false, error: 'Submission disappeared after update' };
+
+      // MODULAR: notify SSE subscribers that a new item entered the queue.
+      emit('queue-update', {
+        type: 'submission_added',
+        submissionId: id,
+        timestamp: new Date().toISOString(),
+      });
+
       return { ok: true, submission };
     },
   };

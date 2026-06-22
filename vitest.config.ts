@@ -12,7 +12,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./tests/helpers/setup.ts'],
     include: ['tests/**/*.test.ts'],
-    exclude: ['**/node_modules/**', '../proxy/**', '../versions/proxy/**', '../versions/__tests__/**'],
+    exclude: ['**/node_modules/**'],
     pool: 'forks',
     poolOptions: {
       forks: {

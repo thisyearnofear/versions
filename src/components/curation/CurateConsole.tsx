@@ -5,7 +5,7 @@
 // from the vanilla version. The interactive TasteGraph drives the
 // 4 quantitative axes; mood tags + notes are free-text inputs.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAccount, useSignMessage } from "wagmi";
 import { TasteGraph, type TasteValues } from "@/components/curation/TasteGraph";
 import { useToast } from "@/components/ui/Toast";
@@ -47,6 +47,45 @@ export function CurateConsole() {
   useEffect(() => {
     void refreshQueue();
   }, [refreshQueue]);
+
+  // MODULAR: SSE connection for real-time queue updates.
+  // Connects to /api/events and listens for queue-update events.
+  // When a submission is added, claimed, or rated, the queue refreshes
+  // automatically. Reconnects after 3s on error.
+  const refreshQueueRef = useRef(refreshQueue);
+  refreshQueueRef.current = refreshQueue;
+
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function connect() {
+      es = new EventSource("/api/events");
+
+      es.addEventListener("connected", () => {
+        // Connection established.
+      });
+
+      es.addEventListener("queue-update", () => {
+        // A submission was added, claimed, or rated. Refresh the queue.
+        refreshQueueRef.current();
+      });
+
+      es.addEventListener("error", () => {
+        es?.close();
+        reconnectTimer = setTimeout(() => {
+          connect();
+        }, 3000);
+      });
+    }
+
+    connect();
+
+    return () => {
+      es?.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
+  }, []);
 
   const select = useCallback((item: QueueItem) => {
     setSelected(item);

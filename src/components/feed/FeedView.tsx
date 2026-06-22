@@ -5,7 +5,7 @@
 // the custom AudioPlayer. Filters (mood / energy / tempo / min solo)
 // hit the API with URL params and re-render the list.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { useToast } from "@/components/ui/Toast";
@@ -43,6 +43,48 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [loading, setLoading] = useState(false);
   const [quote, setQuote] = useState<FeaturedQuote>(FALLBACK_QUOTE);
+
+  // MODULAR: SSE connection for real-time feed updates.
+  // Uses refs so the EventSource persists across filter changes
+  // without reconnecting. feed-update events re-fetch the feed
+  // with whatever the current filters are.
+  const fetchRowsRef = useRef(fetchRows);
+  fetchRowsRef.current = fetchRows;
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function connect() {
+      es = new EventSource("/api/events");
+
+      es.addEventListener("connected", () => {
+        // Connection established. No action needed — the stream is live.
+      });
+
+      es.addEventListener("feed-update", () => {
+        // A new version was published. Re-fetch with current filters.
+        fetchRowsRef.current(filtersRef.current);
+      });
+
+      es.addEventListener("error", () => {
+        // Connection lost. Attempt to reconnect after 3s.
+        es?.close();
+        reconnectTimer = setTimeout(() => {
+          connect();
+        }, 3000);
+      });
+    }
+
+    connect();
+
+    return () => {
+      es?.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
+  }, []);
 
   // Featured quotes (loaded once; fallback if fetch fails).
   useEffect(() => {
