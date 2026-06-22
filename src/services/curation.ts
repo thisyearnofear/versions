@@ -344,7 +344,10 @@ export function createCurationService({ settlement }: { settlement: SettlementSe
 
     async publish(submissionId: string) {
       const result = await publishSubmission(submissionId, settlement);
-      return { alreadyPublished: result.alreadyPublished, legIds: result.legIds };
+      if (result.alreadyPublished) {
+        return { alreadyPublished: true as const, legIds: [] as [] };
+      }
+      return { alreadyPublished: false as const, legIds: result.legIds };
     },
 
     async getCuratorProfile(wallet: string) {

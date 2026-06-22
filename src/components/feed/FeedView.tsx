@@ -44,6 +44,27 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
   const [loading, setLoading] = useState(false);
   const [quote, setQuote] = useState<FeaturedQuote>(FALLBACK_QUOTE);
 
+  const fetchRows = useCallback(
+    async (f: Filters) => {
+      setLoading(true);
+      try {
+        const resp = await apiClient.getFeed({
+          mood: f.mood || undefined,
+          energy: f.energy || undefined,
+          tempo: f.tempo || undefined,
+          minSolo: f.minSolo || undefined,
+          limit: 50,
+        });
+        setRows(resp.rows || []);
+      } catch (err) {
+        showToast(`Feed load failed: ${(err as Error).message}`, "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [showToast],
+  );
+
   // MODULAR: SSE connection for real-time feed updates.
   // Uses refs so the EventSource persists across filter changes
   // without reconnecting. feed-update events re-fetch the feed
@@ -104,27 +125,6 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
       cancelled = true;
     };
   }, []);
-
-  const fetchRows = useCallback(
-    async (f: Filters) => {
-      setLoading(true);
-      try {
-        const resp = await apiClient.getFeed({
-          mood: f.mood || undefined,
-          energy: f.energy || undefined,
-          tempo: f.tempo || undefined,
-          minSolo: f.minSolo || undefined,
-          limit: 50,
-        });
-        setRows(resp.rows || []);
-      } catch (err) {
-        showToast(`Feed load failed: ${(err as Error).message}`, "error");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [showToast],
-  );
 
   useEffect(() => {
     // Skip the initial fetch — initialRows already populated state.
