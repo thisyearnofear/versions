@@ -1,86 +1,41 @@
-# MODULAR: comprehensive .gitignore for the Lepton Submission
-# Marketplace. Organized by category. The proxy is the only
-# runtime; there is no Rust / Cargo / Vercel / Next.js in
-# this repo. Anything that smells like those is dead.
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# ---------- runtime / build artefacts ----------
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-# web client: hashed assets in web/dist/ are produced by
-# `npm run build` and the Dockerfile's RUN layer; never
-# checked in.
-web/dist/
+# testing
+/coverage
 
-# tests: sqlite dbs from node:test's lifecycle
-data/test-*.db
-data/test-*.db-*
+# next.js
+/.next/
+/out/
 
-# runtime: sqlite dbs + uploads
-data/versions.db
-data/versions.db-*
-data/uploads/
+# production
+/build
 
-# node deps + lock-of-a-lock
-node_modules/
-package-lock.json.bak
-
-# compiled output (defensive — we don't transpile)
-*.js.map
-*.d.ts
-*.tsbuildinfo
-
-# ---------- secrets + env ----------
-
-.env
-.env.local
-.env.*.local
-.env.production
-config.js
-secrets.js
-
-# ---------- IDE / editor / OS ----------
-
-# VS Code, JetBrains, Sublime
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.project
-.classpath
-
-# Mac / Windows OS metadata
+# misc
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+*.pem
 
-# Personal CLI tool caches (leave the user's .junie/
-# .qodo/ .blackboxcli/ on disk; never commit)
-.junie/
-.qodo/
-.blackboxcli/
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# ---------- patch artefacts (defensive) ----------
+# env files (can opt-in for committing if needed)
+.env*
 
-*.diff
-*.orig
-*.rej
+# vercel
+.vercel
 
-# ---------- logs + temp ----------
-
-*.log
-*.log.*
-logs/
-tmp/
-temp/
-
-# ---------- benchmark / coverage (defensive) ----------
-
-coverage/
-.nyc_output/
-*.lcov
-bench/
-*.bench
+# typescript
+*.tsbuildinfo
+next-env.d.ts

@@ -1,0 +1,56 @@
+import { z } from 'zod';
+
+const envSchema = z.object({
+  DATABASE_URL: z.string().url(),
+  NEXTAUTH_SECRET: z.string().min(32),
+  NEXTAUTH_URL: z.string().url().optional(),
+
+  // Arc L1
+  ARC_RPC_URL: z.string().url().optional(),
+  ARC_USDC_CONTRACT: z.string().optional(),
+  PLATFORM_WALLET: z.string().optional(),
+
+  // LLM
+  LLM_API_URL: z.string().url().optional(),
+  LLM_API_KEY: z.string().optional(),
+  LLM_MODEL: z.string().default('gpt-4o-mini'),
+
+  // Agent wallets (Circle programmable wallets)
+  AGENT_WALLET_PRODUCTION: z.string().optional(),
+  AGENT_WALLET_PERFORMANCE: z.string().optional(),
+  AGENT_WALLET_MARKET: z.string().optional(),
+  AR_WALLET: z.string().optional(),
+
+  // IPFS
+  PINATA_API_KEY: z.string().optional(),
+  PINATA_SECRET_KEY: z.string().optional(),
+  IPFS_GATEWAY: z.string().default('https://gateway.pinata.cloud'),
+
+  // Server tunables
+  JSON_BODY_LIMIT: z.string().default('256kb'),
+  UPSTREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(12000),
+  SEMANTIC_CACHE_TTL_MS: z.coerce.number().int().positive().default(30000),
+  AUDIO_CACHE_TTL_MS: z.coerce.number().int().positive().default(45000),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
+  RATE_LIMIT_AUDIO_MAX: z.coerce.number().int().positive().default(30),
+
+  // CORS
+  ALLOWED_ORIGINS: z.string().optional(),
+
+  // Monitoring
+  SENTRY_DSN: z.string().optional(),
+  POSTHOG_KEY: z.string().optional(),
+});
+
+export const env = envSchema.parse(process.env);
+
+export const config = {
+  submissionFee: '0.50',
+  curatorShare: 0.70,
+  platformShare: 0.20,
+  musicbrainzShare: 0.10,
+  publishThreshold: 3,
+  claimTtlHours: 24,
+  listenerFee: '0.001',
+  artistPayout: '0.0005',
+} as const;
