@@ -101,7 +101,7 @@ export function AgentMonitor() {
   }, []);
 
   return (
-    <div className="grid md:grid-cols-2 gap-8 border-t border-[var(--color-ink)] pt-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-[var(--color-ink)] pt-8">
       {/* Queue pane */}
       <section>
         <div className="flex items-baseline justify-between mb-4">

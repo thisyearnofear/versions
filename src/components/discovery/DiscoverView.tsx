@@ -134,8 +134,8 @@ function PlaylistCard({
             )}
           </div>
         </div>
-        <div className="flex flex-col items-end font-mono text-[10px] uppercase tracking-[0.12em]">
-          <span className="text-[var(--color-ink-3)] mb-0.5">Per play</span>
+        <div className="font-mono text-[10px] uppercase tracking-[0.12em] flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="text-[var(--color-ink-3)]">Per play</span>
           <span className="text-[var(--color-rust)] font-semibold">→ artist $0.0005</span>
           <span className="text-[var(--color-ink-2)]">· A&amp;R $0.0005</span>
         </div>

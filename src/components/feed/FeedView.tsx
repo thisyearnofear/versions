@@ -151,7 +151,7 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
 
   return (
     <>
-      <form onSubmit={onFilterSubmit} className="grid md:grid-cols-5 gap-4 mb-12 max-w-4xl border-t border-[var(--color-ink)] border-b py-6">
+      <form onSubmit={onFilterSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-12 max-w-4xl border-t border-[var(--color-ink)] border-b py-6">
         <label className="block">
           <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] block mb-2">
             Mood
@@ -307,7 +307,7 @@ function FeedRowItem({ row }: { row: FeedRow }) {
     .join("");
 
   return (
-    <li className="grid md:grid-cols-[1fr_auto] gap-6 md:gap-8 py-8 border-t border-[var(--color-hair)] last:border-b">
+    <li className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 md:gap-8 py-8 border-t border-[var(--color-hair)] last:border-b">
       <div className="min-w-0">
         <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mb-2 pb-2 border-b border-[var(--color-hair)]">
           Edition No <span className="text-[var(--color-ink)] font-medium">{edition}</span> · Pressed{" "}
