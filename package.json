@@ -32,13 +32,14 @@
     "zod": "^4.4.3"
   },
   "optionalDependencies": {
-    "lightningcss-linux-x64-gnu": "1.32.0",
-    "lightningcss-linux-x64-musl": "1.32.0",
     "@tailwindcss/oxide-linux-x64-gnu": "4.3.1",
-    "@tailwindcss/oxide-linux-x64-musl": "4.3.1"
+    "@tailwindcss/oxide-linux-x64-musl": "4.3.1",
+    "lightningcss-linux-x64-gnu": "1.32.0",
+    "lightningcss-linux-x64-musl": "1.32.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.3",
+    "@netlify/plugin-nextjs": "^5.15.12",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -4,3 +4,9 @@
 
 [build.environment]
   NODE_VERSION = "22"
+
+# Explicitly run the Next.js runtime adapter so SSR/API routes and routing
+# are wired up. Without it Netlify publishes the repo root and every route
+# returns Netlify's default 404 page.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
