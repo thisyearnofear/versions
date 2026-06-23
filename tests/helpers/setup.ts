@@ -3,7 +3,9 @@
 // - Polyfills globalThis.crypto.getRandomValues for environments that lack it
 //   (jsdom/happy-dom sometimes do).
 
-process.env.NODE_ENV = process.env.NODE_ENV || 'test';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const env = process.env;
+(env as Record<string, string | undefined>)['NODE_ENV'] = env['NODE_ENV'] || 'test';
 process.env.DATABASE_URL = 'postgresql://placeholder@localhost:5432/placeholder';
 process.env.NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || 'test-secret';
 process.env.PINATA_JWT = process.env.PINATA_JWT || '';
