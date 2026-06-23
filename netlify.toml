@@ -1,6 +1,9 @@
 [build]
   # Run npm install twice: workaround for npm bug #4828 (optional deps skipped on first install)
   command = "npm install && npm run build"
+  # The Next.js runtime adapter requires the publish dir to be .next (not the
+  # repo root). Set here to override a stale repo-root value from the UI.
+  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "22"
