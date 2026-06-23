@@ -6,6 +6,7 @@
 // wallet selection UX + chain switching. This component is the
 // single drop-in for any page that wants a Connect button.
 
+import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useChainId, useDisconnect, useSignMessage } from "wagmi";
 import { useCallback } from "react";
@@ -19,9 +20,30 @@ export interface WagmiConnectButtonProps {
 }
 
 export function WagmiConnectButton({ variant = "default", children }: WagmiConnectButtonProps) {
+  const { address, isConnected } = useAccount();
+
+  const links =
+    isConnected && address ? (
+      <>
+        <Link
+          href={`/artists/${address}`}
+          className="font-mono text-[11px] uppercase tracking-[0.18em] hover:text-[var(--color-rust)] transition-colors"
+        >
+          Artist
+        </Link>
+        <Link
+          href={`/curators/${address}`}
+          className="font-mono text-[11px] uppercase tracking-[0.18em] hover:text-[var(--color-rust)] transition-colors"
+        >
+          Curator
+        </Link>
+      </>
+    ) : null;
+
   if (variant === "compact") {
     return (
       <div className="flex items-center gap-3">
+        {links}
         <ConnectButton
           accountStatus={{ smallScreen: "avatar", largeScreen: "address" }}
           chainStatus={{ smallScreen: "icon", largeScreen: "icon" }}
@@ -33,6 +55,7 @@ export function WagmiConnectButton({ variant = "default", children }: WagmiConne
   }
   return (
     <div className="flex items-center gap-3">
+      {links}
       <ConnectButton
         accountStatus="address"
         chainStatus="icon"

@@ -126,6 +126,7 @@ export interface AgentReviewRecord {
   placement_brief?: PlacementBrief;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface BriefResponse extends PlacementBrief {}
 
 export interface FeedRow {
@@ -187,6 +188,55 @@ export interface ArcInfo {
   platformWallet?: string;
 }
 
+// curator profile — ratings history and earnings
+export interface CuratorProfileResponse {
+  wallet: string;
+  ratings_count: number;
+  total_earned_usdc: number;
+  recent_ratings: Array<{
+    id: string;
+    submissionId: string;
+    soloIntensity: number;
+    vocalQuality: number;
+    energyVsStudio: string;
+    tempoFeel: string;
+    moodTags: string[];
+    notes: string | null;
+    submittedAt: string;
+    title: string | null;
+    artist_name: string | null;
+  }>;
+}
+
+// artist profile — aggregates total submissions, published, earnings, recent activity
+export interface ArtistProfileResponse {
+  wallet: string;
+  submissions_count: number;
+  published_count: number;
+  total_received_usdc: number;
+  recent_submissions: Array<{
+    id: string;
+    title: string;
+    artistName: string;
+    status: string;
+    versionType: string;
+    submittedAt: Date;
+    publishedAt: Date | null;
+  }>;
+  recent_published: Array<{
+    submissionId: string;
+    title: string;
+    artistName: string;
+    versionType: string;
+    avgSoloIntensity: number | null;
+    avgVocalQuality: number | null;
+    energyConsensus: string | null;
+    tempoConsensus: string | null;
+    ratingCount: number;
+    publishedAt: Date;
+  }>;
+}
+
 // ---------- typed wrappers ----------
 
 export const apiClient = {
@@ -239,7 +289,13 @@ export const apiClient = {
     return api.post<{ ok: boolean }>("/api/v1/ar/play", payload);
   },
 
-  // artist dashboards
+  // artist + curator dashboards
+  getCuratorProfile(wallet: string): Promise<CuratorProfileResponse> {
+    return api.get<CuratorProfileResponse>(`/api/v1/curators/${encodeURIComponent(wallet)}`);
+  },
+  getArtistProfile(wallet: string): Promise<ArtistProfileResponse> {
+    return api.get<ArtistProfileResponse>(`/api/v1/artists/${encodeURIComponent(wallet)}`);
+  },
   getArtistVersions(wallet: string, limit = 20): Promise<ArtistVersionsResponse> {
     return api.get<ArtistVersionsResponse>(`/api/v1/artists/${encodeURIComponent(wallet)}/versions?limit=${limit}`);
   },
