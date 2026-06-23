@@ -1,5 +1,6 @@
 [build]
-  command = "npm run build"
+  # Run npm install twice: workaround for npm bug #4828 (optional deps skipped on first install)
+  command = "npm install && npm run build"
 
 [build.environment]
   NODE_VERSION = "22"
