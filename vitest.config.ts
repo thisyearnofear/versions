@@ -14,11 +14,6 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     exclude: ['**/node_modules/**'],
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
     hookTimeout: 30000,
     testTimeout: 30000,
   },
