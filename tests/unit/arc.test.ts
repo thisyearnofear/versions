@@ -3,6 +3,7 @@
 
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import http from 'node:http';
+import { getAddress } from 'viem';
 import {
   createArcAdapter,
   encodeAddress,
@@ -188,7 +189,6 @@ describe('microUsdcToBigInt', () => {
 
 describe('encodeAddress', () => {
   it('pads left to 32 bytes and lowercases', () => {
-    const { getAddress } = require('viem');
     const checksummed = getAddress('0x' + 'ab'.repeat(20));
     expect(encodeAddress(checksummed).length).toBe(64);
     expect(encodeAddress(checksummed)).toBe('0'.repeat(24) + 'ab'.repeat(20));

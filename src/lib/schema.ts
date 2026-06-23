@@ -190,6 +190,7 @@ export const arPlayEvents = pgTable('ar_play_events', {
   artistPayoutUsdc: text('artist_payout_usdc').notNull(),
   listenerTxHash: text('listener_tx_hash'),
   artistTxHash: text('artist_tx_hash'),
+  playType: text('play_type').notNull().default('paid'), // free|paid
   status: text('status').notNull().default('pending'),
   playedAt: timestamp('played_at').defaultNow().notNull(),
 }, (table) => [
@@ -216,4 +217,35 @@ export const listenEvents = pgTable('listen_events', {
   index('idx_listen_events_version').on(table.versionId),
   index('idx_listen_events_listener').on(table.listenerWallet),
   index('idx_listen_events_status').on(table.status, table.startedAt),
+]);
+
+// ── Listener Profiles ───────────────────────────────────
+// Tracks free play allowance, reputation, and engagement stats per listener.
+
+export const listenerProfiles = pgTable('listener_profiles', {
+  wallet: text('wallet').primaryKey(),
+  reputationScore: integer('reputation_score').notNull().default(0),
+  freePlaysUsedToday: integer('free_plays_used_today').notNull().default(0),
+  freePlaysDailyLimit: integer('free_plays_daily_limit').notNull().default(10),
+  lastFreePlayReset: timestamp('last_free_play_reset').defaultNow().notNull(),
+  totalPlays: integer('total_plays').notNull().default(0),
+  totalPaidPlays: integer('total_paid_plays').notNull().default(0),
+  totalFreePlays: integer('total_free_plays').notNull().default(0),
+  distinctTracksPlayed: integer('distinct_tracks_played').notNull().default(0),
+  lastPlayedAt: timestamp('last_played_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_listener_profiles_reputation').on(table.reputationScore),
+]);
+
+// ── Listener Badges ─────────────────────────────────────
+// Milestone achievements awarded for listening engagement.
+
+export const listenerBadges = pgTable('listener_badges', {
+  id: text('id').primaryKey(),
+  wallet: text('wallet').notNull().references(() => listenerProfiles.wallet),
+  badgeType: text('badge_type').notNull(), // explorer|supporter|curator|tastemaker|early_adopter
+  awardedAt: timestamp('awarded_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_listener_badges_wallet').on(table.wallet),
 ]);

@@ -70,9 +70,11 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
   // without reconnecting. feed-update events re-fetch the feed
   // with whatever the current filters are.
   const fetchRowsRef = useRef(fetchRows);
-  fetchRowsRef.current = fetchRows;
   const filtersRef = useRef(filters);
-  filtersRef.current = filters;
+  useEffect(() => {
+    fetchRowsRef.current = fetchRows;
+    filtersRef.current = filters;
+  }, [fetchRows, filters]);
 
   useEffect(() => {
     let es: EventSource | null = null;
@@ -129,6 +131,7 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
   useEffect(() => {
     // Skip the initial fetch — initialRows already populated state.
     if (initialRows.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void fetchRows(EMPTY_FILTERS);
     }
   }, [fetchRows, initialRows.length]);

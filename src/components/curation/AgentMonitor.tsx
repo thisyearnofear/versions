@@ -57,12 +57,15 @@ export function AgentMonitor() {
 
   // Initial load
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshQueue();
   }, [refreshQueue]);
 
   // SSE — keep queue live
   const refreshQueueRef = useRef(refreshQueue);
-  refreshQueueRef.current = refreshQueue;
+  useEffect(() => {
+    refreshQueueRef.current = refreshQueue;
+  }, [refreshQueue]);
 
   useEffect(() => {
     let es: EventSource | null = null;

@@ -1,4 +1,7 @@
 import type { NextRequest } from 'next/server';
+import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { publishedVersions as pvTable } from '@/lib/schema';
 import { services, successResponse, errorResponse, corsPreflight, requestIdFor } from '@/lib/services';
 
 export const dynamic = 'force-dynamic';
@@ -15,9 +18,40 @@ export async function POST(req: NextRequest) {
     if (!playlistId || !versionId || !listenerWallet) {
       return errorResponse(rid, 400, 'MISSING_FIELD', 'playlistId, versionId, and listenerWallet are required');
     }
-    const result = await services().ar.recordPlay({ playlistId, versionId, listenerWallet });
-    if (!result.ok) return errorResponse(rid, 400, 'PLAY_FAILED', result.error);
-    return successResponse(200, result.play, rid);
+
+    const listenerSvc = services().listeners;
+    const arSvc = services().ar;
+
+    // Check if listener has free plays available
+    const freePlayCheck = await listenerSvc.checkFreePlay(listenerWallet);
+    const isFree = freePlayCheck.free;
+
+    // Record the play via AR service — free plays skip the listener on-chain charge
+    const playResult = await arSvc.recordPlay({
+      playlistId,
+      versionId,
+      listenerWallet,
+      playType: isFree ? 'free' : 'paid',
+    });
+
+    if (!playResult.ok) {
+      return errorResponse(rid, 400, 'PLAY_FAILED', playResult.error);
+    }
+
+    // Update listener profile (free play stats, reputation, badges)
+    const incentiveResult = await listenerSvc.recordPlay({
+      wallet: listenerWallet,
+      versionId,
+      playlistId,
+    });
+
+    return successResponse(200, {
+      ...playResult.play,
+      play_type: isFree ? 'free' : 'paid',
+      free_plays_remaining: incentiveResult.remaining,
+      reputation_earned: incentiveResult.reputationEarned,
+      new_badges: incentiveResult.newBadges,
+    }, rid);
   } catch (err) {
     return errorResponse(rid, 500, 'INTERNAL', (err as Error).message);
   }

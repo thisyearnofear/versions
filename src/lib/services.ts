@@ -9,6 +9,7 @@
 // DRY: every route imports from here; no other module creates services.
 
 import type { NextRequest } from 'next/server';
+import path from 'node:path';
 import { createArcAdapter, type ArcAdapter } from '../adapters/arc';
 import { createLlmAdapter, type LlmAdapter } from '../adapters/llm';
 import { createSubmissionsService, type SubmissionsService } from '../services/submissions';
@@ -20,6 +21,7 @@ import { createArService, type ArService } from '../services/ar';
 import { createSweeper, type Sweeper } from '../services/settlement-sweeper';
 import { createRateLimiter, type RateLimiter } from './rate-limit';
 import { createIpfsFromEnv, type PinataClient } from './ipfs';
+import { createListenerService, type ListenerService } from '../services/listeners';
 import { log } from './logger';
 
 // MODULAR: deterministic agent wallets when env is missing.
@@ -44,6 +46,7 @@ export interface ServiceRegistry {
   agents: AgentService;
   ar: ArService;
   sweeper: Sweeper;
+  listeners: ListenerService;
   audioLimiter: RateLimiter;
   generalLimiter: RateLimiter;
   ipfs: PinataClient;
@@ -90,6 +93,7 @@ function build(): ServiceRegistry {
   const llm = createLlmAdapter({ apiUrl: llmApiUrl || undefined, apiKey: llmApiKey || undefined, model: llmModel });
   const agents = createAgentService({ llm, settlement, agentWallets });
   const ar = createArService({ arc, arWallet });
+  const listeners = createListenerService();
   const sweeper = createSweeper({ settlement });
   const ipfs = createIpfsFromEnv();
 
@@ -102,7 +106,7 @@ function build(): ServiceRegistry {
   // missing; in production set UPLOAD_DIR to a persistent path.
   const uploadDir =
     process.env.UPLOAD_DIR ||
-    (process.env.VERCEL ? '/tmp/uploads' : require('path').resolve(process.cwd(), 'data', 'uploads'));
+    (process.env.VERCEL ? '/tmp/uploads' : path.resolve(process.cwd(), 'data', 'uploads'));
 
   return {
     arc,
@@ -112,6 +116,7 @@ function build(): ServiceRegistry {
     feed,
     agents,
     ar,
+    listeners,
     sweeper,
     audioLimiter,
     generalLimiter,

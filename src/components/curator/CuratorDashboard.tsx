@@ -8,8 +8,9 @@
 // The connected wallet is highlighted at the top if it matches the
 // viewed wallet.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAccount } from "wagmi";
+import { useRouter, useSearchParams } from "next/navigation";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -19,6 +20,7 @@ import {
 } from "@/lib/api-client";
 import { energyToNumber, tempoToNumber } from "@/lib/snap";
 import { cn } from "@/lib/utils";
+import { EarningsHistoryTable, ROLE_LABELS } from "@/components/earnings/EarningsHistoryTable";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -43,12 +45,6 @@ const TEMPO_LABELS: Record<string, string> = {
   rushing: "Rushing",
 };
 
-const ROLE_LABELS: Record<string, string> = {
-  curator: "Curator fees",
-  platform: "Platform share",
-  musicbrainz: "Attribution",
-};
-
 // ── Component ──────────────────────────────────────────
 
 export function CuratorDashboard({ wallet }: { wallet: string }) {
@@ -57,19 +53,41 @@ export function CuratorDashboard({ wallet }: { wallet: string }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
+  // Earnings server-side pagination
+  const [earningsCache, setEarningsCache] = useState<EarningsResponse | null>(null);
+  const [earningsPage, setEarningsPage] = useState(0);
+  const EARNINGS_PAGE_SIZE = 10;
+  const [filterEarningsRole, setFilterEarningsRole] = useState<string>("");
+  const [filterEarningsDateFrom, setFilterEarningsDateFrom] = useState<string>("");
+  const [filterEarningsDateTo, setFilterEarningsDateTo] = useState<string>("");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialUrlSyncDone = useRef(false);
 
   const goToTab = useCallback((tab: DashboardTab) => setActiveTab(tab), []);
 
   const isOwn = isConnected && address?.toLowerCase() === wallet.toLowerCase();
 
-  const refresh = useCallback(async () => {
+  const earningsFilterOpts = useCallback((): { role?: string; dateFrom?: string; dateTo?: string } => {
+    const opts: { role?: string; dateFrom?: string; dateTo?: string } = {};
+    if (filterEarningsRole) opts.role = filterEarningsRole;
+    if (filterEarningsDateFrom) opts.dateFrom = filterEarningsDateFrom;
+    if (filterEarningsDateTo) opts.dateTo = filterEarningsDateTo;
+    return opts;
+  }, [filterEarningsRole, filterEarningsDateFrom, filterEarningsDateTo]);
+
+  const refresh = useCallback(async (initialPage?: number, filters?: { role?: string; dateFrom?: string; dateTo?: string }) => {
     setLoading(true);
     try {
+      const page = initialPage ?? 0;
+      const offset = page * EARNINGS_PAGE_SIZE;
       const [profile, earnings] = await Promise.all([
         apiClient.getCuratorProfile(wallet),
-        apiClient.getArtistEarnings(wallet, 50),
+        apiClient.getArtistEarnings(wallet, { limit: EARNINGS_PAGE_SIZE, offset, ...(filters ?? earningsFilterOpts()) }),
       ]);
       setData({ profile, earnings });
+      setEarningsCache(earnings);
+      setEarningsPage(page);
     } catch (err) {
       showToast(`Dashboard load failed: ${(err as Error).message}`, "error");
     } finally {
@@ -77,9 +95,97 @@ export function CuratorDashboard({ wallet }: { wallet: string }) {
     }
   }, [wallet, showToast]);
 
+  // Fetch a specific page of earnings
+  const fetchEarningsPage = useCallback(async (targetPage: number) => {
+    try {
+      const offset = targetPage * EARNINGS_PAGE_SIZE;
+      const earnings = await apiClient.getArtistEarnings(wallet, { limit: EARNINGS_PAGE_SIZE, offset, ...earningsFilterOpts() });
+      setEarningsCache((prev) =>
+        prev
+          ? {
+              ...prev,
+              recent: earnings.recent,
+              recent_total: earnings.recent_total ?? prev.recent_total,
+            }
+          : earnings,
+      );
+      setEarningsPage(targetPage);
+    } catch (err) {
+      showToast(`Failed to load earnings page: ${(err as Error).message}`, "error");
+    }
+  }, [wallet, showToast, earningsFilterOpts]);
+
+  // Initial load — read page, tab, and filter params from URL
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (initialUrlSyncDone.current) return;
+    const urlPage = searchParams.get("page");
+    const initialPage = urlPage ? Math.max(0, parseInt(urlPage, 10) || 0) : 0;
+    const urlTab = searchParams.get("tab");
+
+    const urlRole = searchParams.get("role");
+    const urlDateFrom = searchParams.get("dateFrom");
+    const urlDateTo = searchParams.get("dateTo");
+    const filters: { role?: string; dateFrom?: string; dateTo?: string } = {};
+    if (urlRole === "curator" || urlRole === "platform" || urlRole === "musicbrainz") {
+      filters.role = urlRole;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFilterEarningsRole(urlRole);
+    }
+    if (urlDateFrom) {
+      filters.dateFrom = urlDateFrom;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFilterEarningsDateFrom(urlDateFrom);
+    }
+    if (urlDateTo) {
+      filters.dateTo = urlDateTo;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFilterEarningsDateTo(urlDateTo);
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh(initialPage, Object.keys(filters).length > 0 ? filters : undefined);
+
+    if (urlTab && ["overview", "ratings", "earnings"].includes(urlTab)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveTab(urlTab as DashboardTab);
+    }
+
+    initialUrlSyncDone.current = true;
+  }, [refresh, searchParams]);
+
+  // Re-fetch page 0 when earnings filters change
+  useEffect(() => {
+    if (!initialUrlSyncDone.current) return;
+    if (activeTab !== "earnings") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchEarningsPage(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterEarningsRole, filterEarningsDateFrom, filterEarningsDateTo]);
+
+  // Reset earnings filters when switching away from the earnings tab
+  useEffect(() => {
+    if (!initialUrlSyncDone.current) return;
+    if (activeTab !== "earnings") {
+      setFilterEarningsRole("");
+      setFilterEarningsDateFrom("");
+      setFilterEarningsDateTo("");
+    }
+  }, [activeTab]);
+
+  // Sync URL with active tab, earnings page, and filters
+  useEffect(() => {
+    if (!initialUrlSyncDone.current) return;
+    const params = new URLSearchParams();
+    params.set("tab", activeTab);
+    if (activeTab === "earnings") {
+      params.set("page", String(earningsPage));
+      if (filterEarningsRole) params.set("role", filterEarningsRole);
+      if (filterEarningsDateFrom) params.set("dateFrom", filterEarningsDateFrom);
+      if (filterEarningsDateTo) params.set("dateTo", filterEarningsDateTo);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : window.location.pathname, { scroll: false });
+  }, [earningsPage, activeTab, filterEarningsRole, filterEarningsDateFrom, filterEarningsDateTo, router]);
 
   // ── Loading state ─────────────────────────────────────
   if (loading && !data) {
@@ -170,7 +276,18 @@ export function CuratorDashboard({ wallet }: { wallet: string }) {
       )}
 
       {activeTab === "earnings" && (
-        <EarningsTab earnings={earnings} />
+        <EarningsTab
+          earnings={earningsCache ?? earnings}
+          onFetchPage={fetchEarningsPage}
+          page={earningsPage}
+          pageSize={EARNINGS_PAGE_SIZE}
+          filterRole={filterEarningsRole}
+          filterDateFrom={filterEarningsDateFrom}
+          filterDateTo={filterEarningsDateTo}
+          onFilterRoleChange={setFilterEarningsRole}
+          onFilterDateFromChange={setFilterEarningsDateFrom}
+          onFilterDateToChange={setFilterEarningsDateTo}
+        />
       )}
     </div>
   );
@@ -407,7 +524,29 @@ function ScoreChip({ label, value }: { label: string; value: string }) {
 
 // ── Earnings Tab ───────────────────────────────────────
 
-function EarningsTab({ earnings }: { earnings: EarningsResponse }) {
+function EarningsTab({
+  earnings,
+  onFetchPage,
+  page,
+  pageSize,
+  filterRole,
+  filterDateFrom,
+  filterDateTo,
+  onFilterRoleChange,
+  onFilterDateFromChange,
+  onFilterDateToChange,
+}: {
+  earnings: EarningsResponse;
+  onFetchPage: (page: number) => void;
+  page: number;
+  pageSize: number;
+  filterRole: string;
+  filterDateFrom: string;
+  filterDateTo: string;
+  onFilterRoleChange: (v: string) => void;
+  onFilterDateFromChange: (v: string) => void;
+  onFilterDateToChange: (v: string) => void;
+}) {
   const curatorEarnings = earnings.by_role.filter((r) => r.role === "curator");
   const totalCurator = curatorEarnings.reduce((sum, r) => sum + r.total, 0);
 
@@ -435,42 +574,20 @@ function EarningsTab({ earnings }: { earnings: EarningsResponse }) {
         </div>
       </section>
 
-      {/* Recent transactions */}
-      <section className="lg:col-span-2">
-        <h3 className="font-serif text-xl font-black tracking-tight mb-4">Recent transactions</h3>
-        {earnings.recent.length === 0 ? (
-          <p className="font-serif italic text-[var(--color-ink-3)] py-8 text-center border border-[var(--color-hair)]">
-            No curator earnings yet.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full font-mono text-[11px]">
-              <thead>
-                <tr className="border-b border-[var(--color-hair-strong)]">
-                  <th className="text-left py-3 pr-4 text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] font-normal">Date</th>
-                  <th className="text-left py-3 pr-4 text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] font-normal">Track</th>
-                  <th className="text-left py-3 pr-4 text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] font-normal">Role</th>
-                  <th className="text-right py-3 text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] font-normal">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {earnings.recent.map((e) => (
-                  <tr key={`${e.submission_id}-${e.role}-${e.settled_at}`} className="border-b border-[var(--color-hair)]">
-                    <td className="py-3 pr-4 text-[var(--color-ink-2)] whitespace-nowrap">
-                      {e.settled_at ? new Date(e.settled_at).toLocaleDateString() : "pending"}
-                    </td>
-                    <td className="py-3 pr-4 truncate max-w-[200px]">
-                      {e.submission_title ?? e.submission_id.slice(0, 8)}…
-                    </td>
-                    <td className="py-3 pr-4 text-[var(--color-ink-2)]">{ROLE_LABELS[e.role] ?? e.role}</td>
-                    <td className="py-3 text-right tabular-nums font-medium">+{e.amount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      {/* Recent transactions — shared component */}
+      <EarningsHistoryTable
+        earnings={earnings}
+        onFetchPage={onFetchPage}
+        page={page}
+        pageSize={pageSize}
+        filterRole={filterRole}
+        filterDateFrom={filterDateFrom}
+        filterDateTo={filterDateTo}
+        onFilterRoleChange={onFilterRoleChange}
+        onFilterDateFromChange={onFilterDateFromChange}
+        onFilterDateToChange={onFilterDateToChange}
+        emptyMessage="No curator earnings yet."
+      />
     </div>
   );
 }

@@ -171,6 +171,7 @@ export interface EarningsResponse {
     amount: string;
     settled_at?: string | null;
   }>;
+  recent_total?: number;
 }
 
 export interface ArtistVersionsResponse {
@@ -186,6 +187,67 @@ export interface ArcInfo {
   mock: boolean;
   usdcContract?: string;
   platformWallet?: string;
+}
+
+// ── Listener incentive types ──────────────────────────
+
+export interface ListenerBadgeResponse {
+  id: string;
+  badgeType: string;
+  label: string;
+  description: string;
+  icon: string;
+  awardedAt: string;
+}
+
+export interface ListenerProfileResponse {
+  wallet: string;
+  reputationScore: number;
+  freePlaysRemaining: number;
+  freePlaysDailyLimit: number;
+  freePlaysUsedToday: number;
+  totalPlays: number;
+  totalPaidPlays: number;
+  totalFreePlays: number;
+  distinctTracksPlayed: number;
+  lastPlayedAt: string | null;
+  badges: ListenerBadgeResponse[];
+}
+
+export interface PlayResponse {
+  id: string;
+  playlist_id: string;
+  version_id: string;
+  listener_wallet: string;
+  artist_wallet: string;
+  listener_fee_usdc: string;
+  artist_payout_usdc: string;
+  listener_tx_hash: string | null;
+  artist_tx_hash: string | null;
+  status: string;
+  play_type: 'free' | 'paid';
+  free_plays_remaining: number;
+  reputation_earned: number;
+  new_badges: ListenerBadgeResponse[];
+}
+
+export interface PlayHistoryEntry {
+  id: string;
+  versionId: string;
+  playlistId: string;
+  playlistName: string | null;
+  title: string | null;
+  artistName: string | null;
+  listenerFeeUsdc: string;
+  artistPayoutUsdc: string;
+  playType: 'free' | 'paid';
+  status: string;
+  playedAt: string;
+}
+
+export interface PlayHistoryResponse {
+  rows: PlayHistoryEntry[];
+  total: number;
 }
 
 // curator profile — ratings history and earnings
@@ -285,8 +347,8 @@ export const apiClient = {
   generatePlaylists(): Promise<{ generated: number }> {
     return api.post<{ generated: number }>("/api/v1/ar/playlists/generate");
   },
-  play(payload: { playlistId: string; versionId: string; listenerWallet: string }): Promise<{ ok: boolean }> {
-    return api.post<{ ok: boolean }>("/api/v1/ar/play", payload);
+  play(payload: { playlistId: string; versionId: string; listenerWallet: string }): Promise<PlayResponse> {
+    return api.post<PlayResponse>("/api/v1/ar/play", payload);
   },
 
   // artist + curator dashboards
@@ -299,8 +361,33 @@ export const apiClient = {
   getArtistVersions(wallet: string, limit = 20): Promise<ArtistVersionsResponse> {
     return api.get<ArtistVersionsResponse>(`/api/v1/artists/${encodeURIComponent(wallet)}/versions?limit=${limit}`);
   },
-  getArtistEarnings(wallet: string, limit = 20): Promise<EarningsResponse> {
-    return api.get<EarningsResponse>(`/api/v1/artists/${encodeURIComponent(wallet)}/earnings?limit=${limit}`);
+  getArtistEarnings(wallet: string, opts?: { limit?: number; offset?: number; role?: string; dateFrom?: string; dateTo?: string }): Promise<EarningsResponse> {
+    const params = new URLSearchParams();
+    params.set("limit", String(opts?.limit ?? 10));
+    params.set("offset", String(opts?.offset ?? 0));
+    if (opts?.role) params.set("role", opts.role);
+    if (opts?.dateFrom) params.set("dateFrom", opts.dateFrom);
+    if (opts?.dateTo) params.set("dateTo", opts.dateTo);
+    return api.get<EarningsResponse>(
+      `/api/v1/artists/${encodeURIComponent(wallet)}/earnings?${params.toString()}`,
+    );
+  },
+
+  // listener profile / incentives
+  getListenerProfile(wallet: string): Promise<ListenerProfileResponse> {
+    return api.get<ListenerProfileResponse>(`/api/v1/listeners/${encodeURIComponent(wallet)}`);
+  },
+  getListenerHistory(wallet: string, opts?: { limit?: number; offset?: number; playType?: string; status?: string; dateFrom?: string; dateTo?: string }): Promise<PlayHistoryResponse> {
+    const params = new URLSearchParams();
+    params.set("limit", String(opts?.limit ?? 50));
+    params.set("offset", String(opts?.offset ?? 0));
+    if (opts?.playType) params.set("playType", opts.playType);
+    if (opts?.status) params.set("status", opts.status);
+    if (opts?.dateFrom) params.set("dateFrom", opts.dateFrom);
+    if (opts?.dateTo) params.set("dateTo", opts.dateTo);
+    return api.get<PlayHistoryResponse>(
+      `/api/v1/listeners/${encodeURIComponent(wallet)}/history?${params.toString()}`,
+    );
   },
 
   // payment

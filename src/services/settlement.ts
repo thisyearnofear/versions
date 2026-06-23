@@ -10,7 +10,7 @@
 // trail reads "this was the artist's attribution leg".
 
 import { randomUUID } from 'crypto';
-import { eq, sql, desc, and } from 'drizzle-orm';
+import { eq, sql, desc, and, gte, lte } from 'drizzle-orm';
 import { db } from '../lib/db';
 import { submissions as submissionsTable, settlementLegs as legsTable } from '../lib/schema';
 import type { SettlementStatus, RecipientRole } from '../lib/types';
@@ -142,6 +142,7 @@ export interface EarningsReport {
   total: number;
   by_role: EarningsByRole[];
   recent: RecentEarning[];
+  recent_total: number;
 }
 
 export interface SettlementService {
@@ -159,7 +160,7 @@ export interface SettlementService {
   >;
   getLegsForSubmission: (submissionId: string) => Promise<LegRow[]>;
   sumSettledFor: (wallet: string) => Promise<number>;
-  listEarnings: (wallet: string, opts?: { limit?: number }) => Promise<EarningsReport>;
+  listEarnings: (wallet: string, opts?: { limit?: number; offset?: number; role?: string; dateFrom?: string; dateTo?: string }) => Promise<EarningsReport>;
 }
 
 export function createSettlementService({
@@ -305,7 +306,13 @@ export function createSettlementService({
       return row ? Number(row.total ?? 0) : 0;
     },
 
-    async listEarnings(wallet: string, { limit = 50 } = {}): Promise<EarningsReport> {
+    async listEarnings(wallet: string, { limit = 50, offset = 0, role, dateFrom, dateTo } = {}): Promise<EarningsReport> {
+      const conditions = [eq(legsTable.recipientWallet, wallet), eq(legsTable.status, 'settled')];
+      if (role) conditions.push(eq(legsTable.recipientRole, role));
+      if (dateFrom) conditions.push(gte(legsTable.settledAt, new Date(dateFrom)));
+      if (dateTo) conditions.push(lte(legsTable.settledAt, new Date(dateTo + 'T23:59:59.999Z')));
+      const whereClause = and(...conditions);
+
       const byRoleRows = await db
         .select({
           role: legsTable.recipientRole,
@@ -313,7 +320,7 @@ export function createSettlementService({
           leg_count: sql<number>`COUNT(*)::int`,
         })
         .from(legsTable)
-        .where(and(eq(legsTable.recipientWallet, wallet), eq(legsTable.status, 'settled')))
+        .where(whereClause)
         .groupBy(legsTable.recipientRole)
         .orderBy(sql`SUM(CAST(${legsTable.amountUsdc} AS NUMERIC)) DESC`);
 
@@ -322,7 +329,16 @@ export function createSettlementService({
           total: sql<string>`COALESCE(SUM(CAST(${legsTable.amountUsdc} AS NUMERIC)), 0)`,
         })
         .from(legsTable)
-        .where(and(eq(legsTable.recipientWallet, wallet), eq(legsTable.status, 'settled')));
+        .where(whereClause);
+
+      // Count total recent entries for pagination (uses the same where clause)
+      const [countRow] = await db
+        .select({
+          n: sql<number>`COUNT(*)::int`,
+        })
+        .from(legsTable)
+        .leftJoin(submissionsTable, eq(submissionsTable.id, legsTable.submissionId))
+        .where(whereClause);
 
       const recentRows = await db
         .select({
@@ -336,9 +352,10 @@ export function createSettlementService({
         })
         .from(legsTable)
         .leftJoin(submissionsTable, eq(submissionsTable.id, legsTable.submissionId))
-        .where(and(eq(legsTable.recipientWallet, wallet), eq(legsTable.status, 'settled')))
+        .where(whereClause)
         .orderBy(desc(legsTable.settledAt))
-        .limit(limit);
+        .limit(limit)
+        .offset(offset);
 
       return {
         wallet,
@@ -357,6 +374,7 @@ export function createSettlementService({
           submission_title: r.submission_title,
           artist_name: r.artist_name,
         })),
+        recent_total: Number(countRow?.n ?? 0),
       };
     },
   };

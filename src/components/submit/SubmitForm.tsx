@@ -60,10 +60,12 @@ export function SubmitForm() {
   // Polling for AI agent reviews after verification
   // ──────────────────────────────────────────────────────────
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (state.phase !== "verified") return;
     let cancelled = false;
     const submissionId = state.submissionId;
     setReviewStatus("AI agents analyzing track…");
+    /* eslint-enable react-hooks/set-state-in-effect */
     const deadline = Date.now() + 30_000;
 
     const tick = async () => {

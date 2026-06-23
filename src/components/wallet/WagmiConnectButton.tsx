@@ -37,6 +37,12 @@ export function WagmiConnectButton({ variant = "default", children }: WagmiConne
         >
           Curator
         </Link>
+        <Link
+          href={`/listeners/${address}`}
+          className="font-mono text-[11px] uppercase tracking-[0.18em] hover:text-[var(--color-rust)] transition-colors"
+        >
+          Listener
+        </Link>
       </>
     ) : null;
 

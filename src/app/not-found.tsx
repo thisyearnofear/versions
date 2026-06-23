@@ -7,10 +7,10 @@ export default function NotFound() {
         VERSIONS · 404
       </p>
       <h1 className="font-serif text-6xl md:text-8xl font-black tracking-tight mb-6">
-        That cut doesn't exist.
+        That cut doesn&apos;t exist.
       </h1>
       <p className="font-serif text-lg text-[var(--color-ink-2)] max-w-md mb-12">
-        The version you're looking for was never submitted, or it was pulled
+        The version you&apos;re looking for was never submitted, or it was pulled
         from the catalog.
       </p>
       <Link

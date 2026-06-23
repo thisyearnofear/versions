@@ -44,13 +44,14 @@ export interface TourProps {
 export function Tour({ autoStart = false, withTrigger = true, className }: TourProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
-  const [seen, setSeen] = useState(true); // assume seen until we know otherwise (avoids flash)
+  const [, setSeen] = useState(true); // assume seen until we know otherwise (avoids flash)
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
       const v = window.localStorage.getItem(STORAGE_KEY);
       const isSeen = v === "1";
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSeen(isSeen);
       if (autoStart && !isSeen) {
         setOpen(true);

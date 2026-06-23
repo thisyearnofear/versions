@@ -112,12 +112,14 @@ export function useCoverFromAudio(file: File | null, options?: CoverOptions): Us
   const tokenRef = useRef(0);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (!file) {
       setSvg(null);
       setError(null);
       setLoading(false);
       return;
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
     const token = ++tokenRef.current;
     setLoading(true);
     setError(null);

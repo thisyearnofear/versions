@@ -18,6 +18,8 @@ import type { ArcAdapter } from '../adapters/arc';
 export const LISTENER_FEE_USDC = '0.001';
 export const ARTIST_PAYOUT_USDC = '0.0005';
 
+export type PlayType = 'free' | 'paid';
+
 const PLAYLIST_GENRES = ['rock', 'jazz', 'electronic', 'folk', 'hip-hop', 'classical', 'pop'];
 const PLAYLIST_MOODS = [
   'bluesy',
@@ -91,7 +93,7 @@ export interface ArService {
   generatePlaylists: () => Promise<PlaylistSummary[]>;
   listPlaylists: () => Promise<PlaylistSummary[]>;
   getPlaylist: (playlistId: string) => Promise<PlaylistSummary | null>;
-  recordPlay: (args: { playlistId: string; versionId: string; listenerWallet: string }) => Promise<
+  recordPlay: (args: { playlistId: string; versionId: string; listenerWallet: string; playType?: PlayType }) => Promise<
     | {
         ok: true;
         play: {
@@ -105,6 +107,7 @@ export interface ArService {
           listener_tx_hash: string | null;
           artist_tx_hash: string | null;
           status: 'settled' | 'failed';
+          play_type: PlayType;
         };
       }
     | { ok: false; error: string }
@@ -286,7 +289,7 @@ export function createArService({
       };
     },
 
-    async recordPlay({ playlistId, versionId, listenerWallet }) {
+    async recordPlay({ playlistId, versionId, listenerWallet, playType = 'paid' }) {
       const [playlist] = await db
         .select()
         .from(playlistsTable)
@@ -301,6 +304,7 @@ export function createArService({
         .limit(1);
       if (!version) return { ok: false as const, error: 'Version not found' };
 
+      const isFree = playType === 'free';
       const playId = randomUUID();
       await db.insert(playEventsTable).values({
         id: playId,
@@ -308,30 +312,35 @@ export function createArService({
         versionId,
         listenerWallet,
         artistWallet: version.artistWallet,
-        listenerFeeUsdc: LISTENER_FEE_USDC,
+        listenerFeeUsdc: isFree ? '0' : LISTENER_FEE_USDC,
         artistPayoutUsdc: ARTIST_PAYOUT_USDC,
+        playType,
         status: 'pending',
       });
 
       let listenerTx: string | null = null;
       let artistTx: string | null = null;
 
-      try {
-        const listenerResult = await arc.sendTransfer({
-          from: listenerWallet,
-          to: arWallet,
-          amountUsdc: LISTENER_FEE_USDC,
-        });
-        listenerTx = listenerResult.hash;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        await db
-          .update(playEventsTable)
-          .set({ status: 'failed' })
-          .where(eq(playEventsTable.id, playId));
-        return { ok: false as const, error: 'Listener payment failed: ' + msg };
+      // Free plays skip the listener charge — the platform subsidizes the artist payout.
+      if (!isFree) {
+        try {
+          const listenerResult = await arc.sendTransfer({
+            from: listenerWallet,
+            to: arWallet,
+            amountUsdc: LISTENER_FEE_USDC,
+          });
+          listenerTx = listenerResult.hash;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          await db
+            .update(playEventsTable)
+            .set({ status: 'failed' })
+            .where(eq(playEventsTable.id, playId));
+          return { ok: false as const, error: 'Listener payment failed: ' + msg };
+        }
       }
 
+      // Artist always gets paid (from AR wallet, regardless of play type)
       try {
         const artistResult = await arc.sendTransfer({
           from: arWallet,
@@ -361,11 +370,12 @@ export function createArService({
           version_id: versionId,
           listener_wallet: listenerWallet,
           artist_wallet: version.artistWallet,
-          listener_fee_usdc: LISTENER_FEE_USDC,
+          listener_fee_usdc: isFree ? '0' : LISTENER_FEE_USDC,
           artist_payout_usdc: ARTIST_PAYOUT_USDC,
           listener_tx_hash: listenerTx,
           artist_tx_hash: artistTx,
           status: 'settled' as const,
+          play_type: playType,
         },
       };
     },

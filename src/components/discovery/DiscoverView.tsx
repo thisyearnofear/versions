@@ -9,8 +9,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { useToast } from "@/components/ui/Toast";
-import { apiClient, type Playlist } from "@/lib/api-client";
+import { apiClient, type Playlist, type ListenerBadgeResponse } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { ListenerHub } from "@/components/listener/ListenerHub";
 
 export function DiscoverView() {
   const { address, isConnected } = useAccount();
@@ -18,6 +19,7 @@ export function DiscoverView() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [newBadges, setNewBadges] = useState<ListenerBadgeResponse[]>([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -32,6 +34,7 @@ export function DiscoverView() {
   }, [showToast]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [refresh]);
 
@@ -53,6 +56,12 @@ export function DiscoverView() {
 
   return (
     <>
+      <ListenerHub />
+
+      {newBadges.length > 0 && (
+        <NewBadgeToast badges={newBadges} onDismiss={() => setNewBadges([])} />
+      )}
+
       <div className="flex flex-wrap gap-3 mb-12">
         <button
           type="button"
@@ -84,7 +93,13 @@ export function DiscoverView() {
       ) : (
         <div className="flex flex-col gap-8">
           {playlists.map((pl) => (
-            <PlaylistCard key={pl.id} playlist={pl} listenerWallet={address} isConnected={isConnected} />
+            <PlaylistCard
+              key={pl.id}
+              playlist={pl}
+              listenerWallet={address}
+              isConnected={isConnected}
+              onNewBadges={(badges) => setNewBadges((prev) => [...prev, ...badges])}
+            />
           ))}
         </div>
       )}
@@ -96,25 +111,49 @@ function PlaylistCard({
   playlist,
   listenerWallet,
   isConnected,
+  onNewBadges,
 }: {
   playlist: Playlist;
   listenerWallet: string | undefined;
   isConnected: boolean;
+  onNewBadges?: (badges: ListenerBadgeResponse[]) => void;
 }) {
   const { showToast } = useToast();
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [freePlay, setFreePlay] = useState(false);
 
   const onPlay = useCallback(
     async (versionId: string) => {
       setPayingId(versionId);
       try {
         const wallet = listenerWallet ?? `anonymous_listener_${Date.now()}`;
-        await apiClient.play({ playlistId: playlist.id, versionId, listenerWallet: wallet });
-        showToast("Play settled — $0.0005 paid to artist on Arc", "success", 4000);
+        const resp = await apiClient.play({ playlistId: playlist.id, versionId, listenerWallet: wallet });
+
+        if (resp.play_type === "free") {
+          showToast(
+            `Free play — artist paid $0.0005 (${resp.free_plays_remaining} free plays left)`,
+            "success",
+            4000,
+          );
+          setFreePlay(true);
+        } else {
+          showToast("Play settled — $0.0005 paid to artist on Arc", "success", 4000);
+        }
+
+        // Show new badges via toast
+        if (resp.new_badges && resp.new_badges.length > 0) {
+          onNewBadges?.(resp.new_badges);
+          // Also sync to ListenerHub via window bridge
+          const win = window as unknown as Record<string, unknown>;
+          const syncFn = win.__listenerSyncNewBadges as ((badges: ListenerBadgeResponse[]) => void) | undefined;
+          syncFn?.(resp.new_badges);
+          const fetchFn = win.__listenerFetchProfile as (() => void) | undefined;
+          fetchFn?.();
+        }
       } catch (err) {
         showToast(`Play failed: ${(err as Error).message}`, "error");
       } finally {
-        setTimeout(() => setPayingId(null), 1500);
+        setTimeout(() => { setPayingId(null); setFreePlay(false); }, 1500);
       }
     },
     [listenerWallet, playlist.id, showToast],
@@ -168,17 +207,87 @@ function PlaylistCard({
                   "font-mono text-[10px] uppercase tracking-[0.1em] border px-2.5 py-1.5 transition-colors",
                   payingId === t.submission_id
                     ? "border-[var(--color-hair-strong)] text-[var(--color-ink-3)] cursor-wait"
-                    : "border-[var(--color-rust)] text-[var(--color-rust)] hover:bg-[var(--color-rust)] hover:text-[var(--color-paper)]",
+                    : freePlay
+                      ? "border-[var(--color-hair-strong)] text-[var(--color-ink-3)]"
+                      : "border-[var(--color-rust)] text-[var(--color-rust)] hover:bg-[var(--color-rust)] hover:text-[var(--color-paper)]",
                 )}
-                title={isConnected ? "Pay $0.0005 USDC to the artist on Arc" : "Connect a wallet to be the listener of record"}
+                title={
+                  isConnected
+                    ? "Artist receives $0.0005 USDC — first 10 plays free daily"
+                    : "Connect a wallet to be the listener of record"
+                }
               >
-                {payingId === t.submission_id ? "Settling…" : "$0.0005 → artist"}
+                {payingId === t.submission_id
+                  ? "Settling…"
+                  : freePlay
+                    ? "Played ✓"
+                    : "→ Play"}
               </button>
             </li>
           );
         })}
       </ul>
     </article>
+  );
+}
+
+// ── New Badge Toast ─────────────────────────────────────
+
+function NewBadgeToast({
+  badges,
+  onDismiss,
+}: {
+  badges: ListenerBadgeResponse[];
+  onDismiss: () => void;
+}) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setVisible(false);
+      setTimeout(onDismiss, 300);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [onDismiss]);
+
+  return (
+    <div
+      className={cn(
+        "fixed bottom-6 right-6 z-50 max-w-sm bg-[var(--color-ink)] text-[var(--color-paper)] p-5 rounded shadow-xl transition-all duration-300",
+        visible
+          ? "opacity-100 translate-y-0"
+          : "opacity-0 translate-y-2 pointer-events-none",
+      )}
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)]">
+          New badge{badges.length > 1 ? "s" : ""} earned!
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            setVisible(false);
+            setTimeout(onDismiss, 300);
+          }}
+          className="font-mono text-[11px] text-[var(--color-ink-3)] hover:text-[var(--color-paper)] transition-colors"
+        >
+          ×
+        </button>
+      </div>
+      <div className="flex gap-3 items-center">
+        {badges.map((b) => (
+          <div key={b.id} className="flex flex-col items-center gap-1">
+            <span className="text-2xl">{b.icon}</span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] whitespace-nowrap">
+              {b.label}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-2)] mt-2">
+        {badges.length === 1 ? "Check your profile to see all your badges" : "Keep listening to earn more badges"}
+      </p>
+    </div>
   );
 }
 
