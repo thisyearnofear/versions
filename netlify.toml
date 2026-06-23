@@ -1,6 +1,5 @@
 [build]
-  # Remove cached lightningcss subtree so npm re-resolves platform-specific binary for Linux
-  command = "rm -rf node_modules/lightningcss node_modules/lightningcss-linux-x64-* node_modules/lightningcss-darwin-* node_modules/lightningcss-win32-* 2>/dev/null; npm install && npm run build"
+  command = "npm run build"
 
 [build.environment]
   NODE_VERSION = "22"
