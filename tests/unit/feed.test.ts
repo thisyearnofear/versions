@@ -6,6 +6,8 @@ vi.mock('@/lib/db', () => ({
   get db() { return _getTestDb(); },
 }));
 
+const { clearCache } = await import('../../src/lib/cache');
+
 const { describe, it, expect, beforeAll, beforeEach } = await import('vitest');
 const { eq } = await import('drizzle-orm');
 const { createFeedService } = await import('../../src/services/feed');
@@ -37,6 +39,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await _resetTestDb();
+  clearCache();
 });
 
 describe('feed: listPublished', () => {

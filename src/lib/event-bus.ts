@@ -4,7 +4,11 @@
 // PERFORMANT: O(1) subscribe/unsubscribe. Events are fire-and-forget — if
 //             no subscribers exist, the emit is a no-op.
 
-export type EventName = 'feed-update' | 'queue-update' | 'submission-created';
+export type EventName =
+  | 'feed-update'
+  | 'queue-update'
+  | 'submission-created'
+  | 'playlist-update';
 
 export interface FeedUpdateEvent {
   type: 'published';
@@ -25,7 +29,17 @@ export interface SubmissionCreatedEvent {
   timestamp: string;
 }
 
-export type BusEvent = FeedUpdateEvent | QueueUpdateEvent | SubmissionCreatedEvent;
+export interface PlaylistUpdateEvent {
+  type: 'generated';
+  generated: number;
+  timestamp: string;
+}
+
+export type BusEvent =
+  | FeedUpdateEvent
+  | QueueUpdateEvent
+  | SubmissionCreatedEvent
+  | PlaylistUpdateEvent;
 
 type Handler = (data: BusEvent) => void;
 

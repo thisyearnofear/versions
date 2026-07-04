@@ -2,14 +2,22 @@
 // DRY: every consumer of "what's published" goes through here.
 // PERFORMANT: prepared statements are replaced with a single Drizzle
 //             query — neon-http does its own batching.
+// PERFORMANT (Phase 2): listPublished wrapped in TTL+event-bus cache.
+//                        Key encodes the filter+limit+offset so each
+//                        unique view has its own slot; feed-update
+//                        events invalidate every key under "feed:*".
 
 import { and, eq, gte, lte, desc, sql, type SQL } from 'drizzle-orm';
 import { db } from '../lib/db';
 import { publishedVersions as pvTable, settlementLegs as legsTable } from '../lib/schema';
+import { cached } from '../lib/cache';
 import type { Energy, Tempo } from '../lib/types';
 
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 100;
+// CLEAN: 30s is a tight window that absorbs the SSE-driven re-fetch
+// burst right after a publish event. Longer TTLs risk staleness.
+const FEED_CACHE_TTL_MS = 30_000;
 
 const VALID_ENERGY = new Set<Energy>(['lower', 'same', 'higher']);
 const VALID_TEMPO = new Set<Tempo>(['dragging', 'locked', 'rushing']);
@@ -48,8 +56,6 @@ export interface FeedService {
 function buildWhere(filters: FeedFilters): SQL | undefined {
   const conds: SQL[] = [];
   if (filters.mood && typeof filters.mood === 'string') {
-    // CLEAN: mood is stored as a Postgres jsonb array. Drizzle's
-    // arrayContains matches elements without hand-rolling SQL.
     conds.push(sql`${pvTable.aggregatedMoodTags} @> ${JSON.stringify([filters.mood])}::jsonb`);
   }
   if (filters.energy && VALID_ENERGY.has(filters.energy)) {
@@ -70,32 +76,50 @@ function buildWhere(filters: FeedFilters): SQL | undefined {
   return conds.length === 0 ? undefined : and(...conds);
 }
 
+function feedCacheKey(args: FeedListArgs): string {
+  const parts: string[] = [
+    String(args.limit ?? DEFAULT_LIMIT),
+    String(args.offset ?? 0),
+    args.mood ?? '',
+    args.energy ?? '',
+    args.tempo ?? '',
+    Number.isFinite(args.minSolo) ? String(args.minSolo) : '',
+    Number.isFinite(args.maxSolo) ? String(args.maxSolo) : '',
+    args.artistWallet ?? '',
+  ];
+  return `feed:${parts.join('|')}`;
+}
+
 export function createFeedService(): FeedService {
   return {
-    async listPublished({
-      limit = DEFAULT_LIMIT,
-      offset = 0,
-      ...filters
-    }: FeedListArgs = {}): Promise<FeedListResult> {
-      const safeLimit = Math.min(MAX_LIMIT, Math.max(1, Number(limit) || DEFAULT_LIMIT));
-      const safeOffset = Math.max(0, Number(offset) || 0);
-      const where = buildWhere(filters);
+    async listPublished(args: FeedListArgs = {}): Promise<FeedListResult> {
+      const key = feedCacheKey(args);
+      return cached(key, FEED_CACHE_TTL_MS, async () => {
+        const {
+          limit = DEFAULT_LIMIT,
+          offset = 0,
+          ...filters
+        } = args;
+        const safeLimit = Math.min(MAX_LIMIT, Math.max(1, Number(limit) || DEFAULT_LIMIT));
+        const safeOffset = Math.max(0, Number(offset) || 0);
+        const where = buildWhere(filters);
 
-      const totalRows = await db
-        .select({ n: sql<number>`COUNT(*)::int` })
-        .from(pvTable)
-        .where(where);
-      const total = Number(totalRows[0]?.n ?? 0);
+        const totalRows = await db
+          .select({ n: sql<number>`COUNT(*)::int` })
+          .from(pvTable)
+          .where(where);
+        const total = Number(totalRows[0]?.n ?? 0);
 
-      const rows = await db
-        .select()
-        .from(pvTable)
-        .where(where)
-        .orderBy(desc(pvTable.publishedAt), desc(pvTable.submissionId))
-        .limit(safeLimit)
-        .offset(safeOffset);
+        const rows = await db
+          .select()
+          .from(pvTable)
+          .where(where)
+          .orderBy(desc(pvTable.publishedAt), desc(pvTable.submissionId))
+          .limit(safeLimit)
+          .offset(safeOffset);
 
-      return { total, limit: safeLimit, offset: safeOffset, rows };
+        return { total, limit: safeLimit, offset: safeOffset, rows };
+      }, ['feed-update']);
     },
 
     async getVersion(submissionId: string): Promise<FeedVersionResult | null> {

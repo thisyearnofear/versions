@@ -24,6 +24,13 @@ export async function GET(req: Request): Promise<Response> {
         controller.enqueue(new TextEncoder().encode(payload));
       });
 
+      // MODULAR: stream playlist-update events so the Discover view can
+      // re-fetch playlists when the A&R agent regenerates them.
+      const unsubPlaylistUpdate = subscribe('playlist-update', (data) => {
+        const payload = `event: playlist-update\ndata: ${JSON.stringify(data)}\n\n`;
+        controller.enqueue(new TextEncoder().encode(payload));
+      });
+
       // Heartbeat every 30s keeps load-balancer / proxy timeouts at bay.
       const heartbeat = setInterval(() => {
         controller.enqueue(new TextEncoder().encode(': heartbeat\n\n'));
@@ -37,6 +44,7 @@ export async function GET(req: Request): Promise<Response> {
       req.signal.addEventListener('abort', () => {
         unsubFeedUpdate();
         unsubQueueUpdate();
+        unsubPlaylistUpdate();
         clearInterval(heartbeat);
       });
     },
