@@ -1,6 +1,6 @@
 // MODULAR: rate-limit port. Pure functions; no IO.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRateLimiter, ipFor, type RateLimitedRequest } from '../../src/lib/rate-limit';
 
 function fakeReq(remoteAddress: string | null): RateLimitedRequest {
@@ -35,13 +35,30 @@ describe('rate-limit: separate buckets per IP', () => {
 });
 
 describe('rate-limit: prunes old entries past the window', () => {
-  it('old entries are pruned after windowMs', async () => {
+  // MODULAR: drive Date.now() via vitest fake timers so the test is
+  // fully deterministic and doesn't flake under CI load. The
+  // implementation uses Date.now() (not setTimeout) for the
+  // rolling-window cutoff, so setSystemTime is the right knob.
+  beforeEach(() => {
+    // MODULAR: `now: 0` freezes the clock at epoch so the first batch
+    // of allow() calls record timestamps of 0 (well under any
+    // plausible windowMs). The test body then advances the clock
+    // explicitly to drive the prune.
+    vi.useFakeTimers({ now: 0 });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('old entries are pruned after windowMs', () => {
     const limiter = createRateLimiter({ windowMs: 10, max: 2, label: 'test' });
     const req = fakeReq('3.3.3.3');
     expect(limiter.allow(req)).toBe(true);
     expect(limiter.allow(req)).toBe(true);
     expect(limiter.allow(req)).toBe(false);
-    await new Promise((r) => setTimeout(r, 25));
+    // Advance the clock past windowMs so the rolling-window prune
+    // drops the prior 3 timestamps (all at t=0 < cutoff t=10).
+    vi.setSystemTime(new Date(20));
     expect(limiter.allow(req)).toBe(true);
     expect(limiter.allow(req)).toBe(true);
     expect(limiter.allow(req)).toBe(false);
