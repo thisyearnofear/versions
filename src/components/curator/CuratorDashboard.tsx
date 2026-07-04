@@ -321,9 +321,16 @@ function OverviewTab({
       <section>
         <h3 className="font-serif text-xl font-black tracking-tight mb-4">Recent ratings</h3>
         {profile.recent_ratings.length === 0 ? (
-          <p className="font-serif italic text-[var(--color-ink-3)] py-8 text-center border border-[var(--color-hair)]">
-            No ratings yet. Claim a submission from the queue to start curating.
-          </p>
+          <div className="py-8 px-5 border border-[var(--color-hair)] font-serif text-[var(--color-ink-2)]">
+            <p className="italic text-[var(--color-ink-3)] mb-2">
+              No ratings yet.
+            </p>
+            <p className="text-sm leading-snug">
+              Claim a submission from the queue, listen across the
+              four taste-graph dimensions, and release it for the next
+              curator. Three ratings clear the publish gate.
+            </p>
+          </div>
         ) : (
           <ul className="flex flex-col">
             {profile.recent_ratings.slice(0, 6).map((r) => (
@@ -381,9 +388,15 @@ function OverviewTab({
       <section>
         <h3 className="font-serif text-xl font-black tracking-tight mb-4">Recent earnings</h3>
         {earnings.recent.length === 0 ? (
-          <p className="font-serif italic text-[var(--color-ink-3)] py-8 text-center border border-[var(--color-hair)]">
-            No curator earnings yet. Rate submissions to earn curator fees.
-          </p>
+          <div className="py-8 px-5 border border-[var(--color-hair)] font-serif text-[var(--color-ink-2)]">
+            <p className="italic text-[var(--color-ink-3)] mb-2">
+              No curator earnings yet.
+            </p>
+            <p className="text-sm leading-snug">
+              Curator fees share 70% of each submission pool. Rate
+              three submissions on the same take and your share lands
+              here once it publishes.
+            </p>            </div>
         ) : (
           <ul className="flex flex-col">
             {earnings.recent.slice(0, 8).map((e) => (

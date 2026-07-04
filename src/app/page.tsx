@@ -27,20 +27,22 @@ function Header() {
           A marketplace for alternate takes
         </div>
       </div>
-      <div className="flex items-center gap-3">
-        <Link
-          href="/submit"
-          className="font-mono text-[11px] uppercase tracking-[0.18em] hover:text-[var(--color-rust)] transition-colors"
-        >
-          Submit
-        </Link>
-        <Link
-          href="/feed"
-          className="font-mono text-[11px] uppercase tracking-[0.18em] hover:text-[var(--color-rust)] transition-colors"
-        >
-          Feed
-        </Link>
-        <WagmiConnectButton variant="compact" />
+      <div className="flex flex-col items-end gap-0">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/submit"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] hover:text-[var(--color-rust)] transition-colors"
+          >
+            Submit
+          </Link>
+          <Link
+            href="/feed"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] hover:text-[var(--color-rust)] transition-colors"
+          >
+            Feed
+          </Link>
+          <WagmiConnectButton variant="compact" showGlossary />
+        </div>
       </div>
     </header>
   );

@@ -17,19 +17,24 @@ interface TourStep {
 
 const STEPS: TourStep[] = [
   {
-    title: "01 · Submit a version",
+    title: "01 · Connect your wallet",
     body:
-      "Pay 0.50 USDC to put a take in the queue. The fee funds the curator pool — split 70/20/10 between the curators, the platform, and your own attribution. After three ratings your version publishes to the feed.",
+      "VERSIONS uses a crypto wallet to sign submissions, verify payments, and track attribution. Just connect any EVM wallet (MetaMask, Coinbase Wallet, WalletConnect, or Rainbow). No gas is needed — the 0.50 USDC fee settles on Arc L1, a low-cost sidechain, not Ethereum mainnet. Your wallet is your identity on VERSIONS — it acts as your artist profile, curator badge, and listener pass.",
   },
   {
-    title: "02 · Curate via the taste graph",
+    title: "02 · Submit a version",
     body:
-      "Claim a submission and rate it across four quantitative dimensions on the radar. The polygon is your rating; the readout below shows the live values. Energy and tempo snap to lower/same/higher and dragging/locked/rushing at submit time.",
+      "Upload an audio file, fill in the metadata, and pay 0.50 USDC to put a take in the curation queue. The fee funds the curator pool — split 70/20/10 between the AI agent curators, the platform, and your MusicBrainz attribution. After three agent ratings your version publishes to the feed.",
   },
   {
-    title: "03 · Discover the feed",
+    title: "03 · AI agent curators",
     body:
-      "The feed is the catalog of published versions. Each row carries the aggregated taste graph, the rating dimensions, the mood tags, and a player. Filter by mood, energy, tempo, or solo intensity.",
+      "Three autonomous AI agents review every submission — Production (mix &amp; mastering), Performance (delivery &amp; feel), and Market (placement &amp; fit). Each rates across four dimensions: solo intensity, vocal quality, energy, and tempo. No human in the loop — results appear in seconds.",
+  },
+  {
+    title: "04 · Discover &amp; earn",
+    body:
+      "The feed is the catalog of published versions with aggregated taste-graph ratings. The Discover tab features A&amp;R agent-curated playlists — play a track and the artist earns $0.0005 USDC instantly. Listeners get 10 free plays daily, reputation scores, and milestone badges as they explore.",
   },
 ];
 

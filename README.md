@@ -25,7 +25,7 @@ npm install
 npm run dev      # next dev .
 npm run build    # next build . --experimental-build-mode compile
 npm start        # next start .
-npm test         # vitest (114 tests)
+npm test         # vitest (124 tests)
 npm run db:push  # drizzle-kit push
 npm run db:studio
 ```
@@ -121,13 +121,16 @@ src/
 │   └── llm.ts                # LLM adapter (agent reviews)
 ├── lib/
 │   ├── api-client.ts         # Typed fetch client
+│   ├── cache.ts              # In-process TTL cache w/ event-bus invalidation
 │   ├── config.ts             # Env helpers
 │   ├── db.ts                 # Neon + Drizzle client
 │   ├── event-bus.ts          # In-process pub/sub (SSE backing)
 │   ├── ipfs.ts               # Pinata IPFS upload
 │   ├── logger.ts             # Structured logging
 │   ├── multipart.ts          # Multipart form parsing
+│   ├── rate-limit.ts         # Per-IP token-bucket rate limiter
 │   ├── schema.ts             # Drizzle schema (12 tables)
+│   ├── transaction.ts        # Logical transaction wrapper (compensating rollback)
 │   ├── types.ts              # Shared TS types
 │   ├── utils.ts              # escapeHtml, cn, etc.
 │   ├── validation.ts         # Zod rating validation
@@ -143,6 +146,38 @@ For the pre-migration project history, see commits before `7b05e333`.
 
 - [ ] WalletConnect project ID (`NEXT_PUBLIC_WC_PROJECT_ID`) — required for RainbowKit wallet connections
 - [ ] Production deployment config (Vercel, Railway, or Docker)
+
+## Publish pipeline hardening
+
+The settlement pipeline has been hardened against double-publish races and
+partial-publish state. Key invariants:
+
+- **`uq_legs_submission_wallet_role`** — Postgres unique index on
+  `settlement_legs(submission_id, recipient_wallet, recipient_role)`. The
+  composite key is required because the same wallet can legitimately appear
+  in multiple roles (e.g. the artist is both the `musicbrainz` recipient
+  and the `platform` fallback). DDL is mirrored in `tests/helpers/db.ts`.
+- **`PublishLegIncompleteError`** — named error class thrown by
+  `publishSubmission` when the leg-count guard detects a partial insert.
+  Carries `submissionId`, `expected`, `actual`, and `actualLegIds` so
+  upstream callers (`curation.ts submitRating`, `agents.ts
+  reviewSubmission`) can detect it via `instanceof` and return a
+  structured `{ ok: false, error, code: 'publish_legs_incomplete' }`
+  response.
+- **`expectedLegCountFor(curatorCount)`** — single source of truth for
+  the leg-count formula (`curatorCount + 2 = 1 platform + 1
+  musicbrainz`). Used by the under-count guard, the over-count warning
+  log, and `settlement.splitFee`'s minimum-count check so the "+2"
+  invariant can't drift between call sites.
+- **`transactional()` wrapper** — logical transaction for Neon HTTP.
+  Services that make multi-step DB writes (rating → count → publish →
+  leg) wrap their work in `transactional()` so a failure rolls back
+  partial state via compensating actions instead of leaving orphan rows.
+- **Over-count soft warning** — when orphan legs with `(wallet, role)`
+  combos the build doesn't generate are present, the publish still
+  succeeds but `log.warn` emits `extraLegIds` / `extraLegKeys` (via set
+  difference against the expected keys) so stale rows are traceable
+  for cleanup.
 
 ## Known issues
 

@@ -10,16 +10,21 @@ import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useChainId, useDisconnect, useSignMessage } from "wagmi";
 import { useCallback } from "react";
+import { WalletGlossary } from "@/components/wallet/WalletGlossary";
 
 export interface WagmiConnectButtonProps {
   // Optional: show the short address chip inline (otherwise RainbowKit's
   // default button is rendered, which already includes the address).
   variant?: "default" | "compact";
+  // Optional: when true, include the inline "What is a wallet?" glossary
+  // below the connect button. Off by default because pages with
+  // dedicated dashboard chrome usually have their own explainer.
+  showGlossary?: boolean;
   // Optional: a child slot — render extra elements (e.g. earnings chip) on the right.
   children?: React.ReactNode;
 }
 
-export function WagmiConnectButton({ variant = "default", children }: WagmiConnectButtonProps) {
+export function WagmiConnectButton({ variant = "default", children, showGlossary = false }: WagmiConnectButtonProps) {
   const { address, isConnected } = useAccount();
 
   const links =
@@ -46,28 +51,30 @@ export function WagmiConnectButton({ variant = "default", children }: WagmiConne
       </>
     ) : null;
 
-  if (variant === "compact") {
-    return (
+  const button = (
+    <ConnectButton
+      accountStatus={
+        variant === "compact"
+          ? { smallScreen: "avatar", largeScreen: "address" }
+          : "address"
+      }
+      chainStatus="icon"
+      showBalance={false}
+    />
+  );
+
+  return (
+    <div className="flex flex-col items-end gap-0">
       <div className="flex items-center gap-3">
         {links}
-        <ConnectButton
-          accountStatus={{ smallScreen: "avatar", largeScreen: "address" }}
-          chainStatus={{ smallScreen: "icon", largeScreen: "icon" }}
-          showBalance={false}
-        />
+        {button}
         {children}
       </div>
-    );
-  }
-  return (
-    <div className="flex items-center gap-3">
-      {links}
-      <ConnectButton
-        accountStatus="address"
-        chainStatus="icon"
-        showBalance={false}
-      />
-      {children}
+      {showGlossary && !isConnected && (
+        <div className="w-full max-w-[420px] mt-3">
+          <WalletGlossary variant="compact" />
+        </div>
+      )}
     </div>
   );
 }
