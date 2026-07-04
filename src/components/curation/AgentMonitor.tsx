@@ -12,6 +12,7 @@ import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { apiClient, type AgentReviewRecord, type QueueSubmission } from "@/lib/api-client";
 import { energyToNumber, tempoToNumber } from "@/lib/snap";
 import { escapeHtml } from "@/lib/utils";
+import DOMPurify from "dompurify";
 
 // ── Agent identity kit ─────────────────────────────────
 
@@ -232,9 +233,9 @@ function AgentReviewCard({
         </div>
       </div>
 
-      {/* Mood tags */}
+      {/* Mood tags — sanitized via DOMPurify */}
       {moodTags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-3" dangerouslySetInnerHTML={{ __html: tagMarkup }} />
+        <div className="flex flex-wrap gap-1.5 mt-3" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(tagMarkup) }} />
       )}
 
       {/* Notes */}

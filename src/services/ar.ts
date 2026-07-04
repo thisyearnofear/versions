@@ -4,7 +4,7 @@
 // and pays artists per play.
 
 import { createHash, randomUUID } from 'crypto';
-import { eq, sql, desc } from 'drizzle-orm';
+import { eq, sql, desc, inArray } from 'drizzle-orm';
 import { db } from '../lib/db';
 import {
   arPlaylists as playlistsTable,
@@ -13,26 +13,18 @@ import {
   publishedVersions as pvTable,
   submissions as submissionsTable,
 } from '../lib/schema';
+import { cached } from '../lib/cache';
+import { emit } from '../lib/event-bus';
 import type { ArcAdapter } from '../adapters/arc';
+
+// MODULAR: short TTL + event-bus invalidation. Playlists change
+// infrequently (only when the A&R agent generates fresh ones).
+const PLAYLIST_CACHE_TTL_MS = 30_000;
 
 export const LISTENER_FEE_USDC = '0.001';
 export const ARTIST_PAYOUT_USDC = '0.0005';
 
 export type PlayType = 'free' | 'paid';
-
-const PLAYLIST_GENRES = ['rock', 'jazz', 'electronic', 'folk', 'hip-hop', 'classical', 'pop'];
-const PLAYLIST_MOODS = [
-  'bluesy',
-  'raw',
-  'euphoric',
-  'melancholic',
-  'aggressive',
-  'dreamy',
-  'groovy',
-  'intimate',
-  'cinematic',
-  'nostalgic',
-];
 
 function mockPlaylistName(genre: string, mood: string | null): string {
   const adjectives: Record<string, string[]> = {
@@ -93,7 +85,12 @@ export interface ArService {
   generatePlaylists: () => Promise<PlaylistSummary[]>;
   listPlaylists: () => Promise<PlaylistSummary[]>;
   getPlaylist: (playlistId: string) => Promise<PlaylistSummary | null>;
-  recordPlay: (args: { playlistId: string; versionId: string; listenerWallet: string; playType?: PlayType }) => Promise<
+  recordPlay: (args: {
+    playlistId: string;
+    versionId: string;
+    listenerWallet: string;
+    playType?: PlayType;
+  }) => Promise<
     | {
         ok: true;
         play: {
@@ -132,16 +129,25 @@ export function createArService({
       const published = await db.select().from(pvTable).orderBy(desc(pvTable.publishedAt));
       if (published.length === 0) return [];
 
+      // PERFORMANT: collapse the per-version genre SELECT (N+1) into a
+      // single batched fetch using inArray.
+      const versionIds = published.map((v) => v.submissionId);
+      const subRows = versionIds.length
+        ? await db
+            .select({ id: submissionsTable.id, genre: submissionsTable.genre })
+            .from(submissionsTable)
+            .where(inArray(submissionsTable.id, versionIds))
+        : [];
+      const genreBySubmission = new Map<string, string | null>();
+      for (const r of subRows) {
+        genreBySubmission.set(r.id, r.genre);
+      }
+
       const playlists: PlaylistSummary[] = [];
 
       const byGenre = new Map<string, typeof published>();
       for (const v of published) {
-        const [sub] = await db
-          .select({ genre: submissionsTable.genre })
-          .from(submissionsTable)
-          .where(eq(submissionsTable.id, v.submissionId))
-          .limit(1);
-        const genre = (sub && sub.genre) || 'other';
+        const genre = genreBySubmission.get(v.submissionId) ?? 'other';
         if (!byGenre.has(genre)) byGenre.set(genre, []);
         byGenre.get(genre)!.push(v);
       }
@@ -205,15 +211,33 @@ export function createArService({
           track_count: selected.length,
         });
       }
+
+      // MODULAR: invalidate any cached playlist list once the A&R agent
+      // has finished writing fresh playlists into the catalog.
+      emit('playlist-update', {
+        type: 'generated',
+        generated: playlists.length,
+        timestamp: new Date().toISOString(),
+      });
+
       return playlists;
     },
 
-    async listPlaylists(): Promise<PlaylistSummary[]> {
-      const playlists = await db.select().from(playlistsTable).orderBy(desc(playlistsTable.updatedAt));
-      const result: PlaylistSummary[] = [];
-      for (const p of playlists) {
-        const tracks = await db
+    // PERFORMANT (Phase 2): wrapped in TTL + event-bus cache. The cache
+    // key is a single static string because listPlaylists has no args.
+    listPlaylists(): Promise<PlaylistSummary[]> {
+      return cached('playlists:list', PLAYLIST_CACHE_TTL_MS, async () => {
+        const playlists = await db
+          .select()
+          .from(playlistsTable)
+          .orderBy(desc(playlistsTable.updatedAt));
+        if (playlists.length === 0) return [];
+
+        // PERF: Batch-fetch all tracks for all playlists in a single query.
+        const playlistIds = playlists.map((p) => p.id);
+        const allTracks = await db
           .select({
+            playlistId: playlistTracksTable.playlistId,
             position: playlistTracksTable.position,
             submission_id: pvTable.submissionId,
             title: pvTable.title,
@@ -230,9 +254,20 @@ export function createArService({
           })
           .from(playlistTracksTable)
           .innerJoin(pvTable, eq(pvTable.submissionId, playlistTracksTable.versionId))
-          .where(eq(playlistTracksTable.playlistId, p.id))
+          .where(inArray(playlistTracksTable.playlistId, playlistIds))
           .orderBy(playlistTracksTable.position);
-        result.push({
+
+        const tracksByPlaylist = new Map<string, typeof allTracks>();
+        for (const track of allTracks) {
+          const list = tracksByPlaylist.get(track.playlistId);
+          if (list) {
+            list.push(track);
+          } else {
+            tracksByPlaylist.set(track.playlistId, [track]);
+          }
+        }
+
+        return playlists.map((p) => ({
           id: p.id,
           name: p.name,
           description: p.description,
@@ -242,10 +277,23 @@ export function createArService({
           track_count: p.trackCount,
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
-          tracks,
-        });
-      }
-      return result;
+          tracks: (tracksByPlaylist.get(p.id) || []).map((t) => ({
+            position: t.position,
+            submission_id: t.submission_id,
+            title: t.title,
+            artist_name: t.artist_name,
+            artist_wallet: t.artist_wallet,
+            version_type: t.version_type,
+            audio_path: t.audio_path,
+            avg_solo_intensity: t.avg_solo_intensity,
+            avg_vocal_quality: t.avg_vocal_quality,
+            energy_consensus: t.energy_consensus,
+            tempo_consensus: t.tempo_consensus,
+            aggregated_mood_tags: t.aggregated_mood_tags,
+            published_at: t.published_at,
+          })),
+        }));
+      }, ['playlist-update']);
     },
 
     async getPlaylist(playlistId: string): Promise<PlaylistSummary | null> {

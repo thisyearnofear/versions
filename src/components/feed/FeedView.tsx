@@ -13,6 +13,15 @@ import { apiClient, type FeedRow } from "@/lib/api-client";
 import { energyToNumber, tempoToNumber } from "@/lib/snap";
 import { escapeHtml } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import DOMPurify from "dompurify";
+
+// Sanitize SVG/HTML with DOMPurify — allow only safe SVG tags and attributes.
+function sanitize(unsafe: string): string {
+  return DOMPurify.sanitize(unsafe, {
+    ALLOWED_TAGS: ["svg", "path", "circle", "polygon", "rect", "line", "text", "g", "defs", "linearGradient", "stop", "span"],
+    ALLOWED_ATTR: ["d", "viewBox", "width", "height", "fill", "stroke", "strokeWidth", "stroke-width", "strokeLinejoin", "stroke-linejoin", "cx", "cy", "r", "x", "y", "points", "textAnchor", "dominantBaseline", "fontFamily", "fontSize", "letterSpacing", "class", "data-tg-polygon", "data-tg-axis", "aria-hidden", "xmlns", "role"],
+  });
+}
 
 interface Filters {
   mood: string;
@@ -334,7 +343,7 @@ function FeedRowItem({ row }: { row: FeedRow }) {
         {cover && (
           <div
             className="w-20 h-20 mt-4 border border-[var(--color-hair)]"
-            dangerouslySetInnerHTML={{ __html: cover }}
+            dangerouslySetInnerHTML={{ __html: sanitize(cover) }}
           />
         )}
         <div className="mt-4">

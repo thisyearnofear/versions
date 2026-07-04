@@ -13,6 +13,7 @@ const { createLlmAdapter } = await import('../../src/adapters/llm');
 const { createAgentService } = await import('../../src/services/agents');
 const { createArService } = await import('../../src/services/ar');
 const { signMessage, TEST_ADDRESSES } = await import('../helpers/sig');
+const { clearCache } = await import('../../src/lib/cache');
 
 const TEST_PLATFORM_WALLET = TEST_ADDRESSES.acc0;
 const TEST_AR_WALLET = TEST_ADDRESSES.acc1;
@@ -37,6 +38,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await _resetTestDb();
+  clearCache();
   const sig = await signMessage(1, 'VERSIONS_LEPTON_SUBMIT');
   const r = await submissions.createSubmission({
     audioPath: 'data/uploads/test-ar.mp3',

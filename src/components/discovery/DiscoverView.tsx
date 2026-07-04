@@ -62,34 +62,46 @@ export function DiscoverView() {
         <NewBadgeToast badges={newBadges} onDismiss={() => setNewBadges([])} />
       )}
 
-      <div className="flex flex-wrap gap-3 mb-12">
-        <button
-          type="button"
-          onClick={() => void onGenerate()}
-          disabled={generating}
-          className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[11px] uppercase tracking-[0.18em] px-5 py-3 hover:bg-[var(--color-rust)] transition-colors disabled:opacity-50"
-        >
-          {generating ? "Generating…" : "Generate playlists"}
-        </button>
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          disabled={loading}
-          className="border border-[var(--color-ink)] font-mono text-[11px] uppercase tracking-[0.18em] px-5 py-3 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors disabled:opacity-50"
-        >
-          {loading ? "Loading…" : "Refresh"}
-        </button>
-      </div>
+      {playlists.length > 0 && (
+        <div className="flex flex-wrap gap-3 mb-12">
+          <button
+            type="button"
+            onClick={() => void onGenerate()}
+            disabled={generating}
+            className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[11px] uppercase tracking-[0.18em] px-5 py-3 hover:bg-[var(--color-rust)] transition-colors disabled:opacity-50"
+          >
+            {generating ? "Generating…" : "Generate playlists"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={loading}
+            className="border border-[var(--color-ink)] font-mono text-[11px] uppercase tracking-[0.18em] px-5 py-3 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors disabled:opacity-50"
+          >
+            {loading ? "Loading…" : "Refresh"}
+          </button>
+        </div>
+      )}
+      {playlists.length === 0 && !loading && (
+        <div className="mb-12">
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            aria-label="Retry loading playlists"
+            className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
+          >
+            <span aria-hidden="true">↻ </span>Retry loading
+          </button>
+        </div>
+      )}
 
       {loading && playlists.length === 0 ? (
         <DiscoverSkeleton count={2} />
       ) : playlists.length === 0 ? (
-        <div className="border-t border-b border-[var(--color-hair)] py-10 font-serif text-[var(--color-ink-2)] text-center">
-          <strong className="block text-[var(--color-ink)] font-medium mb-1">
-            No playlists yet.
-          </strong>
-          Click &quot;Generate playlists&quot; to let the A&amp;R agent curate from the published catalog.
-        </div>
+        <DiscoverEmptyState
+          generating={generating}
+          onGenerate={() => void onGenerate()}
+        />
       ) : (
         <div className="flex flex-col gap-8">
           {playlists.map((pl) => (
@@ -228,6 +240,108 @@ function PlaylistCard({
         })}
       </ul>
     </article>
+  );
+}
+
+// ── Empty State ─────────────────────────────────────────
+
+interface FeaturedQuote {
+  id: string;
+  text: string;
+  by: string;
+  role: string;
+}
+
+const FALLBACK_DISCOVER_QUOTE: FeaturedQuote = {
+  id: "fallback",
+  text: "Taste isn't a vote. It's a small, daily bet.",
+  by: "house rule",
+  role: "taste maker",
+};
+
+function DiscoverEmptyState({
+  generating,
+  onGenerate,
+}: {
+  generating: boolean;
+  onGenerate: () => void;
+}) {
+  const [quote, setQuote] = useState<FeaturedQuote>(FALLBACK_DISCOVER_QUOTE);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/data/featured-quotes.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((list: FeaturedQuote[] | null) => {
+        if (cancelled) return;
+        if (Array.isArray(list) && list.length > 0) {
+          setQuote(list[Math.floor(Math.random() * list.length)]);
+        }
+      })
+      .catch(() => {
+        /* keep fallback */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="border-t border-b border-[var(--color-hair)] py-12 font-serif text-[var(--color-ink-2)]">
+      <div className="grid md:grid-cols-[1fr_auto] gap-8 items-start">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-3">
+            The catalog is quiet
+          </p>
+          <h3 className="font-serif text-3xl md:text-4xl font-black tracking-tight mb-3 text-[var(--color-ink)]">
+            No playlists yet.
+          </h3>
+          <p className="font-serif text-base text-[var(--color-ink-2)] leading-snug max-w-[60ch] mb-2">
+            Once a few submissions publish, the A&amp;R agent reads the
+            catalog, clusters it by genre and mood, and writes a curated
+            set. Each play pays the artist directly &mdash; no algorithm
+            gatekeepers.
+          </p>
+          <div
+            role="group"
+            aria-label="Get started"
+            className="flex flex-wrap gap-3 mt-4"
+          >
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={generating}
+              className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[11px] uppercase tracking-[0.18em] px-5 py-3 hover:bg-[var(--color-rust)] transition-colors disabled:opacity-50"
+            >
+              {generating ? "Generating…" : "Generate playlists →"}
+            </button>
+            <a
+              href="/submit"
+              className="border border-[var(--color-ink)] font-mono text-[11px] uppercase tracking-[0.18em] px-5 py-3 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
+            >
+              Submit a version
+            </a>
+            <a
+              href="/agents"
+              className="font-mono text-[11px] uppercase tracking-[0.18em] px-5 py-3 text-[var(--color-ink-2)] hover:text-[var(--color-rust)] transition-colors"
+            >
+              How curation works →
+            </a>
+          </div>
+        </div>
+        <aside className="md:max-w-[36ch] md:border-l md:border-[var(--color-hair-strong)] md:pl-6">
+          <blockquote>
+            <p className="font-serif italic text-[20px] leading-[1.45] text-[var(--color-ink)] mb-3">
+              &ldquo;{quote.text}&rdquo;
+            </p>
+            <footer className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]">
+              — <cite className="not-italic text-[var(--color-ink)] font-medium">{quote.by}</cite>
+              <span className="ml-2 text-[var(--color-ink-2)]">{quote.role}</span>
+            </footer>
+          </blockquote>
+        </aside>
+      </div>
+    </div>
   );
 }
 
