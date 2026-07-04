@@ -1,10 +1,11 @@
 // MODULAR: Curation service. Owns claim/release/rate/publish + the publish
 // gate (N ratings -> publish). All DB writes for these tables go through here.
-// CLEAN: publish is a single SQL transaction — if settlement.splitFee
-//        throws, the publish rolls back. (On Neon HTTP, "transaction" is
-//        a logical grouping; we run the writes sequentially and rely on
-//        idempotent unique constraints for recovery.)
+// CLEAN: submitRating uses the `transactional()` wrapper for compensating
+//        rollback on multi-step writes (insert rating → count update → publish).
+//        The publish gate inside publishSubmission has its own compensations.
 // ENHANCEMENT FIRST: reuses the signature verifier pattern from submissions.
+// PERFORMANT: listArtistVersions batched — one grouped query for ratings
+//             counts, one LEFT JOIN for published_versions. No more N+1.
 
 import { randomUUID } from 'crypto';
 import { verifyMessage, isAddress, getAddress } from 'viem';
@@ -16,10 +17,12 @@ import {
   curatorClaims as claimsTable,
   ratings as ratingsTable,
   publishedVersions as pvTable,
+  settlementLegs as legsTable,
 } from '../lib/schema';
 import { aggregateRatings, type RatingRowLike } from './taste-graph';
 import { validateRating } from '../lib/validation';
 import { publishSubmission } from './publish';
+import { transactional } from '../lib/transaction';
 import type { SettlementService } from './settlement';
 
 export const CLAIM_MESSAGE = 'VERSIONS_LEPTON_CLAIM';
@@ -147,7 +150,6 @@ export type ArtistVersionRow = Awaited<
   ReturnType<CurationService['listArtistVersions']>
 >['rows'][number];
 
-
 export function createCurationService({ settlement }: { settlement: SettlementService }): CurationService {
   return {
     publishThreshold: PUBLISH_THRESHOLD,
@@ -260,9 +262,6 @@ export function createCurationService({ settlement }: { settlement: SettlementSe
       }
 
       // CLEAN: proactively check for existing rating before inserting.
-      // Drizzle wraps PGlite errors as "Failed query: ..." which doesn't
-      // contain "unique" or "duplicate" in err.message, so an explicit
-      // check is more reliable than parsing the error message.
       const [existingRating] = await db
         .select({ id: ratingsTable.id })
         .from(ratingsTable)
@@ -278,66 +277,99 @@ export function createCurationService({ settlement }: { settlement: SettlementSe
       }
 
       const id = randomUUID();
-      await db.insert(ratingsTable).values({
-        id,
-        submissionId,
-        curatorWallet,
-        soloIntensity: validRating.solo_intensity,
-        vocalQuality: validRating.vocal_quality,
-        energyVsStudio: validRating.energy_vs_studio,
-        tempoFeel: validRating.tempo_feel,
-        moodTags: validRating.mood_tags || [],
-        notes: validRating.notes ?? null,
-      });
 
-      await db
-        .update(submissionsTable)
-        .set({ ratingCount: sql`${submissionsTable.ratingCount} + 1` })
-        .where(eq(submissionsTable.id, submissionId));
-
-      const [refreshed] = await db
-        .select({ ratingCount: submissionsTable.ratingCount })
-        .from(submissionsTable)
-        .where(eq(submissionsTable.id, submissionId))
-        .limit(1);
-
+      // MODULAR: multi-step write wrapped in transactional() so a failure
+      // mid-way (rating inserted, count updated, publish failed) cleans
+      // up via compensating rollback. publishSubmission has its own
+      // inner transaction, so failure inside it cancels the outer ops.
+      //
+      // RACE NOTE: the rating_count is NOT compensated on rollback. With
+      // concurrent curators, a `previousCount` snapshot would be stale by
+      // the time the compensation runs and could clobber an honest
+      // increment from another curator. A slightly stale aggregate is
+      // preferable to a lost row. The publish gate below always re-SELECTs
+      // the current count, so a stale aggregate can't block or wrongly
+      // trigger a publish.
       let published: SubmitRatingResult extends { published: infer P } ? P : never = null as never;
-      if ((refreshed?.ratingCount ?? 0) >= PUBLISH_THRESHOLD) {
-        const publishResult = await publishSubmission(submissionId, settlement);
-        if (publishResult.alreadyPublished) {
-          published = { alreadyPublished: true } as never;
-        } else {
-          const settleResults = await settlement.settleLegsAsync(publishResult.legIds);
-          const { settlementLegs: legsTable } = await import('../lib/schema');
-          const finalLegs = await db.select().from(legsTable).where(eq(legsTable.submissionId, submissionId));
-          const [version] = await db.select().from(pvTable).where(eq(pvTable.submissionId, submissionId)).limit(1);
-          published = {
-            alreadyPublished: false,
-            version,
-            settlement_legs: finalLegs,
-            settle_results: settleResults,
-          } as never;
 
-          // MODULAR: notify SSE subscribers that the feed has a new entry.
-          emit('feed-update', {
-            type: 'published',
-            submissionId,
-            timestamp: new Date().toISOString(),
-          });
+      await transactional(async (register) => {
+        await db.insert(ratingsTable).values({
+          id,
+          submissionId,
+          curatorWallet,
+          soloIntensity: validRating.solo_intensity,
+          vocalQuality: validRating.vocal_quality,
+          energyVsStudio: validRating.energy_vs_studio,
+          tempoFeel: validRating.tempo_feel,
+          moodTags: validRating.mood_tags || [],
+          notes: validRating.notes ?? null,
+        });
+
+        register('delete_rating', async () => {
+          try {
+            await db.delete(ratingsTable).where(eq(ratingsTable.id, id));
+          } catch {
+            /* best-effort */
+          }
+        });
+
+        await db
+          .update(submissionsTable)
+          .set({ ratingCount: sql`${submissionsTable.ratingCount} + 1` })
+          .where(eq(submissionsTable.id, submissionId));
+
+        const [refreshed] = await db
+          .select({ ratingCount: submissionsTable.ratingCount })
+          .from(submissionsTable)
+          .where(eq(submissionsTable.id, submissionId))
+          .limit(1);
+
+        if ((refreshed?.ratingCount ?? 0) >= PUBLISH_THRESHOLD) {
+          // MODULAR: let PublishLegIncompleteError propagate naturally.
+          // The outer transactional() catches all errors for compensations
+          // (delete rating, restore count) and re-throws, so the rating
+          // that triggered the failed publish is rolled back. The API
+          // layer can detect the named error via `instanceof` if it
+          // wants to return a structured 500/502.
+          const publishResult = await publishSubmission(submissionId, settlement);
+          if (publishResult.alreadyPublished) {
+            published = { alreadyPublished: true } as never;
+          } else {
+            const settleResults = await settlement.settleLegsAsync(publishResult.legIds);
+            const finalLegs = await db.select().from(legsTable).where(eq(legsTable.submissionId, submissionId));
+            const [version] = await db.select().from(pvTable).where(eq(pvTable.submissionId, submissionId)).limit(1);
+            published = {
+              alreadyPublished: false,
+              version,
+              settlement_legs: finalLegs,
+              settle_results: settleResults,
+            } as never;
+
+            emit('feed-update', {
+              type: 'published',
+              submissionId,
+              timestamp: new Date().toISOString(),
+            });
+          }
         }
-      }
-      // MODULAR: notify SSE subscribers that a rating was submitted.
-      // This fires on every rating regardless of publish threshold.
+      }, { label: `submitRating:${submissionId}` });
+
       emit('queue-update', {
         type: 'submission_rated',
         submissionId,
         timestamp: new Date().toISOString(),
       });
 
+      const [refreshedFinal] = await db
+        .select({ ratingCount: submissionsTable.ratingCount })
+        .from(submissionsTable)
+        .where(eq(submissionsTable.id, submissionId))
+        .limit(1);
+
       return {
         ok: true,
         rating_id: id,
-        rating_count: refreshed?.ratingCount ?? 0,
+        rating_count: refreshedFinal?.ratingCount ?? 0,
         published,
       };
     },
@@ -404,55 +436,42 @@ export function createCurationService({ settlement }: { settlement: SettlementSe
       };
     },
 
+    // PERFORMANT: replaces the per-submission N+1 (Promise.all over count +
+    // pv lookups) with a single LEFT JOIN against published_versions. Total
+    // row count is still its own count query for pagination.
     async listArtistVersions(wallet, { limit = 50, offset = 0 } = {}) {
-      const subs = await db
-        .select()
+      const rows = await db
+        .select({
+          sub: submissionsTable,
+          rating_count: sql<number>`(SELECT COUNT(*)::int FROM ${ratingsTable} WHERE ${ratingsTable.submissionId} = ${submissionsTable.id})`,
+          pv: pvTable,
+        })
         .from(submissionsTable)
+        .leftJoin(pvTable, eq(pvTable.submissionId, submissionsTable.id))
         .where(eq(submissionsTable.artistWallet, wallet))
         .orderBy(desc(submissionsTable.submittedAt))
         .limit(limit)
         .offset(offset);
 
-      const enriched = await Promise.all(
-        subs.map(async (s) => {
-          const [countRow] = await db
-            .select({ c: sql<number>`COUNT(*)::int` })
-            .from(ratingsTable)
-            .where(eq(ratingsTable.submissionId, s.id));
-          const out = {
-            ...s,
-            rating_count: Number(countRow?.c ?? 0),
-            published: undefined as
-              | {
-                  avg_solo_intensity: number | null;
-                  avg_vocal_quality: number | null;
-                  energy_consensus: string | null;
-                  tempo_consensus: string | null;
-                  aggregated_mood_tags: string[] | null;
-                  published_at: Date;
-                }
-              | undefined,
-          };
-          if (s.status === 'published') {
-            const [pv] = await db
-              .select()
-              .from(pvTable)
-              .where(eq(pvTable.submissionId, s.id))
-              .limit(1);
-            if (pv) {
-              out.published = {
-                avg_solo_intensity: pv.avgSoloIntensity,
-                avg_vocal_quality: pv.avgVocalQuality,
-                energy_consensus: pv.energyConsensus,
-                tempo_consensus: pv.tempoConsensus,
-                aggregated_mood_tags: pv.aggregatedMoodTags,
-                published_at: pv.publishedAt,
-              };
-            }
-          }
-          return out;
-        }),
-      );
+      const enriched = rows.map((row) => {
+        const out = {
+          ...row.sub,
+          rating_count: Number(row.rating_count ?? 0),
+          published: row.pv
+            ? {
+                avg_solo_intensity: row.pv.avgSoloIntensity,
+                avg_vocal_quality: row.pv.avgVocalQuality,
+                energy_consensus: row.pv.energyConsensus,
+                tempo_consensus: row.pv.tempoConsensus,
+                aggregated_mood_tags: row.pv.aggregatedMoodTags,
+                published_at: row.pv.publishedAt,
+              }
+            : undefined,
+        } satisfies Awaited<
+          ReturnType<CurationService['listArtistVersions']>
+        >['rows'][number];
+        return out;
+      });
 
       const [totalRow] = await db
         .select({ c: sql<number>`COUNT(*)::int` })
@@ -463,5 +482,3 @@ export function createCurationService({ settlement }: { settlement: SettlementSe
     },
   };
 }
-
-

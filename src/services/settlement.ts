@@ -113,6 +113,19 @@ export function buildLegs({
 
 export type LegRow = typeof legsTable.$inferSelect;
 
+/**
+ * MODULAR: single source of truth for the expected leg count given a
+ * number of distinct curators. `buildLegs` always emits
+ * `curatorCount` curator legs + 1 platform leg + 1 musicbrainz leg,
+ * so the expected total is `curatorCount + 2`. Any caller that needs
+ * to validate `insertLegsAtomic` output (publish.ts guard, splitFee
+ * minimum-count check) must use this helper rather than re-deriving
+ * the formula, so the +2 invariant can't drift between call sites.
+ */
+export function expectedLegCountFor(curatorCount: number): number {
+  return curatorCount + 2;
+}
+
 export interface SettleLegResult {
   leg_id: string;
   status: string;
@@ -156,7 +169,11 @@ export interface SettlementService {
   settleLegsAsync: (legIds: string[]) => Promise<SettleLegResult[]>;
   splitFee: (submissionId: string) => Promise<
     | { ok: true; legs: LegRow[]; settle_results: SettleLegResult[] }
-    | { ok: false; error: string }
+    | {
+        ok: false;
+        error: string;
+        code: 'submission_not_found' | 'submission_not_published' | 'publish_legs_incomplete';
+      }
   >;
   getLegsForSubmission: (submissionId: string) => Promise<LegRow[]>;
   sumSettledFor: (wallet: string) => Promise<number>;
@@ -196,17 +213,40 @@ export function createSettlementService({
         musicbrainzWallet,
       });
       if (legs.length === 0) return [];
-      await db.insert(legsTable).values(
-        legs.map((l) => ({
-          id: l.id,
-          submissionId: l.submission_id,
-          recipientWallet: l.recipient_wallet,
-          recipientRole: l.recipient_role,
-          amountUsdc: l.amount_usdc,
-          status: l.status,
-        })),
-      );
-      return legs;
+      // MODULAR: onConflictDoNothing turns the uq_legs_submission_wallet_role
+      // unique constraint into a graceful no-op for duplicate (submission,
+      // wallet, role) tuples. The DB is the source of truth: any row that
+      // already exists (orphan from a prior failed publish) is left
+      // untouched. We then re-query to return the authoritative full set
+      // of legs so downstream settlement can process them all.
+      await db
+        .insert(legsTable)
+        .values(
+          legs.map((l) => ({
+            id: l.id,
+            submissionId: l.submission_id,
+            recipientWallet: l.recipient_wallet,
+            recipientRole: l.recipient_role,
+            amountUsdc: l.amount_usdc,
+            status: l.status,
+          })),
+        )
+        .onConflictDoNothing({
+          target: [legsTable.submissionId, legsTable.recipientWallet, legsTable.recipientRole],
+        });
+      const existing = await db
+        .select()
+        .from(legsTable)
+        .where(eq(legsTable.submissionId, submissionId));
+      return existing.map((row) => ({
+        id: row.id,
+        submission_id: row.submissionId,
+        recipient_wallet: row.recipientWallet,
+        recipient_role: row.recipientRole as RecipientRole,
+        amount_usdc: row.amountUsdc,
+        status: row.status as SettlementStatus,
+        created_at: row.createdAt.toISOString(),
+      }));
     },
 
     /**
@@ -263,9 +303,19 @@ export function createSettlementService({
         .from(submissionsTable)
         .where(eq(submissionsTable.id, submissionId))
         .limit(1);
-      if (!sub) return { ok: false as const, error: 'Submission not found' };
+      if (!sub) {
+        return {
+          ok: false as const,
+          error: 'Submission not found',
+          code: 'submission_not_found' as const,
+        };
+      }
       if (sub.status !== 'published') {
-        return { ok: false as const, error: `Cannot settle submission in status ${sub.status}` };
+        return {
+          ok: false as const,
+          error: `Cannot settle submission in status ${sub.status}`,
+          code: 'submission_not_published' as const,
+        };
       }
       const distinctCurators = await db
         .select({
@@ -283,6 +333,21 @@ export function createSettlementService({
         curatorWallets,
         musicbrainzWallet: sub.artistWallet,
       });
+      // MODULAR: minimum-count check before settling. splitFee is not
+      // wrapped in a transactional(), so we return an error rather than
+      // throw. This protects the settlement budget from processing a
+      // partial split if the uq_legs_submission_wallet_role constraint
+      // ever silently rejects some rows. The structured `code` field
+      // matches the publish-path error contract so callers can detect
+      // this specific failure uniformly.
+      const expectedLegCount = expectedLegCountFor(curatorWallets.length);
+      if (legs.length < expectedLegCount) {
+        return {
+          ok: false as const,
+          error: `Leg insert incomplete: expected ${expectedLegCount}, got ${legs.length}`,
+          code: 'publish_legs_incomplete' as const,
+        };
+      }
       const settleResults = await this.settleLegsAsync(legs.map((l) => l.id));
       const finalLegs = await this.getLegsForSubmission(submissionId);
       return { ok: true as const, legs: finalLegs, settle_results: settleResults };

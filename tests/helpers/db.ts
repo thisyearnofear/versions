@@ -117,6 +117,11 @@ CREATE TABLE IF NOT EXISTS settlement_legs (
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+-- MODULAR: defense against double-publish races. If a previous publish's
+-- leg compensations failed to clean up the rows, the next publish's
+-- insertLegsAtomic will hit this unique constraint instead of creating
+-- duplicate legs for the same (submission, wallet, role) tuple.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_legs_submission_wallet_role ON settlement_legs(submission_id, recipient_wallet, recipient_role);
 CREATE INDEX IF NOT EXISTS idx_settlement_submission ON settlement_legs(submission_id);
 CREATE INDEX IF NOT EXISTS idx_settlement_recipient ON settlement_legs(recipient_wallet);
 
@@ -172,6 +177,7 @@ CREATE TABLE IF NOT EXISTS ar_play_events (
   artist_payout_usdc TEXT NOT NULL,
   listener_tx_hash TEXT,
   artist_tx_hash TEXT,
+  play_type TEXT NOT NULL DEFAULT 'paid',
   status TEXT NOT NULL DEFAULT 'pending',
   played_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -195,6 +201,29 @@ CREATE TABLE IF NOT EXISTS listen_events (
 CREATE INDEX IF NOT EXISTS idx_listen_events_version ON listen_events(version_id);
 CREATE INDEX IF NOT EXISTS idx_listen_events_listener ON listen_events(listener_wallet);
 CREATE INDEX IF NOT EXISTS idx_listen_events_status ON listen_events(status, started_at);
+
+CREATE TABLE IF NOT EXISTS listener_profiles (
+  wallet TEXT PRIMARY KEY,
+  reputation_score INTEGER NOT NULL DEFAULT 0,
+  free_plays_used_today INTEGER NOT NULL DEFAULT 0,
+  free_plays_daily_limit INTEGER NOT NULL DEFAULT 10,
+  last_free_play_reset TIMESTAMP NOT NULL DEFAULT NOW(),
+  total_plays INTEGER NOT NULL DEFAULT 0,
+  total_paid_plays INTEGER NOT NULL DEFAULT 0,
+  total_free_plays INTEGER NOT NULL DEFAULT 0,
+  distinct_tracks_played INTEGER NOT NULL DEFAULT 0,
+  last_played_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_listener_profiles_reputation ON listener_profiles(reputation_score);
+
+CREATE TABLE IF NOT EXISTS listener_badges (
+  id TEXT PRIMARY KEY,
+  wallet TEXT NOT NULL REFERENCES listener_profiles(wallet),
+  badge_type TEXT NOT NULL,
+  awarded_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_listener_badges_wallet ON listener_badges(wallet);
 `;
 
 export async function initTestDb(): Promise<ReturnType<typeof drizzle<typeof schema>>> {

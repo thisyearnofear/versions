@@ -123,6 +123,15 @@ export const settlementLegs = pgTable('settlement_legs', {
   status: text('status').notNull().default('pending'), // pending|settled|failed
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
+  // MODULAR: defense against double-publish races. If a previous publish
+  // failed mid-way and the leg compensations couldn't clean up the rows,
+  // the next publish's insertLegsAtomic will hit this constraint instead
+  // of silently creating duplicate legs. Includes recipient_role in the
+  // key because the same wallet can legitimately appear in multiple
+  // roles (e.g. artistWallet is both the 'musicbrainz' recipient AND
+  // falls back as the 'platform' recipient when no platform wallet is
+  // configured).
+  unique('uq_legs_submission_wallet_role').on(table.submissionId, table.recipientWallet, table.recipientRole),
   index('idx_settlement_submission').on(table.submissionId),
   index('idx_settlement_recipient').on(table.recipientWallet),
 ]);

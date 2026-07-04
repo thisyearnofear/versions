@@ -15,7 +15,7 @@ import {
   placementBriefs as briefsTable,
   publishedVersions as pvTable,
 } from '../lib/schema';
-import { publishSubmission } from './publish';
+import { publishSubmission, PublishLegIncompleteError } from './publish';
 import type { LlmAdapter } from '../adapters/llm';
 import type { SettlementService } from './settlement';
 import type { AgentName } from '../lib/types';
@@ -216,66 +216,91 @@ export function createAgentService({
       const reviews: AgentReviewSummary[] = [];
       let brief: ParsedReview['placement_brief'] | null = null;
 
-      for (let i = 0; i < AGENT_NAMES.length; i++) {
-        const agentName = AGENT_NAMES[i];
-        const wallet = agentWallets[i];
+      // PERF: Insert all claims in parallel first (fast, independent DB writes)
+      await Promise.all(
+        agentWallets.map((wallet) =>
+          db
+            .insert(claimsTable)
+            .values({
+              id: randomUUID(),
+              submissionId,
+              curatorWallet: wallet,
+              expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+            })
+            .onConflictDoNothing(),
+        ),
+      );
 
-        const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
-        await db
-          .insert(claimsTable)
-          .values({
-            id: randomUUID(),
-            submissionId,
-            curatorWallet: wallet,
-            expiresAt,
-          })
-          .onConflictDoNothing();
+      // PERF: Run all 3 LLM calls in parallel — this is the main latency bottleneck
+      const llmResults = await Promise.all(
+        AGENT_NAMES.map((agentName, i) =>
+          llm
+            .complete({
+              system: SYSTEM_PROMPTS[agentName],
+              user: buildUserPrompt({
+                title: sub.title,
+                artist_name: sub.artistName,
+                version_type: sub.versionType,
+                genre: sub.genre,
+                mood: sub.artistMood,
+                description: sub.description,
+                audio_duration_seconds: sub.audioDurationSeconds,
+                musicbrainz_id: sub.musicbrainzId,
+              }),
+              agentName,
+              genre: sub.genre || 'rock',
+              versionType: sub.versionType || 'live',
+            })
+            .then((result) => ({ agentName, wallet: agentWallets[i], result })),
+        ),
+      );
 
-        const result = await llm.complete({
-          system: SYSTEM_PROMPTS[agentName],
-          user: buildUserPrompt({
-            title: sub.title,
-            artist_name: sub.artistName,
-            version_type: sub.versionType,
-            genre: sub.genre,
-            mood: sub.artistMood,
-            description: sub.description,
-            audio_duration_seconds: sub.audioDurationSeconds,
-            musicbrainz_id: sub.musicbrainzId,
-          }),
-          agentName,
-          genre: sub.genre || 'rock',
-          versionType: sub.versionType || 'live',
-        });
+      // Parse all results
+  const agentResults: Array<{
+    agentName: AgentName;
+    wallet: string;
+    parsed: ParsedReview;
+    mock: boolean;
+    rawText: string;
+  }> = [];
 
-        let parsed: ParsedReview | null = result.parsed || parseAgentResponse(result.text, agentName);
+      for (const { agentName, wallet, result } of llmResults) {
+        let parsed: ParsedReview | null =
+          result.parsed || parseAgentResponse(result.text, agentName);
         if (!parsed) {
           console.warn(`[agents] ${agentName} returned unparseable response, using fallback`);
           const fallback =
             llm.mock === true
               ? null
               : (llm as unknown as { MOCK_TEMPLATES?: Record<AgentName, { getReview: (g: string, v: string) => ParsedReview }> })
-                  .MOCK_TEMPLATES?.[agentName]?.getReview(sub.genre || 'rock', sub.versionType || 'live') ?? null;
+                  .MOCK_TEMPLATES?.[agentName]?.getReview(
+                    sub.genre || 'rock',
+                    sub.versionType || 'live',
+                  ) ?? null;
           if (!fallback) continue;
           parsed = fallback;
         }
+    agentResults.push({ agentName, wallet, parsed, mock: result.mock, rawText: result.text });
+  }
 
-        const reviewId = randomUUID();
-        const ratingId = randomUUID();
+  // Batch-insert all agent reviews and ratings sequentially (fast — local DB writes)
+  for (const { agentName, wallet, parsed, mock, rawText } of agentResults) {
+    const reviewId = randomUUID();
+    const ratingId = randomUUID();
 
-        await db.insert(agentReviewsTable).values({
-          id: reviewId,
-          submissionId,
-          agentName,
-          curatorWallet: wallet,
-          soloIntensity: parsed.solo_intensity,
-          vocalQuality: parsed.vocal_quality,
-          energyVsStudio: parsed.energy_vs_studio,
-          tempoFeel: parsed.tempo_feel,
-          moodTags: parsed.mood_tags,
-          notes: parsed.notes,
-          rawResponse: result.text,
-        });
+    await db.insert(agentReviewsTable).values({
+      id: reviewId,
+      submissionId,
+      agentName,
+      curatorWallet: wallet,
+      soloIntensity: parsed.solo_intensity,
+      vocalQuality: parsed.vocal_quality,
+      energyVsStudio: parsed.energy_vs_studio,
+      tempoFeel: parsed.tempo_feel,
+      moodTags: parsed.mood_tags,
+      notes: parsed.notes,
+      rawResponse: rawText,
+    });
 
         await db
           .insert(ratingsTable)
@@ -291,24 +316,6 @@ export function createAgentService({
             notes: parsed.notes,
           })
           .onConflictDoNothing();
-
-        await db
-          .update(submissionsTable)
-          .set({ ratingCount: sql`${submissionsTable.ratingCount} + 1` })
-          .where(eq(submissionsTable.id, submissionId));
-
-        reviews.push({
-          id: reviewId,
-          agent_name: agentName,
-          curator_wallet: wallet,
-          solo_intensity: parsed.solo_intensity,
-          vocal_quality: parsed.vocal_quality,
-          energy_vs_studio: parsed.energy_vs_studio,
-          tempo_feel: parsed.tempo_feel,
-          mood_tags: parsed.mood_tags,
-          notes: parsed.notes,
-          mock: result.mock,
-        });
 
         if (agentName === 'market' && parsed.placement_brief) {
           const pb = parsed.placement_brief;
@@ -341,7 +348,26 @@ export function createAgentService({
             audience_summary: pb.audience_summary || '',
           };
         }
+
+        reviews.push({
+          id: reviewId,
+          agent_name: agentName,
+          curator_wallet: wallet,
+          solo_intensity: parsed.solo_intensity,
+          vocal_quality: parsed.vocal_quality,
+          energy_vs_studio: parsed.energy_vs_studio,
+          tempo_feel: parsed.tempo_feel,
+          mood_tags: parsed.mood_tags,
+          notes: parsed.notes,
+          mock,
+        });
       }
+
+      // Set rating count atomically to the actual number of successful reviews
+      await db
+        .update(submissionsTable)
+        .set({ ratingCount: agentResults.length })
+        .where(eq(submissionsTable.id, submissionId));
 
       const [refreshed] = await db
         .select({ ratingCount: submissionsTable.ratingCount })
@@ -351,7 +377,23 @@ export function createAgentService({
 
       let published: PublishedSummary | null = null;
       if ((refreshed?.ratingCount ?? 0) >= PUBLISH_THRESHOLD) {
-        const publishResult = await publishSubmission(submissionId, settlement);
+        let publishResult;
+        try {
+          publishResult = await publishSubmission(submissionId, settlement);
+        } catch (err) {
+          // MODULAR: catch the named error so the caller gets a clean
+          // { ok: false, error } response instead of an unhandled
+          // exception. The agent reviews and ratings are already
+          // persisted (we don't roll them back); the curator can retry.
+          if (err instanceof PublishLegIncompleteError) {
+            return {
+              ok: false as const,
+              error: `Publish failed: missing settlement legs — ${err.message}`,
+              code: err.code,
+            };
+          }
+          throw err;
+        }
         if (!publishResult.alreadyPublished) {
           const settleResults = await settlement.settleLegsAsync(publishResult.legIds);
           const { settlementLegs: legsTable } = await import('../lib/schema');
