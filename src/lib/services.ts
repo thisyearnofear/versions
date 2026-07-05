@@ -11,6 +11,7 @@
 import type { NextRequest } from 'next/server';
 import path from 'node:path';
 import { createArcAdapter, type ArcAdapter } from '../adapters/arc';
+import { createGatewayAdapter, type GatewayAdapter } from '../adapters/gateway';
 import { createLlmAdapter, type LlmAdapter } from '../adapters/llm';
 import { createSubmissionsService, type SubmissionsService } from '../services/submissions';
 import { createSettlementService, type SettlementService } from '../services/settlement';
@@ -39,6 +40,7 @@ function deterministicAgentWallet(label: string, slice: number): string {
 
 export interface ServiceRegistry {
   arc: ArcAdapter;
+  gateway: GatewayAdapter;
   submissions: SubmissionsService;
   settlement: SettlementService;
   curation: CurationService;
@@ -57,6 +59,7 @@ export interface ServiceRegistry {
     llmModel: string;
     arcMock: boolean;
     llmMock: boolean;
+    gatewayMock: boolean;
     uploadDir: string;
     ipfsConfigured: boolean;
   };
@@ -86,6 +89,19 @@ function build(): ServiceRegistry {
     platformWallet: platformWallet || undefined,
   });
 
+  // MODULAR: Circle Gateway for sub-cent USDC nanopayments. Mock-first
+  // (same pattern as the arc adapter): when GATEWAY_API_URL is missing
+  // the adapter returns deterministic mock responses so the x402 tip
+  // route and TipButton work without credentials. Setting GATEWAY_API_URL
+  // + GATEWAY_API_KEY in env switches to real batched settlement.
+  const gateway = createGatewayAdapter({
+    apiUrl: process.env.GATEWAY_API_URL || undefined,
+    apiKey: process.env.GATEWAY_API_KEY || undefined,
+    network: 'arc-testnet',
+    usdcContract: arcUsdcContract || undefined,
+    batchIntervalMs: Number(process.env.GATEWAY_BATCH_INTERVAL_MS) || 500,
+  });
+
   const submissions = createSubmissionsService({ arc, platformWallet: platformWallet ?? undefined });
   const settlement = createSettlementService({ arc: arc as ArcAdapter, platformWallet: platformWallet ?? undefined });
   const curation = createCurationService({ settlement });
@@ -110,6 +126,7 @@ function build(): ServiceRegistry {
 
   return {
     arc,
+    gateway,
     submissions,
     settlement,
     curation,
@@ -128,6 +145,7 @@ function build(): ServiceRegistry {
       llmModel,
       arcMock: !arcRpcUrl,
       llmMock: !llmApiKey,
+      gatewayMock: !process.env.GATEWAY_API_URL,
       uploadDir,
       ipfsConfigured: ipfs.isConfigured(),
     },

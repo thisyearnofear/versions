@@ -224,6 +224,29 @@ CREATE TABLE IF NOT EXISTS listener_badges (
   awarded_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_listener_badges_wallet ON listener_badges(wallet);
+
+CREATE TABLE IF NOT EXISTS x402_proofs (
+  id TEXT PRIMARY KEY,
+  puid TEXT NOT NULL UNIQUE,
+  resource_url TEXT NOT NULL,
+  scheme TEXT NOT NULL,
+  network TEXT NOT NULL,
+  asset TEXT NOT NULL,
+  pay_to TEXT NOT NULL,
+  amount_micro_usdc TEXT NOT NULL,
+  valid_until TIMESTAMP NOT NULL,
+  tipper_wallet TEXT NOT NULL,
+  artist_wallet TEXT NOT NULL,
+  message TEXT,
+  signature TEXT NOT NULL,
+  tx_hash TEXT,
+  status TEXT NOT NULL DEFAULT 'verified',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  settled_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_x402_proofs_tipper ON x402_proofs(tipper_wallet);
+CREATE INDEX IF NOT EXISTS idx_x402_proofs_artist ON x402_proofs(artist_wallet);
+CREATE INDEX IF NOT EXISTS idx_x402_proofs_status ON x402_proofs(status, created_at);
 `;
 
 export async function initTestDb(): Promise<ReturnType<typeof drizzle<typeof schema>>> {

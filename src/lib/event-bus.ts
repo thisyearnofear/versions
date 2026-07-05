@@ -8,7 +8,8 @@ export type EventName =
   | 'feed-update'
   | 'queue-update'
   | 'submission-created'
-  | 'playlist-update';
+  | 'playlist-update'
+  | 'tip-received';
 
 export interface FeedUpdateEvent {
   type: 'published';
@@ -35,11 +36,26 @@ export interface PlaylistUpdateEvent {
   timestamp: string;
 }
 
+// MODULAR: emitted by the x402 tip route when a tip proof is verified
+// and submitted to the Gateway. Subscribers (artist dashboards, SSE
+// stream, /feed) can react in real time to show the tip notification.
+export interface TipReceivedEvent {
+  type: 'verified';
+  puid: string;
+  tipperWallet: string;
+  artistWallet: string;
+  amountMicroUsdc: string;
+  txHash: string | null;
+  mock: boolean;
+  timestamp: string;
+}
+
 export type BusEvent =
   | FeedUpdateEvent
   | QueueUpdateEvent
   | SubmissionCreatedEvent
-  | PlaylistUpdateEvent;
+  | PlaylistUpdateEvent
+  | TipReceivedEvent;
 
 type Handler = (data: BusEvent) => void;
 

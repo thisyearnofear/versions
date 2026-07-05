@@ -25,6 +25,7 @@ import {
 import { energyToNumber, tempoToNumber } from "@/lib/snap";
 import { cn } from "@/lib/utils";
 import { EarningsHistoryTable, ROLE_LABELS } from "@/components/earnings/EarningsHistoryTable";
+import { TipButton } from "@/components/wallet/TipButton";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -289,6 +290,16 @@ export function ArtistDashboard({ wallet }: { wallet: string }) {
             <code className="font-mono text-[11px] text-[var(--color-ink-2)] bg-[var(--color-paper-2)] px-2 py-1 border border-[var(--color-hair-strong)]">
               {wallet.slice(0, 6)}…{wallet.slice(-4)}
             </code>
+            {/* MODULAR: sub-cent USDC nanopayment tip surface (x402 +
+                Circle Gateway). Sits next to the wallet address on
+                the Overview tab so the artist is one click from
+                receiving a lepton-scale tip. */}
+            <div className="mt-4 max-w-[360px]">
+              <TipButton
+                artistWallet={wallet}
+                artistName={data.profile.recent_published[0]?.artistName ?? data.profile.recent_submissions[0]?.artistName}
+              />
+            </div>
           </div>
           <div className="flex gap-6 md:gap-10">
             <StatBlock label="Submissions" value={submissionCount} />

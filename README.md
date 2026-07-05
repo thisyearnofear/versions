@@ -179,6 +179,69 @@ partial-publish state. Key invariants:
   difference against the expected keys) so stale rows are traceable
   for cleanup.
 
+## Nanopayments (x402 + Circle Gateway)
+
+The artist dashboard exposes a **Tip** button that lets a listener send a
+sub-cent USDC nanopayment to any artist on Arc. The flow uses the
+[x402 protocol](https://docs.x402.org) with **Circle Gateway** as the
+batched settlement layer:
+
+1. **Client → Server (no payment proof):** `POST /api/x402/tip` with
+   `{artistWallet, amountUsdc}`. The route returns **HTTP 402** with a
+   `PAYMENT-REQUIRED` header (Base64 JSON) containing the EIP-712
+   challenge — the offer the client must sign.
+2. **Client signs the offer** with `useSignTypedData` from wagmi. The
+   challenge carries the actual Arc `chainId` (not hardcoded to 1) so
+   the wallet signs on its current chain.
+3. **Client → Server (with payment proof):** Retry the same `POST` with
+   a `PAYMENT-SIGNATURE` header (Base64 JSON `{scheme, signature,
+   offer}`). The server:
+   - decodes and re-validates the challenge (same `payTo`, `amount`,
+     `puid`, `validUntil`)
+   - recovers the tipper wallet from the EIP-712 signature
+   - persists the proof to `x402_proofs` (replay-protected by a
+     unique index on `puid`)
+   - submits the tip to **Circle Gateway** (`POST {GATEWAY_API_URL}/v1/tips`)
+   - emits a `tip-received` event on the bus for real-time dashboards
+
+### Amounts and the lepton primitive
+
+USDC has 6 decimals. The smallest unit — **1 lepton** = `$0.000001` =
+`1` micro-USDC — is the floor of the Gateway. Presets on the TipButton:
+
+- **1 lepton** (`$0.000001`) — literally the smallest settleable unit
+- **1¢** (`$0.01`) = 10,000 leptons
+- **5¢** (`$0.05`) = 50,000 leptons
+- **25¢** (`$0.25`) = 250,000 leptons
+- **Custom** — any decimal string, per-tip cap is `$1.00`
+
+### Environment variables
+
+```
+GATEWAY_API_URL=https://gateway.circle.com   # optional; mock mode if absent
+GATEWAY_API_KEY=...                         # optional; Bearer token
+GATEWAY_BATCH_INTERVAL_MS=500               # hint for the batcher
+```
+
+The Gateway adapter is **mock-first** (same pattern as the arc
+adapter): with no `GATEWAY_API_URL` set, `submitTip` returns a
+deterministic hash and tags the response with `mock: true` so the
+demo and tests are reproducible.
+
+### Files
+
+- `src/lib/x402.ts` — EIP-712 domain/types, `verifyProof`, `offerMatches`,
+  `parseAmountToMicroUsdc`, `formatMicroUsdc`, base64 header codecs
+- `src/adapters/gateway.ts` — mock-first Gateway client (`submitTip`,
+  `getInfo`, `getTipStatus`)
+- `src/app/api/x402/tip/route.ts` — the two-shot route
+- `src/components/wallet/TipButton.tsx` — the client UI
+- `src/lib/format.ts` — `fmtLeptons` (sub-cent formatter)
+- `src/lib/event-bus.ts` — `'tip-received'` event
+- `src/lib/schema.ts` — `x402_proofs` table
+- `tests/unit/x402.test.ts` — verifyProof with a real viem test wallet,
+  Gateway mock, route 402/200/401/409
+
 ## Known issues
 
 1. **Turbopack `workStore` invariant** — see "Why `--experimental-build-mode compile`" above.

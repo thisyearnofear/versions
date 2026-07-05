@@ -26,6 +26,11 @@ const envSchema = z.object({
   PINATA_SECRET_KEY: z.string().optional(),
   IPFS_GATEWAY: z.string().default('https://gateway.pinata.cloud'),
 
+  // Circle Gateway (x402 nanopayments)
+  GATEWAY_API_URL: z.string().url().optional(),
+  GATEWAY_API_KEY: z.string().optional(),
+  GATEWAY_BATCH_INTERVAL_MS: z.coerce.number().int().positive().default(500),
+
   // Server tunables
   JSON_BODY_LIMIT: z.string().default('256kb'),
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(12000),

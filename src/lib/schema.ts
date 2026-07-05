@@ -258,3 +258,34 @@ export const listenerBadges = pgTable('listener_badges', {
 }, (table) => [
   index('idx_listener_badges_wallet').on(table.wallet),
 ]);
+
+// ── x402 Proofs (idempotency for nanopayment tips) ─────
+// MODULAR: each verified x402 tip writes a row here so the same signed
+// payload can't be replayed (puid is unique). This is the durable
+// replacement for an in-memory Set, which is unreliable on serverless
+// runtimes where a single Lambda instance can be recycled between
+// the 402 challenge and the signed retry.
+
+export const x402Proofs = pgTable('x402_proofs', {
+  id: text('id').primaryKey(),
+  puid: text('puid').notNull().unique(),
+  resourceUrl: text('resource_url').notNull(),
+  scheme: text('scheme').notNull(),
+  network: text('network').notNull(),
+  asset: text('asset').notNull(),
+  payTo: text('pay_to').notNull(),
+  amountMicroUsdc: text('amount_micro_usdc').notNull(),
+  validUntil: timestamp('valid_until').notNull(),
+  tipperWallet: text('tipper_wallet').notNull(),
+  artistWallet: text('artist_wallet').notNull(),
+  message: text('message'),
+  signature: text('signature').notNull(),
+  txHash: text('tx_hash'),
+  status: text('status').notNull().default('verified'), // verified|settled|failed
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  settledAt: timestamp('settled_at'),
+}, (table) => [
+  index('idx_x402_proofs_tipper').on(table.tipperWallet),
+  index('idx_x402_proofs_artist').on(table.artistWallet),
+  index('idx_x402_proofs_status').on(table.status, table.createdAt),
+]);
