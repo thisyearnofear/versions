@@ -10,6 +10,28 @@ import type {
   RecipientRole,
 } from "./types";
 
+// MODULAR: every api-client field that carries user-curator mood
+// tags arrives in one of two wire shapes -- a JSON-stringified
+// string array OR a Drizzle jsonb round-tripped JS array. The
+// four-arm union (string | string[] | null | undefined) covers
+// both possible values AND explicit unset at the type level.
+// Use this as the declared type on every mood-tag-shaped
+// envelope field, then route through `parseMoodTags(raw)` in
+// @/lib/format before reaching for `.length` / `.map` / passing
+// to `deriveValence` -- unpadded accesses fail typecheck by
+// design so a future contributor cannot silently drop the
+// valence / chip signal on the wrong shape again (the same bug
+// pattern AgentMonitor, CuratorDashboard and DiscoverView
+// escaped in prior rounds).
+//
+// Convention: OUTER-OPTIONAL fields declare as `?: MoodTagsEnvelope`
+// (the `?` adds `| undefined` twice -- harmless, mirrors the repo
+// style); INNER fields inside an outer-optional block declare as
+// `: MoodTagsEnvelope` so "field missing" (entire `published?`
+// or empty `recent_ratings[]`) stays distinct from "value is
+// undefined" on a present field.
+export type MoodTagsEnvelope = string | string[] | null | undefined;
+
 export class ApiError extends Error {
   code: string;
   status: number;
@@ -118,7 +140,7 @@ export interface AgentReviewRecord {
   submission_id: string;
   agent_name: AgentName;
   notes?: string | null;
-  mood_tags?: string[];
+  mood_tags?: MoodTagsEnvelope;
   solo_intensity: number;
   vocal_quality: number;
   energy_vs_studio: "lower" | "same" | "higher";
@@ -141,7 +163,7 @@ export interface FeedRow {
   energy_consensus?: string | null;
   tempo_consensus?: string | null;
   rating_count: number;
-  aggregated_mood_tags?: string | null;
+  aggregated_mood_tags?: MoodTagsEnvelope;
   published_at?: string | null;
 }
 
@@ -181,7 +203,7 @@ export interface ArtistVersionsResponse {
       avg_vocal_quality: number | null;
       energy_consensus: string | null;
       tempo_consensus: string | null;
-      aggregated_mood_tags: string[] | null;
+      aggregated_mood_tags: MoodTagsEnvelope;
     };
   }>;
   total: number;
@@ -270,7 +292,7 @@ export interface CuratorProfileResponse {
     vocalQuality: number;
     energyVsStudio: string;
     tempoFeel: string;
-    moodTags: string[];
+    moodTags: MoodTagsEnvelope;
     notes: string | null;
     submittedAt: string;
     title: string | null;
@@ -308,7 +330,7 @@ export interface ArtistProfileResponse {
     avgVocalQuality: number | null;
     energyConsensus: string | null;
     tempoConsensus: string | null;
-    aggregatedMoodTags: string[] | null;
+    aggregatedMoodTags: MoodTagsEnvelope;
     ratingCount: number;
     publishedAt: Date;
   }>;
