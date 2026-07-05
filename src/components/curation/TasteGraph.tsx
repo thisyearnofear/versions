@@ -11,6 +11,7 @@
 // time in the backend — see lib/snap.ts).
 
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 export type TasteAxis = "solo" | "vocal" | "energy" | "tempo";
 
@@ -85,13 +86,17 @@ export function TasteGraphMini({ values, size = 120, className }: TasteGraphMini
             />
           );
         })}
-        <polygon
+        <motion.polygon
           data-tg-polygon="1"
           points={valuePoints}
           fill="rgba(200,74,31,0.18)"
           stroke="var(--color-rust, #c84a1f)"
           strokeWidth={1.5}
           strokeLinejoin="round"
+          initial={{ scale: 0.55, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
+          style={{ transformOrigin: "50% 50%", transformBox: "fill-box" }}
         />
         {MINI_AXES.map((a) => {
           const [x, y] = point(a, valueAt(a.id));

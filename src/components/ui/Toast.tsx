@@ -5,6 +5,7 @@
 // and self-dismiss after `durationMs`.
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 export type ToastType = "info" | "success" | "error" | "warning";
@@ -61,30 +62,30 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         className="fixed bottom-6 right-6 z-[100] flex flex-col-reverse gap-0 max-w-[360px] pointer-events-none"
         aria-live="polite"
       >
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            role="status"
-            className={cn(
-              "pointer-events-auto font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-3 mb-1",
-              "bg-[var(--color-ink)] text-[var(--color-paper)] border-l-[3px]",
-              t.type === "success" && "border-l-[#2d6a2d]",
-              t.type === "error" && "border-l-[#b00020]",
-              t.type === "warning" && "border-l-[var(--color-rust)]",
-              t.type === "info" && "border-l-[var(--color-rust)]",
-              "animate-[toastIn_0.18s_ease-out]",
-            )}
-          >
-            {t.message}
-          </div>
-        ))}
+        <AnimatePresence initial={false}>
+          {toasts.map((t) => (
+            <motion.div
+              key={t.id}
+              role="status"
+              initial={{ y: '110%', scale: 0.95, opacity: 0 }}
+              animate={{ y: 0, scale: 1, opacity: 1 }}
+              exit={{ y: '110%', scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
+              className={cn(
+                "pointer-events-auto font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-3 mb-1",
+                "bg-[var(--color-ink)] text-[var(--color-paper)] border-l-[3px]",
+                t.type === "success" && "border-l-[#2d6a2d]",
+                t.type === "error" && "border-l-[#b00020]",
+                t.type === "warning" && "border-l-[var(--color-rust)]",
+                t.type === "info" && "border-l-[var(--color-rust)]",
+              )}
+            >
+              {t.message}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
-      <style jsx global>{`
-        @keyframes toastIn {
-          from { transform: translateY(8px); opacity: 0; }
-          to   { transform: translateY(0);   opacity: 1; }
-        }
-      `}</style>
+
     </ToastContext.Provider>
   );
 }

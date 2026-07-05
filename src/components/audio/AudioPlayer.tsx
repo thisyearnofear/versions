@@ -77,7 +77,7 @@ export function AudioPlayer({
         type="button"
         onClick={toggle}
         aria-label={`Play ${title}`}
-        className="grid place-items-center w-9 h-9 rounded-full bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-rust)] transition-colors font-mono text-sm flex-shrink-0"
+        className="grid place-items-center w-9 h-9 rounded-full bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-rust)] transition-[transform,colors] duration-150 ease-out active:scale-[0.97] font-mono text-sm flex-shrink-0"
       >
         {playing ? "❚❚" : "▶"}
       </button>

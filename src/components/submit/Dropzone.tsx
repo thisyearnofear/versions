@@ -8,6 +8,7 @@
 // cover (useCoverFromAudio).
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { generateCoverSvg } from "@/components/cover/useCoverFromAudio";
 import { fmtSize, fmtDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -158,47 +159,63 @@ export function Dropzone({
           className="sr-only"
         />
 
-        {fileName ? (
-          <div className="flex flex-col items-center gap-4">
-            <div className="font-serif text-base font-medium text-[var(--color-ink)]">
-              {fileName}
-            </div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
-              {fileSize !== null && fmtSize(fileSize)}
-              {duration !== null && ` · ${fmtDuration(duration)}`}
-              {duration === null && fileSize !== null && " · …"}
-            </div>
-            {coverLoading && (
-              <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]">
-                Building cover…
-              </div>
-            )}
-            {coverSvg && (
-              <div
-                className="w-24 h-24 border border-[var(--color-rust)]"
-                dangerouslySetInnerHTML={{ __html: coverSvg }}
-              />
-            )}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                reset();
-              }}
-              className="font-mono text-[10px] uppercase tracking-[0.18em] border border-[var(--color-ink)] px-3 py-2 hover:bg-[var(--color-ink)] hover:text-[var(--color-paper)] transition-colors"
+        <AnimatePresence mode="wait" initial={false}>
+          {fileName ? (
+            <motion.div
+              key="file"
+              initial={{ opacity: 0, scale: 0.98, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, scale: 0.98, filter: 'blur(4px)' }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              className="flex flex-col items-center gap-4"
             >
-              Remove
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2">
-            <div className="font-serif text-2xl">{label}</div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
-              {hint}
-            </div>
-          </div>
-        )}
+              <div className="font-serif text-base font-medium text-[var(--color-ink)]">
+                {fileName}
+              </div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+                {fileSize !== null && fmtSize(fileSize)}
+                {duration !== null && ` · ${fmtDuration(duration)}`}
+                {duration === null && fileSize !== null && " · …"}
+              </div>
+              {coverLoading && (
+                <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]">
+                  Building cover…
+                </div>
+              )}
+              {coverSvg && (
+                <div
+                  className="w-24 h-24 border border-[var(--color-rust)]"
+                  dangerouslySetInnerHTML={{ __html: coverSvg }}
+                />
+              )}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  reset();
+                }}
+                className="font-mono text-[10px] uppercase tracking-[0.18em] border border-[var(--color-ink)] px-3 py-2 hover:bg-[var(--color-ink)] hover:text-[var(--color-paper)] transition-[transform,colors] duration-150 ease-out active:scale-[0.97]"
+              >
+                Remove
+              </button>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="idle"
+              initial={{ opacity: 0, scale: 0.98, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, scale: 0.98, filter: 'blur(4px)' }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              className="flex flex-col items-center gap-2"
+            >
+              <div className="font-serif text-2xl">{label}</div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+                {hint}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

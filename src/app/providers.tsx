@@ -8,6 +8,7 @@ import { SessionProvider } from "next-auth/react";
 import { wagmiConfig } from "@/lib/wagmi";
 import { ToastProvider } from "@/components/ui/Toast";
 import "@rainbow-me/rainbowkit/styles.css";
+import { MotionConfig } from "framer-motion";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -35,7 +36,7 @@ export function Providers({ children }: { children: ReactNode }) {
             })}
             modalSize="compact"
           >
-            <ToastProvider>{children}</ToastProvider>
+            <MotionConfig reducedMotion="user"><ToastProvider>{children}</ToastProvider></MotionConfig>
           </RainbowKitProvider>
         </QueryClientProvider>
       </WagmiProvider>

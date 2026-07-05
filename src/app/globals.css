@@ -60,3 +60,19 @@ body {
   animation: skeleton-pulse 1.6s ease-in-out infinite;
   background: var(--color-ink);
 }
+
+/* ── Accessibility: honor prefers-reduced-motion ──── */
+/* MotionConfig in providers.tsx handles framer-motion components;
+   this rule covers the rest (Tailwind transition-* utilities,
+   .skel keyframe pulse, AudioPlayer's animate-wave) so users
+   with reduced-motion enabled in their OS get a fully calm UI. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

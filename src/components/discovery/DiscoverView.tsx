@@ -6,6 +6,7 @@
 // /api/v1/ar/play endpoint to settle the $0.0005 USDC payment.
 
 import { useCallback, useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { useToast } from "@/components/ui/Toast";
@@ -197,11 +198,14 @@ function PlaylistCard({
         </p>
       )}
       <ul className="border-t border-[var(--color-hair)]">
-        {(playlist.tracks ?? []).map((t) => {
+        {(playlist.tracks ?? []).map((t, i) => {
           const audioUrl = `/api/v1/uploads/${t.audio_path?.split("/").pop() ?? ""}`;
           return (
-            <li
+            <motion.li
               key={t.submission_id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1], delay: Math.min(i * 0.08, 0.6) }}
               className="flex flex-wrap items-center justify-between gap-3 py-3 border-b border-[var(--color-hair)]"
             >
               <div className="flex-1 min-w-0">
@@ -216,7 +220,7 @@ function PlaylistCard({
                 onClick={() => void onPlay(t.submission_id)}
                 disabled={payingId === t.submission_id}
                 className={cn(
-                  "font-mono text-[10px] uppercase tracking-[0.1em] border px-2.5 py-1.5 transition-colors",
+                  "font-mono text-[10px] uppercase tracking-[0.1em] border px-2.5 py-1.5 transition-[transform,colors] duration-150 ease-out active:scale-[0.97]",
                   payingId === t.submission_id
                     ? "border-[var(--color-hair-strong)] text-[var(--color-ink-3)] cursor-wait"
                     : freePlay
@@ -235,7 +239,7 @@ function PlaylistCard({
                     ? "Played ✓"
                     : "→ Play"}
               </button>
-            </li>
+            </motion.li>
           );
         })}
       </ul>

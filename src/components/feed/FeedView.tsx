@@ -14,6 +14,7 @@ import { energyToNumber, tempoToNumber } from "@/lib/snap";
 import { escapeHtml } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import DOMPurify from "dompurify";
+import { motion } from "framer-motion";
 
 // Sanitize SVG/HTML with DOMPurify — allow only safe SVG tags and attributes.
 function sanitize(unsafe: string): string {
@@ -249,8 +250,8 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
         </div>
       ) : (
         <ul className="flex flex-col">
-          {rows.map((v) => (
-            <FeedRowItem key={v.submission_id} row={v} />
+          {rows.map((v, i) => (
+            <FeedRowItem key={v.submission_id} row={v} animationDelay={Math.min(i * 0.08, 0.6)} />
           ))}
         </ul>
       )}
@@ -301,7 +302,7 @@ function FeedSkeleton({ count = 5 }: { count?: number }) {
   );
 }
 
-function FeedRowItem({ row }: { row: FeedRow }) {
+function FeedRowItem({ row, animationDelay = 0 }: { row: FeedRow; animationDelay?: number }) {
   const tags = useMemo(() => {
     try {
       return JSON.parse(row.aggregated_mood_tags || "[]") as string[];
@@ -319,7 +320,12 @@ function FeedRowItem({ row }: { row: FeedRow }) {
     .join("");
 
   return (
-    <li className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 md:gap-8 py-8 border-t border-[var(--color-hair)] last:border-b">
+    <motion.li
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1], delay: animationDelay }}
+      className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 md:gap-8 py-8 border-t border-[var(--color-hair)] last:border-b"
+    >
       <div className="min-w-0">
         <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mb-2 pb-2 border-b border-[var(--color-hair)]">
           Edition No <span className="text-[var(--color-ink)] font-medium">{edition}</span> · Pressed{" "}
@@ -360,6 +366,6 @@ function FeedRowItem({ row }: { row: FeedRow }) {
           }}
         />
       </div>
-    </li>
+    </motion.li>
   );
 }

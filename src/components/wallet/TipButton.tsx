@@ -245,9 +245,9 @@ export function TipButton({ artistWallet, artistName, variant = 'inline', onSett
             disabled={busy}
             onClick={() => void sendTip(p.amountUsdc)}
             className={cn(
-              'font-mono text-[11px] uppercase tracking-[0.14em] px-3 py-1.5 border',
-              'border-[var(--color-ink)] hover:bg-[var(--color-ink)] hover:text-[var(--color-paper)]',
-              'disabled:opacity-40 disabled:cursor-not-allowed transition-colors',
+            'font-mono text-[11px] uppercase tracking-[0.14em] px-3 py-1.5 border',
+            'border-[var(--color-ink)] hover:bg-[var(--color-ink)] hover:text-[var(--color-paper)]',
+            'disabled:opacity-40 disabled:cursor-not-allowed transition-[transform,colors] duration-150 ease-out active:scale-[0.97]',
             )}
             title={`${p.leptonCount} leptons ($${p.amountUsdc} USDC)`}
           >
@@ -276,7 +276,7 @@ export function TipButton({ artistWallet, artistName, variant = 'inline', onSett
               type="button"
               disabled={busy}
               onClick={handleCustom}
-              className="font-mono text-[11px] uppercase tracking-[0.14em] px-2 py-1 border border-[var(--color-rust)] text-[var(--color-rust)] hover:bg-[var(--color-rust)] hover:text-[var(--color-paper)]"
+              className="font-mono text-[11px] uppercase tracking-[0.14em] px-2 py-1 border border-[var(--color-rust)] text-[var(--color-rust)] hover:bg-[var(--color-rust)] hover:text-[var(--color-paper)] transition-[transform,colors] duration-150 ease-out active:scale-[0.97]"
             >
               Go
             </button>
