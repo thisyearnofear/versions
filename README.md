@@ -25,7 +25,7 @@ npm install
 npm run dev      # next dev .
 npm run build    # next build . --experimental-build-mode compile
 npm start        # next start .
-npm test         # vitest (124 tests)
+npm test         # vitest (142 tests)
 npm run db:push  # drizzle-kit push
 npm run db:studio
 ```
@@ -88,7 +88,8 @@ src/
 ├── app/                      # App Router
 │   ├── api/                  # Route handlers
 │   │   ├── v1/               # Versioned API surface
-│   │   └── events/           # SSE endpoint
+│   │   ├── events/           # SSE endpoint
+│   │   └── x402/             # nanopayment tip route (x402 + Circle Gateway)
 │   ├── agents/               # Agent monitor dashboard
 │   ├── discover/             # A&R playlists page
 │   ├── feed/                 # Published feed page
@@ -118,6 +119,7 @@ src/
 │   └── taste-graph.ts        # Rating aggregation
 ├── adapters/
 │   ├── arc.ts                # Arc blockchain adapter
+│   ├── gateway.ts            # Circle Gateway adapter (x402 nanopayments)
 │   └── llm.ts                # LLM adapter (agent reviews)
 ├── lib/
 │   ├── api-client.ts         # Typed fetch client
@@ -134,7 +136,8 @@ src/
 │   ├── types.ts              # Shared TS types
 │   ├── utils.ts              # escapeHtml, cn, etc.
 │   ├── validation.ts         # Zod rating validation
-│   └── wagmi.ts              # Wagmi config
+│   ├── wagmi.ts              # Wagmi config
+│   └── x402.ts               # EIP-712 challenge + verify for nanopayment tips
 ```
 
 ## Migration notes
