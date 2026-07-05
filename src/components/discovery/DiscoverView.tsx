@@ -12,6 +12,7 @@ import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { useToast } from "@/components/ui/Toast";
 import { apiClient, type Playlist, type ListenerBadgeResponse } from "@/lib/api-client";
+import { parseMoodTags } from "@/lib/format";
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
 import { cn } from "@/lib/utils";
@@ -203,25 +204,13 @@ function PlaylistCard({
       <ul className="border-t border-[var(--color-hair)]">
         {(playlist.tracks ?? []).map((t, i) => {
           const audioUrl = `/api/v1/uploads/${t.audio_path?.split("/").pop() ?? ""}`;
-          // MODULAR: aggregated_mood_tags is a JSON-stringified
-          // string in the row envelope -- parse it on every render
-          // and feed the array to deriveValence. The parse tolerates
-          // both shapes (the wire format is a string; Drizzle's
-          // jsonb round-trip hands back a JS array) so render never
-          // dies on a malformed row. The cost is trivial (one JSON
-          // parse per track, ~10 short strings) and wrapping in
-          // useMemo would itself violate the Rules of Hooks since
-          // the .map body is a loop.
-          const tagsArr: string[] = (() => {
-            try {
-              const raw = t.aggregated_mood_tags;
-              if (Array.isArray(raw)) return raw as string[];
-              if (typeof raw === "string") return JSON.parse(raw) as string[];
-              return [];
-            } catch {
-              return [];
-            }
-          })();
+          // MODULAR: parseMoodTags (lib/format) handles BOTH wire shapes
+          // (the api-client declares `string | null`; Drizzle's jsonb
+          // round-trip sometimes hands back a JS array) and falls back
+          // to [] on malformed input. Shared with FeedView so the
+          // envelope has one source of truth. Per-row call -- not
+          // wrapped in useMemo because the .map body is a loop.
+          const tagsArr = parseMoodTags(t.aggregated_mood_tags);
           const valence = deriveValence(tagsArr);
           return (
             <motion.li

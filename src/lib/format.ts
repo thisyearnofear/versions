@@ -6,6 +6,33 @@ export function fmtSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/**
+ * MODULAR: normalize the `aggregated_mood_tags` envelope to a
+ * `string[]`. The api-client declares the field as `string | null`
+ * (a JSON-stringified array envelope) but Drizzle's jsonb column
+ * sometimes returns a real JS array on select -- so consumers
+ * (FeedView, DiscoverView, ArtistDashboard) need to be tolerant of
+ * BOTH wire shapes during the same render path. Pure function, no
+ * react hook concerns. Returns `[]` for null / undefined / malformed
+ * input so callers can pass `deriveValence(parseMoodTags(raw))` and
+ * always receive a `string[]`. Always returns a fresh array (`.slice()`
+ * on the array branch) so callers can mutate the result without
+ * mutating the source row.
+ */
+export function parseMoodTags(raw: unknown): string[] {
+  if (Array.isArray(raw)) return (raw as unknown[]).slice() as string[];
+  if (typeof raw === "string" && raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as string[];
+      return [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export function fmtDuration(seconds: number | null | undefined): string | null {
   if (seconds == null || !Number.isFinite(seconds)) return null;
   const s = Math.round(seconds);

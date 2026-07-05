@@ -25,6 +25,7 @@ import {
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
 import { cn } from "@/lib/utils";
+import { parseMoodTags } from "@/lib/format";
 import { EarningsHistoryTable, ROLE_LABELS } from "@/components/earnings/EarningsHistoryTable";
 import { TipButton } from "@/components/wallet/TipButton";
 
@@ -64,8 +65,14 @@ function PublishedRowRadar({
   published: PublishedData;
   size?: number;
 }) {
-  const tags = published.aggregated_mood_tags;
-  const valence = useMemo(() => deriveValence(tags ?? []), [tags]);
+  // MODULAR: parseMoodTags returns the same string[] shape used
+  // by FeedView and DiscoverView -- safe for both wire formats
+  // (JSON-string envelope vs Drizzle's jsonb-typed round-trip).
+  // deriveValence then receives a guaranteed string[].
+  const valence = useMemo(
+    () => deriveValence(parseMoodTags(published.aggregated_mood_tags)),
+    [published.aggregated_mood_tags],
+  );
   return (
     <TasteGraphMini
       values={{
@@ -450,7 +457,7 @@ function OverviewTab({
           <ul className="flex flex-col">
             {versions.slice(0, 5).map((v) => {
               const edition = v.id.replace(/-/g, "").slice(0, 4).toUpperCase();
-              const valence = deriveValence(v.published.aggregated_mood_tags ?? []);
+              const valence = deriveValence(parseMoodTags(v.published.aggregated_mood_tags));
               return (
                 <li
                   key={v.id}
@@ -573,7 +580,7 @@ function VersionsTab({
             const audioUrl = `/api/v1/uploads/${v.audioPath?.split("/").pop() ?? ""}`;
             const statusClass = statusColors[v.status] ?? "text-[var(--color-ink-2)]";
             const valence = v.published
-              ? deriveValence(v.published.aggregated_mood_tags ?? [])
+              ? deriveValence(parseMoodTags(v.published.aggregated_mood_tags))
               : null;
             return (
               <li
@@ -724,12 +731,11 @@ function PlacementsTab({
           const reviews = reviewCache[v.id] ?? [];
           const isExpanded = expandedBrief === v.id;
           const loading = isExpanded && brief === undefined;
-          // MODULAR: placements row valence is derived client-side
-          // from the same aggregated_mood_tags polarises the radar.
-          // Inline call -- no hook, deriveValence is pure (~10 tag
-          // comparisons). The radar sub-component memoizes its own
-          // copy for the visual.
-          const valence = deriveValence(v.published.aggregated_mood_tags ?? []);
+          // MODULAR: parseMoodTags normalises the wire-format
+          // (JSON-string envelope vs Drizzle's jsonb array) into a
+          // guaranteed string[] before deriveValence walks it. Pure
+          // function -- no hook needed per row.
+          const valence = deriveValence(parseMoodTags(v.published.aggregated_mood_tags));
 
           return (
             <li

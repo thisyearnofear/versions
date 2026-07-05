@@ -10,6 +10,7 @@ import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { useToast } from "@/components/ui/Toast";
 import { apiClient, type FeedRow } from "@/lib/api-client";
+import { parseMoodTags } from "@/lib/format";
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
 import { escapeHtml } from "@/lib/utils";
@@ -304,13 +305,7 @@ function FeedSkeleton({ count = 5 }: { count?: number }) {
 }
 
 function FeedRowItem({ row, animationDelay = 0 }: { row: FeedRow; animationDelay?: number }) {
-  const tags = useMemo(() => {
-    try {
-      return JSON.parse(row.aggregated_mood_tags || "[]") as string[];
-    } catch {
-      return [];
-    }
-  }, [row.aggregated_mood_tags]);
+  const tags = useMemo(() => parseMoodTags(row.aggregated_mood_tags), [row.aggregated_mood_tags]);
 
   // MODULAR: valence is derived deterministically from the
   // aggregated_mood_tags the server already ships on every FeedRow.
