@@ -21,10 +21,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     // boundary. The curation service also asserts the shape on
     // insert; calling it here too means a third-party client that
     // sends `rating.mood_tags` as a JSON-string fails the route
-    // with a clear post-mortem (the error message names `mood_tags`)
-    // before the service is even invoked. Throws TypeError; the
-    // try/catch below returns 500 INTERNAL.
-    assertMoodTagsShape(rating.mood_tags, 'mood_tags');
+    // with a clear 400 INVALID_MOOD_TAGS response (the error
+    // message names `mood_tags` for the post-mortem) before the
+    // service is even invoked.
+    //
+    // Symmetric pattern: any future route that calls
+    // `assertMoodTagsShape` should follow the same try/catch so
+    // a malformed body becomes 400 INVALID_MOOD_TAGS rather than
+    // 500 INTERNAL. The client can then distinguish "bad body"
+    // from "server error" without parsing the error message.
+    try {
+      assertMoodTagsShape(rating.mood_tags, 'mood_tags');
+    } catch (err) {
+      return errorResponse(rid, 400, 'INVALID_MOOD_TAGS', (err as Error).message);
+    }
     const r = await services().curation.submitRating({ submissionId, curatorWallet, signature, rating });
     if (!r.ok) {
       const status = r.error === 'Submission not found' ? 404 : 400;
