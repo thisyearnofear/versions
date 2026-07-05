@@ -11,7 +11,7 @@
 // time in the backend — see lib/snap.ts).
 
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 export type TasteAxis = "solo" | "vocal" | "energy" | "tempo";
 
@@ -41,6 +41,7 @@ export function TasteGraphMini({ values, size = 120, className }: TasteGraphMini
   const cx = size / 2;
   const cy = size / 2;
   const r = (size / 2) - 14;
+  const reduce = useReducedMotion();
 
   const valueAt = (axisId: TasteAxis): number => {
     const v = Number(values[axisId]) || 0;
@@ -86,35 +87,72 @@ export function TasteGraphMini({ values, size = 120, className }: TasteGraphMini
             />
           );
         })}
-        <motion.polygon
-          data-tg-polygon="1"
-          points={valuePoints}
-          fill="rgba(200,74,31,0.18)"
-          stroke="var(--color-rust, #c84a1f)"
-          strokeWidth={1.5}
-          strokeLinejoin="round"
-          initial={{ scale: 0.55, opacity: 0 }}
+        {/* MODULAR: taste radar wakes up analog-style via outer motion.g
+            (scale 0.55 -> 1 + opacity 0 -> 1, 0.5s easeOutQuint) and
+            then breathes perpetually via inner motion.polygon scale
+            pulse 1 -> 1.04 -> 0.96 -> 1.02 -> 1 over 3.2s easeInOut,
+            starting AND ending at 1 so the repeat-Infinity loop
+            boundary is invisible. The 4 axis handles inherit the
+            wake-up from the g (transform via SVG inheritance) but
+            stay static after -- they ride without ringing. Both
+            transform-box: fill-box lines anchor transform-origin to
+            each element's own bounding box. Reduced-motion users
+            (useReducedMotion) collapse the outer initial to match
+            animate so the wake-up tween is skipped entirely; inner
+            pulse is naturally static via the global MotionConfig. */}
+        <motion.g
+          initial={
+            reduce
+              ? { scale: 1, opacity: 1 }
+              : { scale: 0.55, opacity: 0 }
+          }
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
           style={{ transformOrigin: "50% 50%", transformBox: "fill-box" }}
-        />
-        {MINI_AXES.map((a) => {
-          const [x, y] = point(a, valueAt(a.id));
-          return (
-            <circle
-              key={`handle-${a.id}`}
-              data-tg-axis={a.id}
-              cx={x.toFixed(1)}
-              cy={y.toFixed(1)}
-              r={2}
-              fill="var(--color-rust, #c84a1f)"
-            />
-          );
-        })}
-        {MINI_AXES.map((a) => {
+        >
+          <motion.polygon
+            data-tg-polygon="1"
+            points={valuePoints}
+            fill="rgba(200,74,31,0.18)"
+            stroke="var(--color-rust, #c84a1f)"
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+            animate={{
+              scale: [1, 1.07, 0.93, 1.04, 1],
+            }}
+            transition={{
+              duration: 2.0,
+              ease: "easeInOut",
+              repeat: Infinity,
+              repeatType: "loop",
+              times: [0, 0.25, 0.5, 0.75, 1],
+            }}
+            style={{ transformOrigin: "50% 50%", transformBox: "fill-box" }}
+          />
+          {MINI_AXES.map((a) => {
+            const [x, y] = point(a, valueAt(a.id));
+            return (
+              <circle
+                key={`handle-${a.id}`}
+                data-tg-axis={a.id}
+                cx={x.toFixed(1)}
+                cy={y.toFixed(1)}
+                r={2}
+                fill="var(--color-rust, #c84a1f)"
+              />
+            );
+          })}
+        </motion.g>
+        {/* MODULAR: 4 axis labels wake up staggered 80ms apart, mirroring
+            the AudioPlayer 5-phase stagger pattern applied to the 4
+            actual axes (the TasteAxis type is solo/vocal/energy/tempo).
+            Each label fades from opacity 0 -> 0.7 (matching the static
+            fill alpha). Reduced-motion users collapse initial to match
+            animate so labels appear at full alpha from first paint. */}
+        {MINI_AXES.map((a, i) => {
           const [x, y] = point(a, 1.18);
           return (
-            <text
+            <motion.text
               key={`label-${a.id}`}
               x={x.toFixed(1)}
               y={y.toFixed(1)}
@@ -124,9 +162,16 @@ export function TasteGraphMini({ values, size = 120, className }: TasteGraphMini
               fontSize={8}
               letterSpacing="0.1em"
               fill="rgba(26,26,26,0.7)"
+              initial={{ opacity: reduce ? 1 : 0 }}
+              animate={{ opacity: 1 }}
+              transition={{
+                duration: 0.32,
+                delay: i * 0.08,
+                ease: [0.22, 1, 0.36, 1],
+              }}
             >
               {a.label.toUpperCase()}
-            </text>
+            </motion.text>
           );
         })}
       </svg>
