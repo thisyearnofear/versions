@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { apiClient, type AgentReviewRecord, type QueueSubmission } from "@/lib/api-client";
+import { parseMoodTags } from "@/lib/format";
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
 import type { Valence } from "@/lib/types";
@@ -203,13 +204,15 @@ function AgentReviewCard({
   review: AgentReviewRecord;
   meta: { icon: string; label: string; color: string };
 }) {
-  const moodTags = useMemo(() => {
-    try {
-      return Array.isArray(review.mood_tags) ? review.mood_tags : [];
-    } catch {
-      return [];
-    }
-  }, [review.mood_tags]);
+  // MODULAR: parseMoodTags (lib/format) handles BOTH wire shapes
+  // the api-client envelope can land as -- a JSON-stringified
+  // string OR a Drizzle jsonb round-tripped JS array. The
+  // previous inline Array.isArray short-circuit returned [] for
+  // the string-shape branch, so the valence ScoreRow AND radar
+  // landed at neutral even when the LLM had surfaced bright/dark
+  // tags. Routed through the helper via the shared parser used
+  // by FeedView/DiscoverView/ArtistDashboard.
+  const moodTags = useMemo(() => parseMoodTags(review.mood_tags), [review.mood_tags]);
 
   // MODULAR: valence per review is derived once and reused for both
   // the radar signal (via snap.ts canonical 2/5/8) and the Title Case
