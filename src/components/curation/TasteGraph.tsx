@@ -1,32 +1,40 @@
 "use client";
 
 // MODULAR: Read-only taste-graph radar mini. Used by the feed and
-// agent monitor to show the four-axis polygon (SOLO, VOCAL, ENERGY,
-// TEMPO) for a single set of values. The interactive draggable
+// agent monitor to show the five-axis polygon (SOLO, VOCAL, ENERGY,
+// TEMPO, VALENCE) for a single set of values. The interactive draggable
 // version was removed when the human curator flow was deprecated.
 //
-// Geometry: 4 axes at the cardinal directions so the polygon reads
-// as a compass. Each axis gets a 90° slice to itself. Energy and
-// tempo values are 0–10 continuous on the radar (snapped at submit
-// time in the backend — see lib/snap.ts).
+// Geometry: 5 axes at 72° intervals (360° / 5) starting at the top
+// (-π/2) so the polygon reads as a compass. Each axis gets a 72°
+// slice to itself. The five positions walk clockwise from top:
+// SOLO (top), VOCAL (upper-right), ENERGY (lower-right), TEMPO
+// (lower-left), VALENCE (upper-left). Energy, tempo, and valence
+// values are 0–10 continuous on the radar (snapped at submit time
+// in the backend -- see lib/snap.ts). Valence defaults to 5
+// (neutral) when the host provides no polarity data.
 
 import { cn } from "@/lib/utils";
 import { motion, useReducedMotion } from "framer-motion";
 
-export type TasteAxis = "solo" | "vocal" | "energy" | "tempo";
+export type TasteAxis = "solo" | "vocal" | "energy" | "tempo" | "valence";
 
 export interface TasteValues {
   solo: number;
   vocal: number;
   energy: number;
   tempo: number;
+  valence: number;
 }
+
+const TWO_PI_FIFTHS = (2 * Math.PI) / 5;
 
 const MINI_AXES = [
   { id: "solo", label: "Solo", angle: -Math.PI / 2 },
-  { id: "vocal", label: "Vocal", angle: 0 },
-  { id: "energy", label: "Energy", angle: Math.PI / 2 },
-  { id: "tempo", label: "Tempo", angle: Math.PI },
+  { id: "vocal", label: "Vocal", angle: -Math.PI / 2 + TWO_PI_FIFTHS },
+  { id: "energy", label: "Energy", angle: -Math.PI / 2 + 2 * TWO_PI_FIFTHS },
+  { id: "tempo", label: "Tempo", angle: -Math.PI / 2 + 3 * TWO_PI_FIFTHS },
+  { id: "valence", label: "Valence", angle: -Math.PI / 2 + 4 * TWO_PI_FIFTHS },
 ] as const;
 
 const RING_FRACTIONS = [0.25, 0.5, 0.75, 1] as const;
@@ -87,19 +95,19 @@ export function TasteGraphMini({ values, size = 120, className }: TasteGraphMini
             />
           );
         })}
-        {/* MODULAR: taste radar wakes up analog-style via outer motion.g
-            (scale 0.55 -> 1 + opacity 0 -> 1, 0.5s easeOutQuint) and
-            then breathes perpetually via inner motion.polygon scale
-            pulse 1 -> 1.04 -> 0.96 -> 1.02 -> 1 over 3.2s easeInOut,
-            starting AND ending at 1 so the repeat-Infinity loop
-            boundary is invisible. The 4 axis handles inherit the
-            wake-up from the g (transform via SVG inheritance) but
-            stay static after -- they ride without ringing. Both
-            transform-box: fill-box lines anchor transform-origin to
-            each element's own bounding box. Reduced-motion users
-            (useReducedMotion) collapse the outer initial to match
-            animate so the wake-up tween is skipped entirely; inner
-            pulse is naturally static via the global MotionConfig. */}
+        {    /* MODULAR: taste radar wakes up analog-style via outer motion.g
+        (scale 0.55 -> 1 + opacity 0 -> 1, 0.5s easeOutQuint) and
+        then breathes perpetually via inner motion.polygon scale
+        pulse 1 -> 1.07 -> 0.93 -> 1.04 -> 1 over 2.0s easeInOut,
+        starting AND ending at 1 so the repeat-Infinity loop
+        boundary is invisible. The 5 axis handles inherit the
+        wake-up from the g (transform via SVG inheritance) but
+        stay static after -- they ride without ringing. Both
+        transform-box: fill-box lines anchor transform-origin to
+        each element's own bounding box. Reduced-motion users
+        (useReducedMotion) collapse the outer initial to match
+        animate so the wake-up tween is skipped entirely; inner
+        pulse is naturally static via the global MotionConfig. */}
         <motion.g
           initial={
             reduce
@@ -143,14 +151,21 @@ export function TasteGraphMini({ values, size = 120, className }: TasteGraphMini
             );
           })}
         </motion.g>
-        {/* MODULAR: 4 axis labels wake up staggered 80ms apart, mirroring
-            the AudioPlayer 5-phase stagger pattern applied to the 4
-            actual axes (the TasteAxis type is solo/vocal/energy/tempo).
-            Each label fades from opacity 0 -> 0.7 (matching the static
-            fill alpha). Reduced-motion users collapse initial to match
-            animate so labels appear at full alpha from first paint. */}
+        {/* MODULAR: 5 axis labels wake up staggered 80ms apart across
+            5 phases. The delay is (i % 5) * 0.08 -- the modulo caps
+            the phases at 5 even if MINI_AXES ever grows beyond 5
+            entries, matching the AudioPlayer "5-phase" pattern the
+            user pointed back to. With 5 labels today i is in [0..4]
+            so i % 5 == i, but the modulo is the contract. The 1.22
+            label push-out gives the 72°-spaced labels a small
+            breathing room over the prior 1.18 at 90°. Each label
+            fades from opacity 0 -> 1 so the composite alpha
+            (element opacity * fill alpha 0.7) lands at 0.7,
+            matching the static render. Reduced-motion users
+            collapse initial to match animate so labels appear at
+            full alpha from first paint. */}
         {MINI_AXES.map((a, i) => {
-          const [x, y] = point(a, 1.18);
+          const [x, y] = point(a, 1.22);
           return (
             <motion.text
               key={`label-${a.id}`}
@@ -166,7 +181,7 @@ export function TasteGraphMini({ values, size = 120, className }: TasteGraphMini
               animate={{ opacity: 1 }}
               transition={{
                 duration: 0.32,
-                delay: i * 0.08,
+                delay: (i % 5) * 0.08,
                 ease: [0.22, 1, 0.36, 1],
               }}
             >

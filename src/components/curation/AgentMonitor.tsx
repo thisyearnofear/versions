@@ -10,7 +10,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { apiClient, type AgentReviewRecord, type QueueSubmission } from "@/lib/api-client";
-import { energyToNumber, tempoToNumber } from "@/lib/snap";
+import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
+import { deriveValence } from "@/services/taste-graph";
+import type { Valence } from "@/lib/types";
 import { escapeHtml } from "@/lib/utils";
 import DOMPurify from "dompurify";
 
@@ -32,6 +34,18 @@ const TEMPO_LABELS: Record<string, string> = {
   dragging: "Dragging",
   locked: "Locked",
   rushing: "Rushing",
+};
+
+// MODULAR: per-rating valence display labels (Title Case to match
+// ENERGY_LABELS / TEMPO_LABELS). deriveValence runs against each
+// review's mood_tags rather than the union (the radar renders
+// per-review, not per-submission), so each agent's verdict on the
+// same submission can land in different buckets -- that's by
+// design and reflects honest disagreement between agents.
+const VALENCE_LABELS: Record<Valence, string> = {
+  bright: "Bright",
+  neutral: "Neutral",
+  dark: "Dark",
 };
 
 // ── Component ───────────────────────────────────────────
@@ -197,6 +211,12 @@ function AgentReviewCard({
     }
   }, [review.mood_tags]);
 
+  // MODULAR: valence per review is derived once and reused for both
+  // the radar signal (via snap.ts canonical 2/5/8) and the Title Case
+  // ScoreRow label. Single computation per card keeps the mood_tags
+  // iteration out of both render sites.
+  const valence = useMemo(() => deriveValence(moodTags), [moodTags]);
+
   const tagMarkup = moodTags
     .map((t: string) => `<span class="feed-tag">${escapeHtml(t)}</span>`)
     .join("");
@@ -219,6 +239,7 @@ function AgentReviewCard({
               vocal: review.vocal_quality,
               energy: energyToNumber(review.energy_vs_studio),
               tempo: tempoToNumber(review.tempo_feel),
+              valence: valenceToNumber(valence ?? "neutral"),
             }}
             size={100}
           />
@@ -230,6 +251,7 @@ function AgentReviewCard({
           <ScoreRow label="Vocal" value={`${review.vocal_quality}/10`} />
           <ScoreRow label="Energy" value={ENERGY_LABELS[review.energy_vs_studio] ?? review.energy_vs_studio} />
           <ScoreRow label="Tempo" value={TEMPO_LABELS[review.tempo_feel] ?? review.tempo_feel} />
+          <ScoreRow label="Valence" value={valence ? VALENCE_LABELS[valence] : "Neutral"} />
         </div>
       </div>
 

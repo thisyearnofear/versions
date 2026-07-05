@@ -1,6 +1,7 @@
 export type VersionType = 'demo' | 'live' | 'acoustic' | 'remix' | 'remaster' | 'studio' | 'other';
 export type Energy = 'lower' | 'same' | 'higher';
 export type Tempo = 'dragging' | 'locked' | 'rushing';
+export type Valence = 'bright' | 'neutral' | 'dark';
 export type SubmissionStatus = 'pending_payment' | 'awaiting_curation' | 'in_curation' | 'published' | 'rejected';
 export type SettlementStatus = 'pending' | 'settled' | 'failed';
 export type AgentName = 'production' | 'performance' | 'market';

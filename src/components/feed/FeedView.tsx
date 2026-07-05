@@ -10,7 +10,8 @@ import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { useToast } from "@/components/ui/Toast";
 import { apiClient, type FeedRow } from "@/lib/api-client";
-import { energyToNumber, tempoToNumber } from "@/lib/snap";
+import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
+import { deriveValence } from "@/services/taste-graph";
 import { escapeHtml } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import DOMPurify from "dompurify";
@@ -311,6 +312,14 @@ function FeedRowItem({ row, animationDelay = 0 }: { row: FeedRow; animationDelay
     }
   }, [row.aggregated_mood_tags]);
 
+  // MODULAR: valence is derived deterministically from the
+  // aggregated_mood_tags the server already ships on every FeedRow.
+  // Hoisted once per row so the meta pill and the radar share the
+  // same label without iterating the tags twice -- and so the
+  // radial position reads through the canonical 2/5/8 in snap.ts
+  // rather than a duplicate table.
+  const valence = useMemo(() => deriveValence(tags), [tags]);
+
   const edition = (row.submission_id || "").replace(/-/g, "").slice(0, 4).toUpperCase();
   const pressed = (row.published_at || "").slice(0, 10);
   const audioUrl = `/api/v1/uploads/${row.audio_path?.split("/").pop() ?? ""}`;
@@ -340,7 +349,7 @@ function FeedRowItem({ row, animationDelay = 0 }: { row: FeedRow; animationDelay
         <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mt-1">
           solo {(row.avg_solo_intensity ?? 0).toFixed(1)} · vocal{" "}
           {(row.avg_vocal_quality ?? 0).toFixed(1)} · {row.energy_consensus ?? "-"} ·{" "}
-          {row.tempo_consensus ?? "-"} · {row.rating_count} ratings{" "}
+          {row.tempo_consensus ?? "-"} · {valence ?? "-"} · {row.rating_count} ratings{" "}
           <span className="text-[var(--color-rust)]">· AI agents</span>
         </div>
         {tags.length > 0 && (
@@ -363,6 +372,7 @@ function FeedRowItem({ row, animationDelay = 0 }: { row: FeedRow; animationDelay
             vocal: row.avg_vocal_quality ?? 0,
             energy: energyToNumber(row.energy_consensus ?? "same"),
             tempo: tempoToNumber(row.tempo_consensus ?? "locked"),
+            valence: valenceToNumber(valence ?? "neutral"),
           }}
         />
       </div>
