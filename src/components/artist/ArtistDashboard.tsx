@@ -8,7 +8,7 @@
 // The connected wallet is shown at the top; if the viewed wallet
 // matches the connected wallet the user sees "Your Dashboard".
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
@@ -22,7 +22,8 @@ import {
   type BriefResponse,
   type AgentReviewRecord,
 } from "@/lib/api-client";
-import { energyToNumber, tempoToNumber } from "@/lib/snap";
+import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
+import { deriveValence } from "@/services/taste-graph";
 import { cn } from "@/lib/utils";
 import { EarningsHistoryTable, ROLE_LABELS } from "@/components/earnings/EarningsHistoryTable";
 import { TipButton } from "@/components/wallet/TipButton";
@@ -37,8 +38,47 @@ interface DashboardData {
 
 type DashboardTab = "overview" | "versions" | "earnings" | "placements";
 
-// Helper: extract published versions from ArtistVersionsResponse rows
-type PublishedVersionRow = ArtistVersionsResponse["rows"][number] & { status: "published" } & NonNullable<ArtistVersionsResponse["rows"][number]["published"]>;
+// MODULAR: each `published_versions` row shape from the API.
+// Omit + explicit NonNullable<published> guarantees `published`
+// is REQUIRED on this row type, so the `PublishedRowRadar` block
+// can read `published.aggregated_mood_tags` without the optional
+// chain or a runtime null check at every call site. The filter
+// in ArtistDashboard().publishedVersions keeps the guard at the
+// row source instead.
+type PublishedData = NonNullable<ArtistVersionsResponse["rows"][number]["published"]>;
+type PublishedVersionRow = Omit<ArtistVersionsResponse["rows"][number], "published"> & {
+  published: PublishedData;
+};
+
+// MODULAR: per-row 5-axis radar block. The hook lives INSIDE this
+// component, so each .map() call site simply does
+// `<PublishedRowRadar published={v.published} />` -- React Hooks
+// is satisfied because the hook has a single, stable call site
+// per concrete subcomponent instance. The pre-narrowed PublishedData
+// prop means the aggregated_mood_tags default-to-[] coercion is
+// the only spot that has to defend against a missing field.
+function PublishedRowRadar({
+  published,
+  size = 80,
+}: {
+  published: PublishedData;
+  size?: number;
+}) {
+  const tags = published.aggregated_mood_tags;
+  const valence = useMemo(() => deriveValence(tags ?? []), [tags]);
+  return (
+    <TasteGraphMini
+      values={{
+        solo: published.avg_solo_intensity ?? 0,
+        vocal: published.avg_vocal_quality ?? 0,
+        energy: energyToNumber(published.energy_consensus),
+        tempo: tempoToNumber(published.tempo_consensus),
+        valence: valenceToNumber(valence ?? "neutral"),
+      }}
+      size={size}
+    />
+  );
+}
 
 // ── Labels ─────────────────────────────────────────────
 
@@ -410,6 +450,7 @@ function OverviewTab({
           <ul className="flex flex-col">
             {versions.slice(0, 5).map((v) => {
               const edition = v.id.replace(/-/g, "").slice(0, 4).toUpperCase();
+              const valence = deriveValence(v.published.aggregated_mood_tags ?? []);
               return (
                 <li
                   key={v.id}
@@ -418,20 +459,13 @@ function OverviewTab({
                   <div className="font-serif text-base font-medium">{v.title}</div>
                   <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mt-1">
                     Edition {edition} · {v.versionType} · solo{" "}
-                    {(v.avg_solo_intensity ?? 0).toFixed(1)} · vocal{" "}
-                    {(v.avg_vocal_quality ?? 0).toFixed(1)} ·{" "}
-                    {v.energy_consensus ?? "-"} · {v.tempo_consensus ?? "-"} · {v.ratingCount} ratings
+                    {(v.published.avg_solo_intensity ?? 0).toFixed(1)} · vocal{" "}
+                    {(v.published.avg_vocal_quality ?? 0).toFixed(1)} ·{" "}
+                    {v.published.energy_consensus ?? "-"} · {v.published.tempo_consensus ?? "-"} ·{" "}
+                    {valence ?? "-"} · {v.ratingCount} ratings
                   </div>
                   <div className="flex gap-3 mt-2">
-                    <TasteGraphMini
-                      values={{
-                        solo: v.avg_solo_intensity ?? 0,
-                        vocal: v.avg_vocal_quality ?? 0,
-                        energy: energyToNumber(v.energy_consensus),
-                        tempo: tempoToNumber(v.tempo_consensus),
-                      }}
-                      size={80}
-                    />
+                    <PublishedRowRadar published={v.published} size={80} />
                   </div>
                 </li>
               );
@@ -538,6 +572,9 @@ function VersionsTab({
             const edition = v.id?.replace(/-/g, "").slice(0, 4).toUpperCase() ?? "----";
             const audioUrl = `/api/v1/uploads/${v.audioPath?.split("/").pop() ?? ""}`;
             const statusClass = statusColors[v.status] ?? "text-[var(--color-ink-2)]";
+            const valence = v.published
+              ? deriveValence(v.published.aggregated_mood_tags ?? [])
+              : null;
             return (
               <li
                 key={v.id}
@@ -553,7 +590,8 @@ function VersionsTab({
                       <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mt-1">
                         solo {(v.published.avg_solo_intensity ?? 0).toFixed(1)} · vocal{" "}
                         {(v.published.avg_vocal_quality ?? 0).toFixed(1)} ·{" "}
-                        {v.published.energy_consensus ?? "-"} · {v.published.tempo_consensus ?? "-"}
+                        {v.published.energy_consensus ?? "-"} · {v.published.tempo_consensus ?? "-"} ·{" "}
+                        {valence ?? "-"}
                       </div>
                     )}
                     <div className="font-mono text-[10px] uppercase tracking-[0.12em] mt-2">
@@ -568,15 +606,7 @@ function VersionsTab({
                   </div>
                   {v.published && (
                     <div className="shrink-0">
-                      <TasteGraphMini
-                        values={{
-                          solo: v.published.avg_solo_intensity ?? 0,
-                          vocal: v.published.avg_vocal_quality ?? 0,
-                          energy: energyToNumber(v.published.energy_consensus),
-                          tempo: tempoToNumber(v.published.tempo_consensus),
-                        }}
-                        size={80}
-                      />
+                      <PublishedRowRadar published={v.published} size={80} />
                     </div>
                   )}
                 </div>
@@ -694,6 +724,12 @@ function PlacementsTab({
           const reviews = reviewCache[v.id] ?? [];
           const isExpanded = expandedBrief === v.id;
           const loading = isExpanded && brief === undefined;
+          // MODULAR: placements row valence is derived client-side
+          // from the same aggregated_mood_tags polarises the radar.
+          // Inline call -- no hook, deriveValence is pure (~10 tag
+          // comparisons). The radar sub-component memoizes its own
+          // copy for the visual.
+          const valence = deriveValence(v.published.aggregated_mood_tags ?? []);
 
           return (
             <li
@@ -708,7 +744,7 @@ function PlacementsTab({
                 <div className="min-w-0">
                   <div className="font-serif text-base font-medium">{v.title}</div>
                   <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mt-1">
-                    {v.versionType} · {v.ratingCount} ratings
+                    {v.versionType} · {valence ?? "-"} · {v.ratingCount} ratings
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
@@ -730,6 +766,20 @@ function PlacementsTab({
                   </span>
                 </div>
               </button>
+
+              {/* MODULAR: 5-axis radar strip sits just below the
+                  click-to-expand button so the artist can scan the
+                  taste signal at a glance before deciding to open
+                  the brief. size=60 keeps it slim -- this is a
+                  contextual reminder, not the full Overview/Versions
+                  treatment. */}
+              <div className="px-3 py-2 flex items-center gap-3 border-b border-[var(--color-hair)]">
+                <PublishedRowRadar published={v.published} size={60} />
+                <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]">
+                  solo {(v.published.avg_solo_intensity ?? 0).toFixed(1)} · vocal{" "}
+                  {(v.published.avg_vocal_quality ?? 0).toFixed(1)} · {valence ?? "-"}
+                </div>
+              </div>
 
               {isExpanded && loading && (
                 <div className="px-3 pb-4">

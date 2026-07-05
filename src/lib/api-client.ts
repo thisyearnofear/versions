@@ -175,7 +175,15 @@ export interface EarningsResponse {
 }
 
 export interface ArtistVersionsResponse {
-  rows: Array<SubmissionRecord & { published?: { avg_solo_intensity: number; avg_vocal_quality: number; energy_consensus: string; tempo_consensus: string } }>;
+  rows: Array<SubmissionRecord & {
+    published?: {
+      avg_solo_intensity: number | null;
+      avg_vocal_quality: number | null;
+      energy_consensus: string | null;
+      tempo_consensus: string | null;
+      aggregated_mood_tags: string[] | null;
+    };
+  }>;
   total: number;
 }
 
@@ -285,6 +293,12 @@ export interface ArtistProfileResponse {
     submittedAt: Date;
     publishedAt: Date | null;
   }>;
+  // MODULAR: aggregated_mood_tags is the union of mood_tags across all
+  // ratings of a published version -- the source for the 5th radar
+  // axis (valence) which derives qualitatively from lexical polarity
+  // (see services/taste-graph.ts -> deriveValence). The dashboard
+  // reads it client-side to avoid a DB migration that would persist
+  // valence_consensus alongside energy/tempo_consensus.
   recent_published: Array<{
     submissionId: string;
     title: string;
@@ -294,6 +308,7 @@ export interface ArtistProfileResponse {
     avgVocalQuality: number | null;
     energyConsensus: string | null;
     tempoConsensus: string | null;
+    aggregatedMoodTags: string[] | null;
     ratingCount: number;
     publishedAt: Date;
   }>;
