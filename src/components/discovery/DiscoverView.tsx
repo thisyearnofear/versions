@@ -9,8 +9,11 @@ import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
+import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { useToast } from "@/components/ui/Toast";
 import { apiClient, type Playlist, type ListenerBadgeResponse } from "@/lib/api-client";
+import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
+import { deriveValence } from "@/services/taste-graph";
 import { cn } from "@/lib/utils";
 import { ListenerHub } from "@/components/listener/ListenerHub";
 
@@ -200,6 +203,26 @@ function PlaylistCard({
       <ul className="border-t border-[var(--color-hair)]">
         {(playlist.tracks ?? []).map((t, i) => {
           const audioUrl = `/api/v1/uploads/${t.audio_path?.split("/").pop() ?? ""}`;
+          // MODULAR: aggregated_mood_tags is a JSON-stringified
+          // string in the row envelope -- parse it on every render
+          // and feed the array to deriveValence. The parse tolerates
+          // both shapes (the wire format is a string; Drizzle's
+          // jsonb round-trip hands back a JS array) so render never
+          // dies on a malformed row. The cost is trivial (one JSON
+          // parse per track, ~10 short strings) and wrapping in
+          // useMemo would itself violate the Rules of Hooks since
+          // the .map body is a loop.
+          const tagsArr: string[] = (() => {
+            try {
+              const raw = t.aggregated_mood_tags;
+              if (Array.isArray(raw)) return raw as string[];
+              if (typeof raw === "string") return JSON.parse(raw) as string[];
+              return [];
+            } catch {
+              return [];
+            }
+          })();
+          const valence = deriveValence(tagsArr);
           return (
             <motion.li
               key={t.submission_id}
@@ -212,7 +235,31 @@ function PlaylistCard({
                 <AudioPlayer src={audioUrl} title={t.title} by={t.artist_name} />
                 <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mt-1 ml-12">
                   {t.version_type} · solo {(t.avg_solo_intensity ?? 0).toFixed(1)} · vocal{" "}
-                  {(t.avg_vocal_quality ?? 0).toFixed(1)}
+                  {(t.avg_vocal_quality ?? 0).toFixed(1)} · {valence ?? "-"}
+                </div>
+                {/* MODULAR: 5-axis radar nests inside the meta column --
+                    a thin row below the meta pill text so it sits with
+                    the audio context rather than competing for the row's
+                    horizontal space against the Play button. size=50
+                    keeps the radar in the "signal indicator" register
+                    rather than a primary view; same deriveValence ->
+                    valenceToNumber + energyToNumber + tempoToNumber chain
+                    as FeedView/AgentMonitor/ArtistDashboard -- when
+                    consensus is null, the snap helpers default to
+                    "same"/"locked" (5/5 midpoint) so the polygon lands
+                    on the radial centre rather than collapsing on every
+                    axis. */}
+                <div className="ml-12 mt-2 shrink-0">
+                  <TasteGraphMini
+                    values={{
+                      solo: t.avg_solo_intensity ?? 0,
+                      vocal: t.avg_vocal_quality ?? 0,
+                      energy: energyToNumber(t.energy_consensus),
+                      tempo: tempoToNumber(t.tempo_consensus),
+                      valence: valenceToNumber(valence ?? "neutral"),
+                    }}
+                    size={50}
+                  />
                 </div>
               </div>
               <button
