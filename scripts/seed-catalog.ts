@@ -23,6 +23,7 @@ import {
   arPlaylistTracks as playlistTracksTable,
 } from '../src/lib/schema';
 import { buildLegs } from '../src/services/settlement';
+import { assertMoodTagsShape } from '../src/lib/format';
 import type { AgentName, Energy, Tempo } from '../src/lib/types';
 
 // ── Deterministic UUIDs for reproducibility ─────────────
@@ -330,7 +331,7 @@ async function main() {
         vocalQuality: r.vocalQuality,
         energyVsStudio: r.energyVsStudio,
         tempoFeel: r.tempoFeel,
-        moodTags: r.moodTags,
+        moodTags: assertMoodTagsShape(r.moodTags),
         notes: r.notes,
       });
 
@@ -342,7 +343,7 @@ async function main() {
         vocalQuality: r.vocalQuality,
         energyVsStudio: r.energyVsStudio,
         tempoFeel: r.tempoFeel,
-        moodTags: r.moodTags,
+        moodTags: assertMoodTagsShape(r.moodTags),
         notes: r.notes,
       });
     }
@@ -392,7 +393,7 @@ async function main() {
       avgVocalQuality: avgVocal,
       energyConsensus,
       tempoConsensus,
-      aggregatedMoodTags: uniqueTags,
+      aggregatedMoodTags: assertMoodTagsShape(uniqueTags, "aggregated_mood_tags"),
       ratingCount: 3,
       publishedAt: new Date(Date.now() - 86400000 * TRACKS.indexOf(t)),
     });

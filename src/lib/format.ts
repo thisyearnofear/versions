@@ -33,6 +33,44 @@ export function parseMoodTags(raw: unknown): string[] {
   return [];
 }
 
+/**
+ * MODULAR: writer-side companion to `parseMoodTags`. Asserts that a
+ * value bound for the `mood_tags` / `aggregated_mood_tags` columns
+ * is a canonical `string[]` -- never a JSON-stringified string,
+ * never null / undefined, never a mixed-shape array. The reader
+ * is defensive (parseMoodTags silently coerces junk to `[]` to
+ * keep the UI alive); the writer is strict: a JSON-string input
+ * would double-encode in the jsonb column (`'"["a"]"'` lands as
+ * the literal string, not the array), corrupting every downstream
+ * parseMoodTags call. Throw at the boundary so a future regression
+ * fails locally rather than shipping dirty data. Returns the typed
+ * array so the Drizzle insert picks up the narrowed `string[]`
+ * without an explicit cast.
+ *
+ * The `field` parameter is purely diagnostic -- it appears in the
+ * TypeError so a post-mortem log names the actual column the bad
+ * value was bound for (e.g. `aggregated_mood_tags` for the publish
+ * gate, `mood_tags` for the rating row). Defaults to `"mood_tags"`
+ * for call sites that already encode the column name in the
+ * variable being passed in.
+ */
+export function assertMoodTagsShape(
+  raw: unknown,
+  field: string = "mood_tags",
+): string[] {
+  if (!Array.isArray(raw)) {
+    throw new TypeError(
+      `${field} must be a string[]; received ${raw === null ? "null" : typeof raw}`,
+    );
+  }
+  if (!raw.every((t) => typeof t === "string")) {
+    throw new TypeError(
+      `${field} must be a string[] of strings; mixed or non-string entries rejected`,
+    );
+  }
+  return raw as string[];
+}
+
 export function fmtDuration(seconds: number | null | undefined): string | null {
   if (seconds == null || !Number.isFinite(seconds)) return null;
   const s = Math.round(seconds);

@@ -21,6 +21,7 @@ import {
 import { aggregateRatings, type RatingRowLike } from './taste-graph';
 import { transactional } from '../lib/transaction';
 import { log } from '../lib/logger';
+import { assertMoodTagsShape } from '../lib/format';
 import { expectedLegCountFor, type SettlementService } from './settlement';
 
 export interface PublishResult {
@@ -118,7 +119,7 @@ export async function publishSubmission(
       avgVocalQuality: agg.avg_vocal_quality,
       energyConsensus: agg.energy_consensus,
       tempoConsensus: agg.tempo_consensus,
-      aggregatedMoodTags: agg.aggregated_mood_tags,
+      aggregatedMoodTags: assertMoodTagsShape(agg.aggregated_mood_tags, "aggregated_mood_tags"),
       ratingCount: agg.rating_count,
       publishedAt: new Date(),
     };

@@ -23,6 +23,7 @@ import { aggregateRatings, type RatingRowLike } from './taste-graph';
 import { validateRating } from '../lib/validation';
 import { publishSubmission } from './publish';
 import { transactional } from '../lib/transaction';
+import { assertMoodTagsShape } from '../lib/format';
 import type { SettlementService } from './settlement';
 
 export const CLAIM_MESSAGE = 'VERSIONS_LEPTON_CLAIM';
@@ -301,7 +302,7 @@ export function createCurationService({ settlement }: { settlement: SettlementSe
           vocalQuality: validRating.vocal_quality,
           energyVsStudio: validRating.energy_vs_studio,
           tempoFeel: validRating.tempo_feel,
-          moodTags: validRating.mood_tags || [],
+          moodTags: assertMoodTagsShape(validRating.mood_tags ?? []),
           notes: validRating.notes ?? null,
         });
 

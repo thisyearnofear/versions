@@ -7,6 +7,7 @@
 import { randomUUID } from 'crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../lib/db';
+import { assertMoodTagsShape } from '../lib/format';
 import {
   submissions as submissionsTable,
   ratings as ratingsTable,
@@ -297,7 +298,7 @@ export function createAgentService({
       vocalQuality: parsed.vocal_quality,
       energyVsStudio: parsed.energy_vs_studio,
       tempoFeel: parsed.tempo_feel,
-      moodTags: parsed.mood_tags,
+      moodTags: assertMoodTagsShape(parsed.mood_tags),
       notes: parsed.notes,
       rawResponse: rawText,
     });
@@ -312,7 +313,7 @@ export function createAgentService({
             vocalQuality: parsed.vocal_quality,
             energyVsStudio: parsed.energy_vs_studio,
             tempoFeel: parsed.tempo_feel,
-            moodTags: parsed.mood_tags,
+            moodTags: assertMoodTagsShape(parsed.mood_tags),
             notes: parsed.notes,
           })
           .onConflictDoNothing();
