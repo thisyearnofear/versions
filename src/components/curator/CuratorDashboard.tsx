@@ -18,6 +18,7 @@ import {
   type CuratorProfileResponse,
   type EarningsResponse,
 } from "@/lib/api-client";
+import { parseMoodTags } from "@/lib/format";
 import { energyToNumber, tempoToNumber } from "@/lib/snap";
 import { cn } from "@/lib/utils";
 import { EarningsHistoryTable, ROLE_LABELS } from "@/components/earnings/EarningsHistoryTable";
@@ -466,7 +467,15 @@ function RatingsTab({
       ) : (
         <ul className="flex flex-col">
           {ratings.map((r) => {
-            const moodTags = Array.isArray(r.moodTags) ? r.moodTags : [];
+            // MODULAR: parseMoodTags (lib/format) handles BOTH wire shapes the
+            // api-client envelope can land as -- a JSON-stringified string OR a
+            // Drizzle jsonb round-tripped JS array. The previous inline
+            // Array.isArray short-circuit returned [] for the string-shape
+            // branch, so the curator's per-row mood tag chips silently
+            // disappeared even when the rating row carried typed tags. Routed
+            // through the helper via the shared parser used by FeedView/
+            // DiscoverView/ArtistDashboard/AgentMonitor.
+            const moodTags = parseMoodTags(r.moodTags);
             return (
               <li
                 key={r.id}
