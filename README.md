@@ -71,7 +71,7 @@ npm install
 npm run dev      # next dev .
 npm run build    # next build . --experimental-build-mode compile
 npm start        # next start .
-npm test         # vitest (307 tests)
+npm test         # vitest (309 tests)
 npm run db:push  # drizzle-kit push
 npm run db:studio
 pnpm demo        # self-driving submit → pay → review → publish → tip loop (assumes `pnpm run dev` is up + `pnpm db:push` has been run)
@@ -392,6 +392,53 @@ review.
    influencers='[]'::jsonb, draft_emails='[]'::jsonb WHERE …`
   Drizzle aliasing won't crash but a downstream `.map()` on legacy
   object-arrays will.
+
+## Deploy runbook — Legacy placement_briefs purge
+
+Commit `6f48d190` repurposed the four NOT NULL JSONB columns on
+`placement_briefs` (`venues / youtube_channels / influencers / draft_emails`)
+via Drizzle column-aliasing. Legacy rows predate the repurpose and may
+still hold the OLD shape — `venues` used to be a venue-contact object
+array (`{name, location, capacity}`), `draft_emails` a draft-outreach
+array (`{to, subject, body}`), and `influencers` a contact object array
+(`{twitter, followers}`). Drizzle won't crash on legacy rows but the
+supervisor inverse-search via `services/feed.ts:searchByBrief` will
+TypeError on `.map()` over the object arrays.
+
+Run two commands before deploying `6f48d190` against any DB that was
+seeded before the repurpose:
+
+```bash
+# 1. Dry-run — see the count of rows that look legacy
+npm run db:purge:preview
+
+# 2. Apply the wipe (BEGIN/COMMIT) — only if the count matches what you expect.
+#    Snapshot first if you want a revert path:
+#      pg_dump --table=placement_briefs "$DATABASE_URL" > brief.bak
+npm run db:purge:apply
+```
+
+The WHERE predicate uses `jsonb_typeof(venues->0) <> 'string'` as the
+proxy marker — legacy `venues` was an object array, post-repurpose
+`venues` is a `string[]`. New-shape rows (already `string[]` or
+empty) are skipped; `audience_summary` is never touched because its
+TEXT shape carried over cleanly.
+
+**Narrow-by-design caveat:** the predicate keys off `venues` only.
+Rows whose `venues` is `[]` but whose `youtube_channels /
+influencers / draft_emails` still carry legacy object arrays are
+deliberately NOT wiped — they're functionally harmless because the
+column-aliasing reads them as the new `string[]` shape and a
+downstream `.map()` over an object array would have TypeError'd, but
+any inert legacy objects are not in the hot path. If a paranoid
+operator wants the OR-across-all-4-columns variant, broaden the
+WHERE clause in `scripts/purge-legacy-placement-briefs.apply.sql`
+and the matching test fixture in
+`tests/unit/purge-legacy-briefs.test.ts`.
+
+If `psql` isn't on your PATH (some operator envs), paste the contents
+of `scripts/purge-legacy-placement-briefs.apply.sql` directly into the
+Neon SQL Editor.
 
 ## Known issues
 

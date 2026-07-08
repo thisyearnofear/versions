@@ -12,7 +12,10 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:purge:preview": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/purge-legacy-placement-briefs.preview.sql",
+    "db:purge:apply": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/purge-legacy-placement-briefs.apply.sql",
+    "demo": "tsx scripts/demo.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.74",
