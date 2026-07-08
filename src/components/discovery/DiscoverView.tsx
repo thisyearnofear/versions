@@ -11,11 +11,12 @@ import { useAccount } from "wagmi";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { useToast } from "@/components/ui/Toast";
-import { apiClient, type Playlist, type ListenerBadgeResponse } from "@/lib/api-client";
+import { apiClient, type Playlist, type ListenerBadgeResponse, type BriefSearchResponse } from "@/lib/api-client";
 import { parseMoodTags } from "@/lib/format";
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
 import { cn } from "@/lib/utils";
+import { track } from "@/lib/analytics";
 import { ListenerHub } from "@/components/listener/ListenerHub";
 
 export function DiscoverView() {
@@ -62,6 +63,8 @@ export function DiscoverView() {
   return (
     <>
       <ListenerHub />
+
+      <MatchSearch />
 
       {newBadges.length > 0 && (
         <NewBadgeToast badges={newBadges} onDismiss={() => setNewBadges([])} />
@@ -142,6 +145,7 @@ function PlaylistCard({
   const onPlay = useCallback(
     async (versionId: string) => {
       setPayingId(versionId);
+      track("play_click", { versionId, playlistId: playlist.id, connected: isConnected });
       try {
         const wallet = listenerWallet ?? `anonymous_listener_${Date.now()}`;
         const resp = await apiClient.play({ playlistId: playlist.id, versionId, listenerWallet: wallet });
@@ -157,6 +161,7 @@ function PlaylistCard({
           showToast("Play settled — $0.0005 paid to artist on Arc", "success", 4000);
         }
 
+        track("play_success", { versionId, playType: resp.play_type, freePlaysRemaining: resp.free_plays_remaining });
         // Show new badges via toast
         if (resp.new_badges && resp.new_badges.length > 0) {
           onNewBadges?.(resp.new_badges);
@@ -168,6 +173,7 @@ function PlaylistCard({
           fetchFn?.();
         }
       } catch (err) {
+        track("play_failed", { versionId, error: (err as Error).message.slice(0, 120) });
         showToast(`Play failed: ${(err as Error).message}`, "error");
       } finally {
         setTimeout(() => { setPayingId(null); setFreePlay(false); }, 1500);
@@ -280,6 +286,197 @@ function PlaylistCard({
         })}
       </ul>
     </article>
+  );
+}
+
+// ── Match by Brief (Supervisor inverse-search) ──────────
+// MODULAR: the supervisor surface inverts the feed model. The user
+// pastes a brief — described in plain English — and we rank every
+// published track against (scene_tags, instruments, emotional_arcs,
+// audience_summary) on placement_briefs. The result card carries the
+// fit_score together with `why_fits` citations so a reviewer can see
+// the match rationale without re-reading the source brief. Wired via
+// apiClient.searchByBrief → /api/v1/discover/brief. Same cached()
+// pattern as feed.ts for read-side bursts.
+
+function MatchSearch() {
+  const { showToast } = useToast();
+  const [brief, setBrief] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<BriefSearchResponse | null>(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  const onSearch = useCallback(async () => {
+    const trimmed = brief.trim();
+    if (trimmed.length < 3 || trimmed.length > 500) {
+      showToast(`Brief must be 3–500 characters (got ${trimmed.length}).`, "error");
+      return;
+    }
+    setLoading(true);
+    setSubmitAttempted(true);
+    track("brief_search", { len: trimmed.length });
+    try {
+      const res = await apiClient.searchByBrief({ brief: trimmed, limit: 20 });
+      setResults(res);
+      if (res.rows.length === 0) {
+        showToast("No matches yet — try a less specific brief.", "info");
+      }
+    } catch (err) {
+      showToast(`Search failed: ${(err as Error).message}`, "error");
+      setResults(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [brief, showToast]);
+
+  return (
+    <section
+      aria-labelledby="match-brief-heading"
+      className="mb-16 border-t border-[var(--color-ink)] pt-8"
+    >
+      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-2">
+        Supervisor's inverse-search
+      </p>
+      <h3
+        id="match-brief-heading"
+        className="font-serif text-2xl md:text-3xl font-black tracking-tight mb-3"
+      >
+        Match a brief to the catalog.
+      </h3>
+      <p className="font-serif text-base text-[var(--color-ink-2)] leading-snug max-w-2xl mb-5">
+        Paste a scene in plain English. We score every published version against
+        scene context, instrumentation, emotional arcs, and audience summary.
+        Top 20 ranked by fit.
+      </p>
+      <div className="flex flex-col gap-3 max-w-2xl">
+        <label
+          htmlFor="brief-input"
+          className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]"
+        >
+          Brief
+        </label>
+        <textarea
+          id="brief-input"
+          value={brief}
+          onChange={(e) => setBrief(e.target.value)}
+          placeholder={'e.g. "tense car chase, no vocals, ~120bpm, building to release at 1:30"'}
+          rows={3}
+          maxLength={500}
+          aria-describedby="brief-help"
+          className="border border-[var(--color-ink)] bg-[var(--color-paper)] p-3 font-serif text-base text-[var(--color-ink)] placeholder:text-[var(--color-ink-3)] focus:outline-none focus:border-[var(--color-rust)] resize-vertical"
+        />
+        <div id="brief-help" className="flex items-center justify-between">
+          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
+            {brief.length}/500 chars
+          </span>
+          <button
+            type="button"
+            onClick={() => void onSearch()}
+            disabled={loading || brief.trim().length < 3}
+            className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[11px] uppercase tracking-[0.18em] px-5 py-3 hover:bg-[var(--color-rust)] transition-colors disabled:opacity-50"
+          >
+            {loading ? "Searching\u2026" : "Match"}
+          </button>
+        </div>
+      </div>
+      {loading && (
+        <div className="mt-6" role="status" aria-live="polite">
+          <DiscoverSkeleton count={2} />
+        </div>
+      )}
+      {results && results.rows.length > 0 && !loading && (
+        <div className="mt-8 flex flex-col gap-4" role="list" aria-label="Match results">
+          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]">
+            {results.total} match{results.total === 1 ? "" : "es"}
+          </div>
+          {results.rows.map((r) => (
+            <article
+              key={r.submission_id}
+              role="listitem"
+              className="border-t border-[var(--color-hair)] py-4"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-3 mb-2">
+                <div className="min-w-0 flex-1">
+                  <div className="font-serif text-xl font-black">{r.title}</div>
+                  <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mt-1">
+                    {r.artist_name} · {r.version_type} · {r.rating_count} ratings
+                  </div>
+                </div>
+                <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] tabular-nums">
+                  fit {r.fit_score.toFixed(2)}
+                </div>
+              </div>
+              <AudioPlayer
+                src={`/api/v1/uploads/${r.audio_path?.split("/").pop() ?? ""}`}
+                title={r.title}
+                by={r.artist_name}
+              />
+              {r.brief.audience_summary && (
+                <p className="font-serif text-sm text-[var(--color-ink-2)] leading-snug max-w-[60ch] mt-2">
+                  {r.brief.audience_summary}
+                </p>
+              )}
+              {r.why_fits.length > 0 && (
+                // MODULAR: rust-chip the why_fits citations. Same
+                // visual register as the matches-cited strip in
+                // <PlacementsTab>; sets the editorial signal that
+                // these are *why* and not *what*.
+                <ul className="flex flex-wrap gap-2 mt-2" role="list" aria-label="Why this fits">
+                  {r.why_fits.map((w, i) => (
+                    <li
+                      key={i}
+                      role="listitem"
+                      className="border border-[var(--color-rust)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--color-rust)]"
+                    >
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {r.brief.scene_tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3" role="list" aria-label="Scene tags">
+                  {r.brief.scene_tags.map((tag, i) => (
+                    <span
+                      key={i}
+                      role="listitem"
+                      className="bg-[var(--color-paper-2)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink)]"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {r.brief.instruments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2" role="list" aria-label="Instruments flagged">
+                  {r.brief.instruments.map((inst, i) => (
+                    <span
+                      key={i}
+                      role="listitem"
+                      className="border border-[var(--color-hair-strong)] px-2 py-1 font-mono text-[10px] tracking-wide text-[var(--color-ink-2)]"
+                    >
+                      {inst}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {r.brief.sync_comparables.length > 0 && (
+                <div className="font-mono text-[10px] mt-3 text-[var(--color-ink-3)]">
+                  {r.brief.sync_comparables
+                    .slice(0, 2)
+                    .map((c) => `\u201c${c.name}\u201d`)
+                    .join(" \u00b7 ")}
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+      {results && results.rows.length === 0 && !loading && submitAttempted && (
+        <p className="mt-6 font-serif italic text-[var(--color-ink-3)] border-t border-b border-[var(--color-hair)] py-8 text-center">
+          No tracks matched that brief yet. Try a less specific language.
+        </p>
+      )}
+    </section>
   );
 }
 

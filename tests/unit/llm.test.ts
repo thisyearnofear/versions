@@ -25,7 +25,7 @@ describe('llm: mock mode', () => {
     expect(Array.isArray(r.parsed!.mood_tags)).toBe(true);
   });
 
-  it('market agent returns placement brief', async () => {
+  it('market agent returns supervisor-facing placement brief', async () => {
     const llm = createLlmAdapter({});
     const r = await llm.complete({
       agentName: 'market',
@@ -33,17 +33,24 @@ describe('llm: mock mode', () => {
       versionType: 'live',
     });
     expect(r.parsed!.placement_brief).toBeDefined();
-    expect(r.parsed!.placement_brief!.venues.length).toBeGreaterThan(0);
-    expect(r.parsed!.placement_brief!.draft_emails.length).toBeGreaterThan(0);
+    // MODULAR: the market brief now carries the supervisor inverse-search
+    // shape (scene_tags, instruments, emotional_arcs, sync_comparables,
+    // audience_summary) instead of the prior venues/draft_emails marketing
+    // shape. Each shape field is non-empty for a normal market call.
+    expect(r.parsed!.placement_brief!.scene_tags.length).toBeGreaterThan(0);
+    expect(r.parsed!.placement_brief!.instruments.length).toBeGreaterThan(0);
+    expect(r.parsed!.placement_brief!.emotional_arcs.length).toBeGreaterThan(0);
+    expect(r.parsed!.placement_brief!.sync_comparables.length).toBeGreaterThan(0);
+    expect(typeof r.parsed!.placement_brief!.audience_summary).toBe('string');
   });
 
-  it('different genres produce different venue lists', async () => {
+  it('different genres produce different instrumentation flags', async () => {
     const llm = createLlmAdapter({});
     const rock = await llm.complete({ agentName: 'market', genre: 'rock', versionType: 'live' });
     const jazz = await llm.complete({ agentName: 'market', genre: 'jazz', versionType: 'live' });
-    const rockVenues = rock.parsed!.placement_brief!.venues.map((v) => v.name);
-    const jazzVenues = jazz.parsed!.placement_brief!.venues.map((v) => v.name);
-    expect(rockVenues.join()).not.toBe(jazzVenues.join());
+    const rockInstruments = rock.parsed!.placement_brief!.instruments.join('|');
+    const jazzInstruments = jazz.parsed!.placement_brief!.instruments.join('|');
+    expect(rockInstruments).not.toBe(jazzInstruments);
   });
 
   it('deterministic — same input gives same output', async () => {

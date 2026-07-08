@@ -6,12 +6,13 @@ vi.mock('@/lib/db', () => ({
   get db() { return _getTestDb(); },
 }));
 
-const { clearCache } = await import('../../src/lib/cache');
+const { clearCache, cacheStats } = await import('../../src/lib/cache');
+const { emit } = await import('../../src/lib/event-bus');
 
 const { describe, it, expect, beforeAll, beforeEach } = await import('vitest');
 const { eq } = await import('drizzle-orm');
 const { createFeedService } = await import('../../src/services/feed');
-const { publishedVersions, submissions } = await import('../../src/lib/schema');
+const { publishedVersions, submissions, placementBriefs } = await import('../../src/lib/schema');
 
 async function seedSubmission(subId: string) {
   const db = _getTestDb();
@@ -30,7 +31,61 @@ async function seedSubmission(subId: string) {
     status: 'published',
     paymentTxHash: '0x' + 'a'.repeat(64),
     paymentVerifiedAt: new Date(),
-  });
+  }).onConflictDoNothing();
+}
+
+// MODULAR: brief→match fixture. Seeds submissions + published_versions
+// + placement_briefs in one call so each test is one-liner. Drizzle
+// column-aliasing binds the new logical fields (sceneTags / instruments /
+// emotionalArcs / syncComparables / audienceSummary) to the legacy
+// JSONB columns — insert with camelCase TS keys.
+async function seedBriefRow(
+  subId: string,
+  title: string,
+  brief: {
+    sceneTags: string[],
+    instruments: string[],
+    emotionalArcs: string[],
+    syncComparables: Array<{ name: string; why: string }>,
+    audienceSummary: string,
+  },
+) {
+  const db = _getTestDb();
+  await db.insert(submissions).values({
+    id: subId,
+    artistWallet: '0x' + subId.replace(/-/g, '').slice(0, 40).padEnd(40, 'a'),
+    audioPath: 'audio/' + subId,
+    audioSizeBytes: 1024,
+    contentType: 'audio/mpeg',
+    feeQuoteUsdc: '0.50',
+    title,
+    artistName: 'S',
+    versionType: 'demo',
+    status: 'published',
+    paymentTxHash: '0x' + 'a'.repeat(64),
+    paymentVerifiedAt: new Date(),
+  }).onConflictDoNothing();
+  await db.insert(publishedVersions).values({
+    submissionId: subId,
+    artistWallet: '0xaaa',
+    title,
+    artistName: 'S',
+    versionType: 'demo',
+    audioPath: 'p',
+    ratingCount: 3,
+    publishedAt: new Date(),
+  }).onConflictDoNothing();
+  await db.insert(placementBriefs).values({
+    id: 'pb-' + subId,
+    submissionId: subId,
+    agentName: 'market',
+    sceneTags: brief.sceneTags,
+    instruments: brief.instruments,
+    emotionalArcs: brief.emotionalArcs,
+    syncComparables: brief.syncComparables,
+    audienceSummary: brief.audienceSummary,
+    createdAt: new Date(),
+  }).onConflictDoNothing();
 }
 
 beforeAll(async () => {
@@ -103,6 +158,63 @@ describe('feed: listPublished', () => {
     const feed = createFeedService();
     const r = await feed.listPublished({ limit: 9999 });
     expect(r.limit).toBeLessThanOrEqual(100);
+  });
+});
+
+describe('feed: searchByBrief', () => {
+  // MODULAR: 5-token brief "car chase" yields tokens [car, chase].
+  // The seeded scene_tag "car chase" matches BOTH via substring
+  // (tagLower.includes(t) for t='car' matches "car chase" → +3;
+  // same for t='chase'). Single scene hit → fit_score ≥ 3.
+  it('returns rows whose seeded brief matches the query tokens', async () => {
+    await seedBriefRow('sub-brief-1', 'Highway Chase', {
+      sceneTags: ['car chase', 'highway'],
+      instruments: [],
+      emotionalArcs: [],
+      syncComparables: [],
+      audienceSummary: '',
+    });
+    const feed = createFeedService();
+    const r = await feed.searchByBrief({ brief: 'car chase' });
+    expect(r.total).toBe(1);
+    expect(r.rows.length).toBe(1);
+    expect(r.rows[0].submission_id).toBe('sub-brief-1');
+    expect(r.rows[0].title).toBe('Highway Chase');
+    expect(r.rows[0].fit_score).toBeGreaterThanOrEqual(3);
+    expect(r.rows[0].why_fits.length).toBeGreaterThan(0);
+    expect(r.rows[0].brief.scene_tags).toContain('car chase');
+  });
+
+  it('returns total=0 rows=[] when the brief is pure stop words', async () => {
+    // MODULAR: tokenize() strips stop words + short tokens; an all-stop
+    // brief produces an empty token set, which short-circuits the
+    // loader before any DB read or scoring.
+    const feed = createFeedService();
+    const r = await feed.searchByBrief({ brief: 'the and or a' });
+    expect(r.total).toBe(0);
+    expect(r.rows).toEqual([]);
+  });
+
+  it('cache invalidates on feed-update', async () => {
+    await seedBriefRow('sub-brief-2', 'Cache Cleared', {
+      sceneTags: ['interrogation'],
+      instruments: [],
+      emotionalArcs: [],
+      syncComparables: [],
+      audienceSummary: '',
+    });
+    const feed = createFeedService();
+    // Pre: empty (beforeEach clearCache empties cache.store).
+    expect(cacheStats().entries).toBe(0);
+    await feed.searchByBrief({ brief: 'interrogation scene' });
+    // Post: brief:* key added.
+    expect(cacheStats().entries).toBe(1);
+    // Fire the event the service registered against. Triggering
+    // 'feed-update' must drop the 'brief:*' key even though TTL
+    // hasn't elapsed — the cache() helper subscribed a global
+    // event-bus listener on the first call.
+    emit('feed-update', { type: 'published', submissionId: 'sub-brief-2', timestamp: new Date().toISOString() });
+    expect(cacheStats().entries).toBe(0);
   });
 });
 

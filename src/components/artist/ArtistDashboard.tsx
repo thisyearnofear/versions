@@ -722,8 +722,9 @@ function PlacementsTab({
   return (
     <section>
       <p className="font-serif text-base text-[var(--color-ink-2)] leading-snug max-w-2xl mb-8">
-        The Market agent generates a placement brief for each published version — venues, YouTube channels,
-        influencers, and draft emails to help you get your music in front of the right people.
+        The Market agent generates a supervisor-facing brief for each published version — scene
+        context, instrumentation flags, emotional arcs, and sync comparables that drive the
+        inverse-search index supervisors query against.
       </p>
       <ul className="flex flex-col">
         {published.map((v) => {
@@ -761,7 +762,7 @@ function PlacementsTab({
                   )}
                   {brief && !isExpanded && (
                     <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-rust)]">
-                      {brief.venues.length} venues · {brief.draftEmails.length} drafts
+                      {brief.sync_comparables.length} references · {brief.scene_tags.length} scenes
                     </span>
                   )}
                   <span className={cn(
@@ -799,108 +800,107 @@ function PlacementsTab({
 
               {isExpanded && brief && (
                 <div className="px-3 pb-6 space-y-6">
-                  {/* Audience summary */}
+                  {/* Audience summary — editorial lead */}
                   <div className="border border-[var(--color-hair-strong)] p-5">
-                    <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] mb-2">
+                    <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] mb-3">
                       Audience summary
                     </div>
-                    <p className="font-serif text-base leading-snug text-[var(--color-ink)]">
-                      {brief.audienceSummary}
+                    <p className="font-serif text-lg leading-relaxed text-[var(--color-ink)]">
+                      {brief.audience_summary || "No summary provided."}
                     </p>
                   </div>
 
-                  <div className="grid md:grid-cols-3 gap-4">
-                    {/* Venues */}
-                    <div className="border border-[var(--color-hair-strong)] p-4">
-                      <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] mb-3">
-                        Venues ({brief.venues.length})
-                      </div>
-                      {brief.venues.length === 0 ? (
-                        <p className="font-mono text-[10px] text-[var(--color-ink-3)] italic">None listed</p>
-                      ) : (
-                        <ul className="space-y-3">
-                          {brief.venues.map((v, i) => (
-                            <li key={i}>
-                              <div className="font-serif text-sm font-medium">{v.name}</div>
-                              <div className="font-mono text-[10px] text-[var(--color-ink-2)] mt-0.5">{v.reason}</div>
-                              {v.contact && (
-                                <div className="font-mono text-[10px] text-[var(--color-rust)] mt-0.5">{v.contact}</div>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-
-                    {/* YouTube channels */}
-                    <div className="border border-[var(--color-hair-strong)] p-4">
-                      <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] mb-3">
-                        YouTube ({brief.youtubeChannels.length})
-                      </div>
-                      {brief.youtubeChannels.length === 0 ? (
-                        <p className="font-mono text-[10px] text-[var(--color-ink-3)] italic">None listed</p>
-                      ) : (
-                        <ul className="space-y-3">
-                          {brief.youtubeChannels.map((c) => (
-                            <li key={c.name}>
-                              <div className="font-serif text-sm font-medium">{c.name}</div>
-                              <div className="font-mono text-[10px] text-[var(--color-ink-2)] mt-0.5">{c.reason}</div>
-                              {c.followers && (
-                                <div className="font-mono text-[10px] text-[var(--color-ink-3)] mt-0.5">{c.followers}</div>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-
-                    {/* Influencers */}
-                    <div className="border border-[var(--color-hair-strong)] p-4">
-                      <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] mb-3">
-                        Influencers ({brief.influencers.length})
-                      </div>
-                      {brief.influencers.length === 0 ? (
-                        <p className="font-mono text-[10px] text-[var(--color-ink-3)] italic">None listed</p>
-                      ) : (
-                        <ul className="space-y-3">
-                          {brief.influencers.map((inf, i) => (
-                            <li key={i}>
-                              <div className="font-serif text-sm font-medium">{inf.name}</div>
-                              <div className="font-mono text-[10px] text-[var(--color-ink-2)] mt-0.5">{inf.reason}</div>
-                              {inf.platform && (
-                                <div className="font-mono text-[10px] text-[var(--color-ink-3)] mt-0.5">{inf.platform}</div>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>                    {/* Draft emails */}
-                  <div>
-                    <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] mb-3">
-                      Draft emails ({brief.draftEmails.length})
-                    </div>
-                    {brief.draftEmails.length === 0 ? (
-                      <p className="font-mono text-[10px] text-[var(--color-ink-3)] italic">None drafted</p>
-                    ) : (
-                      <div className="space-y-4">
-                        {brief.draftEmails.map((e) => (
-                          <div key={e.to} className="border border-[var(--color-hair-strong)] p-4">
-                            <div className="font-mono text-[11px] mb-1">
-                              <span className="text-[var(--color-ink-3)]">To:</span>{" "}
-                              <span className="text-[var(--color-ink)]">{e.to}</span>
-                            </div>
-                            <div className="font-mono text-[11px] mb-2">
-                              <span className="text-[var(--color-ink-3)]">Subject:</span>{" "}
-                              <span className="text-[var(--color-ink)]">{e.subject}</span>
-                            </div>
-                            <div className="font-serif text-sm text-[var(--color-ink-2)] leading-snug whitespace-pre-wrap border-t border-[var(--color-hair)] pt-3">
-                              {e.body}
-                            </div>
+                  <div className="grid md:grid-cols-2 gap-6">
+                    {/* Left column: dense metadata (scene_tags, instruments, emotional_arcs) */}
+                    <div className="space-y-6">
+                      {/* Scene tags */}
+                      <div className="border border-[var(--color-hair-strong)] p-4">
+                        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] mb-3">
+                          Scene context ({brief.scene_tags.length})
+                        </div>
+                        {brief.scene_tags.length === 0 ? (
+                          <p className="font-mono text-[10px] text-[var(--color-ink-3)] italic">No scene tags identified</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2" role="list" aria-label="Scene context tags">
+                            {brief.scene_tags.map((tag, i) => (
+                              <span
+                                key={i}
+                                role="listitem"
+                                className="bg-[var(--color-paper-2)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink)]"
+                              >
+                                {tag}
+                              </span>
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
+
+                      {/* Instruments (ghost chips) */}
+                      <div className="border border-[var(--color-hair-strong)] p-4">
+                        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] mb-3">
+                          Instruments ({brief.instruments.length})
+                        </div>
+                        {brief.instruments.length === 0 ? (
+                          <p className="font-mono text-[10px] text-[var(--color-ink-3)] italic">No instruments flagged</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2" role="list" aria-label="Instruments flagged">
+                            {brief.instruments.map((inst, i) => (
+                              <span
+                                key={i}
+                                role="listitem"
+                                className="border border-[var(--color-hair-strong)] px-2 py-1 font-mono text-[10px] tracking-wide text-[var(--color-ink-2)]"
+                              >
+                                {inst}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Emotional arcs as editorial list */}
+                      <div className="border border-[var(--color-hair-strong)] p-4">
+                        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] mb-3">
+                          Emotional arcs ({brief.emotional_arcs.length})
+                        </div>
+                        {brief.emotional_arcs.length === 0 ? (
+                          <p className="font-mono text-[10px] text-[var(--color-ink-3)] italic">No arcs mapped</p>
+                        ) : (
+                          <ul className="space-y-2 list-inside list-disc">
+                            {brief.emotional_arcs.map((arc, i) => (
+                              <li key={i} className="font-serif text-sm leading-snug text-[var(--color-ink)]">
+                                {arc}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right column: sync comparables as citation cards */}
+                    <div className="space-y-4">
+                      <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)]">
+                        Sync references ({brief.sync_comparables.length})
+                      </div>
+                      {brief.sync_comparables.length === 0 ? (
+                        <p className="font-mono text-[10px] text-[var(--color-ink-3)] italic">No comparable tracks cited</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {brief.sync_comparables.map((comp, i) => (
+                            <div
+                              key={i}
+                              className="border border-[var(--color-hair-strong)] p-4 hover:bg-[var(--color-paper-2)]/30 transition-colors"
+                            >
+                              <div className="font-serif text-base font-black text-[var(--color-ink)] mb-1">
+                                &ldquo;{comp.name}&rdquo;
+                              </div>
+                              <div className="font-mono text-[11px] leading-relaxed text-[var(--color-ink-2)]">
+                                {comp.why || '—'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Agent reviews */}

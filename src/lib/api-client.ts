@@ -6,6 +6,8 @@
 import type {
   AgentName,
   AgentReview,
+  BriefSearchResponse,
+  MoodTagsEnvelope,
   PlacementBrief,
   RecipientRole,
 } from "./types";
@@ -30,7 +32,12 @@ import type {
 // `: MoodTagsEnvelope` so "field missing" (entire `published?`
 // or empty `recent_ratings[]`) stays distinct from "value is
 // undefined" on a present field.
-export type MoodTagsEnvelope = string | string[] | null | undefined;
+//
+// MODULAR: the canonical MoodTagsEnvelope + BriefSearchResponse live
+// in `@/lib/types` (source of truth). Re-export here so existing
+// `import { MoodTagsEnvelope } from '@/lib/api-client'` call sites
+// keep working without churn.
+export type { MoodTagsEnvelope, BriefSearchResponse } from "./types";
 
 export class ApiError extends Error {
   code: string;
@@ -209,14 +216,53 @@ export interface ArtistVersionsResponse {
   total: number;
 }
 
+// MODULAR: slim response for the TipButton hover-card. Two small
+// arrays + two scalars — bandwidth stays under ~3 kB even for
+// artists with ≥ 50 published rows. matches recent_published /
+// recent_tips shapes from curation.getArtistTipCard verbatim.
+export interface ArtistTipCardResponse {
+  artist_wallet: string;
+  total_tips: number;
+  total_tips_usdc: string;
+  recent_published: Array<{
+    submission_id: string;
+    title: string;
+    version_type: string;
+    avg_solo_intensity: number | null;
+    avg_vocal_quality: number | null;
+    energy_consensus: string | null;
+    tempo_consensus: string | null;
+    aggregated_mood_tags: string[] | null;
+    rating_count: number;
+    published_at: string;
+  }>;
+  recent_tips: Array<{
+    puid: string;
+    tipper_wallet: string;
+    amount_micro_usdc: string;
+    amount_usdc: string;
+    message: string | null;
+    settled_at: string | null;
+    created_at: string;
+  }>;
+}
+
 export interface VerifyPaymentResponse {
   status: string;
 }
 
+// MODULAR: full ArcInfo shape mirrors src/adapters/arc.ts#ArcInfo.
+// Only the fields needed by the client for payment wiring are typed
+// non-optional; the rest stay optional because the server returns
+// nulls in mock mode (no RPC → no chainId / contract deployed).
 export interface ArcInfo {
   mock: boolean;
-  usdcContract?: string;
-  platformWallet?: string;
+  chainId?: string | null;
+  rpcUrl?: string | null;
+  usdcContract?: string | null;
+  usdcDecimals?: number;
+  platformWallet?: string | null;
+  platformUsdcBalance?: string | null;
 }
 
 // ── Listener incentive types ──────────────────────────
@@ -377,6 +423,30 @@ export const apiClient = {
     return api.get<FeedResponse>(`/api/v1/feed${qs ? `?${qs}` : ""}`);
   },
 
+  // MODULAR: supervisor inverse-search. Brief text is mandatory;
+  // structured filters (sceneTags, instruments, energy, tempo) are
+  // comma-separated CSV strings. The server clamps/validates and
+  // throws ApiError with code INVALID_BRIEF on out-of-range text.
+  searchByBrief(args: {
+    brief: string;
+    sceneTags?: string;
+    instruments?: string;
+    energy?: string;
+    tempo?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<BriefSearchResponse> {
+    const usp = new URLSearchParams();
+    usp.set("brief", args.brief);
+    if (args.sceneTags) usp.set("sceneTags", args.sceneTags);
+    if (args.instruments) usp.set("instruments", args.instruments);
+    if (args.energy) usp.set("energy", args.energy);
+    if (args.tempo) usp.set("tempo", args.tempo);
+    usp.set("limit", String(args.limit ?? 20));
+    usp.set("offset", String(args.offset ?? 0));
+    return api.get<BriefSearchResponse>(`/api/v1/discover/brief?${usp.toString()}`);
+  },
+
   // playlists
   getPlaylists(): Promise<Playlist[]> {
     return api.get<Playlist[]>("/api/v1/ar/playlists");
@@ -398,7 +468,14 @@ export const apiClient = {
   getArtistVersions(wallet: string, limit = 20): Promise<ArtistVersionsResponse> {
     return api.get<ArtistVersionsResponse>(`/api/v1/artists/${encodeURIComponent(wallet)}/versions?limit=${limit}`);
   },
-  getArtistEarnings(wallet: string, opts?: { limit?: number; offset?: number; role?: string; dateFrom?: string; dateTo?: string }): Promise<EarningsResponse> {
+  // MODULAR: TipButton hover-card payload. Returns 3 most-recent
+      // published + 5 most-recent x402 nanopayment tips + footer
+      // aggregates in one fetch. Reuses curation.getArtistTipCard
+      // which fans out to pvTable + x402_proofs in parallel.
+      getArtistTipCard(wallet: string): Promise<ArtistTipCardResponse> {
+        return api.get<ArtistTipCardResponse>(`/api/v1/artists/${encodeURIComponent(wallet)}/tip-card`);
+      },
+      getArtistEarnings(wallet: string, opts?: { limit?: number; offset?: number; role?: string; dateFrom?: string; dateTo?: string }): Promise<EarningsResponse> {
     const params = new URLSearchParams();
     params.set("limit", String(opts?.limit ?? 10));
     params.set("offset", String(opts?.offset ?? 0));

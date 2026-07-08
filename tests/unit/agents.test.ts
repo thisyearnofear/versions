@@ -78,9 +78,17 @@ describe('agents: full pipeline', () => {
       expect(['dragging', 'locked', 'rushing']).toContain(review.tempo_feel);
       expect(review.mock).toBe(true);
     }
-    expect(result.brief!.venues.length).toBeGreaterThan(0);
-    expect(result.brief!.youtube_channels.length).toBeGreaterThan(0);
-    expect(result.brief!.draft_emails.length).toBeGreaterThan(0);
+    // MODULAR: market-agent brief now uses the supervisor inverse-search
+    // shape. The persisted routes mirror the new schema (sceneTags /
+    // instruments / emotionalArcs / syncComparables) — named differently
+    // on the JSON wire (scene_tags / sync_comparables / etc.) but the
+    // returned shape here is the raw agent-brief payload (snake_case keys
+    // straight from the parser).
+    expect(result.brief!.scene_tags.length).toBeGreaterThan(0);
+    expect(result.brief!.instruments.length).toBeGreaterThan(0);
+    expect(result.brief!.emotional_arcs.length).toBeGreaterThan(0);
+    expect(result.brief!.sync_comparables.length).toBeGreaterThan(0);
+    expect(typeof result.brief!.audience_summary).toBe('string');
   });
 
   it('published version has correct taste-graph', async () => {

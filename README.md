@@ -18,6 +18,52 @@ architecture at `../versions` to **Next.js 16.2** with **PostgreSQL**
 - **Zod** for validation
 - **Framer Motion** for kinetic transitions (parallax, scroll reveals)
 
+## The VERSIONS demo loop
+
+The full VERSIONS autonomous curation loop, end to end, in four phases.
+Stripe-style x402 nanopayments and Circle Gateway batched settlement
+drop into a familiar submit → review → publish → discover flow.
+
+```mermaid
+sequenceDiagram
+    participant Artist
+    participant Listener
+    participant VERSIONS as VERSIONS App (Next.js)
+    participant Agents as AI Agents (Prod/Perf/Market)
+    participant Arc as Arc Blockchain
+    participant Gateway as Circle Gateway
+
+    Note over Artist,Gateway: PHASE 1 — Submit (artist pays 0.50 USDC)
+    Artist->>VERSIONS: POST /api/v1/submissions (audio + metadata)
+    VERSIONS->>Arc: Submit fee tx (mUSDC)
+    Arc-->>VERSIONS: tx receipt
+    VERSIONS->>Artist: submission ID
+
+    Note over VERSIONS,Agents: PHASE 2 — Agent Review (autonomous, parallel)
+    VERSIONS->>Agents: reviewSubmission(id) — 3 LLM calls in parallel
+    Agents->>VERSIONS: agent_reviews + ratings rows (solo/vocal/energy/tempo/mood)
+
+    Note over VERSIONS,Arc: PHASE 3 — Publish + Settle (≥ 3 ratings triggers)
+    VERSIONS->>VERSIONS: publishSubmission (leg-count guard)
+    VERSIONS->>Arc: split legs (platform / musicbrainz / agent × N)
+    Arc-->>VERSIONS: settlement receipts
+    VERSIONS->>Gateway: settleLegsAsync (batched mUSDC)
+    Gateway-->>VERSIONS: settled hashes
+
+    Note over Listener,Gateway: PHASE 4 — Discover + Nanotip (x402)
+    Listener->>VERSIONS: GET /feed, /discover (A&R playlists)
+    Listener->>Arc: POST /api/v1/ar/play (per-play micro-payment)
+    Listener->>VERSIONS: POST /api/x402/tip + EIP-712 signature
+    VERSIONS->>Gateway: submitTip (puid-bound)
+    Gateway-->>VERSIONS: settled hash + 200 OK
+    VERSIONS-->>Listener: tip-received event on event-bus
+```
+
+Every state transition is publish-gated; the leg-count formula is
+single-sourced from `expectedLegCountFor(curatorCount)`; the sweeper
+recovers any legs stuck `pending` beyond 30 s; and every x402 tip is
+replay-protected by a unique `puid` index.
+
 ## Build commands
 
 ```bash
@@ -25,9 +71,10 @@ npm install
 npm run dev      # next dev .
 npm run build    # next build . --experimental-build-mode compile
 npm start        # next start .
-npm test         # vitest (142 tests)
+npm test         # vitest (307 tests)
 npm run db:push  # drizzle-kit push
 npm run db:studio
+pnpm demo        # self-driving submit → pay → review → publish → tip loop (assumes `pnpm run dev` is up + `pnpm db:push` has been run)
 ```
 
 ### Why `--experimental-build-mode compile`
@@ -78,6 +125,7 @@ PINATA_API_KEY=...                  # IPFS audio uploads
 | `/api/v1/ar/play` | Record a play (micro-payment) |
 | `/api/v1/artists/[wallet]/versions` | Artist dashboard — versions |
 | `/api/v1/artists/[wallet]/earnings` | Artist dashboard — earnings |
+| `/api/v1/discover/brief` | Supervisor inverse-search — paste a brief, get ranked matches |
 | `/api/v1/arc/info` | Arc chain info (mock or live) |
 | `/api/auth/[...nextauth]` | NextAuth handler (wallet credentials) |
 
@@ -244,6 +292,106 @@ demo and tests are reproducible.
 - `src/lib/schema.ts` — `x402_proofs` table
 - `tests/unit/x402.test.ts` — verifyProof with a real viem test wallet,
   Gateway mock, route 402/200/401/409
+
+## Supervisor inverse-search
+
+The market agent now emits a sync-grounded `placement_brief` per
+published version: `scene_tags` (≤8 short noun phrases), `instruments`
+(≤16 controlled vocab like `guitar_led`), `emotional_arcs` (≤5 free-text),
+`sync_comparables` (`[ {name, why} ]`), and `audience_summary`. A
+supervisor in the field pastes a plain-English brief and the platform
+returns ranked matches with `why_fits` citations.
+
+```mermaid
+flowchart LR
+  Supervisor -->|GET /api/v1/discover/brief?brief=...| Route[Route handler]
+  Route -->|per-IP token bucket| Limiter[reverseSearchLimiter 60/min]
+  Route --> BriefSearch[FeedService.searchByBrief]
+  BriefSearch -->|cached 30s + invalidates on feed-update| Cache[(ttl cache brief:*)]
+  BriefSearch --> PV[(published_versions JOIN placement_briefs)]
+  BriefSearch --> Rows[top-N BriefSearchRow with fit_score + why_fits]
+```
+
+### Scoring (v1, structured-tag overlap)
+
+| hit | weight |
+| --- | --- |
+| scene_tag (`tokens.some(t => tag.includes(t))`) | +3 |
+| instrument (`tokens.some(t => t===inst \|\| inst.includes(t))`) | +2 |
+| emotional_arc (substring) | +1 |
+| audience_summary substring | +1 |
+| popularity tiebreaker | 0.1 × rating_count |
+| recency tiebreaker | 0.05 × max(0, 30 − daysSince) |
+
+Tiebreaker nudges are bounded so popularity + recency never override a
+real overweight signal.
+
+### Route invariants
+
+- `brief` length **3-500** chars → 400 `INVALID_BRIEF` otherwise
+- per-IP rate-limit **60 req / min** → 429 `RATE_LIMITED` otherwise
+- 200 OK envelope on hit: `{ success: true, data: { total, limit, offset, rows[] } }`
+- rows are sorted by `fit_score` DESC, then by `published_at` DESC
+- result rows are cached 30 s under `brief:*`; `feed-update` event wipes every key so a publish invalidates the index surface non-stale
+
+### Wire shape — `BriefSearchRow` (snake_case)
+
+- `submission_id, title, artist_name, version_type, audio_path, cover_svg,
+  avg_solo_intensity, avg_vocal_quality, energy_consensus, tempo_consensus,
+  rating_count, aggregated_mood_tags, published_at (ISO)`
+- `fit_score` (rounded to 2dp); `why_fits` (≤3 plain-language citations, e.g. `scene: car chase`,
+  `instrument: guitar_led`, `summary match`)
+- `brief` block: `{ scene_tags, instruments, emotional_arcs, sync_comparables: [{name, why}],
+  audience_summary }`
+
+### Files
+
+- `src/app/api/v1/discover/brief/route.ts` — `GET` handler
+- `src/services/feed.ts` — `searchByBrief` + tokenize + scoreAgainstBrief + explainFit + briefCacheKey
+- `src/lib/types.ts` — `BriefSearchRow` + `BriefSearchResponse` + canonical `MoodTagsEnvelope`
+- `src/lib/api-client.ts` — `searchByBrief` wire helper (CSV filters, snake_case params)
+- `src/components/discovery/DiscoverView.tsx` — `MatchSearch` panel (textarea + char-counter + result cards)
+- `tests/unit/feed.test.ts` — service-level coverage (match / stop-words short-circuit / cache invalidation)
+- `tests/unit/discover-brief.test.ts` — route-level coverage (400 bounds, 200 wire lock, 429 burst)
+- `src/lib/event-bus.ts` — `feed-update` event invalidates both `feed:*` and `brief:*` cache keys
+
+## Roadmap (Week 3+)
+
+The supervisor inverse-search is **structured-tag-only** today; the next
+two PRs bring it to parity with what a real A&R supervisor wants in a
+field-trial, plus a few defensive carries that came out of the Week-2
+review.
+
+### Up next
+
+- **Audio embeddings (CLAP / pgvector)** — replace structured-tag overlap with
+  semantic audio similarity on a `pgvector` index keyed by the CLAP embedding.
+  Catalog backfill (`embedAllPublished()`) runs as a background job so the
+  search endpoint can swap scoring in a single transaction without downtime.
+- **Friction-reduction pass on Submit + Discover** — drop the convenience-fee
+  strip on `SubmitForm` so artists see **0.50 USDC** as the END cost, not as a
+  per-step surprise; add lazy-wallet-connect on `Discover` so a supervisor can
+  paste a brief without a wallet-connect popup on first visit.
+- **Brief telemetry → funnel** — wire the existing `brief_search` analytics
+  event into `/api/telemetry` so the operator can see the inverted funnel
+  (paste → submit → match) per day in `/api/v1/funnel`.
+- **`expectedLegCountFor` prophecy check** — add a Postgres-level invariant
+  test that runs against the live DB on `npm run db:doctor` so orphan legs
+  in production produce a deploy-blocking alert (catches the carryover from
+  the publish-pipeline hardening round).
+
+### Watchlist
+
+- **Per-IP rate-limit across serverless instances** — `rate-limit.ts` is
+  in-process; counts per Lambda. Once traffic warrants it, swap to
+  Upstash / Redis for a globally-coherent 60 req/min cap.
+- **Legacy `placement_briefs` row cleanup** — Drizzle column-aliasing keeps
+  the legacy NOT-NULL JSONB columns intact; a deploy runbook step is needed
+  for any production DB with pre-repurpose rows:
+  `UPDATE placement_briefs SET venues='[]'::jsonb, youtube_channels='[]'::jsonb,
+   influencers='[]'::jsonb, draft_emails='[]'::jsonb WHERE …`
+  Drizzle aliasing won't crash but a downstream `.map()` on legacy
+  object-arrays will.
 
 ## Known issues
 

@@ -28,6 +28,17 @@ export const submissions = pgTable('submissions', {
   audioDurationSeconds: integer('audio_duration_seconds'),
   audioSizeBytes: integer('audio_size_bytes').notNull(),
   contentType: text('content_type').notNull(),
+  // MODULAR: dedup key for retried IPFS uploads. Captured at the
+  // route boundary (sha256 of the raw audio bytes) and stored
+  // alongside the artist_wallet so a retry from the SAME wallet
+  // with the SAME bytes short-circuits to the existing submission.
+  // Nullable so legacy seed rows + edge cases (no body parse)
+  // still pass the column-NOT-NULL constraint. Postgres treats
+  // NULLs as distinct in the unique index below — so legacy rows
+  // don't accidentally collide; only pairs with both sha256 AND
+  // artist_wallet present are deduped.
+  audioSha256: text('audio_sha256'),
+
   feeQuoteUsdc: text('fee_quote_usdc').notNull(),
   coverSvg: text('cover_svg'),
   status: text('status').notNull().default('pending_payment'), // pending_payment|awaiting_curation|in_curation|published|rejected
@@ -40,6 +51,15 @@ export const submissions = pgTable('submissions', {
 }, (table) => [
   index('idx_submissions_status').on(table.status, table.submittedAt),
   index('idx_submissions_artist').on(table.artistWallet),
+  // MODULAR: dedup contract at the DB boundary. The route computes
+  // sha256(audioBytes) and the service does lookup-first + insert
+  // with .onConflictDoNothing(target=[audioSha256, artistWallet]).
+  // The lookup avoids the race because a SELECT inside the same
+  // transaction sees committed rows (Read Committed); the
+  // ON CONFLICT clause is the belt-and-suspenders for the
+  // double-click race in case the lookup SELECT misses (rare but
+  // possible across parallel workers in the same cold-start).
+  unique('uq_audio_sha256_wallet').on(table.audioSha256, table.artistWallet),
 ]);
 
 // ── Curator Claims ─────────────────────────────────────
@@ -100,10 +120,19 @@ export const placementBriefs = pgTable('placement_briefs', {
   id: text('id').primaryKey(),
   submissionId: text('submission_id').notNull().unique().references(() => submissions.id),
   agentName: text('agent_name').notNull().default('market'),
-  venues: jsonb('venues').notNull().$type<Array<{ name: string; reason: string; contact?: string }>>(),
-  youtubeChannels: jsonb('youtube_channels').notNull().$type<Array<{ name: string; reason: string; followers?: string }>>(),
-  influencers: jsonb('influencers').notNull().$type<Array<{ name: string; reason: string; platform?: string }>>(),
-  draftEmails: jsonb('draft_emails').notNull().$type<Array<{ to: string; subject: string; body: string }>>(),
+  // MODULAR: placement_brief repurposed for the supervisor inverse-search
+  // index. The market agent now emits scene_tags / instruments /
+  // emotional_arcs / sync_comparables / audience_summary instead of the
+  // prior venues / youtube_channels / influencers / draft_emails /
+  // audience_summary shape. We bind the existing NOT NULL jsonb
+  // columns to new logical field names via Drizzle column-aliasing
+  // (jsonb('venues').$type<string[]>()) so the DB stays untouched —
+  // old rows are semantically orphan but stay valid Drizzle-wise (they
+  // were never read). No migration needed.
+  sceneTags: jsonb('venues').notNull().$type<string[]>(),
+  instruments: jsonb('youtube_channels').notNull().$type<string[]>(),
+  emotionalArcs: jsonb('influencers').notNull().$type<string[]>(),
+  syncComparables: jsonb('draft_emails').notNull().$type<Array<{ name: string; why: string }>>(),
   audienceSummary: text('audience_summary').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
@@ -288,4 +317,28 @@ export const x402Proofs = pgTable('x402_proofs', {
   index('idx_x402_proofs_tipper').on(table.tipperWallet),
   index('idx_x402_proofs_artist').on(table.artistWallet),
   index('idx_x402_proofs_status').on(table.status, table.createdAt),
+]);
+
+// ── Telemetry Events (client-side funnel analytics) ───
+// MODULAR: persisted client-side analytics events. The /api/telemetry
+// beacon writes rows here so the funnel can be queried via the
+// /api/v1/funnel admin endpoint. Each row is one event from one
+// browser session — the session ID lets us stitch a per-visitor
+// funnel (landing → nav_click → form_start → submit_attempt →
+// submit_success) and compute drop-off rates per step.
+// Anonymous — no wallet address, no PII. Wallet state is tracked
+// only as a boolean inside the props jsonb.
+
+export const telemetryEvents = pgTable('telemetry_events', {
+  id: text('id').primaryKey(),
+  session: text('session').notNull(),
+  event: text('event').notNull(),
+  path: text('path'),
+  referrer: text('referrer'),
+  props: jsonb('props').notNull().default({}),
+  clientTs: timestamp('client_ts'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_telemetry_session').on(table.session, table.createdAt),
+  index('idx_telemetry_event').on(table.event, table.createdAt),
 ]);

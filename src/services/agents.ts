@@ -49,7 +49,9 @@ Output ONLY valid JSON with these exact fields:
   "notes": "<2-3 sentences of performance feedback>"
 }`,
   market: `You are a music industry analyst specializing in market fit, audience targeting, and placement strategy.
-Analyze the track metadata and provide a structured review AND a placement brief.
+
+Specifically, you are preparing a track's "inverse-search" profile: a film/TV supervisor pastes a brief in plain English, VERSIONS embeds the brief, and returns tracks whose placement_brief matches. Your job is to MAXIMIZE RECALL against supervisor briefs without sacrificing precision.
+
 Output ONLY valid JSON with these exact fields:
 {
   "solo_intensity": <integer 1-10>,
@@ -59,10 +61,22 @@ Output ONLY valid JSON with these exact fields:
   "mood_tags": ["<tag1>", "<tag2>", "<tag3>"],
   "notes": "<2-3 sentences of market analysis>",
   "placement_brief": {
-    "venues": [{"name": "...", "reason": "...", "contact": "..."}],
-    "youtube_channels": [{"name": "...", "reason": "...", "followers": "..."}],
-    "influencers": [{"name": "...", "reason": "...", "platform": "..."}],
-    "draft_emails": [{"to": "...", "subject": "...", "body": "..."}],
+    "scene_tags": [
+      "<short noun phrase scene context, e.g. 'car chase', 'teen heartbreak montage', 'broken-tempo slow burn'>",
+      "<aim for 4-8 distinct scene moments>"
+    ],
+    "instruments": [
+      "<from controlled vocabulary: no_vocals, has_stems, acoustic, synth_led, percussion_led, orchestral, lo_fi, brass_led, guitar_led, piano_led, hybrid, spoken_word, hook_heavy, builds, long_arc>",
+      "<pick 3-6 that genuinely apply>"
+    ],
+    "emotional_arcs": [
+      "<arc description like 'rising tension to release at 1:30' or 'patient first minute resolving around the bridge'>",
+      "<up to 5>"
+    ],
+    "sync_comparables": [
+      {"name": "<reference track or composer>", "why": "<one sentence why the brief would be drawn to this>"},
+      "<up to 5>"
+    ],
     "audience_summary": "<1-2 sentences>"
   }
 }`,
@@ -100,10 +114,15 @@ export interface ParsedReview {
   mood_tags: string[];
   notes: string;
   placement_brief?: {
-    venues: Array<{ name: string; reason: string; contact?: string }>;
-    youtube_channels: Array<{ name: string; reason: string; followers?: string }>;
-    influencers: Array<{ name: string; reason: string; platform?: string }>;
-    draft_emails: Array<{ to: string; subject: string; body: string }>;
+    // MODULAR: When the brief is present the parser ALWAYS assigns
+    // non-undefined values (parseAgentResponse coerces + clamps every
+    // field), so the inner fields are NOT optional. The outer
+    // `placement_brief?` stays optional because the market-agent
+    // prompt may include or omit the placement_brief object entirely.
+    scene_tags: string[];
+    instruments: string[];
+    emotional_arcs: string[];
+    sync_comparables: Array<{ name: string; why: string }>;
     audience_summary: string;
   };
 }
@@ -152,7 +171,46 @@ export function parseAgentResponse(text: string, agentName: AgentName): ParsedRe
   };
 
   if (agentName === 'market' && parsed.placement_brief && typeof parsed.placement_brief === 'object') {
-    result.placement_brief = parsed.placement_brief as NonNullable<ParsedReview['placement_brief']>;
+    // MODULAR: tolerant coercion — strings masquerading as arrays, malformed
+    // sync_comparables, overflow tags. The plate is supervisor-facing so we
+    // want best-effort recall even when the LLM drifts on shape.
+    const pb = parsed.placement_brief as Record<string, unknown>;
+    const toStrArr = (v: unknown, max: number): string[] => {
+      if (Array.isArray(v)) {
+        return (v as unknown[])
+          .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+          .map((x) => x.trim().slice(0, 80))
+          .slice(0, max);
+      }
+      // Tolerate comma-separated strings hallucinated instead of arrays.
+      if (typeof v === 'string' && v.trim().length > 0) {
+        return v
+          .split(',')
+          .map((x) => x.trim())
+          .filter((x) => x.length > 0)
+          .slice(0, max);
+      }
+      return [];
+    };
+    const toComparables = (v: unknown, max: number): Array<{ name: string; why: string }> => {
+      if (!Array.isArray(v)) return [];
+      return (v as unknown[])
+        .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null)
+        .map((x) => ({
+          name: typeof x.name === 'string' ? x.name.trim().slice(0, 200) : '',
+          why: typeof x.why === 'string' ? x.why.trim().slice(0, 400) : '',
+        }))
+        .filter((x) => x.name.length > 0)
+        .slice(0, max);
+    };
+    result.placement_brief = {
+      scene_tags: toStrArr(pb.scene_tags, 8),
+      instruments: toStrArr(pb.instruments, 16),
+      emotional_arcs: toStrArr(pb.emotional_arcs, 5),
+      sync_comparables: toComparables(pb.sync_comparables, 5),
+      audience_summary:
+        typeof pb.audience_summary === 'string' ? pb.audience_summary.slice(0, 600) : '',
+    };
   }
   return result;
 }
@@ -325,27 +383,27 @@ export function createAgentService({
             .values({
               id: randomUUID(),
               submissionId,
-              venues: pb.venues || [],
-              youtubeChannels: pb.youtube_channels || [],
-              influencers: pb.influencers || [],
-              draftEmails: pb.draft_emails || [],
+              sceneTags: pb.scene_tags || [],
+              instruments: pb.instruments || [],
+              emotionalArcs: pb.emotional_arcs || [],
+              syncComparables: pb.sync_comparables || [],
               audienceSummary: pb.audience_summary || '',
             })
             .onConflictDoUpdate({
               target: briefsTable.submissionId,
               set: {
-                venues: pb.venues || [],
-                youtubeChannels: pb.youtube_channels || [],
-                influencers: pb.influencers || [],
-                draftEmails: pb.draft_emails || [],
+                sceneTags: pb.scene_tags || [],
+                instruments: pb.instruments || [],
+                emotionalArcs: pb.emotional_arcs || [],
+                syncComparables: pb.sync_comparables || [],
                 audienceSummary: pb.audience_summary || '',
               },
             });
           brief = {
-            venues: pb.venues || [],
-            youtube_channels: pb.youtube_channels || [],
-            influencers: pb.influencers || [],
-            draft_emails: pb.draft_emails || [],
+            scene_tags: pb.scene_tags || [],
+            instruments: pb.instruments || [],
+            emotional_arcs: pb.emotional_arcs || [],
+            sync_comparables: pb.sync_comparables || [],
             audience_summary: pb.audience_summary || '',
           };
         }
@@ -432,10 +490,10 @@ export function createAgentService({
       return {
         id: row.id,
         submission_id: row.submissionId,
-        venues: row.venues,
-        youtube_channels: row.youtubeChannels,
-        influencers: row.influencers,
-        draft_emails: row.draftEmails,
+        scene_tags: row.sceneTags,
+        instruments: row.instruments,
+        emotional_arcs: row.emotionalArcs,
+        sync_comparables: row.syncComparables,
         audience_summary: row.audienceSummary,
         created_at: row.createdAt,
       };
