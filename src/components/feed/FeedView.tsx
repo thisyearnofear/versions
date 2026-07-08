@@ -15,6 +15,7 @@ import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
 import { escapeHtml } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { track } from "@/lib/analytics";
 import DOMPurify from "dompurify";
 import { motion } from "framer-motion";
 
@@ -54,11 +55,17 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
   const [rows, setRows] = useState<FeedRow[]>(initialRows);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [loading, setLoading] = useState(false);
+  const [feedError, setFeedError] = useState(false);
+  // MODULAR: optimistic true — avoids a flash of "paused" before the
+  // first SSE connected event arrives. Only flips to false on actual
+  // connection error.
+  const [sseConnected, setSseConnected] = useState(true);
   const [quote, setQuote] = useState<FeaturedQuote>(FALLBACK_QUOTE);
 
   const fetchRows = useCallback(
     async (f: Filters) => {
       setLoading(true);
+      setFeedError(false);
       try {
         const resp = await apiClient.getFeed({
           mood: f.mood || undefined,
@@ -69,6 +76,8 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
         });
         setRows(resp.rows || []);
       } catch (err) {
+        setFeedError(true);
+        track("feed_load_failed", { error: (err as Error).message.slice(0, 120) });
         showToast(`Feed load failed: ${(err as Error).message}`, "error");
       } finally {
         setLoading(false);
@@ -96,7 +105,8 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
       es = new EventSource("/api/events");
 
       es.addEventListener("connected", () => {
-        // Connection established. No action needed — the stream is live.
+        // Connection established.
+        setSseConnected(true);
       });
 
       es.addEventListener("feed-update", () => {
@@ -105,7 +115,12 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
       });
 
       es.addEventListener("error", () => {
-        // Connection lost. Attempt to reconnect after 3s.
+        // MODULAR: was silently reconnecting with no user feedback.
+        // Now surfaces a stale indicator so the user knows the feed
+        // may be out of date, and tracks the reconnect so we can
+        // measure connection reliability.
+        setSseConnected(false);
+        track("sse_reconnect", { target: "feed" });
         es?.close();
         reconnectTimer = setTimeout(() => {
           connect();
@@ -228,6 +243,33 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
           {loading ? "Loading…" : "Filter"}
         </button>
       </form>
+
+      {/* MODULAR: SSE stale indicator — shows when the real-time
+          connection drops so the user knows the feed may be out of
+          date rather than wondering why nothing is updating. */}
+      {!sseConnected && rows.length > 0 && (
+        <div className="flex items-center gap-2 mb-4 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+          <span className="inline-block w-2 h-2 rounded-full bg-[var(--color-ink-3)]" />
+          Live updates paused — reconnecting…
+        </div>
+      )}
+
+      {/* MODULAR: fetch error retry — was toast-only with no in-page
+          retry control. Now shows a retry link alongside the toast. */}
+      {feedError && !loading && (
+        <div className="flex items-center gap-3 mb-4 border-t border-b border-[var(--color-rust)] py-3">
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-rust)]">
+            Feed couldn&rsquo;t load.
+          </span>
+          <button
+            type="button"
+            onClick={() => void fetchRows(filters)}
+            className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink)] hover:text-[var(--color-rust)] transition-colors"
+          >
+            <span aria-hidden="true">↻ </span>Retry
+          </button>
+        </div>
+      )}
 
       {loading && rows.length === 0 ? (
         <FeedSkeleton count={5} />

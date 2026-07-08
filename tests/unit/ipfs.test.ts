@@ -88,3 +88,20 @@ describe('ipfs: gatewayUrl', () => {
     expect(c.gatewayUrl('QmYyy')).toBe('https://example.com/ipfs/QmYyy');
   });
 });
+
+// MODULAR: pins the unpin contract that the submission dedup
+// short-circuit relies on (see src/app/api/v1/submissions/route.ts).
+// A retried IPFS upload that hits the unique index needs the
+// redundant pin released so Pinata's per-pin quota doesn't leak.
+describe('ipfs: unpin', () => {
+  it('mock unpin is a callable no-op (does not throw)', async () => {
+    const c = createPinataClient({});
+    await expect(c.unpin('QmYyy')).resolves.toBeUndefined();
+  });
+
+  it('mock unpin is idempotent across repeated calls', async () => {
+    const c = createPinataClient({});
+    await c.unpin('QmYyy');
+    await expect(c.unpin('QmYyy')).resolves.toBeUndefined();
+  });
+});

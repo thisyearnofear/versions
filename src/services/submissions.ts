@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'crypto';
 import { verifyMessage, isAddress, getAddress } from 'viem';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../lib/db';
 import { emit } from '../lib/event-bus';
 import { submissions as submissionsTable, ratings as ratingsTable, settlementLegs as legsTable } from '../lib/schema';
@@ -36,6 +36,12 @@ export interface CreateSubmissionArgs {
   artistWallet: string;
   signature: string;
   audioIpfsCid?: string | null;
+  // MODULAR: sha256 of the raw uploaded audio bytes, captured at
+  // the route boundary and used with `artistWallet` (lowercased)
+  // as the dedup key against uq_audio_sha256_wallet. Nullable so
+  // the in-process triage helpers and any future non-upload
+  // call sites can omit it.
+  audioSha256?: string | null;
 }
 
 export interface SubmissionRow {
@@ -59,6 +65,7 @@ export interface SubmissionRow {
   payment_verified_at: Date | null;
   submitted_at: Date;
   published_at: Date | null;
+  audio_sha256: string | null;
 }
 
 export type VerifyResult = { ok: true } | { ok: false; error: string };
@@ -85,6 +92,7 @@ export function rowToSubmission(row: typeof submissionsTable.$inferSelect): Subm
     payment_verified_at: row.paymentVerifiedAt,
     submitted_at: row.submittedAt,
     published_at: row.publishedAt,
+    audio_sha256: row.audioSha256 ?? null,
   };
 }
 
@@ -127,7 +135,7 @@ export interface SubmissionWithExtras extends SubmissionRow {
 }
 
 export type SubmitResult =
-  | { ok: true; submission: SubmissionRow }
+  | { ok: true; submission: SubmissionRow; deduped: boolean }
   | { ok: false; error: string };
 
 export type VerifyPaymentResult =
@@ -198,45 +206,101 @@ export function createSubmissionsService({
       metadata,
       artistWallet,
       signature,
+      audioSha256,
     }: CreateSubmissionArgs): Promise<SubmitResult> {
       const sigCheck = await verifyArtistSignature({ artistWallet, signature });
       if (!sigCheck.ok) return { ok: false, error: sigCheck.error };
 
-      const id = randomUUID();
-      const [row] = await db
-        .insert(submissionsTable)
-        .values({
-          id,
-          artistWallet,
-          audiusTrackId: metadata.audiusTrackId || null,
-          musicbrainzId: metadata.musicbrainzId || null,
-          title: metadata.title,
-          artistName: metadata.artistName,
-          versionType: metadata.versionType,
-          genre: metadata.genre || null,
-          artistMood: metadata.mood || null,
-          description: metadata.description || null,
-          audioPath,
-          audioDurationSeconds: durationSeconds ?? null,
-          audioSizeBytes: sizeBytes,
-          contentType,
-          feeQuoteUsdc: FEE_QUOTE_USDC,
-          coverSvg: metadata.coverSvg || null,
-          status: 'pending_payment',
-        })
-        .returning();
+      // MODULAR: lookup-first dedup. The unique index
+      // uq_audio_sha256_wallet on (audioSha256, artistWallet) is the
+      // contract — this SELECT is the common-path fast path that
+      // covers the typical "user hit submit twice" case (IPFS
+      // retried, browser double-fired, etc.). The race fallback
+      // after the insert handles the double-click where two
+      // parallel requests both fall through the lookup.
+      const walletKey = artistWallet.toLowerCase();
+      if (audioSha256) {
+        const [existing] = await db
+          .select()
+          .from(submissionsTable)
+          .where(
+            and(
+              eq(submissionsTable.audioSha256, audioSha256),
+              eq(submissionsTable.artistWallet, walletKey),
+            ),
+          )
+          .limit(1);
+        if (existing) {
+          return { ok: true, submission: rowToSubmission(existing), deduped: true };
+        }
+      }
 
-      if (!row) return { ok: false, error: 'Insert failed' };
+      const id = randomUUID();
+      // MODULAR: insert with onConflictDoNothing so a parallel
+      // double-click concurrent with the lookup above lands safely
+      // on the unique index instead of crashing the request with
+      // a Postgres unique-violation error. The .returning() being
+      // empty is the signal that someone else won the race — we
+      // then re-fetch and return as deduped.
+      const insertValues = {
+        id,
+        artistWallet: walletKey,
+        audiusTrackId: metadata.audiusTrackId || null,
+        musicbrainzId: metadata.musicbrainzId || null,
+        title: metadata.title,
+        artistName: metadata.artistName,
+        versionType: metadata.versionType,
+        genre: metadata.genre || null,
+        artistMood: metadata.mood || null,
+        description: metadata.description || null,
+        audioPath,
+        audioDurationSeconds: durationSeconds ?? null,
+        audioSizeBytes: sizeBytes,
+        contentType,
+        feeQuoteUsdc: FEE_QUOTE_USDC,
+        coverSvg: metadata.coverSvg || null,
+        status: 'pending_payment' as const,
+        audioSha256: audioSha256 ?? null,
+      };
+      const [row] = audioSha256
+        ? await db
+            .insert(submissionsTable)
+            .values(insertValues)
+            .onConflictDoNothing({
+              target: [submissionsTable.audioSha256, submissionsTable.artistWallet],
+            })
+            .returning()
+        : await db.insert(submissionsTable).values(insertValues).returning();
+
+      if (!row) {
+        // Race fallback — the unique index caught a parallel insert.
+        if (audioSha256) {
+          const [existing] = await db
+            .select()
+            .from(submissionsTable)
+            .where(
+              and(
+                eq(submissionsTable.audioSha256, audioSha256),
+                eq(submissionsTable.artistWallet, walletKey),
+              ),
+            )
+            .limit(1);
+          if (existing) {
+            return { ok: true, submission: rowToSubmission(existing), deduped: true };
+          }
+        }
+        return { ok: false, error: 'Insert failed' };
+      }
 
       // MODULAR: notify SSE subscribers that a new submission exists.
       emit('submission-created', {
         type: 'created',
         submissionId: id,
-        artistWallet,
+        artistWallet: walletKey,
         timestamp: new Date().toISOString(),
       });
 
-      return { ok: true, submission: rowToSubmission(row) };
+      return { ok: true, submission: rowToSubmission(row), deduped: false };
     },
 
     async getSubmissionAsync(id: string): Promise<SubmissionWithExtras | null> {

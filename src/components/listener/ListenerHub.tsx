@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { apiClient, type ListenerProfileResponse, type ListenerBadgeResponse } from "@/lib/api-client";
+import { track } from "@/lib/analytics";
 import { BadgeGrid } from "./ListenerBadge";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,7 @@ export function ListenerHub() {
   const { address, isConnected } = useAccount();
   const [profile, setProfile] = useState<ListenerProfileResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   const fetchProfile = useCallback(async () => {
@@ -22,11 +24,16 @@ export function ListenerHub() {
       return;
     }
     setLoading(true);
+    setError(false);
     try {
       const p = await apiClient.getListenerProfile(address);
       setProfile(p);
     } catch {
-      // Silently fail — the feature degrades gracefully
+      // MODULAR: was silently swallowing — now surfaces a retry state
+      // so the user knows something went wrong instead of seeing a
+      // blank hub. Tracked so we can measure the failure rate.
+      setError(true);
+      track("listener_profile_failed", { wallet: address.slice(0, 8) });
     } finally {
       setLoading(false);
     }
@@ -71,6 +78,29 @@ export function ListenerHub() {
 
   if (loading && !profile) {
     return <ListenerHubSkeleton />;
+  }
+
+  // MODULAR: was `return null` on both error and no-profile — the
+  // user saw a blank strip with no explanation. Now shows a compact
+  // retry state on error, and still returns null only when the
+  // profile legitimately doesn't exist yet (no plays).
+  if (error && !profile) {
+    return (
+      <div className="border-b border-[var(--color-hair)] pb-4 mb-8">
+        <div className="flex items-center justify-between gap-4">
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+            Couldn&rsquo;t load your listener profile.
+          </p>
+          <button
+            type="button"
+            onClick={() => void fetchProfile()}
+            className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-rust)] hover:text-[var(--color-ink)] transition-colors"
+          >
+            <span aria-hidden="true">↻ </span>Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (!profile) return null;

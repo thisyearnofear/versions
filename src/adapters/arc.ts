@@ -10,6 +10,13 @@
 import { createHash } from 'crypto';
 import { getAddress, isAddress } from 'viem';
 import { requestJson } from '../lib/http';
+// MODULAR: BigInt → big-endian hex of fixed byte width. Pulled from
+// @/lib/hex-utils so the padStart(64, '0') logic is testable in
+// isolation rather than inline in encodeUint256. Negative-input
+// + overflow validation also lives in the helper (single source
+// of truth) — encodeUint256 just normalizes bigint|number →
+// bigint and requests the 32-byte uint256 width.
+import { bigIntToPaddedHex, addressToPaddedHex } from '../lib/hex-utils';
 
 const DEFAULT_TIMEOUT = 8000;
 const MOCK_FINALITY_MS = 500;
@@ -24,17 +31,27 @@ const ERC20_TRANSFER_SELECTOR = '0xa9059cbb'; // keccak256("transfer(address,uin
 const ERC20_DECIMALS_SELECTOR = '0x313ce567'; // keccak256("decimals()")[:4]
 
 export function encodeAddress(addr: string): string {
-  // MODULAR: lowercase the address, strip 0x, pad-left to 32 bytes.
+  // MODULAR: viem validates + checksum-normalizes the address;
+  // addressToPaddedHex in @/lib/hex-utils owns the 24-zero-pad
+  // into a 32-byte word. The isAddress pre-check stays here so
+  // the error message ("invalid address: <addr>") is preserved —
+  // tests/unit/arc.test.ts asserts /invalid/ on the thrown error,
+  // and viem's getAddress would throw "Invalid Address"
+  // (capitalised) which would still match but flip the casing.
+  // Belt + suspenders: explicit isAddress proves we're rejecting
+  // truly garbage inputs before viem's normalize path tries to
+  // dereference them.
   if (!isAddress(addr)) throw new Error('invalid address: ' + addr);
-  return '0'.repeat(24) + getAddress(addr).slice(2).toLowerCase();
+  return addressToPaddedHex(getAddress(addr).slice(2));
 }
 
 export function encodeUint256(valueBig: bigint | number): string {
   // MODULAR: BigInt -> 32-byte hex. amountMicroUsdc fits in uint256 for any
   // sane USDC amount (USDC total supply is ~10^15 micro-units; uint256 is 10^77).
+  // bigIntToPaddedHex validates non-negative + overflow; this function
+  // only normalizes bigint | number -> bigint and picks the width.
   const v = typeof valueBig === 'bigint' ? valueBig : BigInt(valueBig);
-  if (v < BigInt(0)) throw new Error('amount must be non-negative');
-  return v.toString(16).padStart(64, '0');
+  return bigIntToPaddedHex(v, 32);
 }
 
 export function microUsdcToBigInt(decimalString: string): bigint {

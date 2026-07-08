@@ -68,105 +68,78 @@ function mockMarketNotes(genre: string, versionType: string): string {
     `The track has placement potential across live venues, curated playlists, and sync licensing.`;
 }
 
+// MODULAR: mirror of PlacementBrief in lib/types.ts. Snake_case on purpose
+// so the LLM emits / mocks emit a shape that doesn't need remapping at the
+// agent_service boundary. The fields drive VIDEO / FILM supervisor
+// inverse-search: scene_tags + instruments + emotional_arcs + sync_comparables
+// form the searchable profile a brief embeds against.
 export interface MockPlacementBrief {
-  venues: Array<{ name: string; reason: string; contact?: string }>;
-  youtube_channels: Array<{ name: string; reason: string; followers?: string }>;
-  influencers: Array<{ name: string; reason: string; platform?: string }>;
-  draft_emails: Array<{ to: string; subject: string; body: string }>;
+  scene_tags: string[];
+  instruments: string[];
+  emotional_arcs: string[];
+  sync_comparables: Array<{ name: string; why: string }>;
   audience_summary: string;
 }
 
 function mockPlacementBrief(genre: string, versionType: string): MockPlacementBrief {
-  const genreVenues: Record<string, Array<{ name: string; reason: string; contact?: string }>> = {
+  // Per-genre instrumentation flags. The instruments emit between 3-6
+  // entries per genre; the test asserts that two genres produce two
+  // different arrays. Rocks are guitar-led hooked long-arc; jazz is
+  // piano acoustic; electronic is synth/percussion-led; default is hybrid.
+  const genreInstrumentation: Record<string, string[]> = {
+    rock: ['guitar_led', 'hybrid', 'hook_heavy', 'long_arc'],
+    jazz: ['piano_led', 'acoustic', 'long_arc', 'no_vocals'],
+    electronic: ['synth_led', 'percussion_led', 'long_arc'],
+    default: ['hybrid', 'acoustic', 'hook_heavy'],
+  };
+
+  // Per-genre scene_tags (short noun phrases; supervisor-friendly).
+  const genreScenes: Record<string, string[]> = {
+    rock: ['arena close-up', 'garage scrub', 'roadside tension'],
+    jazz: ['smoke-room monologue', 'rain-slick rooftop', 'midnight phone call'],
+    electronic: ['neon chase', 'warehouse set piece', 'time-lapse rooftop'],
+    default: ['morning commute', 'quiet reveal', 'arrested development'],
+  };
+
+  // Per-genre sync_comparables. Each entry is a reference track whose
+  // tonal/pacing qualities a brief would be drawn to.
+  const genreComparables: Record<string, Array<{ name: string; why: string }>> = {
     rock: [
-      { name: 'The Troubadour (Los Angeles)', reason: 'Legendary rock venue, books emerging acts for Monday residency slots', contact: 'booking@troubadour.com' },
-      { name: 'Bowery Ballroom (New York)', reason: 'Indie rock staple, known for breaking new artists', contact: 'talent@boweryballroom.com' },
-      { name: 'The Fillmore (San Francisco)', reason: 'Historic venue with a dedicated rock audience', contact: 'booking@livenation.com' },
+      { name: 'Bruce Springsteen — Nebraska', why: `intimate demo-grade ${versionType} feeling that motivates scene cuts` },
+      { name: 'Big Thief — UFOF demos', why: `stripped ${versionType} takes that sit under quiet scenes` },
     ],
     jazz: [
-      { name: 'Blue Note (New York)', reason: 'Premier jazz club, accepts demo submissions for late-night sets', contact: 'submissions@bluenotejazz.com' },
-      { name: 'Ronnie Scotts (London)', reason: 'International jazz landmark with an emerging artist program', contact: 'bookings@ronniescotts.co.uk' },
-      { name: 'The Jazz Standard (New York)', reason: 'Intimate setting ideal for alternate takes and experimental sets', contact: 'info@jazzstandard.com' },
+      { name: 'Bill Evans — Sunday at the Village Vanguard', why: `live ${versionType} intimacy for observational cuts` },
+      { name: 'Robert Glasner — Conversation', why: `sparse ${versionType} layering for broken-tempo beats` },
     ],
     electronic: [
-      { name: 'Berghain Kantine (Berlin)', reason: 'Adjacent to Berghain, books experimental electronic acts', contact: 'booking@berghain.de' },
-      { name: 'Output (Brooklyn)', reason: 'Electronic music focused, strong local following', contact: 'talent@output.club' },
-      { name: 'Fabric (London)', reason: 'Legendary electronic venue with Room 2 for emerging artists', contact: 'bookings@fabriclondon.com' },
+      { name: 'Caribou — Swim tour set', why: `modular electronic ${versionType} warmth for uneasy moods` },
     ],
     default: [
-      { name: 'Local open mic nights', reason: 'Start with community venues to build a live following', contact: 'Check local listings' },
-      { name: 'House concerts network', reason: 'Intimate settings where alternate takes shine', contact: 'sofarsounds.com/perform' },
-      { name: 'College radio stations', reason: 'Independent stations actively seek non-standard versions', contact: 'Submit via station websites' },
+      { name: 'Bon Iver — 22, A Million', why: `genre-bending ${versionType} textures for ambiguous scenes` },
+      { name: 'Radiohead — TKOL looseness', why: `low-fidelity ${versionType} patience for held moments` },
     ],
   };
 
-  const genreChannels: Record<string, Array<{ name: string; reason: string; followers?: string }>> = {
-    rock: [
-      { name: 'KEXP', reason: 'Seattle-based, known for live in-studio performances and deep rock curation', followers: '1.2M subscribers' },
-      { name: 'Mahogany', reason: 'Focuses on intimate acoustic and alternate performances', followers: '3.8M subscribers' },
-      { name: 'NPR Tiny Desk', reason: 'The gold standard for stripped-back performances — submit via NPR Music', followers: '4.1M subscribers' },
-    ],
-    jazz: [
-      { name: 'Jazz Re:freshed', reason: 'UK-based, champions new jazz and alternate takes', followers: '180K subscribers' },
-      { name: 'WBGO Jazz 88.3', reason: 'Newark-based, worlds largest jazz radio, accepts submissions', followers: '50K subscribers' },
-      { name: 'The Jazz Hole', reason: 'Curates rare and alternate jazz recordings', followers: '95K subscribers' },
-    ],
-    electronic: [
-      { name: 'Boiler Room', reason: 'Underground electronic sessions, accepts artist submissions', followers: '5.2M subscribers' },
-      { name: 'Cercle', reason: 'Cinematic electronic performances in unique locations', followers: '3.1M subscribers' },
-      { name: 'Mixmag', reason: 'Electronic music media, features new artists and alternate mixes', followers: '1.8M subscribers' },
-    ],
-    default: [
-      { name: 'COLORS', reason: 'Showcases unique artists in a minimalist format', followers: '4.5M subscribers' },
-      { name: 'Like I Could Dive', reason: 'Covers and alternate versions from emerging artists', followers: '120K subscribers' },
-      { name: 'Our Music Box', reason: 'Intimate live sessions with emerging artists', followers: '200K subscribers' },
-    ],
+  // Per-genre emotional_arc. Free-text pacing/range description.
+  const genreArcs: Record<string, string[]> = {
+    rock: ['restrained intro escalating to a cathartic release pre-chorus'],
+    jazz: ['conversational opening breaking to unresolved tension late'],
+    electronic: ['patient build lifting into melodic centerpiece at 1:30'],
+    default: ['intimate low-energy verse resolving into denser hook at the bridge'],
   };
 
-  const genreInfluencers: Record<string, Array<{ name: string; reason: string; platform?: string }>> = {
-    rock: [
-      { name: '@anthemusical', reason: 'Rock and indie curation, 150K followers, responsive to DM submissions', platform: 'Instagram' },
-      { name: '@guitarworldmag', reason: 'Guitar-focused content, features standout solos and alternate takes', platform: 'Instagram' },
-    ],
-    jazz: [
-      { name: '@jazznightswithdominick', reason: 'Jazz discovery, 80K followers, actively seeks new recordings', platform: 'Instagram' },
-      { name: '@thejazzgroove', reason: 'Daily jazz curation including live and alternate versions', platform: 'Instagram' },
-    ],
-    electronic: [
-      { name: '@electronicbuddha', reason: 'Electronic music discovery, 200K followers', platform: 'Instagram' },
-      { name: '@ravefamily', reason: 'Electronic community, shares new artists and underground sounds', platform: 'Instagram' },
-    ],
-    default: [
-      { name: '@indiespotlight', reason: 'Independent music discovery, 100K+ followers, open to submissions', platform: 'Instagram' },
-      { name: '@newmusicdaily', reason: 'Daily new music features across genres', platform: 'Instagram' },
-    ],
-  };
-
-  const key = genreVenues[genre] ? genre : 'default';
+  const key = genreInstrumentation[genre] ? genre : 'default';
 
   return {
-    venues: genreVenues[key],
-    youtube_channels: genreChannels[key],
-    influencers: genreInfluencers[key],
+    scene_tags: [...genreScenes[key], key === 'jazz' ? 'late-night cab ride' : 'low-stakes outcome'],
+    instruments: genreInstrumentation[key],
+    emotional_arcs: genreArcs[key],
+    sync_comparables: genreComparables[key],
     audience_summary:
-      `The ${genre} ${versionType} market is strongest among 25-40 year old listeners who value authenticity and variety. ` +
-      `Focus outreach on venues that book emerging artists, YouTube channels that feature intimate performances, ` +
-      `and influencers who actively curate new ${genre} content. The alternate take angle is your differentiator — ` +
-      `lead with "heres a version you havent heard" rather than generic promotion.`,
-    draft_emails: [
-      {
-        to: genreVenues[key][0].name,
-        subject: `Booking inquiry: ${genre} artist with ${versionType} material`,
-        body:
-          `Hi,\n\nI'm a ${genre} artist with a catalog of alternate takes and ${versionType} versions that go beyond standard studio recordings. I'd love to discuss a potential booking.\n\nMy work has been reviewed on VERSIONS, a curated marketplace for alternate versions, where it received strong ratings for performance and production quality.\n\nI'm available for a showcase set and can provide streaming links and press materials.\n\nBest regards`,
-      },
-      {
-        to: genreChannels[key][0].name,
-        subject: `Submission: ${genre} ${versionType} performance for consideration`,
-        body:
-          `Hi,\n\nI'm reaching out with a ${genre} ${versionType} recording that I think would resonate with your audience.\n\nThe track is an alternate take that captures something the studio version didn't — [describe the unique element]. It's been curated and reviewed on VERSIONS, a marketplace dedicated to this kind of material.\n\nI'd love to submit it for your consideration. Streaming link: [your link]\n\nThank you for your time.`,
-      },
-    ],
+      `Supervisor briefs in ${genre} ${versionType} reward authentic alternate-take framing. ` +
+      `Lead with "a version that fits" rather than generic promotion; the inverse-search index is tuned for ` +
+      `scene-tag / instrumentation / emotional-arc recall, not popularity.`,
   };
 }
 

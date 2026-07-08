@@ -23,6 +23,13 @@ export interface PinataClient {
     filename: string,
     contentType: string,
   ): Promise<PinataUploadResult>;
+  // MODULAR: best-effort unpin for the dedup short-circuit path
+  // (see src/app/api/v1/submissions/route.ts). Mock mode is a no-op
+  // since `mockCid` produces a synthetic in-process identifier with
+  // no real pin; real Pinata mode tries the SDK's
+  // `unpin.public.cid([cid])` shape and swallows version-mismatch
+  // errors so the route cleanup never crashes the dedup response.
+  unpin(cid: string): Promise<void>;
   gatewayUrl(cid: string, filename?: string): string;
   isConfigured(): boolean;
   mode(): "pinata" | "mock";
@@ -89,6 +96,33 @@ export function createPinataClient(config: PinataConfig): PinataClient {
     gatewayUrl(cid: string, filename?: string) {
       const base = `${gateway}/ipfs/${cid}`;
       return filename ? `${base}/${filename}` : base;
+    },
+    async unpin(cid: string): Promise<void> {
+      // MODULAR: mock mode → no-op. `mockCid` produces a synthetic
+      // base32 hash with no corresponding IPFS pin anywhere; the
+      // route still sets `audioIpfsCid = null` on the dedup hit so
+      // the response shape stays consistent.
+      if (!configured) return;
+      try {
+        // MODULAR: feature-checked call. The Pinata SDK exposes
+        // `unpin.public.cid([cid])` in recent versions, but the
+        // exact surface drifts across releases. We feature-check
+        // so a future SDK mismatch surfaces as a silent no-op
+        // instead of a 500 on the dedup short-circuit (which is
+        // the user-visible path). Operators with a permanent
+        // version drift can unpin orphans from Pinata's dashboard.
+        const sdk = getSdk() as unknown as {
+          unpin?: { public?: { cid?: (cids: string[]) => Promise<unknown> } };
+        };
+        const fn = sdk.unpin?.public?.cid;
+        if (typeof fn === 'function') {
+          await fn([cid]);
+        }
+      } catch {
+        // swallow — dedup body has already returned success; the
+        // redundant pin becomes an orphan that the operator can
+        // clean up out-of-band if needed.
+      }
     },
     async uploadAudio(
       buffer: Buffer,

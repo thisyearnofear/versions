@@ -6,6 +6,7 @@
 
 import Link from "next/link";
 import { WagmiConnectButton } from "@/components/wallet/WagmiConnectButton";
+import { track } from "@/lib/analytics";
 
 export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" | "discover" }) {
   const tabs = [
@@ -32,6 +33,7 @@ export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" |
             key={t.id}
             href={t.href}
             role="tab"
+            onClick={() => track("nav_click", { to: t.href, source: "site_header" })}
             className={`font-mono text-[11px] uppercase tracking-[0.18em] px-5 py-4 border-b-2 transition-colors whitespace-nowrap ${
               active === t.id
                 ? "border-[var(--color-rust)] text-[var(--color-rust)]"

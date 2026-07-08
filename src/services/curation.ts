@@ -18,7 +18,9 @@ import {
   ratings as ratingsTable,
   publishedVersions as pvTable,
   settlementLegs as legsTable,
+  x402Proofs as x402ProofsTable,
 } from '../lib/schema';
+import { fromMicroUsdc } from './settlement';
 import { aggregateRatings, type RatingRowLike } from './taste-graph';
 import { validateRating } from '../lib/validation';
 import { publishSubmission } from './publish';
@@ -122,6 +124,40 @@ export interface CurationService {
     total_received_usdc: number;
     recent_submissions: Array<typeof submissionsTable.$inferSelect>;
     recent_published: Array<typeof pvTable.$inferSelect>;
+  }>;
+  // MODULAR: tip-card is the slim payload surfaced by the TipButton
+  // recipient hover-card on the listener-facing feed/artist pages.
+  // Returns the 3 most-recently-published versions + the 5 most
+  // recent x402 nanopayment tips the artist has received, plus
+  // aggregate counts so the card can render a "X tips · Y USDC"
+  // footer without a second fetch.
+  getArtistTipCard: (
+    wallet: string,
+  ) => Promise<{
+    artist_wallet: string;
+    total_tips: number;
+    total_tips_usdc: string;
+    recent_published: Array<{
+      submission_id: string;
+      title: string;
+      version_type: string;
+      avg_solo_intensity: number | null;
+      avg_vocal_quality: number | null;
+      energy_consensus: string | null;
+      tempo_consensus: string | null;
+      aggregated_mood_tags: string[] | null;
+      rating_count: number;
+      published_at: Date;
+    }>;
+    recent_tips: Array<{
+      puid: string;
+      tipper_wallet: string;
+      amount_micro_usdc: string;
+      amount_usdc: string;
+      message: string | null;
+      settled_at: Date | null;
+      created_at: Date;
+    }>;
   }>;
   listArtistVersions: (
     wallet: string,
@@ -434,6 +470,97 @@ export function createCurationService({ settlement }: { settlement: SettlementSe
         total_received_usdc: received,
         recent_submissions: subs,
         recent_published: published,
+      };
+    },
+
+    // PERFORMANT: two indexed queries (pvTable + x402ProofsTable)
+    // are the entire payload. Both tables have a covering index
+    // for the wallet predicate (idx_published_at and
+    // idx_x402_proofs_artist). Parallel Promise.all keeps the
+    // card-skeleton-to-content swap fast even on cold-start.
+    async getArtistTipCard(wallet: string) {
+      const [recentPublished, recentTips, totalTipsRow, totalMicroRow] = await Promise.all([
+        db
+          .select({
+            submission_id: pvTable.submissionId,
+            title: pvTable.title,
+            version_type: pvTable.versionType,
+            avg_solo_intensity: pvTable.avgSoloIntensity,
+            avg_vocal_quality: pvTable.avgVocalQuality,
+            energy_consensus: pvTable.energyConsensus,
+            tempo_consensus: pvTable.tempoConsensus,
+            aggregated_mood_tags: pvTable.aggregatedMoodTags,
+            rating_count: pvTable.ratingCount,
+            published_at: pvTable.publishedAt,
+          })
+          .from(pvTable)
+          .where(eq(pvTable.artistWallet, wallet))
+          .orderBy(desc(pvTable.publishedAt))
+          .limit(3),
+        db
+          .select({
+            puid: x402ProofsTable.puid,
+            tipper_wallet: x402ProofsTable.tipperWallet,
+            amount_micro_usdc: x402ProofsTable.amountMicroUsdc,
+            message: x402ProofsTable.message,
+            settled_at: x402ProofsTable.settledAt,
+            created_at: x402ProofsTable.createdAt,
+          })
+          .from(x402ProofsTable)
+          .where(eq(x402ProofsTable.artistWallet, wallet))
+          .orderBy(
+            sql`COALESCE(${x402ProofsTable.settledAt}, ${x402ProofsTable.createdAt}) DESC`,
+          )
+          .limit(5),
+        db
+          .select({ n: sql<number>`COUNT(*)::int` })
+          .from(x402ProofsTable)
+          .where(eq(x402ProofsTable.artistWallet, wallet)),
+        db
+          .select({
+            total: sql<string>`COALESCE(SUM(CAST(${x402ProofsTable.amountMicroUsdc} AS NUMERIC)), 0)`,
+          })
+          .from(x402ProofsTable)
+          .where(
+            and(
+              eq(x402ProofsTable.artistWallet, wallet),
+              eq(x402ProofsTable.status, 'settled'),
+            ),
+          ),
+      ]);
+
+      // MODULAR: SUM returns the micro-amount as a numeric string —
+      // re-render through fromMicroUsdc so the wire shape matches
+      // the rest of the API (decimal USDC string, not USDC×10^6).
+      // fromMicroUsdc is a noop when the input is "0" so empty
+      // wallets get a clean "0" footer instead of "0.000000".
+      const totalMicro = totalMicroRow[0]?.total ?? '0';
+      const totalUsdc = totalMicro === '0' ? '0' : fromMicroUsdc(BigInt(totalMicro));
+
+      return {
+        artist_wallet: wallet,
+        total_tips: Number(totalTipsRow[0]?.n ?? 0),
+        total_tips_usdc: totalUsdc,
+        recent_published: recentPublished,
+        recent_tips: recentTips.map((t) => ({
+          puid: t.puid,
+          tipper_wallet: t.tipper_wallet,
+          amount_micro_usdc: t.amount_micro_usdc,
+          // MODULAR: same trick — micro → decimal USDC at the wire
+          // boundary so the client doesn't need a BigInt convert
+          // (which is awkward in components that take a string for
+          // formatMicroUsdc compatibility anyway).
+          amount_usdc: (() => {
+            try {
+              return fromMicroUsdc(BigInt(t.amount_micro_usdc));
+            } catch {
+              return '0';
+            }
+          })(),
+          message: t.message,
+          settled_at: t.settled_at,
+          created_at: t.created_at,
+        })),
       };
     },
 

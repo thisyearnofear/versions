@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS submissions (
   audio_path TEXT NOT NULL,
   audio_duration_seconds INTEGER,
   audio_size_bytes INTEGER NOT NULL,
+  audio_sha256 TEXT,
   content_type TEXT NOT NULL,
   fee_quote_usdc TEXT NOT NULL,
   cover_svg TEXT,
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS submissions (
 );
 CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions(status, submitted_at);
 CREATE INDEX IF NOT EXISTS idx_submissions_artist ON submissions(artist_wallet);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_audio_sha256_wallet ON submissions(audio_sha256, artist_wallet);
 
 CREATE TABLE IF NOT EXISTS curator_claims (
   id TEXT PRIMARY KEY,
@@ -247,6 +249,19 @@ CREATE TABLE IF NOT EXISTS x402_proofs (
 CREATE INDEX IF NOT EXISTS idx_x402_proofs_tipper ON x402_proofs(tipper_wallet);
 CREATE INDEX IF NOT EXISTS idx_x402_proofs_artist ON x402_proofs(artist_wallet);
 CREATE INDEX IF NOT EXISTS idx_x402_proofs_status ON x402_proofs(status, created_at);
+
+CREATE TABLE IF NOT EXISTS telemetry_events (
+  id TEXT PRIMARY KEY,
+  session TEXT NOT NULL,
+  event TEXT NOT NULL,
+  path TEXT,
+  referrer TEXT,
+  props JSONB NOT NULL DEFAULT '{}',
+  client_ts TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_telemetry_session ON telemetry_events(session, created_at);
+CREATE INDEX IF NOT EXISTS idx_telemetry_event ON telemetry_events(event, created_at);
 `;
 
 export async function initTestDb(): Promise<ReturnType<typeof drizzle<typeof schema>>> {
@@ -276,6 +291,8 @@ export async function resetTestDb(): Promise<void> {
   if (!_pg) return;
   // Drop all rows from every test table. Cheaper than recreating the instance.
   const tables = [
+    'telemetry_events',
+    'x402_proofs',
     'listen_events',
     'ar_play_events',
     'ar_playlist_tracks',

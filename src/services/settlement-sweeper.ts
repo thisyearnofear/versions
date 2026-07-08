@@ -15,6 +15,15 @@ import { db } from '../lib/db';
 import { settlementLegs as legsTable } from '../lib/schema';
 import { log } from '../lib/logger';
 import type { SettlementService } from './settlement';
+// MODULAR: server-side submit config (Next.js enforces server-only
+// bundling via the .server.ts suffix). The sweeper's default
+// polling cadence reads the same env-overridable knob as the
+// client's receipt-wait timeout — operators on Arc mainnet (or
+// future chains with longer block times) tune SUBMIT_RECEIPT_TIMEOUT_MS
+// without redeploying. Aliased on import so the sweeper-side
+// semantic (`SWEEPER_DEFAULT_INTERVAL_MS`) is explicit at the
+// call site — the env var name is incidental to the polling role.
+import { SUBMIT_RECEIPT_TIMEOUT_MS as SWEEPER_DEFAULT_INTERVAL_MS } from '../lib/submit-config.server';
 
 export const STUCK_THRESHOLD_MS = 30 * 1000; // 30s
 
@@ -106,7 +115,16 @@ export function createSweeper({ settlement }: { settlement: SettlementService })
     // scheduled after `intervalMs`, not at t=0 (the publish path
     // already drives settleLegsAsync inline; the sweeper is for
     // recovery, not the happy path).
-    start({ intervalMs = 60_000 }: { intervalMs?: number } = {}) {
+    //
+    // MODULAR: intervalMs default reads the server-side submit
+    // config (parsed once at boot from SUBMIT_RECEIPT_TIMEOUT_MS).
+    // Numeric default is unchanged (60_000 ms = 1 min) — operators
+    // who don't set the env get identical behavior to before. Only
+    // ops who set SUBMIT_RECEIPT_TIMEOUT_MS see a different cadence,
+    // which is the documented contract.
+    start({
+      intervalMs = SWEEPER_DEFAULT_INTERVAL_MS,
+    }: { intervalMs?: number } = {}) {
       if (timer) return;
       timer = setInterval(() => {
         void tick();

@@ -9,8 +9,9 @@
 import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useChainId, useDisconnect, useSignMessage } from "wagmi";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { WalletGlossary } from "@/components/wallet/WalletGlossary";
+import { track } from "@/lib/analytics";
 
 export interface WagmiConnectButtonProps {
   // Optional: show the short address chip inline (otherwise RainbowKit's
@@ -26,6 +27,18 @@ export interface WagmiConnectButtonProps {
 
 export function WagmiConnectButton({ variant = "default", children, showGlossary = false }: WagmiConnectButtonProps) {
   const { address, isConnected } = useAccount();
+
+  // MODULAR: fire analytics when the wallet connects / disconnects.
+  // Only tracks the boolean (connected: true), not the address — no PII.
+  const prevConnected = useRef(false);
+  useEffect(() => {
+    if (isConnected && !prevConnected.current) {
+      track("wallet_connected", { variant });
+    } else if (!isConnected && prevConnected.current) {
+      track("wallet_disconnected", { variant });
+    }
+    prevConnected.current = isConnected;
+  }, [isConnected, variant]);
 
   const links =
     isConnected && address ? (

@@ -229,6 +229,88 @@ describe('x402 module', () => {
   });
 });
 
+// ── x402 module edge cases ─────────────────────────────
+
+// MODULAR: pin the API-boundary contracts that the route handler
+// relies on. viem guarantees the cryptographic pieces; this block
+// pins what WE own — the regex, the canonical string formatting,
+// the case-insensitive payTo comparison, and the BigInt(uint256)
+// boundary conversion inside hashOffer.
+describe('x402 module edge cases', () => {
+  it('parseAmountToMicroUsdc: leading dot ".5", trailing dot "1.", zero "0", throws on empty ""', () => {
+    // MODULAR: the regex ^\d+(\.\d+)?$ is intentionally strict —
+    // requires a leading digit + optional trailing-digit fractional
+    // part. We pin the boundaries so a future regex relaxation
+    // never lands silently in production.
+    expect(parseAmountToMicroUsdc('0').toString()).toBe('0');
+    expect(() => parseAmountToMicroUsdc('')).toThrow();
+    expect(() => parseAmountToMicroUsdc('.5')).toThrow();
+    expect(() => parseAmountToMicroUsdc('1.')).toThrow();
+  });
+
+  it('formatMicroUsdc: 0n renders exactly "0" (not "" or "0.000000")', () => {
+    // MODULAR: the canonical-string-strip logic must NOT collapse
+    // zero to empty. Pinning here so a future refactor that drops
+    // the truthy-fallback (`frac === '0' ? whole : ...`) is caught
+    // before any user-facing code (`fmtLeptons`, TipButton toast).
+    expect(formatMicroUsdc(0n)).toBe('0');
+  });
+
+  it('decodeHeader: invalid base64 string throws on the Buffer decode step', () => {
+    // MODULAR: pinning the throw here means the route's
+    // decodeHeader<X402Offer>(headers.get('x')) call MUST be
+    // guarded — an uncaught throw would surface as 500 instead of
+    // a structured 400 to the client.
+    expect(() => decodeHeader('!@#$%^&*')).toThrow();
+  });
+
+  it('decodeHeader: malformed JSON inside otherwise-valid base64 throws on JSON.parse', () => {
+    // MODULAR: same contract as the invalid-base64 test — the
+    // route must catch JSON.parse errors and surface 400, not 500.
+    const bad = Buffer.from('{ "this is not": valid json', 'utf8').toString('base64');
+    expect(() => decodeHeader(bad)).toThrow();
+  });
+
+  it('offerMatches: payTo is case-insensitive (uppercase vs lowercase)', () => {
+    // MODULAR: pin the explicit toLowerCase() comparison — viem's
+    // getAddress would normalize, but offerMatches operates on the
+    // raw wire strings, so the route MUST lowercase before
+    // comparing or it will fail-equivalent offers.
+    const upper: X402Offer = {
+      resourceUrl: '/x', scheme: X402_SCHEME, network: X402_NETWORK, asset: X402_ASSET,
+      payTo: '0xABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD', amount: '1', validUntil: 1, puid: 'p',
+    };
+    const lower = { ...upper, payTo: upper.payTo.toLowerCase() };
+    expect(offerMatches({ expected: upper, submitted: lower })).toBe(true);
+  });
+
+  it('offerMatches: single-field drift on puid returns false', () => {
+    // MODULAR: cover one representative single-field drift — the
+    // full 7-field cartesian is bloat; viem's getAddress
+    // comparison via case-insensitivity is pinned above; this
+    // test pins the "any one field drifts → false" contract.
+    const base: X402Offer = {
+      resourceUrl: '/x', scheme: X402_SCHEME, network: X402_NETWORK, asset: X402_ASSET,
+      payTo: '0x000000000000000000000000000000000000d3ad', amount: '1', validUntil: 1, puid: 'p1',
+    };
+    expect(offerMatches({ expected: base, submitted: { ...base, puid: 'p2' } })).toBe(false);
+  });
+
+  it('hashOffer: changing amount changes the hash (boundary-conversion sanity)', () => {
+    // MODULAR: pin that the BigInt(uint256) boundary conversion
+    // in hashOffer is wired into the EIP-712 struct — if a future
+    // refactor accidentally string-stringifies the amount, the
+    // hash will be identical and this test catches it.
+    const d = buildDomain(1234);
+    const o1: X402Offer = {
+      resourceUrl: '/x', scheme: X402_SCHEME, network: X402_NETWORK, asset: X402_ASSET,
+      payTo: '0x000000000000000000000000000000000000d3ad', amount: '1', validUntil: 1, puid: 'p',
+    };
+    const o2 = { ...o1, amount: '2' };
+    expect(hashOffer(d, o1)).not.toBe(hashOffer(d, o2));
+  });
+});
+
 // ── Gateway adapter tests ──────────────────────────────
 
 describe('Gateway adapter (mock mode)', () => {

@@ -5,15 +5,18 @@
 // verified / failed / abandoned) that drive the UI. Encapsulated in
 // one component; the page renders it directly.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAccount, useSignMessage } from "wagmi";
 import { Dropzone } from "@/components/submit/Dropzone";
 import { useToast } from "@/components/ui/Toast";
 import { Tour } from "@/components/ui/Tour";
 import { ApiError, apiClient, type AgentReviewRecord } from "@/lib/api-client";
 import { copyToClipboard } from "@/lib/utils";
+import { track } from "@/lib/analytics";
+import { useSubmitPayment, type PaymentPhase, type SendPaymentResult } from "@/components/submit/use-submit-payment";
 
 const PAYMENT_RETRIES = 3;
+const FEE_AMOUNT_USDC = "0.50";
 
 type SubmitPhase =
   | { phase: "idle" }
@@ -35,10 +38,44 @@ const AGENT_LABELS: Record<string, { icon: string; name: string }> = {
 const ENERGY_LABELS: Record<string, string> = { lower: "LOWER", same: "SAME", higher: "HIGHER" };
 const TEMPO_LABELS: Record<string, string> = { dragging: "DRAGGING", locked: "LOCKED", rushing: "RUSHING" };
 
+// MODULAR: extract the last in-flight tx hash from any hook
+// phase that legally carries one. Used by retryVerifyPayment to
+// avoid burning fresh user funds on receipt-timeout retries —
+// the original tx is on-chain; Arc RPC just hasn't caught up
+// yet. The shim sets lastTxHash.current on success only, so
+// when the receipt timeout throws we need a second source of
+// truth. The hook's error phase carries the broadcast hash
+// (added precisely for this fallback) and the broadcasting phase
+// is covered defensively in case the deadline happens to fire
+// before the receipt watcher resolves.
+// MODULAR: TS narrowing works here because each branch's `phase`
+// discriminant narrows the union before we read .txHash — no
+// `as` cast required.
+function paymentRecoveredTxHash(phase: PaymentPhase): string | null {
+  if (phase.phase === "broadcasting") return phase.txHash;
+  if (phase.phase === "error" && phase.txHash) return phase.txHash;
+  return null;
+}
+
 export function SubmitForm() {
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const { showToast } = useToast();
+  // MODULAR: destructure the hook so the `sendPayment` reference
+  // is stable across renders (the hook's returned object itself is
+  // fresh each render, but `sendPayment` is wrapped in useCallback
+  // and is the only field the submit state machine actually depends
+  // on). Destructuring keeps the form's onSubmit / retry deps stable.
+  // MODULAR: `phase` is pulled out for the chain-status banner
+  // — `arcInfo` is owned by the hook and queried on demand, the
+  // form doesn't need it anymore (mocked flag comes from
+  // sendPayment's return value, not the cached ArcInfo).
+  const { sendPayment, phase: paymentPhase, reset: resetPayment } = useSubmitPayment({
+    feeAmountUsdc: FEE_AMOUNT_USDC,
+  });
+  // MODULAR: cache the tx hash so the success-path message shows
+  // the user the actual on-chain receipt, not just "submitted".
+  const lastTxHash = useRef<string | null>(null);
 
   const [state, setState] = useState<SubmitPhase>({ phase: "idle" });
   const [file, setFile] = useState<File | null>(null);
@@ -46,15 +83,34 @@ export function SubmitForm() {
   const [reviews, setReviews] = useState<ReviewItem[] | null>(null);
   const [reviewStatus, setReviewStatus] = useState<string>("");
 
+  // MODULAR: fire form_start once when the user first focuses any
+  // field in the form. This lets us measure form abandonment vs.
+  // submit conversion separately — users who land on /submit but
+  // never focus a field are a different drop-off cohort than users
+  // who start filling the form but bail before submit.
+  const formStarted = useRef(false);
+  const onFormFocus = useCallback(() => {
+    if (formStarted.current) return;
+    formStarted.current = true;
+    track("form_start", { field: "title" });
+  }, []);
+
   const reset = useCallback(() => {
     setState({ phase: "idle" });
     setFile(null);
     setCoverSvg(null);
     setReviews(null);
     setReviewStatus("");
+    formStarted.current = false;
+    lastTxHash.current = null;
+    // MODULAR: also reset the payment hook so a fresh submit
+    // doesn't inherit the previous attempt's last phase (e.g.
+    // showing a stale "Awaiting wallet sign…" banner on a brand
+    // new form).
+    resetPayment();
     const form = document.getElementById("submitForm") as HTMLFormElement | null;
     form?.reset();
-  }, []);
+  }, [resetPayment]);
 
   // ──────────────────────────────────────────────────────────
   // Polling for AI agent reviews after verification
@@ -98,34 +154,79 @@ export function SubmitForm() {
   // ──────────────────────────────────────────────────────────
   // Payment helpers
   // ──────────────────────────────────────────────────────────
-  const getPaymentTxHash = useCallback(async (): Promise<string> => {
-    try {
-      const info = await apiClient.getArcInfo();
-      // MODULAR: real EVM transfer is wired in a separate wallet task.
-      // Until then, return a deterministic mock tx hash so the rest
-      // of the state machine can be exercised end-to-end.
-      if (!info.mock && info.usdcContract) {
-        // Real sendUsdcTransferViaEvm goes here once the wallet
-        // component is wired into the page-level client.
-      }
-    } catch {
-      /* fall back to mock */
-    }
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    return "0x" + Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
-  }, []);
+  // MODULAR: getPaymentTxHash is a thin shim over the
+  // useSubmitPayment hook so the existing state-machine code in
+  // onSubmit / retryVerifyPayment reads identically. Forwards
+  // the hook's SendPaymentResult verbatim and caches the
+  // txHash on a ref so the success/ban paths can show the
+  // on-chain receipt. Returning the typed SendPaymentResult
+  // (not an inline shape) keeps this shim in lockstep with the
+  // hook — adding a field upstream won't silently drop it
+  // here.
+  const getPaymentTxHash = useCallback(async (): Promise<SendPaymentResult> => {
+    const result = await sendPayment();
+    lastTxHash.current = result.txHash;
+    return result;
+  }, [sendPayment]);
 
   const retryVerifyPayment = useCallback(
     async (s: { submissionId: string; attempts: number }) => {
       setState({ phase: "verifying", submissionId: s.submissionId, message: "Re-attempting payment verification…" });
+      // MODULAR: retry-first verifies with the cached tx hash
+      // from the previous attempt. Re-sending a brand new tx
+      // every retry burns gas on the user (in real mode) and
+      // produces extra on-chain noise if the original tx was
+      // valid but slow to propagate to Arc RPC.
+      //
+      // Cache lookup chain (in priority order):
+      //   1. lastTxHash.current — set by the shim on the SUCCESS
+      //      path. Catches the "verifyPayment itself failed" case
+      //      (txHash broadcast + receipt confirmed + verify
+      //      endpoint returned non-awaiting_curation).
+      //   2. paymentPhase.txHash — catches cases where:
+      //      (a) writeContractAsync succeeded but the receipt
+      //          wait timed out. The hook sets phase="error"
+      //          WITH txHash, so we re-verify the same hash —
+      //          the server will eventually see it.
+      //      (b) writeContractAsync succeeded and we're still
+      //          in the broadcasting-waiting-for-receipt phase
+      //          (defensive — this branch shouldn't fire in
+      //          practice because submit can't fail mid-receipt
+      //          wait, but covered for safety).
+      //   3. null — fall through to a fresh getPaymentTxHash
+      //      (first attempt failed before broadcast, e.g.
+      //      switchChain rejected, writeContract rejected,
+      //      getArcInfo network error, runtime chainId guard).
+      let txHash: string | null =
+        lastTxHash.current ?? paymentRecoveredTxHash(paymentPhase);
+      track("payment_tx_retry", { submissionId: s.submissionId, attempt: s.attempts, hasCachedHash: !!txHash });
+      if (!txHash) {
+        try {
+          const fresh = await getPaymentTxHash();
+          txHash = fresh.txHash;
+        } catch {
+          // surface this without bumping attempts so the user can try the cached-hash path again
+          setState({
+            phase: "failed",
+            submissionId: s.submissionId,
+            attempts: s.attempts,
+            message: "Retry couldn't send a fresh tx — try again.",
+          });
+          showToast("Couldn't send a fresh tx. Try again.", "warning", 4000);
+          return;
+        }
+      }
       try {
-        const txHash = await getPaymentTxHash();
         const verify = await apiClient.verifyPayment(s.submissionId, { txHash });
         if (verify.status !== "awaiting_curation") {
           throw new Error(`Verification returned status=${verify.status}`);
         }
         setState({ phase: "verified", submissionId: s.submissionId });
+        // MODULAR: same rationale as onSubmit — the funnel
+        // (src/services/telemetry.ts + /api/v1/funnel) uses
+        // payment_verified as the funnel step; duplicating to a
+        // payment_tx_confirmed event would double-count.
+        track("payment_verified", { submissionId: s.submissionId, txHash });
         showToast("Payment verified — submission is in the curator queue.", "success", 5000);
       } catch (err) {
         const attempts = s.attempts + 1;
@@ -143,7 +244,7 @@ export function SubmitForm() {
         }
       }
     },
-    [getPaymentTxHash, showToast],
+    [getPaymentTxHash, paymentPhase, showToast],
   );
 
   // ──────────────────────────────────────────────────────────
@@ -162,6 +263,7 @@ export function SubmitForm() {
       }
       const form = e.currentTarget;
       const fd = new FormData(form);
+      track("submit_attempt");
       setState({ phase: "submitting", message: "Signing submission…" });
 
       try {
@@ -191,23 +293,66 @@ export function SubmitForm() {
         const submissionId = data.id;
 
         setState({ phase: "pending", submissionId });
-        const txHash = await getPaymentTxHash();
+        track("payment_initiated", { submissionId });
+        const { txHash, mocked: wasMockedPayment, chainId: paymentChainId, mockReason } = await getPaymentTxHash();
+        // MODULAR: payment_tx_broadcast captures the moment the
+        // tx is sent (or a DEV mock replaces it). The mocked
+        // flag + chainId + mockReason came directly from the
+        // hook's response so we don't have to inspect
+        // paymentPhase inside this closure (which would read the
+        // stale pre-send snapshot due to React state batching).
+        // Mock sends report chainId: null + mockReason set so
+        // the funnel can tell "no on-chain settlement" apart
+        // from "settled on chain X", and an ops dashboard can
+        // split "deliberate preview deploy" from "operator env
+        // misconfig".
+        track("payment_tx_broadcast", {
+          submissionId,
+          txHash,
+          mocked: wasMockedPayment,
+          chainId: paymentChainId,
+          mockReason,
+        });
         setState({ phase: "verifying", submissionId, message: "Awaiting finality…" });
         const verify = await apiClient.verifyPayment(submissionId, { txHash });
         if (verify.status !== "awaiting_curation") {
           throw new Error(`Verification returned status=${verify.status}`);
         }
         setState({ phase: "verified", submissionId });
-        showToast("Submission live in the queue.", "success");
+        track("submit_success", { submissionId });
+        // MODULAR: payment_verified is the existing funnel step
+        // (see src/services/telemetry.ts #FUNNEL_STEPS and the
+        // /api/v1/funnel endpoint). We deliberately don't add a
+        // separate "payment_tx_confirmed" event — it fires from
+        // the same trigger (verifyPayment returning
+        // awaiting_curation) and would double-count in the funnel
+        // query. payment_tx_broadcast + payment_verified gives
+        // the meaningful split: "tx sent" vs "server confirmed".
+        track("payment_verified", { submissionId, txHash });
+        // MODULAR: surface the actual on-chain tx hash in the
+        // success toast so the user has a copy-pasteable receipt
+        // for support / tax / a-r-i claims. Truncated to the
+        // first 10 hex chars + … — full hash is on the verify API
+        // response and the explorer link in the toast.
+        const txShort = txHash ? `${txHash.slice(0, 10)}…` : "";
+        showToast(
+          wasMockedPayment
+            ? `Submission live in the queue (DEV-ONLY mock tx ${txShort}).`
+            : `Submission live in the queue — tx ${txShort}`,
+          "success",
+          6000,
+        );
         form.reset();
         setFile(null);
         setCoverSvg(null);
+        formStarted.current = false;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const submissionId =
           err instanceof ApiError && err.body && typeof err.body === "object" && "data" in err.body
             ? ((err.body as { data?: { id?: string } }).data?.id ?? null)
             : null;
+        track("submit_failed", { hasSubmissionId: !!submissionId, error: msg.slice(0, 120) });
         if (submissionId) {
           setState({ phase: "failed", submissionId, attempts: 1, message: msg });
         } else {
@@ -260,6 +405,7 @@ export function SubmitForm() {
               required
               maxLength={200}
               placeholder="Gravity — acoustic demo, 3am take"
+              onFocus={onFormFocus}
               className="w-full bg-transparent border-b-2 border-[var(--color-hair-strong)] focus:border-[var(--color-rust)] focus:outline-none py-3 font-serif text-lg"
             />
           </label>
@@ -369,6 +515,54 @@ export function SubmitForm() {
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-ink-2)]">
             {statusMessage}
           </p>
+        )}
+
+        {paymentPhase.phase !== "idle" && paymentPhase.phase !== "error" && (
+          // MODULAR: chain-status banner — surfaces what the
+          // payment hook is doing in real time so the user isn't
+          // staring at a spinner wondering whether they're being
+          // prompted to switch chains, sign in the wallet, or
+          // waiting for finality. Two visual flavors:
+          //   - mock + non-broadcast: yellow-tinted DEV-ONLY warning
+          //     so a preview deploy is never confused with prod.
+          //   - real + non-broadcast: neutral italic micro-status.
+          <div
+            className={
+              paymentPhase.phase === "mocked"
+                ? "border-l-2 border-[var(--color-rust)] bg-[var(--color-paper-2)]/60 pl-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] flex items-start gap-2"
+                : "border-l-2 border-[var(--color-hair-strong)] bg-[var(--color-paper-2)]/60 pl-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] flex items-start gap-2"
+            }
+            aria-live="polite"
+          >
+            <span className="shrink-0">
+              {paymentPhase.phase === "mocked"
+                ? "⚠"
+                : paymentPhase.phase === "switching_chain"
+                ? "↻"
+                : paymentPhase.phase === "awaiting_wallet_sign"
+                ? "→"
+                : paymentPhase.phase === "broadcasting"
+                ? "✓"
+                : "•"}
+            </span>
+            <span className="flex-1">
+              {paymentPhase.phase === "mocked" &&
+                (paymentPhase.reason === "arc-mock"
+                  ? "DEV-ONLY mock payment — connect ARC_RPC_URL, ARC_USDC_CONTRACT and PLATFORM_WALLET to settle on Arc."
+                  : "Arc config incomplete — falling back to DEV mock. Set ARC_RPC_URL + ARC_USDC_CONTRACT + PLATFORM_WALLET in env.")}
+              {paymentPhase.phase === "switching_chain" &&
+                `Switching to Arc testnet (chain ${paymentPhase.targetChainId}) — approve in your wallet.`}
+              {paymentPhase.phase === "awaiting_wallet_sign" &&
+                "Approve the 0.50 USDC transfer in your wallet."}
+              {paymentPhase.phase === "broadcasting" &&
+                // MODULAR: the `broadcasting` phase now covers both
+                // the post-writeContract state AND the 1-confirmation
+                // wait. Surface the wait explicitly so the user
+                // doesn't think the spinner is hung and click again
+                // (which would queue a duplicate tx on the wallet).
+                `Confirming on Arc (waiting 1 block confirmation) — tx ${paymentPhase.txHash.slice(0, 10)}…`}
+            </span>
+          </div>
         )}
 
         {state.phase === "failed" && (
