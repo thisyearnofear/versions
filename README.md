@@ -440,7 +440,32 @@ If `psql` isn't on your PATH (some operator envs), paste the contents
 of `scripts/purge-legacy-placement-briefs.apply.sql` directly into the
 Neon SQL Editor.
 
+## Recent prod execution (2026-07-08)
+
+Last verified run against the production Neon DB
+(`ep-polished-flower-at3asl7k-pooler.c-9.us-east-1.aws.neon.tech`):
+
+```bash
+# Preview
+npm run db:purge:preview
+# → legacy_rows_to_purge = 0 / distinct_submissions_impacted = 0
+
+# Apply (BEGIN/COMMIT atomic, idempotent)
+npm run db:purge:apply
+# → BEGIN / UPDATE 0 / COMMIT
+
+# Verify
+psql "$DATABASE_URL" -c "SELECT count(*) FROM placement_briefs;"
+# → 0
+```
+
+Production was already in post-repurpose shape — `placement_briefs` has 0
+rows total, so the apply was an idempotent no-op (`UPDATE 0`). The runbook
+fired end-to-end against real Neon Postgres and committed cleanly. Operator
+can ship `6f48d190` without needing a follow-up purge.
+
 ## Known issues
 
 1. **Turbopack `workStore` invariant** — see "Why `--experimental-build-mode compile`" above.
 2. **No `.env.example`** — the project uses a `.env` file but there's no checked-in template. Create one to document all required vars.
+3. **Homebrew `pg_dump` version mismatch** — the local Homebrew `pg_dump` is `14.22` while the Neon server runs Postgres `18.4`. `pg_dump --table=placement_briefs "$DATABASE_URL" > brief.bak` aborts with `server version: 18.4; pg_dump version: 14.22` before producing any output, so the revert path documented in the Deploy runbook above does NOT work until the local client is upgraded to ≥18. **Inline `psql -c "..."` queries still work fine** against the 18 server (the smoke-update `BEGIN; UPDATE 0; COMMIT;` ran end-to-end on real Neon this way). Fix: `brew install postgresql@18 && brew link --force postgresql@18`.
