@@ -1,75 +1,58 @@
 "use client";
 
+// MODULAR: Landing page. The first thing a visitor sees. Leads
+// with plain-language value prop, shows a live activity strip
+// so the platform feels alive, and auto-starts the onboarding
+// tour for first-time visitors. Uses the shared SiteHeader for
+// consistent navigation with the other section pages.
+
 import Link from "next/link";
-import { WagmiConnectButton } from "@/components/wallet/WagmiConnectButton";
+import { SiteHeader } from "@/components/SiteHeader";
+import { Tour } from "@/components/ui/Tour";
+import { LiveActivityStrip } from "@/components/home/LiveActivityStrip";
+import { track } from "@/lib/analytics";
 
 export default function Home() {
   return (
     <div className="flex flex-col flex-1">
-      <Header />
+      <SiteHeader />
       <main className="flex-1">
         <Hero />
+        <LiveActivityStrip />
         <SectionNav />
       </main>
       <Footer />
+      <Tour autoStart withTrigger />
     </div>
-  );
-}
-
-function Header() {
-  return (
-    <header className="border-b border-[var(--color-hair-strong)] px-6 md:px-12 py-5 flex items-center justify-between gap-6">
-      <div className="flex items-baseline gap-4">
-        <div className="font-serif text-2xl font-black tracking-tight">
-          VERSIONS
-        </div>
-        <div className="hidden md:block font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
-          A marketplace for alternate takes
-        </div>
-      </div>
-      <div className="flex flex-col items-end gap-0">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/submit"
-            className="font-mono text-[11px] uppercase tracking-[0.18em] hover:text-[var(--color-rust)] transition-colors"
-          >
-            Submit
-          </Link>
-          <Link
-            href="/feed"
-            className="font-mono text-[11px] uppercase tracking-[0.18em] hover:text-[var(--color-rust)] transition-colors"
-          >
-            Feed
-          </Link>
-          <WagmiConnectButton variant="compact" showGlossary />
-        </div>
-      </div>
-    </header>
   );
 }
 
 function Hero() {
   return (
-    <section className="px-6 md:px-12 py-16 md:py-28 max-w-5xl">
-      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-8">
-        Lepton Submission Marketplace · est. 2026
+    <section className="px-6 md:px-12 py-16 md:py-24 max-w-5xl">
+      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-6">
+        Alternate takes, rated by AI · 2026
       </p>
-      <h1 className="font-serif text-5xl md:text-7xl lg:text-8xl font-black leading-[0.95] tracking-tight mb-8">
-        A demo, a live take,
+      <h1 className="font-serif text-5xl md:text-7xl lg:text-8xl font-black leading-[0.95] tracking-tight mb-6">
+        Every version
         <br />
         <span className="italic font-normal text-[var(--color-rust)]">
-          the cut almost buried.
+          deserves a verdict.
         </span>
       </h1>
-      <p className="font-serif text-xl md:text-2xl leading-snug max-w-2xl text-[var(--color-ink-2)] mb-12">
-        Submit a version. Three AI agent curators analyze Production,
-        Performance, and Market in seconds. The 0.50 USDC submission fee
-        settles instantly on Arc — 70/20/10 split between curators, platform,
-        and MusicBrainz attribution.
+      <p className="font-serif text-xl md:text-2xl leading-snug max-w-2xl text-[var(--color-ink-2)] mb-4">
+        Submit a demo, a live take, or a remix. Three AI agents listen
+        and rate it in seconds — production, performance, and market
+        fit. No gatekeepers, no waiting weeks for feedback.
+      </p>
+      <p className="font-serif text-lg leading-snug max-w-2xl text-[var(--color-ink-3)] mb-10">
+        Browse the feed, discover playlists, or submit your own. Each
+        play pays the artist directly.
       </p>
       <div className="flex flex-wrap gap-4">
         <Link
           href="/submit"
+          onClick={() => track("nav_click", { to: "/submit", source: "hero_cta" })}
           className="inline-flex items-center gap-3 bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[11px] uppercase tracking-[0.18em] px-6 py-4 hover:bg-[var(--color-rust)] transition-colors"
         >
           Submit a version
@@ -77,9 +60,17 @@ function Hero() {
         </Link>
         <Link
           href="/discover"
+          onClick={() => track("nav_click", { to: "/discover", source: "hero_cta" })}
           className="inline-flex items-center gap-3 border border-[var(--color-ink)] font-mono text-[11px] uppercase tracking-[0.18em] px-6 py-4 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
         >
-          Discover playlists
+          Listen to playlists
+        </Link>
+        <Link
+          href="/agents"
+          onClick={() => track("nav_click", { to: "/agents", source: "hero_cta" })}
+          className="inline-flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] px-6 py-4 text-[var(--color-ink-2)] hover:text-[var(--color-rust)] transition-colors"
+        >
+          Watch the agents
         </Link>
       </div>
     </section>
@@ -92,25 +83,25 @@ function SectionNav() {
       num: "01",
       label: "Submit",
       href: "/submit",
-      blurb: "Upload an audio file, fill in the metadata, pay 0.50 USDC. The submission fee funds the curator pool.",
+      blurb: "Upload an audio file and get rated by three AI agents in seconds.",
     },
     {
       num: "02",
       label: "Agents",
       href: "/agents",
-      blurb: "Three autonomous AI agents review every submission — no human in the loop. See what they decided in real time.",
+      blurb: "Watch the AI curators review submissions in real time — no human in the loop.",
     },
     {
       num: "03",
       label: "Feed",
       href: "/feed",
-      blurb: "Versions that cleared the publish gate — at least three curator ratings. Filter by mood, energy, tempo.",
+      blurb: "Published versions that cleared the gate. Filter by mood, energy, and tempo.",
     },
     {
       num: "04",
       label: "Discover",
       href: "/discover",
-      blurb: "A&R agent curated playlists from the published catalog. Each play pays the artist $0.0005 USDC.",
+      blurb: "AI-curated playlists. Each play pays the artist directly — no algorithm gatekeepers.",
     },
   ];
 
@@ -121,6 +112,7 @@ function SectionNav() {
           <Link
             key={s.num}
             href={s.href}
+            onClick={() => track("nav_click", { to: s.href, source: "section_nav" })}
             className={`group p-8 md:p-10 hover:bg-[var(--color-paper-2)] transition-colors ${
               i < sections.length - 1
                 ? "md:border-r border-b md:border-b-0 border-[var(--color-hair)]"
@@ -153,7 +145,7 @@ function Footer() {
   return (
     <footer className="border-t border-[var(--color-hair-strong)] px-6 md:px-12 py-8 flex flex-wrap items-center justify-between gap-4">
       <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]">
-        VERSIONS · Lepton Submission Marketplace · 2026
+        VERSIONS · Alternate takes marketplace · 2026
       </div>
       <div className="flex gap-6 font-mono text-[10px] uppercase tracking-[0.18em]">
         <a href="https://github.com/thisyearnofear/versions" className="hover:text-[var(--color-rust)]" target="_blank" rel="noopener noreferrer">Docs</a>

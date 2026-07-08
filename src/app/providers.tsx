@@ -7,6 +7,7 @@ import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import { SessionProvider } from "next-auth/react";
 import { wagmiConfig } from "@/lib/wagmi";
 import { ToastProvider } from "@/components/ui/Toast";
+import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import "@rainbow-me/rainbowkit/styles.css";
 import { MotionConfig } from "framer-motion";
 
@@ -36,7 +37,7 @@ export function Providers({ children }: { children: ReactNode }) {
             })}
             modalSize="compact"
           >
-            <MotionConfig reducedMotion="user"><ToastProvider>{children}</ToastProvider></MotionConfig>
+            <MotionConfig reducedMotion="user"><AnalyticsProvider><ToastProvider>{children}</ToastProvider></AnalyticsProvider></MotionConfig>
           </RainbowKitProvider>
         </QueryClientProvider>
       </WagmiProvider>
