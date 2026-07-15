@@ -21,10 +21,9 @@ const envSchema = z.object({
   AGENT_WALLET_MARKET: z.string().optional(),
   AR_WALLET: z.string().optional(),
 
-  // IPFS
-  PINATA_API_KEY: z.string().optional(),
-  PINATA_SECRET_KEY: z.string().optional(),
-  IPFS_GATEWAY: z.string().default('https://gateway.pinata.cloud'),
+  // IPFS (Pinata JWT is read directly in src/lib/ipfs.ts)
+  PINATA_JWT: z.string().optional(),
+  PINATA_GATEWAY: z.string().optional(),
 
   // Circle Gateway (x402 nanopayments)
   GATEWAY_API_URL: z.string().url().optional(),
@@ -39,10 +38,10 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
   RATE_LIMIT_AUDIO_MAX: z.coerce.number().int().positive().default(30),
 
-  // CORS
+  // CORS (reserved — not yet wired into route handlers)
   ALLOWED_ORIGINS: z.string().optional(),
 
-  // Monitoring
+  // Monitoring (reserved — not yet wired into error tracking or product analytics)
   SENTRY_DSN: z.string().optional(),
   POSTHOG_KEY: z.string().optional(),
 });

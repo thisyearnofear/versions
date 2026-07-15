@@ -499,9 +499,14 @@ export function SubmitForm() {
         </div>
 
         <div className="pt-6 flex flex-wrap items-center justify-between gap-4">
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
-            Submission fee: 0.50 USDC · settled on Arc
-          </p>
+          <div className="flex flex-col gap-1">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+              Total cost: <strong className="text-[var(--color-ink)]">0.50 USDC</strong> · settled on Arc
+            </p>
+            <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+              No additional gas or hidden fees
+            </p>
+          </div>
           <button
             type="submit"
             disabled={submitDisabled}

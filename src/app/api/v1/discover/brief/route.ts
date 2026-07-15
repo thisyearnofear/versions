@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
   // compatible plain object (`Record<string, string>` is assignable
   // to the wider signature because `string` ∈ the union).
   const headerSnapshot = Object.fromEntries(req.headers.entries());
-  if (!inverseSearchLimiter.allow({ headers: headerSnapshot })) {
+  if (!(await inverseSearchLimiter.allow({ headers: headerSnapshot }))) {
     return errorResponse(rid, 429, 'RATE_LIMITED', 'Too many requests; please slow down.');
   }
   try {

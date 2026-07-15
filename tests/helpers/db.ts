@@ -99,10 +99,10 @@ CREATE TABLE IF NOT EXISTS placement_briefs (
   id TEXT PRIMARY KEY,
   submission_id TEXT NOT NULL UNIQUE,
   agent_name TEXT NOT NULL DEFAULT 'market',
-  venues JSONB NOT NULL,
-  youtube_channels JSONB NOT NULL,
-  influencers JSONB NOT NULL,
-  draft_emails JSONB NOT NULL,
+  scene_tags JSONB NOT NULL,
+  instruments JSONB NOT NULL,
+  emotional_arcs JSONB NOT NULL,
+  sync_comparables JSONB NOT NULL,
   audience_summary TEXT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -262,6 +262,20 @@ CREATE TABLE IF NOT EXISTS telemetry_events (
 );
 CREATE INDEX IF NOT EXISTS idx_telemetry_session ON telemetry_events(session, created_at);
 CREATE INDEX IF NOT EXISTS idx_telemetry_event ON telemetry_events(event, created_at);
+
+-- MODULAR: version_embeddings table for CLAP semantic search.
+-- PGlite doesn't support the pgvector extension, so we use TEXT
+-- instead of vector(512). The embedding service stores the vector
+-- as a string like "[0.1,0.2,...]" — the Drizzle customType's
+-- toDriver/fromDriver handles the serialization. Tests that need
+-- to query by cosine distance use the pure cosineSimilarity function
+-- instead of the pgvector <=> operator.
+CREATE TABLE IF NOT EXISTS version_embeddings (
+  submission_id TEXT PRIMARY KEY REFERENCES published_versions(submission_id),
+  embedding TEXT NOT NULL,
+  model TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
 `;
 
 export async function initTestDb(): Promise<ReturnType<typeof drizzle<typeof schema>>> {
@@ -291,6 +305,7 @@ export async function resetTestDb(): Promise<void> {
   if (!_pg) return;
   // Drop all rows from every test table. Cheaper than recreating the instance.
   const tables = [
+    'version_embeddings',
     'telemetry_events',
     'x402_proofs',
     'listen_events',

@@ -6,8 +6,8 @@
 // reads the .sql files via fs and pipes them to PGlite.
 //
 // Test seeds two placement_briefs rows with the EXACT snake_case
-// column names (`venues / youtube_channels / influencers /
-// draft_emails / audience_summary`) so we bypass Drizzle's TS-level
+// column names (`scene_tags / instruments / emotional_arcs /
+// sync_comparables / audience_summary`) so we bypass Drizzle's TS-level
 // shape enforcement. The legacy row carries object-array shapes
 // (the pre-repurpose representation); the new-shape row carries
 // string[] / Array<{name, why}> (the post-repurpose representation).
@@ -70,8 +70,8 @@ async function seedBothShapes() {
   `);
   await pg.exec(`
     INSERT INTO placement_briefs
-      (id, submission_id, venues, youtube_channels, influencers,
-       draft_emails, audience_summary)
+      (id, submission_id, scene_tags, instruments, emotional_arcs,
+       sync_comparables, audience_summary)
     VALUES
       ('pb-legacy', 'sub-legacy',
        '[{"name": "Madison Square Garden", "location": "NY"}]',
@@ -133,9 +133,9 @@ describe('runbook: purge-legacy-briefs (apply)', () => {
     ]);
     expect(fresh!.audienceSummary).toBe('New summary');
 
-    // Stubborn fixture: empty venues but legacy object-array shapes
+    // Stubborn fixture: empty scene_tags but legacy object-array shapes
     // elsewhere. Narrow-by-design — the WHERE predicate keys off
-    // `venues` only, so this row is deliberately skipped. The legacy
+    // `scene_tags` only, so this row is deliberately skipped. The legacy
     // object arrays in the other 3 columns are inert (downstream
     // `.map()` over them would TypeError, but they won't be touched
     // until a future operator-driven migration). Locking this in

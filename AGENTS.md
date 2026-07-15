@@ -36,3 +36,40 @@ lock there fails typecheck otherwise.
 Write-side fields (`RatingInput.mood_tags`, `Playlist.mood`,
 `SubmissionMetadata.mood`) stay single-typed because writers always
 emit canonical shapes; touch only when changing the write path.
+
+## Build & test commands
+
+```bash
+npm test              # vitest — 333 tests (330 unit + 3 integration)
+npm run build         # next build . --experimental-build-mode compile
+npx tsc --noEmit      # typecheck only
+npx eslint src/ tests/ --max-warnings 0  # lint (pre-existing warnings exist)
+npm run db:push       # drizzle-kit push (schema → DB)
+npm run db:pgvector   # enable pgvector + create version_embeddings table
+npm run db:rename-briefs  # rename legacy placement_briefs columns
+npm run db:purge:preview  # dry-run legacy brief purge
+npm run db:purge:apply    # apply legacy brief purge
+```
+
+## Mock-first architecture
+
+All external adapters fall back to deterministic mock mode when their
+env vars are absent. The full demo loop (submit → pay → review →
+publish → tip) runs with zero external dependencies. Check mock status
+via `GET /api/health/ready` — it reports `arc.mock`, `llm.mock`,
+`embedding.mock`, `gateway.mock`, and `ipfs.configured`.
+
+## Service registry
+
+Services are accessed via `services()` from `src/lib/services.ts`. The
+registry is a singleton (cached on first call). It exposes:
+`submissions`, `curation`, `feed`, `settlement`, `agents`, `ar`,
+`tasteGraph`, `embeddings`, and `config` (mock flags, upload dir, etc.).
+
+## Integration tests
+
+Integration tests live in `tests/integration/` and call services
+directly (not via HTTP). They use the same PGlite test DB as unit
+tests but don't mock the service registry — they exercise the full
+service chain. The `version_embeddings` table uses TEXT (not vector)
+in PGlite since pgvector isn't available.

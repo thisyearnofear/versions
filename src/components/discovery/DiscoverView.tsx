@@ -346,7 +346,7 @@ function MatchSearch() {
       <p className="font-serif text-base text-[var(--color-ink-2)] leading-snug max-w-2xl mb-5">
         Paste a scene in plain English. We score every published version against
         scene context, instrumentation, emotional arcs, and audience summary.
-        Top 20 ranked by fit.
+        Top 20 ranked by fit. No wallet needed — search is free.
       </p>
       <div className="flex flex-col gap-3 max-w-2xl">
         <label

@@ -13,10 +13,12 @@ import path from 'node:path';
 import { createArcAdapter, type ArcAdapter } from '../adapters/arc';
 import { createGatewayAdapter, type GatewayAdapter } from '../adapters/gateway';
 import { createLlmAdapter, type LlmAdapter } from '../adapters/llm';
+import { createEmbeddingAdapter } from '../adapters/embedding';
 import { createSubmissionsService, type SubmissionsService } from '../services/submissions';
 import { createSettlementService, type SettlementService } from '../services/settlement';
 import { createCurationService, type CurationService } from '../services/curation';
 import { createFeedService, type FeedService } from '../services/feed';
+import { createEmbeddingService, type EmbeddingService } from '../services/embeddings';
 import { createAgentService, type AgentService } from '../services/agents';
 import { createArService, type ArService } from '../services/ar';
 import { createSweeper, type Sweeper } from '../services/settlement-sweeper';
@@ -45,6 +47,7 @@ export interface ServiceRegistry {
   settlement: SettlementService;
   curation: CurationService;
   feed: FeedService;
+  embeddings: EmbeddingService;
   agents: AgentService;
   ar: ArService;
   sweeper: Sweeper;
@@ -60,6 +63,7 @@ export interface ServiceRegistry {
     arcMock: boolean;
     llmMock: boolean;
     gatewayMock: boolean;
+    embeddingMock: boolean;
     uploadDir: string;
     ipfsConfigured: boolean;
   };
@@ -105,7 +109,9 @@ function build(): ServiceRegistry {
   const submissions = createSubmissionsService({ arc, platformWallet: platformWallet ?? undefined });
   const settlement = createSettlementService({ arc: arc as ArcAdapter, platformWallet: platformWallet ?? undefined });
   const curation = createCurationService({ settlement });
-  const feed = createFeedService();
+  const embeddingAdapter = createEmbeddingAdapter();
+  const feed = createFeedService({ embedding: embeddingAdapter });
+  const embeddings = createEmbeddingService(embeddingAdapter);
   const llm = createLlmAdapter({ apiUrl: llmApiUrl || undefined, apiKey: llmApiKey || undefined, model: llmModel });
   const agents = createAgentService({ llm, settlement, agentWallets });
   const ar = createArService({ arc, arWallet });
@@ -131,6 +137,7 @@ function build(): ServiceRegistry {
     settlement,
     curation,
     feed,
+    embeddings,
     agents,
     ar,
     listeners,
@@ -146,6 +153,7 @@ function build(): ServiceRegistry {
       arcMock: !arcRpcUrl,
       llmMock: !llmApiKey,
       gatewayMock: !process.env.GATEWAY_API_URL,
+      embeddingMock: embeddingAdapter.mock,
       uploadDir,
       ipfsConfigured: ipfs.isConfigured(),
     },

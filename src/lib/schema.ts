@@ -1,4 +1,22 @@
-import { pgTable, text, integer, real, timestamp, index, unique, jsonb, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, real, timestamp, index, unique, jsonb, boolean, customType } from 'drizzle-orm/pg-core';
+
+// MODULAR: pgvector custom column type. Stores a float array that
+// Postgres treats as a `vector(N)` column when the pgvector extension
+// is installed. The extension must be created before db:push:
+//   CREATE EXTENSION IF NOT EXISTS vector;
+// See scripts/create-pgvector-extension.sql.
+const vector = customType<{ data: number[]; driverData: string; config: { dimensions: number } }>({
+  dataType(config) {
+    return `vector(${config?.dimensions ?? 512})`;
+  },
+  toDriver(value: number[]): string {
+    return `[${value.map((v) => v.toFixed(6)).join(',')}]`;
+  },
+  fromDriver(value: string): number[] {
+    const inner = value.replace(/^\[/, '').replace(/\]$/, '');
+    return inner.split(',').map(Number);
+  },
+});
 
 // ── Users ──────────────────────────────────────────────
 
@@ -121,18 +139,15 @@ export const placementBriefs = pgTable('placement_briefs', {
   submissionId: text('submission_id').notNull().unique().references(() => submissions.id),
   agentName: text('agent_name').notNull().default('market'),
   // MODULAR: placement_brief repurposed for the supervisor inverse-search
-  // index. The market agent now emits scene_tags / instruments /
-  // emotional_arcs / sync_comparables / audience_summary instead of the
-  // prior venues / youtube_channels / influencers / draft_emails /
-  // audience_summary shape. We bind the existing NOT NULL jsonb
-  // columns to new logical field names via Drizzle column-aliasing
-  // (jsonb('venues').$type<string[]>()) so the DB stays untouched —
-  // old rows are semantically orphan but stay valid Drizzle-wise (they
-  // were never read). No migration needed.
-  sceneTags: jsonb('venues').notNull().$type<string[]>(),
-  instruments: jsonb('youtube_channels').notNull().$type<string[]>(),
-  emotionalArcs: jsonb('influencers').notNull().$type<string[]>(),
-  syncComparables: jsonb('draft_emails').notNull().$type<Array<{ name: string; why: string }>>(),
+  // index. The market agent emits scene_tags / instruments /
+  // emotional_arcs / sync_comparables / audience_summary. The physical
+  // columns were renamed from the legacy names (venues / youtube_channels /
+  // influencers / draft_emails) via scripts/rename-placement-briefs-columns.sql
+  // so the DB matches the logical field names — no more column-aliasing.
+  sceneTags: jsonb('scene_tags').notNull().$type<string[]>(),
+  instruments: jsonb('instruments').notNull().$type<string[]>(),
+  emotionalArcs: jsonb('emotional_arcs').notNull().$type<string[]>(),
+  syncComparables: jsonb('sync_comparables').notNull().$type<Array<{ name: string; why: string }>>(),
   audienceSummary: text('audience_summary').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
@@ -342,3 +357,20 @@ export const telemetryEvents = pgTable('telemetry_events', {
   index('idx_telemetry_session').on(table.session, table.createdAt),
   index('idx_telemetry_event').on(table.event, table.createdAt),
 ]);
+
+// ── Version Embeddings (CLAP / pgvector semantic search) ───────────
+// MODULAR: one row per published version, storing the CLAP audio
+// embedding as a pgvector vector(512) column. The supervisor
+// inverse-search embeds the brief text into the same space and
+// queries for nearest neighbors by cosine distance (<=> operator).
+// Backfill is a background job (embedAllPublished); new versions
+// get embedded at publish time. The table is separate from
+// published_versions so the embedding can be recomputed without
+// touching the main row.
+
+export const versionEmbeddings = pgTable('version_embeddings', {
+  submissionId: text('submission_id').primaryKey().references(() => publishedVersions.submissionId),
+  embedding: vector('embedding', { dimensions: 512 }).notNull(),
+  model: text('model').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});

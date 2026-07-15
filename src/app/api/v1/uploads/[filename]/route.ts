@@ -27,7 +27,7 @@ function safeUploadPath(uploadDir: string, filename: string): string | null {
 export async function GET(req: NextRequest, ctx: { params: Promise<{ filename: string }> }) {
   const rid = requestIdFor(req);
   const svc = services();
-  if (!svc.audioLimiter.allow({ headers: headerBag(req) }, clientIpFor(req))) {
+  if (!(await svc.audioLimiter.allow({ headers: headerBag(req) }, clientIpFor(req)))) {
     return rateLimitedResponse(rid);
   }
   try {

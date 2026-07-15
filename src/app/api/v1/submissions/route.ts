@@ -20,7 +20,7 @@ export function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const rid = requestIdFor(req);
   const svc = services();
-  if (!svc.audioLimiter.allow({ headers: headerBag(req) }, clientIpFor(req))) {
+  if (!(await svc.audioLimiter.allow({ headers: headerBag(req) }, clientIpFor(req)))) {
     return rateLimitedResponse(rid);
   }
   try {

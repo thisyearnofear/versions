@@ -71,7 +71,7 @@ npm install
 npm run dev      # next dev .
 npm run build    # next build . --experimental-build-mode compile
 npm start        # next start .
-npm test         # vitest (309 tests)
+npm test         # vitest (333 tests: 330 unit + 3 integration)
 npm run db:push  # drizzle-kit push
 npm run db:studio
 pnpm demo        # self-driving submit → pay → review → publish → tip loop (assumes `pnpm run dev` is up + `pnpm db:push` has been run)
@@ -87,18 +87,33 @@ the correct mode for an authenticated marketplace anyway.
 
 ## Environment
 
-Copy `.env.example` to `.env` and fill in:
+Copy `.env.example` to `.env` and fill in. The full variable list with
+descriptions is in `.env.example`; the essential ones are:
 
 ```
 DATABASE_URL=postgresql://...       # Neon pooled connection string
 NEXTAUTH_SECRET=                    # openssl rand -base64 32
 NEXTAUTH_URL=http://localhost:3000
-NEXT_PUBLIC_WC_PROJECT_ID=          # WalletConnect Cloud project id (optional)
-ARC_RPC_URL=https://...             # Arc testnet/mainnet RPC
-ARC_PAYMENT_RECIPIENT=0x...
-OPENAI_API_KEY=sk-...               # Curator agents
-PINATA_API_KEY=...                  # IPFS audio uploads
+NEXT_PUBLIC_WC_PROJECT_ID=          # WalletConnect Cloud project id (for mobile wallets)
+ARC_RPC_URL=https://...             # Arc testnet/mainnet RPC (omit for mock mode)
+ARC_USDC_CONTRACT=0x...             # mUSDC contract on Arc (omit for mock)
+PLATFORM_WALLET=0x...               # Fee recipient wallet (omit for mock)
+LLM_API_KEY=...                     # Curator agent LLM (omit for mock mode)
+PINATA_JWT=...                      # Pinata JWT for IPFS uploads (omit for local-only)
 ```
+
+### WalletConnect Project ID
+
+`NEXT_PUBLIC_WC_PROJECT_ID` is required for RainbowKit to offer
+WalletConnect-compatible wallets (mobile wallets via QR code). Without
+it, only browser-extension wallets (MetaMask, Coinbase Wallet, etc.)
+work. Get a free project ID at [cloud.walletconnect.com](https://cloud.walletconnect.com/).
+
+### Mock mode
+
+All external adapters are **mock-first**: omitting their env vars
+falls back to deterministic mock mode so the full demo loop runs with
+zero external dependencies. See `.env.example` for the complete list.
 
 ## Routes
 
@@ -126,7 +141,9 @@ PINATA_API_KEY=...                  # IPFS audio uploads
 | `/api/v1/artists/[wallet]/versions` | Artist dashboard — versions |
 | `/api/v1/artists/[wallet]/earnings` | Artist dashboard — earnings |
 | `/api/v1/discover/brief` | Supervisor inverse-search — paste a brief, get ranked matches |
+| `/api/v1/embeddings/backfill` | Embeddings status (GET) + catalog backfill (POST) |
 | `/api/v1/arc/info` | Arc chain info (mock or live) |
+| `/api/telemetry` | Client-side funnel analytics beacon |
 | `/api/auth/[...nextauth]` | NextAuth handler (wallet credentials) |
 
 ## Project layout
@@ -195,8 +212,8 @@ The old `versions-next/` scaffolding directory has been removed.
 For the pre-migration project history, see commits before `7b05e333`.
 ### Remaining work
 
-- [ ] WalletConnect project ID (`NEXT_PUBLIC_WC_PROJECT_ID`) — required for RainbowKit wallet connections
-- [ ] Production deployment config (Vercel, Railway, or Docker)
+- [ ] WalletConnect project ID (`NEXT_PUBLIC_WC_PROJECT_ID`) — get one from [cloud.walletconnect.com](https://cloud.walletconnect.com/) (see Environment section above)
+- [x] Production deployment config — `netlify.toml` for Netlify + `Dockerfile` for any container platform
 
 ## Publish pipeline hardening
 
@@ -357,41 +374,86 @@ real overweight signal.
 
 ## Roadmap (Week 3+)
 
-The supervisor inverse-search is **structured-tag-only** today; the next
-two PRs bring it to parity with what a real A&R supervisor wants in a
-field-trial, plus a few defensive carries that came out of the Week-2
-review.
+The supervisor inverse-search supports both **structured-tag overlap**
+(v1, always available) and **CLAP semantic audio similarity** (v2, when
+embeddings are configured). The semantic layer is the primary ranking
+signal; structured tags provide explainable `why_fits` citations.
+
+### Semantic search (CLAP / pgvector)
+
+When `EMBEDDING_API_URL` is set, the embedding adapter calls a hosted
+CLAP API to embed both the supervisor's brief text and each published
+version's audio into the same 512-dim vector space. The feed service
+queries pgvector for cosine-distance nearest neighbors, then combines
+the semantic similarity with the structured-tag score via a hybrid
+scorer (semantic × 0.7 + structured × 0.3 + popularity/recency
+tiebreakers). When embeddings are absent (mock mode, no pgvector, or
+any DB error), the search gracefully falls back to structured-tag-only
+scoring — no downtime, no broken results.
+
+**Setup:**
+```bash
+npm run db:pgvector          # enable pgvector extension + create version_embeddings table
+npm run db:push              # push the schema (version_embeddings table)
+# Set EMBEDDING_API_URL + EMBEDDING_API_KEY in .env
+# Backfill existing catalog:
+#   curl -X POST http://localhost:3000/api/v1/embeddings/backfill
+# Or call services().embeddings.embedAllPublished() from a script
+```
+
+**Files:**
+- `src/adapters/embedding.ts` — mock-first CLAP adapter (embedAudio / embedText)
+- `src/services/embeddings.ts` — backfill service (embedVersion / embedAllPublished / hasEmbeddings)
+- `src/services/feed.ts` — hybrid scorer (cosineSimilarity + hybridScore pure functions, semantic search path in searchByBrief)
+- `src/lib/schema.ts` — `version_embeddings` table with `vector(512)` column
+- `scripts/create-pgvector-extension.sql` — extension + table + ivfflat index
+- `tests/unit/embedding.test.ts` — adapter tests (mock mode: determinism, L2 norm, dimensions)
+- `tests/unit/semantic-score.test.ts` — pure-function tests (cosine similarity, hybrid score weights)
 
 ### Up next
 
-- **Audio embeddings (CLAP / pgvector)** — replace structured-tag overlap with
-  semantic audio similarity on a `pgvector` index keyed by the CLAP embedding.
-  Catalog backfill (`embedAllPublished()`) runs as a background job so the
-  search endpoint can swap scoring in a single transaction without downtime.
-- **Friction-reduction pass on Submit + Discover** — drop the convenience-fee
-  strip on `SubmitForm` so artists see **0.50 USDC** as the END cost, not as a
-  per-step surprise; add lazy-wallet-connect on `Discover` so a supervisor can
-  paste a brief without a wallet-connect popup on first visit.
-- **Brief telemetry → funnel** — wire the existing `brief_search` analytics
-  event into `/api/telemetry` so the operator can see the inverted funnel
-  (paste → submit → match) per day in `/api/v1/funnel`.
 - **`expectedLegCountFor` prophecy check** — add a Postgres-level invariant
   test that runs against the live DB on `npm run db:doctor` so orphan legs
   in production produce a deploy-blocking alert (catches the carryover from
   the publish-pipeline hardening round).
 
+### Completed
+
+- **Friction-reduction pass on Submit + Discover** — `SubmitForm` now shows
+  **"Total cost: 0.50 USDC · No additional gas or hidden fees"** as the
+  final cost, not a per-step surprise. `DiscoverView` MatchSearch panel
+  notes "No wallet needed — search is free" so supervisors can paste a
+  brief without a wallet-connect popup on first visit.
+- **Brief telemetry → funnel** — the `brief_search` analytics event is
+  wired into `/api/v1/funnel` via a new `supervisorFunnel` field in the
+  `FunnelBreakdown` response. The funnel endpoint now reports both the
+  artist funnel (page_view → nav_click → form_start → submit_attempt →
+  submit_success) and the supervisor funnel (page_view → brief_search).
+- **Auth signin page** — `/auth/signin` page implemented with
+  wallet-signature-based sign-in that bridges RainbowKit's client-side
+  connection with NextAuth's server-side session.
+- **Embeddings backfill API route** — `POST /api/v1/embeddings/backfill`
+  triggers a full-catalog CLAP embedding backfill; `GET` returns status
+  (has_embeddings + mock flag).
+- **Health/ready endpoint** — now reports `embedding.mock`,
+  `gateway.mock`, and `ipfs.configured` alongside the existing `arc.mock`
+  and `llm.mock` flags.
+- **Dockerfile** — multi-stage Docker build with standalone Next.js output
+  for deployment to any container platform.
+- **Integration tests** — `tests/integration/full-loop.test.ts` exercises
+  the full service-layer loop (submit → review → publish → feed → brief
+  search) against the test PGlite DB.
+
 ### Watchlist
 
-- **Per-IP rate-limit across serverless instances** — `rate-limit.ts` is
-  in-process; counts per Lambda. Once traffic warrants it, swap to
-  Upstash / Redis for a globally-coherent 60 req/min cap.
-- **Legacy `placement_briefs` row cleanup** — Drizzle column-aliasing keeps
-  the legacy NOT-NULL JSONB columns intact; a deploy runbook step is needed
-  for any production DB with pre-repurpose rows:
-  `UPDATE placement_briefs SET venues='[]'::jsonb, youtube_channels='[]'::jsonb,
-   influencers='[]'::jsonb, draft_emails='[]'::jsonb WHERE …`
-  Drizzle aliasing won't crash but a downstream `.map()` on legacy
-  object-arrays will.
+- **Embedding API provider selection** — the adapter is provider-agnostic
+  (any HTTP endpoint that accepts `{ audio_url }` or `{ text }` and returns
+  `{ embedding: number[] }`). Pin a specific provider (Replicate, HuggingFace
+  Inference) once the catalog is live and benchmark latency + cost.
+- **Globally-coherent rate limiting** — `rate-limit.ts` now supports Upstash
+  Redis (`UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`). When unset,
+  the in-memory limiter runs per-instance. Set both env vars to switch to
+  globally-coherent rate limiting across serverless instances.
 
 ## Deploy runbook — Legacy placement_briefs purge
 
@@ -464,8 +526,63 @@ rows total, so the apply was an idempotent no-op (`UPDATE 0`). The runbook
 fired end-to-end against real Neon Postgres and committed cleanly. Operator
 can ship `6f48d190` without needing a follow-up purge.
 
+## Deploy runbook — DB migrations
+
+Three SQL scripts must be run against the production DB before (or
+alongside) `npm run db:push`. All are idempotent and safe to re-run.
+
+### 1. Rename placement_briefs columns
+
+Renames the legacy JSONB columns to their logical names
+(`venues`→`scene_tags`, `youtube_channels`→`instruments`,
+`influencers`→`emotional_arcs`, `draft_emails`→`sync_comparables`).
+Required before `db:push` on any DB that still has the old column
+names.
+
+```bash
+npm run db:rename-briefs
+```
+
+### 2. Enable pgvector + create version_embeddings table
+
+Enables the `vector` extension and creates the `version_embeddings`
+table with a `vector(512)` column + ivfflat cosine index. Required
+only if you want semantic search (CLAP embeddings). The structured-
+tag scorer works without it.
+
+```bash
+npm run db:pgvector
+```
+
+On Neon, pgvector is available on all plans. On other Postgres
+providers, install the extension first: `CREATE EXTENSION vector;`.
+
+### 3. Push schema
+
+After the SQL scripts, push the Drizzle schema to create/update all
+tables:
+
+```bash
+npm run db:push
+```
+
+### 4. Backfill embeddings (optional)
+
+After enabling pgvector and setting `EMBEDDING_API_URL` +
+`EMBEDDING_API_KEY`, backfill the existing catalog:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/embeddings/backfill
+```
+
+Or check status without triggering a backfill:
+
+```bash
+curl http://localhost:3000/api/v1/embeddings/backfill
+```
+
 ## Known issues
 
 1. **Turbopack `workStore` invariant** — see "Why `--experimental-build-mode compile`" above.
-2. **No `.env.example`** — the project uses a `.env` file but there's no checked-in template. Create one to document all required vars.
+2. **`.env.example` is now checked in** — it documents every env var referenced by `src/lib/config.ts` (Zod schema), `src/lib/services.ts`, `src/lib/ipfs.ts`, `src/lib/wagmi.ts`, and the submit-config pair. Copy it to `.env` and fill in the required values (`DATABASE_URL`, `NEXTAUTH_SECRET`). All adapter vars (Arc, LLM, Gateway, Pinata) are optional — omitting them runs the respective adapter in mock mode.
 3. **Homebrew `pg_dump` version mismatch** — the local Homebrew `pg_dump` is `14.22` while the Neon server runs Postgres `18.4`. `pg_dump --table=placement_briefs "$DATABASE_URL" > brief.bak` aborts with `server version: 18.4; pg_dump version: 14.22` before producing any output, so the revert path documented in the Deploy runbook above does NOT work until the local client is upgraded to ≥18. **Inline `psql -c "..."` queries still work fine** against the 18 server (the smoke-update `BEGIN; UPDATE 0; COMMIT;` ran end-to-end on real Neon this way). Fix: `brew install postgresql@18 && brew link --force postgresql@18`.

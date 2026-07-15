@@ -4,6 +4,7 @@
 //   2. 4 submissions (1 awaiting_curation, 3 published)
 //   3. Agent reviews + ratings for each published submission
 //   4. Published versions + settlement legs (pending)
+//   4.5. Placement briefs (inverse-search index per submission)
 //   5. One A&R playlist with tracks
 //
 // Run:   npx tsx scripts/seed-catalog.ts
@@ -21,6 +22,7 @@ import {
   settlementLegs as legsTable,
   arPlaylists as playlistsTable,
   arPlaylistTracks as playlistTracksTable,
+  placementBriefs as briefsTable,
 } from '../src/lib/schema';
 import { buildLegs } from '../src/services/settlement';
 import { assertMoodTagsShape } from '../src/lib/format';
@@ -236,6 +238,50 @@ const REVIEWS: Record<string, ReviewDef[]> = {
   ],
 };
 
+// MODULAR: per-track placement_brief for the supervisor inverse-search
+// (searchByBrief in src/services/feed.ts). Tracks realistic genre
+// vocab — scene_tags ≤8 nouns, instruments from the llm.ts per-genre
+// map (synth_led/guitar_led/percussion_led/etc), emotional_arcs ≤5
+// free-text, sync_comparables 1-3 reference entries, and a 1-2
+// sentence audience_summary. Each entry targets a distinct supervisor
+// scenario (festival/folk-cinema/alt-sports) so the inverse-search
+// scores well across brief phrasings.
+const PLACEMENT_BRIEFS: Record<string, {
+  sceneTags: string[];
+  instruments: string[];
+  emotionalArcs: string[];
+  syncComparables: Array<{ name: string; why: string }>;
+  audienceSummary: string;
+}> = {
+  [IDS.subNeon]: {
+    sceneTags: ['festival montage', 'neon chase', 'warehouse set piece'],
+    instruments: ['synth_led', 'percussion_led', 'long_arc'],
+    emotionalArcs: ['patient build lifting into melodic centerpiece at 1:30'],
+    syncComparables: [
+      { name: 'Caribou — Swim tour set', why: 'modular electronic warmth for uneasy moods' },
+    ],
+    audienceSummary: 'High-energy electronic fit for festival scenes or night-driving sequences.',
+  },
+  [IDS.subAutumn]: {
+    sceneTags: ['morning commute', 'quiet reveal', 'cabin porch'],
+    instruments: ['acoustic', 'guitar_led', 'no_vocals'],
+    emotionalArcs: ['intimate low-energy verse resolving into denser hook'],
+    syncComparables: [
+      { name: 'Big Thief — UFOF demos', why: 'stripped acoustic takes that sit under quiet scenes' },
+    ],
+    audienceSummary: 'Authentic folk intimacy perfect for reflective moments and indie cinema.',
+  },
+  [IDS.subStreet]: {
+    sceneTags: ['urban establishing shot', 'training montage', 'underground club'],
+    instruments: ['hook_heavy', 'percussion_led', 'spoken_word'],
+    emotionalArcs: ['commanding vocal delivery driving steady rhythm'],
+    syncComparables: [
+      { name: 'Kendrick Lamar — Section.80', why: 'raw lyricism over booming rhythmic track' },
+    ],
+    audienceSummary: 'Gritty and authentic hip-hop with strong drive, suitable for alt-sports and urban drama.',
+  },
+};
+
 // ── Main ─────────────────────────────────────────────────
 
 async function main() {
@@ -422,6 +468,44 @@ async function main() {
     console.log(`    ${t.title} — published with ${legs.length} settlement legs`);
   }
 
+  // ── 4.5 Placement briefs (supervisor inverse-search index) ─
+  // MODULAR: searchByBrief (src/services/feed.ts) joins placement_briefs
+  // with published_versions and scores each row's scene_tags /
+  // instruments / emotional_arcs / audience_summary against the
+  // supervisor's free-text brief. Seed one realistic brief per
+  // published track so `/api/v1/discover/brief` returns non-zero
+  // fit_score rows instead of 0. Idempotent: select-then-skip matches
+  // the rest of the script so a re-run after a real publish cycle
+  // leaves existing operator-curated rows alone.
+  console.log('  Creating placement briefs...');
+  let briefsCreated = 0;
+  for (const t of publishedTracks) {
+    const brief = PLACEMENT_BRIEFS[t.id];
+    if (!brief) continue;
+    const [existingBrief] = await db
+      .select({ id: briefsTable.id })
+      .from(briefsTable)
+      .where(eq(briefsTable.submissionId, t.id))
+      .limit(1);
+    if (existingBrief) {
+      console.log(`    ${t.title} — placement brief already exists, skipping.`);
+      continue;
+    }
+    await db.insert(briefsTable).values({
+      id: randomUUID(),
+      submissionId: t.id,
+      agentName: 'market',
+      sceneTags: brief.sceneTags,
+      instruments: brief.instruments,
+      emotionalArcs: brief.emotionalArcs,
+      syncComparables: brief.syncComparables,
+      audienceSummary: brief.audienceSummary,
+      createdAt: new Date(Date.now() - 86400000 * TRACKS.indexOf(t)),
+    });
+    briefsCreated++;
+    console.log(`    ${t.title} — placement brief created`);
+  }
+
   // ── 5. A&R playlist ──────────────────────────────────
   console.log('  Creating A&R playlist...');
   const publishedIds = publishedTracks.map((t) => t.id);
@@ -459,6 +543,7 @@ async function main() {
   console.log('\n✅ Catalog seeded successfully!');
   console.log(`   ${TRACKS.length} submissions`);
   console.log(`   ${publishedTracks.length} published versions`);
+  console.log(`   ${briefsCreated} placement briefs`);
   console.log(`   1 A&R playlist`);
 }
 

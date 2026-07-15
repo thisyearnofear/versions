@@ -28,6 +28,9 @@ export async function GET(req: NextRequest): Promise<Response> {
         providers: {
           arc: { mock: svc.config.arcMock },
           llm: { mock: svc.config.llmMock, model: svc.config.llmModel },
+          embedding: { mock: svc.config.embeddingMock },
+          gateway: { mock: svc.config.gatewayMock },
+          ipfs: { configured: svc.config.ipfsConfigured },
         },
       },
     },

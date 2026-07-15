@@ -61,8 +61,10 @@ export interface SettlementLeg {
 // filters, scores every published version against the union of
 // (scene_tags, instruments, emotional_arcs, audience_summary)
 // on placement_briefs, and returns ranked rows with plain-language
-// `why_fits` citations. v1 is structured-tag only — embedding
-// similarity is a future PR once CLAP backfill lands.
+// `why_fits` citations. v1 is structured-tag only; v2 adds CLAP
+// semantic audio similarity via pgvector (hybrid scorer: semantic
+// similarity is the primary signal, structured tags provide the
+// `why_fits` citations). See src/services/feed.ts.
 export interface BriefSearchRow {
   submission_id: string;
   title: string;
