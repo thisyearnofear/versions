@@ -1,10 +1,16 @@
 # VERSIONS · Next.js (production architecture)
 
-This is the production-grade rebuild of the VERSIONS Lepton Submission
-Marketplace, ported from the vanilla Node.js + SQLite + browser-ESM
-architecture at `../versions` to **Next.js 16.2** with **PostgreSQL**
-(Neon serverless), **NextAuth v5** (wallet credentials), **Wagmi v2** +
-**RainbowKit**, **Drizzle ORM**, and the **Vercel AI SDK**.
+VERSIONS is a sync-first music search engine. Music supervisors, A&R
+teams, and sync houses paste a plain-English brief and get ranked
+matches from a catalog of alternate takes. Artists submit versions;
+AI agents review and tag them; supervisors find the right track in
+seconds.
+
+This repo is the production-grade rebuild of the VERSIONS Lepton
+Submission Marketplace, ported from the vanilla Node.js + SQLite +
+browser-ESM architecture at `../versions` to **Next.js 16.2** with
+**PostgreSQL** (Neon serverless), **NextAuth v5** (wallet credentials),
+**Wagmi v2** + **RainbowKit**, **Drizzle ORM**, and the **Vercel AI SDK**.
 
 ## Stack
 
@@ -21,8 +27,10 @@ architecture at `../versions` to **Next.js 16.2** with **PostgreSQL**
 ## The VERSIONS demo loop
 
 The full VERSIONS autonomous curation loop, end to end, in four phases.
-Stripe-style x402 nanopayments and Circle Gateway batched settlement
-drop into a familiar submit → review → publish → discover flow.
+The primary customer is the music supervisor; the primary action is
+searching the catalog by brief. Stripe-style x402 nanopayments and
+Circle Gateway batched settlement drop into a submit → review → publish
+→ discover flow.
 
 ```mermaid
 sequenceDiagram
@@ -64,6 +72,21 @@ single-sourced from `expectedLegCountFor(curatorCount)`; the sweeper
 recovers any legs stuck `pending` beyond 30 s; and every x402 tip is
 replay-protected by a unique `puid` index.
 
+## Strategy
+
+VERSIONS is intentionally **sync-first, B2B-first**. The consumer
+features (feed, playlists, listener tips) exist as secondary
+optionality: they keep the platform alive, demonstrate the Arc / x402
+payment story, and may one day supply engagement data to supervisors.
+But the near-term go-to-market is the supervisor inverse-search.
+
+**Primary motion:** supervisors and A&R teams paste briefs → artists
+submit versions → AI agents tag and rank → supervisors license tracks.
+
+**Secondary motion:** listeners browse the feed, play tracks, and tip
+artists. This is not the business model; it is a live demo of the
+catalog and a future data layer.
+
 ## Build commands
 
 ```bash
@@ -98,6 +121,8 @@ NEXT_PUBLIC_WC_PROJECT_ID=          # WalletConnect Cloud project id (for mobile
 ARC_RPC_URL=https://...             # Arc testnet/mainnet RPC (omit for mock mode)
 ARC_USDC_CONTRACT=0x...             # mUSDC contract on Arc (omit for mock)
 PLATFORM_WALLET=0x...               # Fee recipient wallet (omit for mock)
+PLATFORM_WALLET_PRIVATE_KEY=...     # Optional server-side signer for automated settlement (hot wallet — rotate/restrict post-demo)
+# Note: without PLATFORM_WALLET_PRIVATE_KEY, settlement legs still produce deterministic mock hashes even when ARC_RPC_URL is live.
 LLM_API_KEY=...                     # Curator agent LLM (omit for mock mode)
 PINATA_JWT=...                      # Pinata JWT for IPFS uploads (omit for local-only)
 ```
@@ -246,6 +271,27 @@ partial-publish state. Key invariants:
   succeeds but `log.warn` emits `extraLegIds` / `extraLegKeys` (via set
   difference against the expected keys) so stale rows are traceable
   for cleanup.
+
+## Arc L1 settlement
+
+Submission fees and curator/artist payouts settle on Arc via USDC. The
+settlement service splits each submission fee into curator, platform, and
+artist legs and drives each leg through `src/adapters/arc.ts`.
+
+- **Mock-first** — omitting `ARC_RPC_URL` keeps the demo loop green with
+deterministic hashes.
+- **Real-mode server-side signing** — when `ARC_RPC_URL`,
+`ARC_USDC_CONTRACT`, `PLATFORM_WALLET`, and `PLATFORM_WALLET_PRIVATE_KEY`
+are set, the adapter signs and broadcasts real ERC-20 transfer transactions
+from the platform treasury wallet. The private key is validated against the
+`from` address so a mismatched key fails fast.
+- **Dynamic chain** — the adapter reads `eth_chainId` from the configured
+RPC and builds the viem `Chain` at runtime, so testnet/mainnet RPCs are
+both supported without hardcoding.
+- **Health probe** — `GET /api/health/ready` reports `arc.reachable`,
+`chainId`, `platformBalance`, and `signerConfigured`. If real Arc is
+configured but unreachable, the endpoint returns HTTP 503 with
+`status: "degraded"`.
 
 ## Nanopayments (x402 + Circle Gateway)
 

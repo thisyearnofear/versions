@@ -8,10 +8,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useAccount } from "wagmi";
+import { useSearchParams, useRouter } from "next/navigation";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { useToast } from "@/components/ui/Toast";
-import { apiClient, type Playlist, type ListenerBadgeResponse, type BriefSearchResponse } from "@/lib/api-client";
+import { apiClient, type Playlist, type ListenerBadgeResponse, type BriefSearchResponse, type BriefSearchRow } from "@/lib/api-client";
 import { parseMoodTags } from "@/lib/format";
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
@@ -301,10 +302,22 @@ function PlaylistCard({
 
 function MatchSearch() {
   const { showToast } = useToast();
+  const { isConnected } = useAccount();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [brief, setBrief] = useState("");
   const [loading, setLoading] = useState(false);
+  const [savingBrief, setSavingBrief] = useState(false);
   const [results, setResults] = useState<BriefSearchResponse | null>(null);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  // Pre-fill brief from ?brief= query param (e.g. from saved briefs / recent searches)
+  useEffect(() => {
+    const fromUrl = searchParams.get("brief");
+    if (fromUrl) {
+      setBrief(fromUrl);
+    }
+  }, [searchParams]);
 
   const onSearch = useCallback(async () => {
     const trimmed = brief.trim();
@@ -321,13 +334,61 @@ function MatchSearch() {
       if (res.rows.length === 0) {
         showToast("No matches yet — try a less specific brief.", "info");
       }
+      // Log search for supervisor dashboard (best-effort; no await)
+      if (isConnected) {
+        void apiClient.logSearch({ briefText: trimmed, resultsCount: res.total }).catch(() => {
+          // ignore — dashboard is optional
+        });
+      }
     } catch (err) {
       showToast(`Search failed: ${(err as Error).message}`, "error");
       setResults(null);
     } finally {
       setLoading(false);
     }
-  }, [brief, showToast]);
+  }, [brief, showToast, isConnected]);
+
+  // Auto-search if brief was pre-filled from URL
+  useEffect(() => {
+    if (brief.trim().length >= 3 && !submitAttempted && !results) {
+      void onSearch();
+    }
+  }, [brief, onSearch, submitAttempted, results]);
+
+  const onInterest = async (row: BriefSearchRow) => {
+    if (!isConnected) {
+      showToast("Connect your wallet to save licensing interests.", "error");
+      return;
+    }
+    try {
+      await apiClient.addInterest({ submissionId: row.submission_id });
+      showToast("Added to your licensing shortlist", "success");
+    } catch (err) {
+      showToast(`Interest failed: ${(err as Error).message}`, "error");
+    }
+  };
+
+  const onSaveBrief = async () => {
+    if (!isConnected) {
+      showToast("Connect your wallet to save briefs.", "error");
+      return;
+    }
+    const trimmed = brief.trim();
+    if (trimmed.length < 3 || trimmed.length > 500) {
+      showToast(`Brief must be 3–500 characters (got ${trimmed.length}).`, "error");
+      return;
+    }
+    setSavingBrief(true);
+    try {
+      await apiClient.saveBrief({ briefText: trimmed });
+      showToast("Brief saved — redirecting to dashboard", "success");
+      router.push("/supervisor");
+    } catch (err) {
+      showToast(`Save brief failed: ${(err as Error).message}`, "error");
+    } finally {
+      setSavingBrief(false);
+    }
+  };
 
   return (
     <section
@@ -417,10 +478,6 @@ function MatchSearch() {
                 </p>
               )}
               {r.why_fits.length > 0 && (
-                // MODULAR: rust-chip the why_fits citations. Same
-                // visual register as the matches-cited strip in
-                // <PlacementsTab>; sets the editorial signal that
-                // these are *why* and not *what*.
                 <ul className="flex flex-wrap gap-2 mt-2" role="list" aria-label="Why this fits">
                   {r.why_fits.map((w, i) => (
                     <li
@@ -459,6 +516,23 @@ function MatchSearch() {
                   ))}
                 </div>
               )}
+              <div className="flex flex-wrap gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => void onInterest(r)}
+                  className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 hover:bg-[var(--color-rust)] transition-colors"
+                >
+                  Interested
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onSaveBrief()}
+                  disabled={savingBrief}
+                  className="border border-[var(--color-ink)] font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors disabled:opacity-50"
+                >
+                  {savingBrief ? "Saving…" : "Save brief"}
+                </button>
+              </div>
               {r.brief.sync_comparables.length > 0 && (
                 <div className="font-mono text-[10px] mt-3 text-[var(--color-ink-3)]">
                   {r.brief.sync_comparables

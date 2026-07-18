@@ -73,6 +73,13 @@ describe('arc: mock-first (no rpcUrl)', () => {
     expect(r.mock).toBe(true);
     expect(r.hash).toMatch(/^0x[0-9a-f]{64}$/);
   });
+
+  it('sendTransfer returns deterministic mock hash', async () => {
+    const arc = createArcAdapter({});
+    const r = await arc.sendTransfer({ from: '0xa', to: '0xb', amountUsdc: '0.50' });
+    expect(r.mock).toBe(true);
+    expect(r.hash).toMatch(/^0x[0-9a-f]{64}$/);
+  });
 });
 
 describe('arc: live mode via stub server', () => {
@@ -169,6 +176,19 @@ describe('arc: live mode via stub server', () => {
     });
     const q = await arc.quoteTransfer({ to: '0x' + 'bb'.repeat(20), amountUsdc: '0.50' });
     expect(q.willSucceed).toBe(true);
+  });
+
+  it('sendTransfer validates from address against private key when configured', async () => {
+    const arc = createArcAdapter({
+      rpcUrl: stub.url,
+      usdcContract: '0x' + 'aa'.repeat(20),
+      platformWallet: '0x' + '11'.repeat(20),
+      platformWalletPrivateKey: '0x' + 'db'.repeat(32),
+      requestTimeoutMs: 2000,
+    });
+    await expect(
+      arc.sendTransfer({ from: '0x' + 'bb'.repeat(20), to: '0x' + 'cc'.repeat(20), amountUsdc: '0.50' }),
+    ).rejects.toThrow(/does not match PLATFORM_WALLET_PRIVATE_KEY derived address/);
   });
 });
 

@@ -25,6 +25,7 @@ import { createSweeper, type Sweeper } from '../services/settlement-sweeper';
 import { createRateLimiter, type RateLimiter } from './rate-limit';
 import { createIpfsFromEnv, type PinataClient } from './ipfs';
 import { createListenerService, type ListenerService } from '../services/listeners';
+import { createSupervisorDashboardService, type SupervisorDashboardService } from '../services/supervisor';
 import { log } from './logger';
 
 // MODULAR: deterministic agent wallets when env is missing.
@@ -52,6 +53,7 @@ export interface ServiceRegistry {
   ar: ArService;
   sweeper: Sweeper;
   listeners: ListenerService;
+  supervisor: SupervisorDashboardService;
   audioLimiter: RateLimiter;
   generalLimiter: RateLimiter;
   ipfs: PinataClient;
@@ -91,6 +93,7 @@ function build(): ServiceRegistry {
     rpcUrl: arcRpcUrl || undefined,
     usdcContract: arcUsdcContract || undefined,
     platformWallet: platformWallet || undefined,
+    platformWalletPrivateKey: process.env.PLATFORM_WALLET_PRIVATE_KEY || undefined,
   });
 
   // MODULAR: Circle Gateway for sub-cent USDC nanopayments. Mock-first
@@ -116,6 +119,7 @@ function build(): ServiceRegistry {
   const agents = createAgentService({ llm, settlement, agentWallets });
   const ar = createArService({ arc, arWallet });
   const listeners = createListenerService();
+  const supervisor = createSupervisorDashboardService();
   const sweeper = createSweeper({ settlement });
   const ipfs = createIpfsFromEnv();
 
@@ -141,6 +145,7 @@ function build(): ServiceRegistry {
     agents,
     ar,
     listeners,
+    supervisor,
     sweeper,
     audioLimiter,
     generalLimiter,
@@ -221,7 +226,7 @@ export function corsPreflight(requestId: string): Response {
     status: 204,
     headers: {
       ...CORS_HEADERS,
-      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, x-request-id',
       'Access-Control-Max-Age': '600',
       'x-request-id': requestId,

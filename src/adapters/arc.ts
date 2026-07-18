@@ -8,7 +8,8 @@
 //        whether to gate on real-Arc.
 
 import { createHash } from 'crypto';
-import { getAddress, isAddress } from 'viem';
+import { getAddress, isAddress, createPublicClient, createWalletClient, http as viemHttp, type Hash, type Chain } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import { requestJson } from '../lib/http';
 // MODULAR: BigInt → big-endian hex of fixed byte width. Pulled from
 // @/lib/hex-utils so the padStart(64, '0') logic is testable in
@@ -125,11 +126,13 @@ export function createArcAdapter({
   rpcUrl,
   usdcContract,
   platformWallet,
+  platformWalletPrivateKey,
   requestTimeoutMs = DEFAULT_TIMEOUT,
 }: {
   rpcUrl?: string;
   usdcContract?: string;
   platformWallet?: string;
+  platformWalletPrivateKey?: string;
   requestTimeoutMs?: number;
 }): ArcAdapter {
   const useMock = !rpcUrl;
@@ -380,18 +383,55 @@ export function createArcAdapter({
     },
 
     /**
-     * Server-side send. The client normally signs + broadcasts; this method
-     * is used by the mock harness and by tests.
+     * Server-side send. When a platform private key is configured and Arc
+     * is reachable, sign and broadcast an ERC-20 transfer. Otherwise fall
+     * back to the deterministic mock hash so tests and demos stay green.
      */
     async sendTransfer({ from, to, amountUsdc }: SendTransferArgs): Promise<TransferResult> {
       const up = await isReachable();
-      const hash = deterministicHash({ from, to, amountUsdc, ts: Date.now() });
       if (!up) {
-        return { hash, mock: true };
+        return { hash: deterministicHash({ from, to, amountUsdc, ts: Date.now() }), mock: true };
       }
-      // Real-Arc broadcast belongs on the client. Server-side send is only
-      // useful for the mock harness; emit a structured error in real mode.
-      throw new Error('server-side sendTransfer is mock-only; client must broadcast on Arc');
+      if (!usdcContract) throw new Error('ARC_USDC_CONTRACT is not set');
+      if (!platformWalletPrivateKey) {
+        return { hash: deterministicHash({ from, to, amountUsdc, ts: Date.now() }), mock: true };
+      }
+
+      const normalizedKey = platformWalletPrivateKey.trim();
+      const account = privateKeyToAccount(
+        (normalizedKey.startsWith('0x') ? normalizedKey : `0x${normalizedKey}`) as `0x${string}`,
+      );
+      const effectiveFrom = from ? from : account.address;
+      if (effectiveFrom.toLowerCase() !== account.address.toLowerCase()) {
+        throw new Error(
+          `sendTransfer 'from' (${effectiveFrom}) does not match PLATFORM_WALLET_PRIVATE_KEY derived address (${account.address})`,
+        );
+      }
+
+      const chainIdHex = await fetchChainId();
+      if (!chainIdHex) throw new Error('Unable to fetch Arc chainId from RPC');
+      const chainIdNum = Number(BigInt(chainIdHex));
+      const chain: Chain = {
+        id: chainIdNum,
+        name: 'Arc',
+        nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 6 },
+        rpcUrls: { default: { http: [rpcUrl!] }, public: { http: [rpcUrl!] } },
+        blockExplorers: { default: { name: 'ArcScan', url: 'https://arcscan.app' } },
+      };
+      const transport = viemHttp(rpcUrl!);
+      const publicClient = createPublicClient({ chain, transport });
+      const walletClient = createWalletClient({ account, chain, transport });
+
+      const hash = await walletClient.sendTransaction({
+        account,
+        to: usdcContract as `0x${string}`,
+        data: this.buildErc20TransferCalldata({ to, amountUsdc }) as `0x${string}`,
+        value: 0n,
+      }) as Hash;
+
+      // Wait briefly for the receipt so callers get a confirmed status.
+      await publicClient.waitForTransactionReceipt({ hash, timeout: 30_000 });
+      return { hash, mock: false };
     },
 
     /**

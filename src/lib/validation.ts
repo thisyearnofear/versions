@@ -109,4 +109,37 @@ export function parsePositiveInt(value: unknown, fallback: number | null): numbe
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+// ── Supervisor dashboard validation ─────────────────────
+
+export const SUPERVISOR_ROLES = ['supervisor', 'sync_house', 'aandr'] as const;
+export const LICENSING_STATUSES = ['interested', 'contacted', 'licensed', 'passed'] as const;
+
+export const SupervisorProfileUpdateSchema = z.object({
+  email: z.string().trim().email().max(254).optional().nullable(),
+  name: z.string().trim().max(100).optional().nullable(),
+  company: z.string().trim().max(100).optional().nullable(),
+  role: z.enum(SUPERVISOR_ROLES).optional().nullable(),
+});
+export type SupervisorProfileUpdateInput = z.infer<typeof SupervisorProfileUpdateSchema>;
+
+export const BriefTextInputSchema = z.object({
+  briefText: z.string().trim().min(3).max(500),
+  filters: z.record(z.string(), z.unknown()).optional(),
+});
+export type BriefTextInputValidated = z.infer<typeof BriefTextInputSchema>;
+
+export const LicensingInterestSchema = z.object({
+  submissionId: z.string().trim().min(1),
+  status: z.enum(LICENSING_STATUSES).optional(),
+  notes: z.string().max(MAX_NOTES_LEN).optional().nullable(),
+});
+export type LicensingInterestValidated = z.infer<typeof LicensingInterestSchema>;
+
+export const LicensingInterestUpdateSchema = z.object({
+  id: z.string().trim().min(1),
+  status: z.enum(LICENSING_STATUSES).optional(),
+  notes: z.string().max(MAX_NOTES_LEN).optional().nullable(),
+});
+export type LicensingInterestUpdateValidated = z.infer<typeof LicensingInterestUpdateSchema>;
+
 export type { VersionType, Energy, Tempo };

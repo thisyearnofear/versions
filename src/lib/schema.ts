@@ -374,3 +374,62 @@ export const versionEmbeddings = pgTable('version_embeddings', {
   model: text('model').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+
+// ── Supervisor Profiles ─────────────────────────────────
+// B2B sync-first: music supervisors, A&R teams, and sync houses.
+
+export const supervisorProfiles = pgTable('supervisor_profiles', {
+  wallet: text('wallet').primaryKey().references(() => users.walletAddress),
+  email: text('email'),
+  name: text('name'),
+  company: text('company'),
+  role: text('role').default('supervisor'), // supervisor | sync_house | aandr
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_supervisor_profiles_email').on(table.email),
+]);
+
+// ── Saved Briefs ────────────────────────────────────────
+// Briefs a supervisor wants to keep and reuse.
+
+export const savedBriefs = pgTable('saved_briefs', {
+  id: text('id').primaryKey(),
+  supervisorWallet: text('supervisor_wallet').notNull().references(() => supervisorProfiles.wallet),
+  briefText: text('brief_text').notNull(),
+  filters: jsonb('filters').notNull().$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_saved_briefs_supervisor').on(table.supervisorWallet, table.createdAt),
+]);
+
+// ── Brief Searches ───────────────────────────────────────
+// Audit log of every supervisor search for recent-searches UI.
+
+export const briefSearches = pgTable('brief_searches', {
+  id: text('id').primaryKey(),
+  supervisorWallet: text('supervisor_wallet').notNull().references(() => supervisorProfiles.wallet),
+  briefText: text('brief_text').notNull(),
+  filters: jsonb('filters').notNull().$type<Record<string, unknown>>().default({}),
+  resultsCount: integer('results_count').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_brief_searches_supervisor').on(table.supervisorWallet, table.createdAt),
+]);
+
+// ── Licensing Interests ────────────────────────────────
+// One-click "I'm interested" tracking for supervisor workflow.
+
+export const licensingInterests = pgTable('licensing_interests', {
+  id: text('id').primaryKey(),
+  supervisorWallet: text('supervisor_wallet').notNull().references(() => supervisorProfiles.wallet),
+  submissionId: text('submission_id').notNull().references(() => publishedVersions.submissionId),
+  status: text('status').notNull().default('interested'), // interested | contacted | licensed | passed
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  unique('uq_interest_supermission').on(table.supervisorWallet, table.submissionId),
+  index('idx_licensing_interests_supervisor').on(table.supervisorWallet, table.createdAt),
+]);

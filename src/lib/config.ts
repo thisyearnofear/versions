@@ -9,6 +9,10 @@ const envSchema = z.object({
   ARC_RPC_URL: z.string().url().optional(),
   ARC_USDC_CONTRACT: z.string().optional(),
   PLATFORM_WALLET: z.string().optional(),
+  // Optional: server-side signer for automated settlement. When absent,
+  // settlement falls back to mock mode (deterministic hash) so tests
+  // and demos run without a hot wallet.
+  PLATFORM_WALLET_PRIVATE_KEY: z.string().optional(),
 
   // LLM
   LLM_API_URL: z.string().url().optional(),

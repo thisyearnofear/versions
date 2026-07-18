@@ -8,12 +8,13 @@ import Link from "next/link";
 import { WagmiConnectButton } from "@/components/wallet/WagmiConnectButton";
 import { track } from "@/lib/analytics";
 
-export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" | "discover" }) {
+export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" | "discover" | "supervisor" }) {
   const tabs = [
+    { id: "discover", label: "Discover", href: "/discover" },
+    { id: "supervisor", label: "Dashboard", href: "/supervisor" },
+    { id: "feed", label: "Feed", href: "/feed" },
     { id: "submit", label: "Submit", href: "/submit" },
     { id: "agents", label: "Agents", href: "/agents" },
-    { id: "feed", label: "Feed", href: "/feed" },
-    { id: "discover", label: "Discover", href: "/discover" },
   ] as const;
 
   return (

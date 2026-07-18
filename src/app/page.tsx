@@ -31,46 +31,47 @@ function Hero() {
   return (
     <section className="px-6 md:px-12 py-16 md:py-24 max-w-5xl">
       <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-6">
-        Alternate takes, rated by AI · 2026
+        Sync-ready music, matched by AI · 2026
       </p>
       <h1 className="font-serif text-5xl md:text-7xl lg:text-8xl font-black leading-[0.95] tracking-tight mb-6">
-        Every version
+        Find the right
         <br />
         <span className="italic font-normal text-[var(--color-rust)]">
-          deserves a verdict.
+          version for any scene.
         </span>
       </h1>
       <p className="font-serif text-xl md:text-2xl leading-snug max-w-2xl text-[var(--color-ink-2)] mb-4">
-        Submit a demo, a live take, or a remix. Three AI agents listen
-        and rate it in seconds — production, performance, and market
-        fit. No gatekeepers, no waiting weeks for feedback.
+        Paste a brief in plain English and VERSIONS ranks every
+        published track by scene, instrument, emotional arc, and
+        audience fit. Built for music supervisors, sync houses, and
+        A&R teams who need the right sound fast.
       </p>
       <p className="font-serif text-lg leading-snug max-w-2xl text-[var(--color-ink-3)] mb-10">
-        Browse the feed, discover playlists, or submit your own. Each
-        play pays the artist directly.
+        Artists submit alternate takes; AI agents review and tag them;
+        supervisors search the catalog in seconds.
       </p>
       <div className="flex flex-wrap gap-4">
         <Link
-          href="/submit"
-          onClick={() => track("nav_click", { to: "/submit", source: "hero_cta" })}
+          href="/discover"
+          onClick={() => track("nav_click", { to: "/discover", source: "hero_cta" })}
           className="inline-flex items-center gap-3 bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[11px] uppercase tracking-[0.18em] px-6 py-4 hover:bg-[var(--color-rust)] transition-colors"
         >
-          Submit a version
+          Find music for a brief
           <span aria-hidden="true">→</span>
         </Link>
         <Link
-          href="/discover"
-          onClick={() => track("nav_click", { to: "/discover", source: "hero_cta" })}
+          href="/feed"
+          onClick={() => track("nav_click", { to: "/feed", source: "hero_cta" })}
           className="inline-flex items-center gap-3 border border-[var(--color-ink)] font-mono text-[11px] uppercase tracking-[0.18em] px-6 py-4 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
         >
-          Listen to playlists
+          Browse the catalog
         </Link>
         <Link
-          href="/agents"
-          onClick={() => track("nav_click", { to: "/agents", source: "hero_cta" })}
+          href="/submit"
+          onClick={() => track("nav_click", { to: "/submit", source: "hero_cta" })}
           className="inline-flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] px-6 py-4 text-[var(--color-ink-2)] hover:text-[var(--color-rust)] transition-colors"
         >
-          Watch the agents
+          Submit a version
         </Link>
       </div>
     </section>
@@ -81,27 +82,27 @@ function SectionNav() {
   const sections = [
     {
       num: "01",
-      label: "Submit",
-      href: "/submit",
-      blurb: "Upload an audio file and get rated by three AI agents in seconds.",
+      label: "Discover",
+      href: "/discover",
+      blurb: "Paste a brief and rank the catalog by fit. Built for supervisors and A&R.",
     },
     {
       num: "02",
-      label: "Agents",
-      href: "/agents",
-      blurb: "Watch the AI curators review submissions in real time — no human in the loop.",
-    },
-    {
-      num: "03",
       label: "Feed",
       href: "/feed",
       blurb: "Published versions that cleared the gate. Filter by mood, energy, and tempo.",
     },
     {
+      num: "03",
+      label: "Submit",
+      href: "/submit",
+      blurb: "Upload an audio file and get rated by three AI agents in seconds.",
+    },
+    {
       num: "04",
-      label: "Discover",
-      href: "/discover",
-      blurb: "AI-curated playlists. Each play pays the artist directly — no algorithm gatekeepers.",
+      label: "Agents",
+      href: "/agents",
+      blurb: "Watch the AI curators review submissions in real time — no human in the loop.",
     },
   ];
 

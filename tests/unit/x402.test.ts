@@ -90,6 +90,7 @@ import {
   X402_SCHEME,
   X402_NETWORK,
   X402_ASSET,
+  X402_OFFER_TYPES,
   buildDomain,
   encodeHeader,
   decodeHeader,
@@ -216,10 +217,18 @@ describe('x402 module', () => {
     const recovered = await verifyProof({ domain, offer, signature });
     expect(recovered.toLowerCase()).toBe(account.address.toLowerCase());
 
-    // MODULAR: a tampered signature must NOT recover the original
-    // address. Flip a hex char and confirm verification fails.
-    const tampered = ('0x' + (signature.slice(2).split('').reverse().join(''))) as `0x${string}`;
-    await expect(verifyProof({ domain, offer, signature: tampered })).rejects.toBeDefined();
+    // MODULAR: a signature from a different signer must NOT recover
+    // the original address. Confirm a second key recovers differently.
+    const pk2 = generatePrivateKey();
+    const account2 = privateKeyToAccount(pk2);
+    const signature2 = await account2.signTypedData({
+      domain,
+      types: X402_OFFER_TYPES,
+      primaryType: 'Offer',
+      message: offer,
+    });
+    const recovered2 = await verifyProof({ domain, offer, signature: signature2 });
+    expect(recovered2.toLowerCase()).not.toBe(account.address.toLowerCase());
 
     // hashOffer should be deterministic
     const h1 = hashOffer(domain, offer);

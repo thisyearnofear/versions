@@ -37,7 +37,7 @@ import type {
 // in `@/lib/types` (source of truth). Re-export here so existing
 // `import { MoodTagsEnvelope } from '@/lib/api-client'` call sites
 // keep working without churn.
-export type { MoodTagsEnvelope, BriefSearchResponse } from "./types";
+export type { MoodTagsEnvelope, BriefSearchResponse, BriefSearchRow } from "./types";
 
 export class ApiError extends Error {
   code: string;
@@ -55,7 +55,7 @@ export class ApiError extends Error {
 type Envelope<T> = { data?: T; success?: boolean; error?: { message: string; code?: string } };
 
 async function request<T>(
-  method: "GET" | "POST" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -84,6 +84,8 @@ async function request<T>(
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
+  put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
+  patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
   delete: <T>(path: string, body?: unknown) => request<T>("DELETE", path, body),
 };
 
@@ -382,6 +384,49 @@ export interface ArtistProfileResponse {
   }>;
 }
 
+// ── Supervisor dashboard types ────────────────────────
+
+export interface SupervisorProfile {
+  wallet: string;
+  email: string | null;
+  name: string | null;
+  company: string | null;
+  role: "supervisor" | "sync_house" | "aandr";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedBrief {
+  id: string;
+  supervisor_wallet: string;
+  brief_text: string;
+  filters: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BriefSearchRecord {
+  id: string;
+  supervisor_wallet: string;
+  brief_text: string;
+  filters: Record<string, unknown>;
+  results_count: number;
+  created_at: string;
+}
+
+export interface LicensingInterest {
+  id: string;
+  supervisor_wallet: string;
+  submission_id: string;
+  title?: string | null;
+  artist_name?: string | null;
+  artist_wallet?: string | null;
+  status: "interested" | "contacted" | "licensed" | "passed";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ---------- typed wrappers ----------
 
 export const apiClient = {
@@ -507,6 +552,52 @@ export const apiClient = {
   // payment
   getArcInfo(): Promise<ArcInfo> {
     return api.get<ArcInfo>("/api/v1/arc/info");
+  },
+
+  // supervisor dashboard
+  getSupervisorProfile(): Promise<{ profile: SupervisorProfile | null }> {
+    return api.get<{ profile: SupervisorProfile | null }>("/api/v1/supervisor/profile");
+  },
+  updateSupervisorProfile(body: { email?: string; name?: string; company?: string; role?: string }): Promise<{ profile: SupervisorProfile }> {
+    return api.put<{ profile: SupervisorProfile }>("/api/v1/supervisor/profile", body);
+  },
+  getSavedBriefs(opts?: { limit?: number; offset?: number; search?: string }): Promise<{ rows: SavedBrief[]; total: number }> {
+    const params = new URLSearchParams();
+    if (opts?.limit !== undefined) params.set("limit", String(opts.limit));
+    if (opts?.offset !== undefined) params.set("offset", String(opts.offset));
+    if (opts?.search) params.set("search", opts.search);
+    const qs = params.toString();
+    return api.get<{ rows: SavedBrief[]; total: number }>(`/api/v1/supervisor/saved-briefs${qs ? `?${qs}` : ""}`);
+  },
+  saveBrief(body: { briefText: string; filters?: Record<string, unknown> }): Promise<{ row: SavedBrief }> {
+    return api.post<{ row: SavedBrief }>("/api/v1/supervisor/saved-briefs", body);
+  },
+  deleteSavedBrief(id: string): Promise<{ ok: boolean }> {
+    return api.delete<{ ok: boolean }>(`/api/v1/supervisor/saved-briefs?id=${encodeURIComponent(id)}`);
+  },
+  getRecentSearches(opts?: { limit?: number; offset?: number; search?: string }): Promise<{ rows: BriefSearchRecord[]; total: number }> {
+    const params = new URLSearchParams();
+    if (opts?.limit !== undefined) params.set("limit", String(opts.limit));
+    if (opts?.offset !== undefined) params.set("offset", String(opts.offset));
+    if (opts?.search) params.set("search", opts.search);
+    const qs = params.toString();
+    return api.get<{ rows: BriefSearchRecord[]; total: number }>(`/api/v1/supervisor/recent-searches${qs ? `?${qs}` : ""}`);
+  },
+  logSearch(body: { briefText: string; filters?: Record<string, unknown>; resultsCount?: number }): Promise<{ row: BriefSearchRecord }> {
+    return api.post<{ row: BriefSearchRecord }>("/api/v1/supervisor/recent-searches", body);
+  },
+  getInterests(opts?: { limit?: number; offset?: number }): Promise<{ rows: LicensingInterest[]; total: number }> {
+    const params = new URLSearchParams();
+    if (opts?.limit !== undefined) params.set("limit", String(opts.limit));
+    if (opts?.offset !== undefined) params.set("offset", String(opts.offset));
+    const qs = params.toString();
+    return api.get<{ rows: LicensingInterest[]; total: number }>(`/api/v1/supervisor/interests${qs ? `?${qs}` : ""}`);
+  },
+  addInterest(body: { submissionId: string; status?: string; notes?: string }): Promise<{ row: LicensingInterest }> {
+    return api.post<{ row: LicensingInterest }>("/api/v1/supervisor/interests", body);
+  },
+  updateInterest(body: { id: string; status?: string; notes?: string }): Promise<{ row: LicensingInterest }> {
+    return api.patch<{ row: LicensingInterest }>("/api/v1/supervisor/interests", body);
   },
 };
 

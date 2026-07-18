@@ -276,6 +276,49 @@ CREATE TABLE IF NOT EXISTS version_embeddings (
   model TEXT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS supervisor_profiles (
+  wallet TEXT PRIMARY KEY REFERENCES users(wallet_address),
+  email TEXT,
+  name TEXT,
+  company TEXT,
+  role TEXT DEFAULT 'supervisor',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_supervisor_profiles_email ON supervisor_profiles(email);
+
+CREATE TABLE IF NOT EXISTS saved_briefs (
+  id TEXT PRIMARY KEY,
+  supervisor_wallet TEXT NOT NULL REFERENCES supervisor_profiles(wallet),
+  brief_text TEXT NOT NULL,
+  filters JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_saved_briefs_supervisor ON saved_briefs(supervisor_wallet, created_at);
+
+CREATE TABLE IF NOT EXISTS brief_searches (
+  id TEXT PRIMARY KEY,
+  supervisor_wallet TEXT NOT NULL REFERENCES supervisor_profiles(wallet),
+  brief_text TEXT NOT NULL,
+  filters JSONB NOT NULL DEFAULT '{}',
+  results_count INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_brief_searches_supervisor ON brief_searches(supervisor_wallet, created_at);
+
+CREATE TABLE IF NOT EXISTS licensing_interests (
+  id TEXT PRIMARY KEY,
+  supervisor_wallet TEXT NOT NULL REFERENCES supervisor_profiles(wallet),
+  submission_id TEXT NOT NULL REFERENCES published_versions(submission_id),
+  status TEXT NOT NULL DEFAULT 'interested',
+  notes TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_interest_supermission ON licensing_interests(supervisor_wallet, submission_id);
+CREATE INDEX IF NOT EXISTS idx_licensing_interests_supervisor ON licensing_interests(supervisor_wallet, created_at);
 `;
 
 export async function initTestDb(): Promise<ReturnType<typeof drizzle<typeof schema>>> {
@@ -305,6 +348,10 @@ export async function resetTestDb(): Promise<void> {
   if (!_pg) return;
   // Drop all rows from every test table. Cheaper than recreating the instance.
   const tables = [
+    'licensing_interests',
+    'saved_briefs',
+    'brief_searches',
+    'supervisor_profiles',
     'version_embeddings',
     'telemetry_events',
     'x402_proofs',
