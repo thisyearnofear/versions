@@ -168,7 +168,7 @@ export function WaveformGallery() {
             covers.map((cover, i) => {
               const pt = points[i];
               if (!pt) return null;
-              const isPlaceholder = cover.id.startsWith("placeholder");
+              const isPlaceholder = !cover.id || cover.id.startsWith("placeholder");
               return (
                 <motion.div
                   key={cover.id}

@@ -36,8 +36,9 @@ export function OPTIONS() {
 export async function GET(req: NextRequest): Promise<Response> {
   const rid = requestIdFor(req);
   try {
-    const [reviewRows, tipRows, batchRows, legRows, playRows] = await Promise.all([
-      // Recent agent verdicts (with submission context)
+    // Each query is independent — a failure in one (e.g. a table not
+    // existing on a fresh deploy) doesn't kill the whole route.
+    const [reviewRes, tipRes, batchRes, legRes, playRes] = await Promise.allSettled([
       db
         .select({
           submissionId: agentReviews.submissionId,
@@ -56,7 +57,6 @@ export async function GET(req: NextRequest): Promise<Response> {
         .orderBy(desc(agentReviews.submittedAt))
         .limit(PER_KIND),
 
-      // Recently verified tips still queued for batching
       db
         .select({
           tipperWallet: x402Proofs.tipperWallet,
@@ -69,7 +69,6 @@ export async function GET(req: NextRequest): Promise<Response> {
         .orderBy(desc(x402Proofs.createdAt))
         .limit(PER_KIND),
 
-      // Settled tip batches: one row per on-chain transfer (grouped by hash)
       db
         .select({
           txHash: x402Proofs.txHash,
@@ -84,7 +83,6 @@ export async function GET(req: NextRequest): Promise<Response> {
         .orderBy(desc(sql`MAX(${x402Proofs.settledAt})`))
         .limit(PER_KIND),
 
-      // Recently settled payout legs
       db
         .select({
           submissionId: settlementLegs.submissionId,
@@ -99,7 +97,6 @@ export async function GET(req: NextRequest): Promise<Response> {
         .orderBy(desc(settlementLegs.settledAt))
         .limit(PER_KIND),
 
-      // Recently settled plays
       db
         .select({
           versionId: arPlayEvents.versionId,
@@ -115,6 +112,12 @@ export async function GET(req: NextRequest): Promise<Response> {
         .orderBy(desc(arPlayEvents.playedAt))
         .limit(PER_KIND),
     ]);
+
+    const reviewRows = reviewRes.status === 'fulfilled' ? reviewRes.value : [];
+    const tipRows = tipRes.status === 'fulfilled' ? tipRes.value : [];
+    const batchRows = batchRes.status === 'fulfilled' ? batchRes.value : [];
+    const legRows = legRes.status === 'fulfilled' ? legRes.value : [];
+    const playRows = playRes.status === 'fulfilled' ? playRes.value : [];
 
     const events: EconomyEvent[] = [
       ...reviewRows.map((r) => ({
@@ -143,7 +146,7 @@ export async function GET(req: NextRequest): Promise<Response> {
         amountUsdc: (Number(b.totalMicro ?? 0) / 1_000_000).toFixed(6),
         txHash: b.txHash,
         settledCount: b.settledCount,
-        timestamp: b.settledAt.toISOString(),
+        timestamp: (b.settledAt ?? new Date(0)).toISOString(),
       })),
       ...legRows.map((l) => ({
         kind: 'leg_settled' as const,
