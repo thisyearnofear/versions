@@ -184,6 +184,28 @@ export interface FeedResponse {
   total?: number;
 }
 
+// The feed service emits Drizzle camelCase rows (submissionId, coverSvg, …)
+// while the UI contract is snake_case. Normalize at the boundary, accepting
+// either shape so server-side loads and the HTTP API stay interchangeable.
+export function normalizeFeedRow(raw: Record<string, unknown>): FeedRow {
+  const pick = <T>(a: unknown, b: unknown): T => (a !== undefined ? a : b) as T;
+  return {
+    submission_id: pick(raw.submission_id, raw.submissionId),
+    title: pick(raw.title, ""),
+    artist_name: pick(raw.artist_name, raw.artistName),
+    version_type: pick(raw.version_type, raw.versionType),
+    audio_path: pick(raw.audio_path, raw.audioPath),
+    cover_svg: pick(raw.cover_svg, raw.coverSvg),
+    avg_solo_intensity: pick(raw.avg_solo_intensity, raw.avgSoloIntensity),
+    avg_vocal_quality: pick(raw.avg_vocal_quality, raw.avgVocalQuality),
+    energy_consensus: pick(raw.energy_consensus, raw.energyConsensus),
+    tempo_consensus: pick(raw.tempo_consensus, raw.tempoConsensus),
+    rating_count: pick(raw.rating_count, raw.ratingCount),
+    aggregated_mood_tags: pick(raw.aggregated_mood_tags, raw.aggregatedMoodTags),
+    published_at: pick(raw.published_at, raw.publishedAt),
+  };
+}
+
 export interface Playlist {
   id: string;
   name: string;
@@ -462,13 +484,16 @@ export const apiClient = {
   },
 
   // feed
-  getFeed(params: Record<string, string | number | undefined> = {}): Promise<FeedResponse> {
+  async getFeed(params: Record<string, string | number | undefined> = {}): Promise<FeedResponse> {
     const usp = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== "") usp.set(k, String(v));
     }
     const qs = usp.toString();
-    return api.get<FeedResponse>(`/api/v1/feed${qs ? `?${qs}` : ""}`);
+    const resp = await api.get<{ rows?: Array<Record<string, unknown>>; total?: number }>(
+      `/api/v1/feed${qs ? `?${qs}` : ""}`,
+    );
+    return { rows: (resp?.rows ?? []).map(normalizeFeedRow), total: resp?.total };
   },
 
   // MODULAR: supervisor inverse-search. Brief text is mandatory;

@@ -4,7 +4,7 @@
 // missing table on a fresh deploy doesn't 500 the route.
 
 import type { NextRequest } from 'next/server';
-import { eq, count, sum } from 'drizzle-orm';
+import { eq, count, sql } from 'drizzle-orm';
 import { db } from '../../../../lib/db';
 import {
   agentReviews,
@@ -36,15 +36,15 @@ export async function GET(req: NextRequest): Promise<Response> {
       db.select({ c: count() }).from(publishedVersions),
       db.select({ c: count() }).from(agentReviews),
       db
-        .select({ total: sum(settlementLegs.amountUsdc) })
+        .select({ total: sql<string>`COALESCE(SUM(${settlementLegs.amountUsdc}::numeric), 0)` })
         .from(settlementLegs)
         .where(eq(settlementLegs.status, 'settled')),
       db
-        .select({ total: sum(x402Proofs.amountMicroUsdc) })
+        .select({ total: sql<string>`COALESCE(SUM(${x402Proofs.amountMicroUsdc}::numeric), 0)` })
         .from(x402Proofs)
         .where(eq(x402Proofs.status, 'settled')),
       db
-        .select({ total: sum(arPlayEvents.artistPayoutUsdc) })
+        .select({ total: sql<string>`COALESCE(SUM(${arPlayEvents.artistPayoutUsdc}::numeric), 0)` })
         .from(arPlayEvents)
         .where(eq(arPlayEvents.status, 'settled')),
     ]);

@@ -125,10 +125,12 @@ async function main() {
   ok(`deduped: ${Boolean(data.deduped ?? false)}`);
 
   header('Step 2 — POST /api/v1/submissions/[id]/verify-payment (auto-fires agent review)');
+  // Random per-run hash — a fixed hash trips the tx-reuse guard on repeat runs.
+  const txHash = `0x${createHash('sha256').update(`${submissionId}-${Date.now()}`).digest('hex')}`;
   const verifyRes = await fetch(`${API_BASE}/api/v1/submissions/${submissionId}/verify-payment`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ txHash: `0x${'00'.repeat(32)}` }),
+    body: JSON.stringify({ txHash }),
   });
   if (!verifyRes.ok) {
     err(`verify-payment failed (${verifyRes.status}): ${await verifyRes.text()}`);

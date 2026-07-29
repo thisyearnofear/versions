@@ -184,7 +184,10 @@ export function WaveformGallery() {
           ))}
         </svg>
 
-        <div className="absolute top-1/2 left-0 -translate-y-1/2" style={{ width: `${WAVE_WIDTH}px` }}>
+        <div
+          className="absolute top-1/2 left-0 -translate-y-1/2"
+          style={{ width: `${WAVE_WIDTH}px`, height: `${WAVE_HEIGHT}px` }}
+        >
           {points.length === covers.length &&
             covers.map((cover, i) => {
               const pt = points[i];

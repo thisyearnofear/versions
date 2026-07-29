@@ -8,7 +8,7 @@ import { verifyMessage, isAddress, getAddress } from 'viem';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../lib/db';
 import { emit } from '../lib/event-bus';
-import { submissions as submissionsTable, ratings as ratingsTable, settlementLegs as legsTable } from '../lib/schema';
+import { submissions as submissionsTable, ratings as ratingsTable, settlementLegs as legsTable, users as usersTable } from '../lib/schema';
 import type { SubmissionStatus, VersionType } from '../lib/types';
 import type { ArcAdapter } from '../adapters/arc';
 import { microUsdcToBigInt } from '../adapters/arc';
@@ -240,6 +240,17 @@ export function createSubmissionsService({
       }
 
       const id = randomUUID();
+      // First-time wallets have no users row yet; the artist_wallet FK
+      // requires one. Idempotent upsert mirrors supervisor.ensureUser.
+      await db
+        .insert(usersTable)
+        .values({
+          id: randomUUID(),
+          walletAddress: walletKey,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .onConflictDoNothing({ target: usersTable.walletAddress });
       // MODULAR: insert with onConflictDoNothing so a parallel
       // double-click concurrent with the lookup above lands safely
       // on the unique index instead of crashing the request with

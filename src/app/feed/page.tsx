@@ -3,12 +3,12 @@ import { FeedView } from "@/components/feed/FeedView";
 import { FadeIn } from "@/components/ui/FadeIn";
 import { ToastProvider } from "@/components/ui/Toast";
 import { services } from "@/lib/services";
-import type { FeedRow } from "@/lib/api-client";
+import { normalizeFeedRow, type FeedRow } from "@/lib/api-client";
 
 async function loadInitialFeed(): Promise<FeedRow[]> {
   try {
     const result = await services().feed.listPublished({ limit: 20, offset: 0 });
-    return result.rows as unknown as FeedRow[];
+    return (result.rows as unknown as Array<Record<string, unknown>>).map(normalizeFeedRow);
   } catch {
     return [];
   }
