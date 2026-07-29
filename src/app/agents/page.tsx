@@ -1,5 +1,6 @@
 import { SiteHeader } from "@/components/SiteHeader";
 import { AgentMonitor } from "@/components/curation/AgentMonitor";
+import { EconomyTicker } from "@/components/economy/EconomyTicker";
 import { ToastProvider } from "@/components/ui/Toast";
 
 export default function AgentsPage() {
@@ -20,7 +21,12 @@ export default function AgentsPage() {
             what each agent decided, then see the version publish once all three
             agree.
           </p>
-          <AgentMonitor />
+          <div className="grid lg:grid-cols-[1fr_360px] gap-12 items-start">
+            <AgentMonitor />
+            <aside className="lg:sticky lg:top-8">
+              <EconomyTicker limit={10} />
+            </aside>
+          </div>
         </main>
       </div>
     </ToastProvider>

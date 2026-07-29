@@ -368,6 +368,7 @@ export function createArService({
 
       let listenerTx: string | null = null;
       let artistTx: string | null = null;
+      let artistMock = false;
 
       // Free plays skip the listener charge — the platform subsidizes the artist payout.
       if (!isFree) {
@@ -396,6 +397,7 @@ export function createArService({
           amountUsdc: ARTIST_PAYOUT_USDC,
         });
         artistTx = artistResult.hash;
+        artistMock = !!artistResult.mock;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         await db
@@ -409,6 +411,19 @@ export function createArService({
         .update(playEventsTable)
         .set({ listenerTxHash: listenerTx, artistTxHash: artistTx, status: 'settled' })
         .where(eq(playEventsTable.id, playId));
+
+      // Economy ticker: pay-per-play settled (listener → A&R → artist).
+      emit('economy-event', {
+        kind: 'play',
+        versionId,
+        playType,
+        toWallet: version.artistWallet,
+        amountUsdc: ARTIST_PAYOUT_USDC,
+        listenerTxHash: listenerTx,
+        artistTxHash: artistTx,
+        mock: artistMock,
+        timestamp: new Date().toISOString(),
+      });
 
       return {
         ok: true as const,

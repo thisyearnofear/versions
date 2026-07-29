@@ -10,6 +10,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Tour } from "@/components/ui/Tour";
 import { LiveActivityStrip } from "@/components/home/LiveActivityStrip";
+import { EconomyTicker } from "@/components/economy/EconomyTicker";
 import { track } from "@/lib/analytics";
 
 export default function Home() {
@@ -18,6 +19,11 @@ export default function Home() {
       <SiteHeader />
       <main className="flex-1">
         <Hero />
+        <div className="border-t border-[var(--color-hair-strong)]">
+          <div className="px-6 md:px-12 py-8 max-w-3xl">
+            <EconomyTicker limit={6} />
+          </div>
+        </div>
         <LiveActivityStrip />
         <SectionNav />
       </main>

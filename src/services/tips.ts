@@ -13,6 +13,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../lib/db';
 import { x402Proofs } from '../lib/schema';
+import { emit } from '../lib/event-bus';
 import { log } from '../lib/logger';
 import type { ArcAdapter } from '../adapters/arc';
 import { fromMicroUsdc } from './settlement';
@@ -67,6 +68,16 @@ export function createTipSettlementService({
         .update(x402Proofs)
         .set({ status: 'settled', txHash: r.hash, settledAt: new Date() })
         .where(inArray(x402Proofs.id, rows.map((row) => row.id)));
+      // Economy ticker: one on-chain transfer for the whole batch.
+      emit('economy-event', {
+        kind: 'tip_batch_settled',
+        toWallet: artistWallet,
+        amountUsdc,
+        txHash: r.hash,
+        settledCount: rows.length,
+        mock: !!r.mock,
+        timestamp: new Date().toISOString(),
+      });
       return {
         status: 'settled',
         hash: r.hash,

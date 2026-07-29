@@ -13,6 +13,7 @@ import { randomUUID } from 'crypto';
 import { eq, sql, desc, and, gte, lte } from 'drizzle-orm';
 import { db } from '../lib/db';
 import { submissions as submissionsTable, settlementLegs as legsTable } from '../lib/schema';
+import { emit } from '../lib/event-bus';
 import type { SettlementStatus, RecipientRole } from '../lib/types';
 import type { ArcAdapter } from '../adapters/arc';
 
@@ -283,6 +284,17 @@ export function createSettlementService({
               status: 'settled',
             })
             .where(eq(legsTable.id, legId));
+          // Economy ticker: one payout leg landed on-chain.
+          emit('economy-event', {
+            kind: 'leg_settled',
+            submissionId: leg.submissionId,
+            recipientRole: leg.recipientRole,
+            toWallet: leg.recipientWallet,
+            amountUsdc: leg.amountUsdc,
+            txHash: r.hash,
+            mock: !!r.mock,
+            timestamp: new Date().toISOString(),
+          });
           results.push({ leg_id: legId, status: 'settled', tx_hash: r.hash, mock: !!r.mock });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);

@@ -9,7 +9,8 @@ export type EventName =
   | 'queue-update'
   | 'submission-created'
   | 'playlist-update'
-  | 'tip-received';
+  | 'tip-received'
+  | 'economy-event';
 
 export interface FeedUpdateEvent {
   type: 'published';
@@ -50,12 +51,48 @@ export interface TipReceivedEvent {
   timestamp: string;
 }
 
+// MODULAR: normalized "agent economy" activity item. Services emit one of
+// these whenever something a demo-watcher cares about happens: an agent
+// files a review, a tip proof verifies, a tip batch settles on-chain, a
+// settlement leg pays out, or a pay-per-play clears. The SSE route
+// forwards them verbatim; the EconomyTicker renders them with agent
+// identity, USDC amounts, and ArcScan links. All fields JSON-safe; only
+// `kind` and `timestamp` are required.
+export interface EconomyEvent {
+  kind: 'review' | 'tip' | 'tip_batch_settled' | 'leg_settled' | 'play';
+  timestamp: string;
+  // context
+  submissionId?: string;
+  title?: string | null;
+  artistName?: string | null;
+  agentName?: string;
+  versionId?: string;
+  playType?: string;
+  recipientRole?: string;
+  fromWallet?: string;
+  toWallet?: string;
+  // review payload (energy/tempo are the agents' qualitative strings)
+  solo?: number;
+  vocal?: number;
+  energy?: string;
+  tempo?: string;
+  notes?: string | null;
+  // money payload
+  amountUsdc?: string;
+  txHash?: string | null;
+  artistTxHash?: string | null;
+  listenerTxHash?: string | null;
+  settledCount?: number;
+  mock?: boolean;
+}
+
 export type BusEvent =
   | FeedUpdateEvent
   | QueueUpdateEvent
   | SubmissionCreatedEvent
   | PlaylistUpdateEvent
-  | TipReceivedEvent;
+  | TipReceivedEvent
+  | EconomyEvent;
 
 type Handler = (data: BusEvent) => void;
 

@@ -5,7 +5,7 @@
 //             n connected clients. Heartbeat keeps the proxy alive.
 // CLEAN: no external dependencies — native Web Streams API.
 
-import { subscribe, type BusEvent } from '@/lib/event-bus';
+import { subscribe } from '@/lib/event-bus';
 
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'auto';
@@ -31,6 +31,13 @@ export async function GET(req: Request): Promise<Response> {
         controller.enqueue(new TextEncoder().encode(payload));
       });
 
+      // Economy ticker: agent reviews, verified tips, batch settlements,
+      // payout legs, and pay-per-play events as they happen.
+      const unsubEconomy = subscribe('economy-event', (data) => {
+        const payload = `event: economy-event\ndata: ${JSON.stringify(data)}\n\n`;
+        controller.enqueue(new TextEncoder().encode(payload));
+      });
+
       // Heartbeat every 30s keeps load-balancer / proxy timeouts at bay.
       const heartbeat = setInterval(() => {
         controller.enqueue(new TextEncoder().encode(': heartbeat\n\n'));
@@ -45,6 +52,7 @@ export async function GET(req: Request): Promise<Response> {
         unsubFeedUpdate();
         unsubQueueUpdate();
         unsubPlaylistUpdate();
+        unsubEconomy();
         clearInterval(heartbeat);
       });
     },

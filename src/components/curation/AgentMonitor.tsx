@@ -15,6 +15,7 @@
 // no parallel health probe, no separate heartbeat timer.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { apiClient, type AgentReviewRecord, type FeedRow, type QueueSubmission } from "@/lib/api-client";
 import { parseMoodTags } from "@/lib/format";
@@ -117,7 +118,6 @@ export function AgentMonitor() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshQueue();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadRecentVerdicts();
   }, [refreshQueue, loadRecentVerdicts]);
 
@@ -136,6 +136,9 @@ export function AgentMonitor() {
   // the recent-verdicts strip when a queue-update arrives (because
   // publishing ≈ a queue-update with the version landing in the
   // published_versions table in the same transaction window).
+  // Also listens to economy-event so an agent verdict landing on the
+  // currently-selected submission refreshes the review pane instantly
+  // — the judge sees the card appear while they are watching.
   useEffect(() => {
     let es: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -156,6 +159,20 @@ export function AgentMonitor() {
         // A queue-update almost certainly coincides with a publish-
         // leg landing, so refresh the recent-verdicts strip too.
         loadRecentVerdictsRef.current();
+      });
+      es.addEventListener("economy-event", (msg) => {
+        try {
+          const e = JSON.parse((msg as MessageEvent).data) as { kind?: string; submissionId?: string };
+          if (e.kind === "review" && e.submissionId) {
+            const sid = e.submissionId;
+            setSelectedId(sid);
+            apiClient.getReviews(sid).then((data) => {
+              setReviews(Array.isArray(data) ? data : []);
+            }).catch(() => { /* silent */ });
+          }
+        } catch {
+          /* malformed — ignore */
+        }
       });
       es.addEventListener("error", () => {
         setSseStatus("reconnecting");
@@ -322,12 +339,21 @@ export function AgentMonitor() {
           </p>
         ) : (
           <div className="flex flex-col gap-4">
-            {reviews.map((r) => {
-              const meta = AGENT_META[r.agent_name] ?? { icon: "🤖", label: r.agent_name, color: "var(--color-ink)" };
-              return (
-                <AgentReviewCard key={`${r.submission_id}-${r.agent_name}`} review={r} meta={meta} />
-              );
-            })}
+            <AnimatePresence mode="popLayout">
+              {reviews.map((r, idx) => {
+                const meta = AGENT_META[r.agent_name] ?? { icon: "🤖", label: r.agent_name, color: "var(--color-ink)" };
+                return (
+                  <motion.div
+                    key={`${r.submission_id}-${r.agent_name}`}
+                    initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ delay: idx * 0.12, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <AgentReviewCard review={r} meta={meta} />
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         )}
       </section>

@@ -281,6 +281,19 @@ export async function POST(req: NextRequest) {
       timestamp: new Date().toISOString(),
     });
 
+    // Economy ticker: the verified nanopayment itself (batch settlement,
+    // when it happens inline or via sweeper, emits its own event from the
+    // tips service).
+    emit('economy-event', {
+      kind: 'tip',
+      fromWallet: tipperWallet,
+      toWallet: body.artistWallet,
+      amountUsdc: (Number(submitted.offer.amount) / 1_000_000).toFixed(6),
+      txHash: result.hash,
+      mock: result.mock,
+      timestamp: new Date().toISOString(),
+    });
+
     log.info('tip settled', {
       rid,
       puid: submitted.offer.puid,

@@ -5,7 +5,7 @@
 //        operator wallets). The settlement service pays agent wallets on publish.
 
 import { randomUUID } from 'crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '../lib/db';
 import { assertMoodTagsShape } from '../lib/format';
 import {
@@ -17,6 +17,7 @@ import {
   publishedVersions as pvTable,
 } from '../lib/schema';
 import { publishSubmission, PublishLegIncompleteError } from './publish';
+import { emit } from '../lib/event-bus';
 import type { LlmAdapter } from '../adapters/llm';
 import type { SettlementService } from './settlement';
 import type { AgentName } from '../lib/types';
@@ -419,6 +420,22 @@ export function createAgentService({
           mood_tags: parsed.mood_tags,
           notes: parsed.notes,
           mock,
+        });
+
+        // Economy ticker: one event per filed verdict.
+        emit('economy-event', {
+          kind: 'review',
+          agentName,
+          submissionId,
+          title: sub.title,
+          artistName: sub.artistName,
+          solo: parsed.solo_intensity,
+          vocal: parsed.vocal_quality,
+          energy: parsed.energy_vs_studio,
+          tempo: parsed.tempo_feel,
+          notes: parsed.notes,
+          mock,
+          timestamp: new Date().toISOString(),
         });
       }
 

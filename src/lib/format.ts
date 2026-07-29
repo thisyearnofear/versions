@@ -1,5 +1,23 @@
 // MODULAR: pure formatters shared by dropzone + audio player.
 
+/** Lightweight relative time: "45s ago" / "12m ago" / "3h ago" / "2d ago". */
+export function relativeTime(iso: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+/** USDC amount string for tickers: "0.010000" → "0.01", keeps up to 6 dp. */
+export function fmtUsdc(amount: string | number): string {
+  const n = typeof amount === "number" ? amount : Number(amount);
+  if (!Number.isFinite(n)) return String(amount);
+  return n.toFixed(6).replace(/\.?0+$/, "") || "0";
+}
+
 export function fmtSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
