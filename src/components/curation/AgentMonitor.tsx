@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
+import { PipelineStepper } from "@/components/economy/PipelineStepper";
 import { apiClient, type AgentReviewRecord, type FeedRow, type QueueSubmission } from "@/lib/api-client";
 import { parseMoodTags } from "@/lib/format";
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
@@ -317,6 +318,17 @@ export function AgentMonitor() {
                 <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mt-1">
                   {sub.artist_name} · {sub.version_type}
                   {sub.ratingCount !== undefined && ` · ${sub.ratingCount}/3 agents rated`}
+                  {sub.status && (
+                    <span
+                      className={`ml-2 inline-block border px-1.5 py-px text-[9px] tracking-[0.14em] ${
+                        sub.status === "in_curation"
+                          ? "border-[var(--color-rust)] text-[var(--color-rust)]"
+                          : "border-[var(--color-hair-strong)] text-[var(--color-ink-3)]"
+                      }`}
+                    >
+                      {sub.status.replace(/_/g, " ")}
+                    </span>
+                  )}
                 </div>
               </li>
             );
@@ -327,6 +339,14 @@ export function AgentMonitor() {
       {/* Agent review pane */}
       <section>
         <h3 className="font-serif text-2xl font-black mb-4">Agent Reviews</h3>
+        {selectedId && (
+          <div className="mb-5 border border-[var(--color-hair-strong)] bg-[var(--color-paper-2)]/40 px-4 py-3">
+            <PipelineStepper
+              status={queue.find((q) => q.id === selectedId)?.status}
+              ratingCount={queue.find((q) => q.id === selectedId)?.ratingCount}
+            />
+          </div>
+        )}
         {!selectedId ? (
           <p className="font-serif italic text-[var(--color-ink-3)] py-10 text-center border-t border-b border-[var(--color-hair)]">
             Select a submission from the queue to inspect agent reviews.

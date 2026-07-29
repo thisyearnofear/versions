@@ -124,6 +124,9 @@ export interface QueueSubmission {
   version_type: string;
   genre?: string | null;
   ratingCount?: number;
+  status?: string;
+  published_at?: string | null;
+  payment_tx_hash?: string | null;
 }
 
 export interface RatingInput {

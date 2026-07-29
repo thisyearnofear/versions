@@ -25,6 +25,7 @@ import { useSignTypedData, useAccount } from 'wagmi';
 import { getAddress } from 'viem';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
+import { shortHash, txUrl } from '@/lib/explorer';
 import { apiClient, type ArtistTipCardResponse } from '@/lib/api-client';
 import {
   X402_OFFER_TYPES,
@@ -116,6 +117,21 @@ export function TipButton({ artistWallet, artistName, variant = 'inline', onSett
   const [busy, setBusy] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
+  // MODULAR: inline settlement confirmation. After a tip's proof is
+  // verified (or batched on-chain), surface the tx hash + ArcScan
+  // link right under the tip controls so the tipper gets immediate,
+  // verifiable proof their USDC moved — no need to open the economy
+  // ticker. Auto-clears after 8 s so it never accumulates stale rows.
+  const [lastConfirmed, setLastConfirmed] = useState<{
+    hash: string;
+    amountUsdc: string;
+    mock: boolean;
+  } | null>(null);
+  useEffect(() => {
+    if (!lastConfirmed) return;
+    const t = setTimeout(() => setLastConfirmed(null), 8000);
+    return () => clearTimeout(t);
+  }, [lastConfirmed]);
 
   // ── Hover-card state + refs ─────────────────────────────────
   // MODULAR: hover-driven fetch with delay + abort + per-wallet
@@ -318,6 +334,10 @@ export function TipButton({ artistWallet, artistName, variant = 'inline', onSett
           'success',
         );
 
+        // MODULAR: surface on-chain (or mock) confirmation inline with
+        // an ArcScan link so the tipper sees verifiable settlement.
+        setLastConfirmed({ hash: json.data.hash, amountUsdc, mock: json.data.mock });
+
         // MODULAR: invalidate the cached card so the next hover re-
         // fetches with this tip in recent_tips. Cache stays cheap
         // because the per-wallet Map holds at most one entry per
@@ -465,6 +485,29 @@ export function TipButton({ artistWallet, artistName, variant = 'inline', onSett
           <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] mt-2">
             Sign the prompt in your wallet…
           </p>
+        )}
+        {lastConfirmed && (
+          <div
+            className="mt-3 flex items-center gap-2 border border-[var(--color-ink)]/20 bg-[var(--color-paper)]/60 px-3 py-2"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-rust)] shrink-0" aria-hidden="true" />
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-2)]">
+              {lastConfirmed.mock ? 'Tip recorded (mock)' : 'Settled on Arc'} · $
+              {lastConfirmed.amountUsdc}
+            </span>
+            {!lastConfirmed.mock && (
+              <a
+                href={txUrl(lastConfirmed.hash)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto font-mono text-[10px] tracking-[0.1em] text-[var(--color-rust)] underline underline-offset-2 hover:text-[var(--color-rust-dark)]"
+              >
+                {shortHash(lastConfirmed.hash)} ↗
+              </a>
+            )}
+          </div>
         )}
       </div>
 
