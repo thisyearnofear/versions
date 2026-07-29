@@ -37,10 +37,23 @@ Write-side fields (`RatingInput.mood_tags`, `Playlist.mood`,
 `SubmissionMetadata.mood`) stay single-typed because writers always
 emit canonical shapes; touch only when changing the write path.
 
+## Feed wire-shape convention (camelCase → snake_case)
+
+Drizzle rows are camelCase (`submissionId`, `coverSvg`) but the UI
+contract for feed rows is snake_case (`submission_id`, `cover_svg`).
+`/api/v1/feed` emits camelCase, so **all feed-row consumption must
+route through `normalizeFeedRow(raw)` in `src/lib/api-client.ts`**,
+which accepts either shape and returns canonical snake_case
+`FeedRow`s. `getFeed` already applies it; server components that
+call the feed service directly (e.g. `src/app/feed/page.tsx`) must
+apply it themselves. Skipping it reproduces the bug class where
+covers render as "···" placeholders and React logs duplicate-key
+warnings (every row keyed `undefined`).
+
 ## Build & test commands
 
 ```bash
-npm test              # vitest — 333 tests (330 unit + 3 integration)
+npm test              # vitest — 362 tests (359 unit + 3 integration)
 npm run build         # next build . --experimental-build-mode compile
 npx tsc --noEmit      # typecheck only
 npx eslint src/ tests/ --max-warnings 0  # lint (pre-existing warnings exist)

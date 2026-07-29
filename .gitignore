@@ -24,6 +24,15 @@
 .DS_Store
 *.pem
 
+# local IDE/agent state
+.qoder/
+
+# local audio uploads (submissions land here in dev)
+/data/
+
+# pitch materials (kept out of the repo)
+VERSIONS_Pitch_Deck.*
+
 # debug
 npm-debug.log*
 yarn-debug.log*

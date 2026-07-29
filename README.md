@@ -408,6 +408,30 @@ auto-refreshes and the new card animates in.
 
 Files: `src/components/curation/AgentMonitor.tsx`.
 
+### Musical interactions (Web Audio)
+
+The landing page is itself an instrument — inspired by Codrops'
+MusicalInteractions, built with zero audio files and zero new deps
+(pure Web Audio oscillator synthesis):
+
+- **Playable waveform hero**: clicking/tapping the waveform gallery
+  plays a pitched note — vertical position maps to an 8-note C-major
+  scale (C4 at the bottom → C5 at the top) with a ripple animation at
+  the touch point. `touch-pan-y` keeps vertical scroll working on
+  mobile.
+- **Economy event chimes**: each SSE `economy-event` kind has its own
+  sound — agent review (E4+G4 dyad), verified tip (C5), on-chain
+  settlement (C-E-G triad), per-play royalty (G5). Off by default;
+  the ♪ toggle on the economy ticker opts in (and resumes the
+  AudioContext inside the user gesture, as browsers require).
+- **Envelope synthesis**: every tone is an oscillator with a short
+  attack-decay gain envelope, so chimes stay soft and non-fatiguing
+  during a busy demo.
+
+Files: `src/lib/audio-feedback.ts` (synth engine),
+`src/components/home/WaveformGallery.tsx` (playable hero),
+`src/components/economy/EconomyTicker.tsx` (sound toggle + chimes).
+
 The artist dashboard exposes a **Tip** button that lets a listener send a
 sub-cent USDC nanopayment to any artist on Arc. The flow uses the
 [x402 protocol](https://docs.x402.org) with a DB-queued **batch settler**
@@ -726,6 +750,17 @@ tables:
 ```bash
 npm run db:push
 ```
+
+**Drift caveat:** `drizzle-kit push` asks interactive questions when
+the live DB has drifted from `src/lib/schema.ts` — it fails with
+"Interactive prompts require a TTY" in non-interactive shells, so run
+it from a real terminal. A drifted DB will bite in specific ways: a
+missing `submissions.audio_sha256` column 500s the submit route, a
+missing `uq_legs_submission_wallet_role` unique index makes publish
+roll back (its `ON CONFLICT` needs the index to exist), and missing
+`x402_proofs` / `telemetry_events` tables break tips and analytics.
+All of these are created by a clean `db:push`; if push can't run,
+mirror the DDL from `src/lib/schema.ts` via `psql`.
 
 ### 4. Backfill embeddings (optional)
 
