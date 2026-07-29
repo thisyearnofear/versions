@@ -2,20 +2,31 @@
 
 // MODULAR: kinetic waveform gallery for the landing page. Published
 // album covers ride along an SVG waveform path — scroll advances
-// them across the wave with tangent rotation, giving the first-screen
-// the energy of music in motion. Falls back to placeholder covers
-// when the catalog is empty (mock mode / fresh deploy).
+// them across the wave with tangent rotation. Clicking the wave plays
+// a note (pitch maps to Y position) — the landing page is an instrument.
+// Falls back to placeholder covers when the catalog is empty.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { apiClient, type FeedRow } from "@/lib/api-client";
+import { playNoteAt, resumeAudio } from "@/lib/audio-feedback";
 
 const WAVE_WIDTH = 1600;
 const WAVE_HEIGHT = 280;
-const COVER_SIZE = 72;
 const MAX_COVERS = 8;
 
-// Sample N evenly-spaced points along the SVG path.
+// Responsive cover size: smaller on mobile.
+function useCoverSize() {
+  const [size, setSize] = useState(72);
+  useEffect(() => {
+    const update = () => setSize(window.innerWidth < 640 ? 48 : 72);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  return size;
+}
+
 function samplePathPoints(
   pathEl: SVGPathElement,
   count: number,
@@ -25,7 +36,6 @@ function samplePathPoints(
   for (let i = 0; i < count; i++) {
     const t = i / Math.max(1, count - 1);
     const p = pathEl.getPointAtLength(t * len);
-    // Tangent angle from a nearby point
     const p2 = pathEl.getPointAtLength(Math.min(len, t * len + 1));
     const angle = (Math.atan2(p2.y - p.y, p2.x - p.x) * 180) / Math.PI;
     points.push({ x: p.x, y: p.y, angle });
@@ -33,7 +43,6 @@ function samplePathPoints(
   return points;
 }
 
-// The waveform SVG path — a smooth sine-like wave across the width.
 const WAVE_PATH = `M 0 ${WAVE_HEIGHT / 2}
   C ${WAVE_WIDTH * 0.1} ${WAVE_HEIGHT * 0.15}, ${WAVE_WIDTH * 0.2} ${WAVE_HEIGHT * 0.85}, ${WAVE_WIDTH * 0.3} ${WAVE_HEIGHT * 0.5}
   C ${WAVE_WIDTH * 0.4} ${WAVE_HEIGHT * 0.15}, ${WAVE_WIDTH * 0.5} ${WAVE_HEIGHT * 0.85}, ${WAVE_WIDTH * 0.6} ${WAVE_HEIGHT * 0.5}
@@ -53,18 +62,32 @@ export function WaveformGallery() {
   const [covers, setCovers] = useState<CoverItem[]>([]);
   const [points, setPoints] = useState<Array<{ x: number; y: number; angle: number }>>([]);
   const [loaded, setLoaded] = useState(false);
+  const [ripples, setRipples] = useState<Array<{ id: number; x: number; y: number }>>([]);
+  const coverSize = useCoverSize();
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start end", "end start"],
   });
 
-  // Horizontal pan: scroll moves covers across the wave.
   const x = useTransform(scrollYProgress, [0, 1], ["0%", "-40%"]);
-  // Subtle wave opacity fade in/out.
   const waveOpacity = useTransform(scrollYProgress, [0, 0.2, 0.8, 1], [0.3, 0.6, 0.6, 0.3]);
 
-  // Fetch published versions for covers.
+  // Click-to-play: Y position → note pitch. Also spawns a ripple.
+  const handleWaveClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const yRel = (e.clientY - rect.top) / rect.height;
+    resumeAudio();
+    playNoteAt(Math.max(0, Math.min(1, yRel)));
+    // Ripple at click point (in SVG coordinates).
+    const xRel = ((e.clientX - rect.left) / rect.width) * WAVE_WIDTH;
+    const ySvg = yRel * WAVE_HEIGHT;
+    const id = Date.now();
+    setRipples((prev) => [...prev, { id, x: xRel, y: ySvg }]);
+    setTimeout(() => setRipples((prev) => prev.filter((r) => r.id !== id)), 600);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     apiClient
@@ -79,14 +102,8 @@ export function WaveformGallery() {
             artist: r.artist_name,
             coverSvg: r.cover_svg ?? null,
           }));
-        // Pad with placeholders if fewer than 4.
         while (items.length < 4) {
-          items.push({
-            id: `placeholder-${items.length}`,
-            title: "",
-            artist: "",
-            coverSvg: null,
-          });
+          items.push({ id: `placeholder-${items.length}`, title: "", artist: "", coverSvg: null });
         }
         setCovers(items);
       })
@@ -109,14 +126,11 @@ export function WaveformGallery() {
     };
   }, []);
 
-  // Sample path points once the path is in the DOM.
   useEffect(() => {
     if (!pathRef.current || covers.length === 0) return;
-    const pts = samplePathPoints(pathRef.current, covers.length);
-    setPoints(pts);
+    setPoints(samplePathPoints(pathRef.current, covers.length));
   }, [covers]);
 
-  // Re-sample on resize.
   useEffect(() => {
     function onResize() {
       if (!pathRef.current || covers.length === 0) return;
@@ -129,20 +143,16 @@ export function WaveformGallery() {
   return (
     <section
       ref={containerRef}
-      className="relative overflow-hidden border-t border-b border-[var(--color-hair-strong)]"
-      style={{ height: `${WAVE_HEIGHT + 120}px` }}
+      className="relative overflow-hidden border-t border-b border-[var(--color-hair-strong)] h-[320px] sm:h-[400px]"
     >
-      {/* Scrollable wave container */}
-      <motion.div
-        style={{ x }}
-        className="absolute inset-0 flex items-center"
-      >
+      <motion.div style={{ x }} className="absolute inset-0 flex items-center">
         <svg
           width={WAVE_WIDTH}
           height={WAVE_HEIGHT}
           viewBox={`0 0 ${WAVE_WIDTH} ${WAVE_HEIGHT}`}
-          className="absolute top-1/2 left-0 -translate-y-1/2"
+          className="absolute top-1/2 left-0 -translate-y-1/2 cursor-pointer touch-pan-y"
           preserveAspectRatio="xMidYMid meet"
+          onClick={handleWaveClick}
         >
           <motion.path
             ref={pathRef}
@@ -152,7 +162,6 @@ export function WaveformGallery() {
             strokeWidth={2}
             style={{ opacity: waveOpacity }}
           />
-          {/* Glow line under the wave */}
           <motion.path
             d={WAVE_PATH}
             fill="none"
@@ -160,9 +169,21 @@ export function WaveformGallery() {
             strokeWidth={1}
             style={{ opacity: waveOpacity, filter: "blur(8px)" }}
           />
+          {/* Click ripples */}
+          {ripples.map((r) => (
+            <motion.circle
+              key={r.id}
+              cx={r.x}
+              cy={r.y}
+              r={0}
+              fill="var(--color-rust)"
+              initial={{ r: 0, opacity: 0.4 }}
+              animate={{ r: 30, opacity: 0 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+            />
+          ))}
         </svg>
 
-        {/* Covers positioned along the wave */}
         <div className="absolute top-1/2 left-0 -translate-y-1/2" style={{ width: `${WAVE_WIDTH}px` }}>
           {points.length === covers.length &&
             covers.map((cover, i) => {
@@ -175,9 +196,9 @@ export function WaveformGallery() {
                   className="absolute"
                   style={{
                     left: `${pt.x}px`,
-                    top: `${pt.y - COVER_SIZE / 2}px`,
-                    width: `${COVER_SIZE}px`,
-                    height: `${COVER_SIZE}px`,
+                    top: `${pt.y - coverSize / 2}px`,
+                    width: `${coverSize}px`,
+                    height: `${coverSize}px`,
                     rotate: `${pt.angle * 0.3}deg`,
                   }}
                   initial={{ opacity: 0, scale: 0.5 }}
@@ -187,26 +208,21 @@ export function WaveformGallery() {
                 >
                   {isPlaceholder ? (
                     <div
-                      className="w-full h-full border-2 border-[var(--color-hair-strong)] bg-[var(--color-paper-2)] flex items-center justify-center"
-                      style={{ borderRadius: "4px" }}
+                      className="w-full h-full border-2 border-[var(--color-hair-strong)] bg-[var(--color-paper-2)] flex items-center justify-center rounded"
                     >
                       <span className="font-mono text-[8px] text-[var(--color-ink-3)]">···</span>
                     </div>
                   ) : (
-                    <div className="w-full h-full relative group cursor-pointer" style={{ borderRadius: "4px", overflow: "hidden" }}>
+                    <div className="w-full h-full relative group cursor-pointer rounded overflow-hidden">
                       {cover.coverSvg ? (
-                        <div
-                          className="w-full h-full"
-                          dangerouslySetInnerHTML={{ __html: cover.coverSvg }}
-                        />
+                        <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: cover.coverSvg }} />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-[var(--color-rust)] to-[var(--color-rust-dark)] flex items-center justify-center">
-                          <span className="font-serif text-lg text-[var(--color-paper)] font-black">
+                          <span className="font-serif text-base sm:text-lg text-[var(--color-paper)] font-black">
                             {cover.title.charAt(0).toUpperCase()}
                           </span>
                         </div>
                       )}
-                      {/* Hover tooltip */}
                       <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-2)] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                         {cover.title} · {cover.artist}
                       </div>
@@ -218,10 +234,10 @@ export function WaveformGallery() {
         </div>
       </motion.div>
 
-      {/* Section label */}
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 text-center pointer-events-none">
+      {/* Section label + play hint */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 text-center pointer-events-none">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]">
-          {loaded ? "From the catalog" : "Loading…"}
+          {loaded ? "From the catalog · click to play" : "Loading…"}
         </p>
       </div>
     </section>

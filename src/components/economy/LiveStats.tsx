@@ -76,7 +76,7 @@ export function LiveStats() {
   }, []);
 
   return (
-    <div className="flex justify-center gap-8 md:gap-16 py-2">
+    <div className="flex justify-center gap-5 sm:gap-10 md:gap-16 py-2">
       <StatItem
         label="Tracks"
         value={stats.tracksPublished}
@@ -141,7 +141,7 @@ function StatItem({
         initial={{ scale: 1.08, color: "var(--color-rust)" }}
         animate={{ scale: 1, color: "var(--color-ink)" }}
         transition={{ duration: 0.3 }}
-        className="font-serif text-3xl md:text-4xl font-black tabular-nums"
+        className="font-serif text-2xl sm:text-3xl md:text-4xl font-black tabular-nums"
       >
         {formatted}
       </motion.div>

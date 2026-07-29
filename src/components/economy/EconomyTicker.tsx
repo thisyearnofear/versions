@@ -14,6 +14,7 @@ import type { EconomyEvent } from "@/lib/event-bus";
 import { agentIdentity } from "@/lib/agent-identity";
 import { shortAddress, shortHash, txUrl } from "@/lib/explorer";
 import { fmtUsdc, relativeTime } from "@/lib/format";
+import { playEconomySound, resumeAudio } from "@/lib/audio-feedback";
 
 type LiveState = "loading" | "live" | "connecting" | "quiet";
 
@@ -24,6 +25,7 @@ function eventKey(e: EconomyEvent): string {
 export function EconomyTicker({ limit = 12 }: { limit?: number }) {
   const [events, setEvents] = useState<EconomyEvent[]>([]);
   const [live, setLive] = useState<LiveState>("loading");
+  const [soundOn, setSoundOn] = useState(false);
 
   // Initial replay from the DB so the feed is never empty on load.
   useEffect(() => {
@@ -55,6 +57,8 @@ export function EconomyTicker({ limit = 12 }: { limit?: number }) {
           if (prev.some((p) => eventKey(p) === key)) return prev;
           return [e, ...prev].slice(0, limit);
         });
+        // Musical feedback: play a chime when sound is enabled.
+        if (soundOn) playEconomySound(e.kind);
       } catch {
         /* malformed event — ignore */
       }
@@ -62,7 +66,7 @@ export function EconomyTicker({ limit = 12 }: { limit?: number }) {
     es.onopen = () => setLive("live");
     es.onerror = () => setLive((s) => (s === "live" ? "connecting" : s));
     return () => es.close();
-  }, [limit]);
+  }, [limit, soundOn]);
 
   const visible = useMemo(() => events.slice(0, limit), [events, limit]);
 
@@ -82,6 +86,18 @@ export function EconomyTicker({ limit = 12 }: { limit?: number }) {
         <h3 className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-ink-2)]">
           Agent economy · {live === "live" ? "live" : live === "connecting" ? "reconnecting" : live === "loading" ? "loading" : "recent"}
         </h3>
+        <button
+          type="button"
+          onClick={() => {
+            if (!soundOn) resumeAudio();
+            setSoundOn((s) => !s);
+          }}
+          className="ml-auto font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
+          aria-label={soundOn ? "Mute economy sounds" : "Enable economy sounds"}
+          title={soundOn ? "Sound on — click to mute" : "Sound off — click to enable chimes"}
+        >
+          {soundOn ? "♪ on" : "♪ off"}
+        </button>
       </div>
 
       {live === "loading" ? (
