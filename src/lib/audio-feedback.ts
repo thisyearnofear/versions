@@ -100,3 +100,26 @@ export function playEconomySound(kind: string): void {
 export function resumeAudio(): void {
   getCtx();
 }
+
+// MODULAR: shared sound preference. The ticker's ♪ toggle and the
+// live-demo button both control chimes, so the on/off state lives
+// here (module singleton) instead of in any one component.
+let soundEnabled = false;
+const soundListeners = new Set<() => void>();
+
+export function isSoundEnabled(): boolean {
+  return soundEnabled;
+}
+
+export function setSoundEnabled(on: boolean): void {
+  if (on) resumeAudio();
+  if (soundEnabled === on) return;
+  soundEnabled = on;
+  soundListeners.forEach((fn) => fn());
+}
+
+/** Subscribe to sound-preference changes (useSyncExternalStore shape). */
+export function subscribeSound(fn: () => void): () => void {
+  soundListeners.add(fn);
+  return () => soundListeners.delete(fn);
+}

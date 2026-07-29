@@ -13,6 +13,7 @@ import { Tour } from "@/components/ui/Tour";
 import { EconomyTicker } from "@/components/economy/EconomyTicker";
 import { LiveStats } from "@/components/economy/LiveStats";
 import { WaveformGallery } from "@/components/home/WaveformGallery";
+import { LiveDemoButton } from "@/components/home/LiveDemoButton";
 import { track } from "@/lib/analytics";
 
 export default function Home() {
@@ -21,6 +22,7 @@ export default function Home() {
       <SiteHeader />
       <main className="flex-1">
         <Hero />
+        <DemoBand />
         <StatsBand />
         <TickerBand />
         <WaveformGallery />
@@ -29,6 +31,19 @@ export default function Home() {
       <Footer />
       <Tour autoStart withTrigger />
     </div>
+  );
+}
+
+function DemoBand() {
+  return (
+    <motion.section
+      className="px-6 pb-14 max-w-2xl mx-auto"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.35 }}
+    >
+      <LiveDemoButton />
+    </motion.section>
   );
 }
 

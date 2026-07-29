@@ -75,7 +75,9 @@ export async function GET(req: NextRequest): Promise<Response> {
           artistWallet: x402Proofs.artistWallet,
           settledCount: sql<number>`COUNT(*)::int`,
           totalMicro: sql<string>`SUM(CAST(${x402Proofs.amountMicroUsdc} AS NUMERIC))`,
-          settledAt: sql<Date>`MAX(${x402Proofs.settledAt})`,
+          // Raw SQL aggregates bypass drizzle's timestamp mapping and
+          // come back as strings — normalized to Date in the map below.
+          settledAt: sql<string | null>`MAX(${x402Proofs.settledAt})`,
         })
         .from(x402Proofs)
         .where(eq(x402Proofs.status, 'settled'))
@@ -146,7 +148,7 @@ export async function GET(req: NextRequest): Promise<Response> {
         amountUsdc: (Number(b.totalMicro ?? 0) / 1_000_000).toFixed(6),
         txHash: b.txHash,
         settledCount: b.settledCount,
-        timestamp: (b.settledAt ?? new Date(0)).toISOString(),
+        timestamp: (b.settledAt ? new Date(b.settledAt) : new Date(0)).toISOString(),
       })),
       ...legRows.map((l) => ({
         kind: 'leg_settled' as const,

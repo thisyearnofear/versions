@@ -39,7 +39,8 @@ export type AnalyticsEvent =
   | "feed_load_failed"
   | "listener_profile_failed"
   | "sse_reconnect"
-  | "brief_search";
+  | "brief_search"
+  | "demo_run";
 
 export interface AnalyticsProps {
   [key: string]: string | number | boolean | null | undefined;

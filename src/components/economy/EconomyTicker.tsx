@@ -7,14 +7,14 @@
 // exists. Mock events are badged honestly — this is the surface a judge
 // watches, so it never overclaims.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import type { EconomyEvent } from "@/lib/event-bus";
 import { agentIdentity } from "@/lib/agent-identity";
 import { shortAddress, shortHash, txUrl } from "@/lib/explorer";
 import { fmtUsdc, relativeTime } from "@/lib/format";
-import { playEconomySound, resumeAudio } from "@/lib/audio-feedback";
+import { playEconomySound, isSoundEnabled, setSoundEnabled, subscribeSound } from "@/lib/audio-feedback";
 
 type LiveState = "loading" | "live" | "connecting" | "quiet";
 
@@ -25,7 +25,7 @@ function eventKey(e: EconomyEvent): string {
 export function EconomyTicker({ limit = 12 }: { limit?: number }) {
   const [events, setEvents] = useState<EconomyEvent[]>([]);
   const [live, setLive] = useState<LiveState>("loading");
-  const [soundOn, setSoundOn] = useState(false);
+  const soundOn = useSyncExternalStore(subscribeSound, isSoundEnabled, () => false);
 
   // Initial replay from the DB so the feed is never empty on load.
   useEffect(() => {
@@ -88,10 +88,7 @@ export function EconomyTicker({ limit = 12 }: { limit?: number }) {
         </h3>
         <button
           type="button"
-          onClick={() => {
-            if (!soundOn) resumeAudio();
-            setSoundOn((s) => !s);
-          }}
+          onClick={() => setSoundEnabled(!soundOn)}
           className="ml-auto font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
           aria-label={soundOn ? "Mute economy sounds" : "Enable economy sounds"}
           title={soundOn ? "Sound on — click to mute" : "Sound off — click to enable chimes"}
