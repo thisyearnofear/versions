@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { DiscoverView } from "@/components/discovery/DiscoverView";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -19,9 +20,19 @@ export default function DiscoverPage() {
             play pays the artist $0.0005 USDC on Arc — agent-to-agent economics,
             settled instantly.
           </p>
-          <DiscoverView />
+          <Suspense fallback={<DashboardFallback />}>
+            <DiscoverView />
+          </Suspense>
         </main>
       </div>
     </ToastProvider>
+  );
+}
+
+function DashboardFallback() {
+  return (
+    <div className="py-16 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+      Loading…
+    </div>
   );
 }

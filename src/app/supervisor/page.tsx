@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SupervisorDashboard } from "@/components/supervisor/SupervisorDashboard";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -18,7 +19,15 @@ export default function SupervisorPage() {
             Save briefs, revisit recent searches, and track tracks you are
             considering for sync. Connect your wallet to persist everything.
           </p>
-          <SupervisorDashboard />
+          <Suspense
+            fallback={
+              <div className="py-16 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+                Loading…
+              </div>
+            }
+          >
+            <SupervisorDashboard />
+          </Suspense>
         </main>
       </div>
     </ToastProvider>

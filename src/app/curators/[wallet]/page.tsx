@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { CuratorDashboard } from "@/components/curator/CuratorDashboard";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -18,7 +19,15 @@ export default async function CuratorPage({
       <div className="flex flex-col flex-1">
         <SiteHeader />
         <main className="flex-1 px-6 md:px-12 py-12 max-w-5xl">
-          <CuratorDashboard wallet={wallet} />
+          <Suspense
+            fallback={
+              <div className="py-16 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+                Loading…
+              </div>
+            }
+          >
+            <CuratorDashboard wallet={wallet} />
+          </Suspense>
         </main>
       </div>
     </ToastProvider>

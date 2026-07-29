@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ListenerDashboard } from "@/components/listener/ListenerDashboard";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -17,7 +18,15 @@ export default async function ListenerPage({
       <div className="flex flex-col flex-1">
         <SiteHeader />
         <main className="flex-1 px-6 md:px-12 py-12 max-w-5xl">
-          <ListenerDashboard wallet={wallet} />
+          <Suspense
+            fallback={
+              <div className="py-16 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+                Loading…
+              </div>
+            }
+          >
+            <ListenerDashboard wallet={wallet} />
+          </Suspense>
         </main>
       </div>
     </ToastProvider>
