@@ -206,6 +206,23 @@ export function normalizeFeedRow(raw: Record<string, unknown>): FeedRow {
   };
 }
 
+// Same boundary rule as normalizeFeedRow: the reviews route emits
+// Drizzle camelCase rows but AgentReviewRecord is snake_case.
+export function normalizeReviewRow(raw: Record<string, unknown>): AgentReviewRecord {
+  const pick = <T>(a: unknown, b: unknown): T => (a !== undefined ? a : b) as T;
+  return {
+    submission_id: pick(raw.submission_id, raw.submissionId),
+    agent_name: pick(raw.agent_name, raw.agentName),
+    notes: pick(raw.notes, null),
+    mood_tags: pick(raw.mood_tags, raw.moodTags),
+    solo_intensity: pick(raw.solo_intensity, raw.soloIntensity),
+    vocal_quality: pick(raw.vocal_quality, raw.vocalQuality),
+    energy_vs_studio: pick(raw.energy_vs_studio, raw.energyVsStudio),
+    tempo_feel: pick(raw.tempo_feel, raw.tempoFeel),
+    placement_brief: pick(raw.placement_brief, raw.placementBrief),
+  };
+}
+
 export interface Playlist {
   id: string;
   name: string;
@@ -464,8 +481,9 @@ export const apiClient = {
   verifyPayment(submissionId: string, body: { txHash: string }): Promise<VerifyPaymentResponse> {
     return api.post<VerifyPaymentResponse>(`/api/v1/submissions/${submissionId}/verify-payment`, body);
   },
-  getReviews(submissionId: string): Promise<AgentReviewRecord[]> {
-    return api.get<AgentReviewRecord[]>(`/api/v1/submissions/${submissionId}/reviews`);
+  async getReviews(submissionId: string): Promise<AgentReviewRecord[]> {
+    const rows = await api.get<Array<Record<string, unknown>>>(`/api/v1/submissions/${submissionId}/reviews`);
+    return (Array.isArray(rows) ? rows : []).map(normalizeReviewRow);
   },
   getBrief(submissionId: string): Promise<BriefResponse> {
     return api.get<BriefResponse>(`/api/v1/submissions/${submissionId}/brief`);

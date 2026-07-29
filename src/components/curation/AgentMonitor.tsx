@@ -22,7 +22,6 @@ import { apiClient, type AgentReviewRecord, type FeedRow, type QueueSubmission }
 import { parseMoodTags } from "@/lib/format";
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
-import type { Valence } from "@/lib/types";
 import { escapeHtml } from "@/lib/utils";
 import DOMPurify from "dompurify";
 
@@ -32,30 +31,6 @@ const AGENT_META: Record<string, { icon: string; label: string; color: string }>
   production: { icon: "🎛️", label: "Production Agent", color: "var(--color-rust)" },
   performance: { icon: "🎤", label: "Performance Agent", color: "var(--color-ink)" },
   market: { icon: "📊", label: "Market Agent", color: "var(--color-ink-2)" },
-};
-
-const ENERGY_LABELS: Record<string, string> = {
-  lower: "Lower",
-  same: "Same",
-  higher: "Higher",
-};
-
-const TEMPO_LABELS: Record<string, string> = {
-  dragging: "Dragging",
-  locked: "Locked",
-  rushing: "Rushing",
-};
-
-// MODULAR: per-rating valence display labels (Title Case to match
-// ENERGY_LABELS / TEMPO_LABELS). deriveValence runs against each
-// review's mood_tags rather than the union (the radar renders
-// per-review, not per-submission), so each agent's verdict on the
-// same submission can land in different buckets -- that's by
-// design and reflects honest disagreement between agents.
-const VALENCE_LABELS: Record<Valence, string> = {
-  bright: "Bright",
-  neutral: "Neutral",
-  dark: "Dark",
 };
 
 // ── Component ───────────────────────────────────────────
@@ -214,12 +189,12 @@ export function AgentMonitor() {
           </span>
         </div>
         {recentVerdicts.length === 0 ? (
-          <p className="font-serif italic text-[var(--color-ink-3)] py-6 border-t border-b border-[var(--color-hair)] text-center">
+          <div className="font-serif italic text-[var(--color-ink-3)] py-6 border-t border-b border-[var(--color-hair)] text-center">
             No published versions yet.
             <div className="font-mono text-[10px] uppercase tracking-[0.14em] mt-2">
               The first agent-reviewed + auto-published loop will land here.
             </div>
-          </p>
+          </div>
         ) : (
           <ul className="flex flex-col border-t border-[var(--color-hair)]">
             {recentVerdicts.map((r) => (
@@ -341,9 +316,15 @@ export function AgentMonitor() {
         <h3 className="font-serif text-2xl font-black mb-4">Agent Reviews</h3>
         {selectedId && (
           <div className="mb-5 border border-[var(--color-hair-strong)] bg-[var(--color-paper-2)]/40 px-4 py-3">
+            {/* A published submission leaves the queue, so fall back to
+                the loaded reviews for count/status — otherwise the
+                stepper reads "0/3 agents" under three visible cards. */}
             <PipelineStepper
-              status={queue.find((q) => q.id === selectedId)?.status}
-              ratingCount={queue.find((q) => q.id === selectedId)?.ratingCount}
+              status={
+                queue.find((q) => q.id === selectedId)?.status ??
+                (reviews.length >= 3 ? "published" : undefined)
+              }
+              ratingCount={queue.find((q) => q.id === selectedId)?.ratingCount ?? reviews.length}
             />
           </div>
         )}
@@ -434,14 +415,33 @@ function AgentReviewCard({
           />
         </div>
 
-        {/* Scores */}
-        <div className="flex-1 min-w-0 grid grid-cols-2 gap-x-4 gap-y-1">
-          <ScoreRow label="Solo" value={`${review.solo_intensity}/10`} />
-          <ScoreRow label="Vocal" value={`${review.vocal_quality}/10`} />
-          <ScoreRow label="Energy" value={ENERGY_LABELS[review.energy_vs_studio] ?? review.energy_vs_studio} />
-          <ScoreRow label="Tempo" value={TEMPO_LABELS[review.tempo_feel] ?? review.tempo_feel} />
-          <ScoreRow label="Valence" value={valence ? VALENCE_LABELS[valence] : "Neutral"} />
+        {/* Rubric — animated per-axis bars */}
+        <div className="flex-1 min-w-0 flex flex-col gap-1.5 justify-center">
+          <AxisBar label="Solo" value={review.solo_intensity} color={meta.color} />
+          <AxisBar label="Vocal" value={review.vocal_quality} color={meta.color} />
         </div>
+      </div>
+
+      {/* Categorical axes — full width so labels never collide */}
+      <div className="grid grid-cols-3 gap-x-4 mt-3">
+        <AxisTriad
+          label="Energy"
+          options={["Lower", "Same", "Higher"]}
+          active={["lower", "same", "higher"].indexOf(review.energy_vs_studio)}
+          color={meta.color}
+        />
+        <AxisTriad
+          label="Tempo"
+          options={["Drag", "Locked", "Rush"]}
+          active={["dragging", "locked", "rushing"].indexOf(review.tempo_feel)}
+          color={meta.color}
+        />
+        <AxisTriad
+          label="Valence"
+          options={["Dark", "Neutral", "Bright"]}
+          active={["dark", "neutral", "bright"].indexOf(valence ?? "neutral")}
+          color={meta.color}
+        />
       </div>
 
       {/* Mood tags — sanitized via DOMPurify */}
@@ -449,21 +449,74 @@ function AgentReviewCard({
         <div className="flex flex-wrap gap-1.5 mt-3" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(tagMarkup) }} />
       )}
 
-      {/* Notes */}
+      {/* Rationale — the agent's written reasoning, framed as first-class */}
       {review.notes && (
-        <p className="font-serif text-sm text-[var(--color-ink-2)] mt-3 leading-snug border-t border-[var(--color-hair)] pt-3">
-          {review.notes}
-        </p>
+        <div className="mt-3 border-t border-[var(--color-hair)] pt-3">
+          <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] mb-1">
+            Rationale
+          </div>
+          <p className="font-serif text-sm text-[var(--color-ink-2)] leading-snug">
+            {review.notes}
+          </p>
+        </div>
       )}
     </div>
   );
 }
 
-function ScoreRow({ label, value }: { label: string; value: string }) {
+// MODULAR: AxisBar animates width on mount so the rubric "fills in"
+// as each card lands in the staged AnimatePresence reveal — judges
+// see the agent's scores materialize rather than pop in fully formed.
+function AxisBar({ label, value, color }: { label: string; value: number; color: string }) {
+  const clamped = Math.max(0, Math.min(10, value));
   return (
-    <div className="flex items-baseline gap-1.5">
-      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">{label}</span>
-      <span className="font-mono text-sm font-medium text-[var(--color-ink)] tabular-nums">{value}</span>
+    <div>
+      <div className="flex items-baseline justify-between">
+        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">{label}</span>
+        <span className="font-mono text-xs font-medium text-[var(--color-ink)] tabular-nums">{clamped}/10</span>
+      </div>
+      <div className="h-[3px] bg-[var(--color-hair)] mt-0.5 overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${clamped * 10}%` }}
+          transition={{ duration: 0.7, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          className="h-full"
+          style={{ background: color }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Categorical 3-way axis (energy / tempo / valence). Active segment
+// carries the agent color; a -1 active index (unknown value) renders
+// all segments inactive rather than crashing.
+function AxisTriad({
+  label,
+  options,
+  active,
+  color,
+}: {
+  label: string;
+  options: [string, string, string];
+  active: number;
+  color: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">{label}</div>
+      <div className="flex gap-[3px] mt-1" role="img" aria-label={`${label}: ${options[active] ?? "unknown"}`}>
+        {options.map((_, i) => (
+          <span
+            key={i}
+            className="h-[3px] flex-1"
+            style={{ background: i === active ? color : "var(--color-hair)" }}
+          />
+        ))}
+      </div>
+      <div className="font-mono text-[10px] text-[var(--color-ink-2)] mt-0.5 truncate">
+        {options[active] ?? "—"}
+      </div>
     </div>
   );
 }
