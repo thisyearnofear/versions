@@ -23,4 +23,5 @@
 # 10 s default. The client auto-reconnects on drop, but a longer timeout
 # keeps the stream alive for the live economy ticker + agent monitor.
 [functions]
-  timeout = 30
+  [functions.timeout]
+    value = 30
