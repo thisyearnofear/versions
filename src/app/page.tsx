@@ -11,6 +11,7 @@ import { motion } from "framer-motion";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Tour } from "@/components/ui/Tour";
 import { EconomyTicker } from "@/components/economy/EconomyTicker";
+import { LiveStats } from "@/components/economy/LiveStats";
 import { WaveformGallery } from "@/components/home/WaveformGallery";
 import { track } from "@/lib/analytics";
 
@@ -20,6 +21,7 @@ export default function Home() {
       <SiteHeader />
       <main className="flex-1">
         <Hero />
+        <StatsBand />
         <TickerBand />
         <WaveformGallery />
         <SectionNav />
@@ -77,6 +79,14 @@ function Hero() {
         </Link>
       </motion.div>
     </section>
+  );
+}
+
+function StatsBand() {
+  return (
+    <div className="px-6 py-6">
+      <LiveStats />
+    </div>
   );
 }
 
