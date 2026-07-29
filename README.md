@@ -12,6 +12,71 @@ browser-ESM architecture at `../versions` to **Next.js 16.2** with
 **PostgreSQL** (Neon serverless), **NextAuth v5** (wallet credentials),
 **Wagmi v2** + **RainbowKit**, **Drizzle ORM**, and the **Vercel AI SDK**.
 
+---
+
+## Circle "Build on Arc" Hackathon — Agentic Economy Track
+
+VERSIONS is a fully autonomous music A&R pipeline where **AI agents
+review, rank, and publish music** and **Arc USDC settles every
+payment** — submission fees, agent payouts, per-play royalties, and
+listener tips — with zero human intervention.
+
+### Why this wins the Agentic Economy track
+
+- **Three autonomous AI agents** (Production, Performance, Market)
+  review every submission in parallel, score it on a 5-axis rubric,
+  and auto-publish when all three agree — no human curator in the loop.
+- **A fourth agent** (A&R) generates curated playlists from the published
+  catalog and pays per-play royalties to artists on Arc.
+- **Every money movement is on Arc**: submission fees (x402),
+  agent/curator payouts (settlement legs), per-play royalties, and
+  listener nanopayments (x402 tips) all settle as real USDC transfers
+  on the Arc L1.
+- **Live economy ticker**: the landing page shows a real-time feed of
+  agent verdicts, verified tips, on-chain settlements, and pay-per-play
+  events as they happen — with ArcScan tx links and honest mock badges.
+- **Staged verdict reveal**: when a judge selects a submission, agent
+  review cards animate in one by one as each agent finishes, and a
+  pipeline stepper (Submit → Pay → Review → Publish → Settle) shows the
+  exact lifecycle position.
+- **x402 nanopayments**: listeners tip artists as little as 1 lepton
+  ($0.000001) using the x402 protocol with EIP-712 signatures, batched
+  into on-chain USDC transfers with inline settlement confirmation.
+
+### Quick start for judges (zero dependencies)
+
+```bash
+npm install
+npm run db:push     # creates the PGlite local DB (no external Postgres needed)
+npm run dev         # starts on http://localhost:3000
+```
+
+With no env vars set, every adapter runs in **mock mode** — the full
+demo loop (submit → pay → review → publish → tip) works end-to-end with
+deterministic mock data. Check mock status at `GET /api/health/ready`.
+
+To run the self-driving demo loop:
+
+```bash
+pnpm demo           # auto-submits, pays, reviews, publishes, and tips
+```
+
+### Going real on Arc testnet
+
+Set these env vars to switch from mock to real on-chain settlement:
+
+```
+ARC_RPC_URL=https://rpc.testnet.arc.network
+ARC_USDC_CONTRACT=0x3600000000000000000000000000000000000000
+PLATFORM_WALLET=0x...                    # funded testnet wallet
+PLATFORM_WALLET_PRIVATE_KEY=0x...         # hot wallet key (testnet only)
+AGENT_KEY_SEED=any-secret-string          # gives each agent its own signing wallet
+```
+
+See `.env.example` for the full list. The health endpoint
+(`GET /api/health/ready`) reports `arc.mock`, `signerConfigured`, and
+`platformBalance` so you can verify real-mode status at a glance.
+
 ## Stack
 
 - **Next.js** 16.2.9 (App Router, Turbopack, React 19.2)
@@ -92,21 +157,13 @@ catalog and a future data layer.
 ```bash
 npm install
 npm run dev      # next dev .
-npm run build    # next build . --experimental-build-mode compile
+npm run build    # next build . (standalone output)
 npm start        # next start .
-npm test         # vitest (333 tests: 330 unit + 3 integration)
+npm test         # vitest (362 tests: 359 unit + 3 integration)
 npm run db:push  # drizzle-kit push
 npm run db:studio
 pnpm demo        # self-driving submit → pay → review → publish → tip loop (assumes `pnpm run dev` is up + `pnpm db:push` has been run)
 ```
-
-### Why `--experimental-build-mode compile`
-
-Next.js 16.2.9 has a known Turbopack regression (workStore invariant) when
-prerendering internal `/_global-error` and `/_not-found` routes during a
-default `next build`. The `compile` build mode produces the same artifacts
-but marks every route as **ƒ Dynamic — server-rendered on demand**, which is
-the correct mode for an authenticated marketplace anyway.
 
 ## Environment
 
@@ -144,13 +201,15 @@ zero external dependencies. See `.env.example` for the complete list.
 
 | Route | Purpose |
 | --- | --- |
-| `/` | Brand-forward landing with 4-section nav |
+| `/` | Brand-forward landing with live economy ticker + 4-section nav |
 | `/submit` | Submit a version (audio upload + metadata + 0.50 USDC fee) |
-| `/agents` | Agent monitor — watch AI agents review the queue in real time |
+| `/agents` | Agent monitor — watch AI agents review the queue in real time + economy ticker |
 | `/feed` | Published versions with mood/energy/tempo filters |
 | `/discover` | A&R agent playlists with per-play micro-payments |
 | `/api/health` | Service health probe |
-| `/api/events` | SSE stream for real-time feed + queue updates |
+| `/api/health/ready` | Detailed readiness probe (arc.mock, llm.mock, signerConfigured, etc.) |
+| `/api/events` | SSE stream for real-time feed + queue + economy events |
+| `/api/economy/activity` | Recent economy activity (reviews, tips, settlements, plays) for ticker initial load |
 | `/api/v1/feed` | List published submissions (filtered) |
 | `/api/v1/submissions` | Create / list submissions |
 | `/api/v1/submissions/queue` | Curation queue |
@@ -238,7 +297,13 @@ For the pre-migration project history, see commits before `7b05e333`.
 ### Remaining work
 
 - [ ] WalletConnect project ID (`NEXT_PUBLIC_WC_PROJECT_ID`) — get one from [cloud.walletconnect.com](https://cloud.walletconnect.com/) (see Environment section above)
+- [ ] Funded Arc testnet wallet (`PLATFORM_WALLET_PRIVATE_KEY`) for real on-chain settlement demo
 - [x] Production deployment config — `netlify.toml` for Netlify + `Dockerfile` for any container platform
+- [x] Live economy ticker (SSE + ArcScan links)
+- [x] Submission pipeline stepper (Submit → Pay → Review → Publish → Settle)
+- [x] x402 settlement confirmation UI (inline tx link)
+- [x] Staged verdict reveal (framer-motion staggered agent cards)
+- [x] Build verification (all 18 routes prerender, 362 tests pass)
 
 ## Publish pipeline hardening
 
@@ -294,6 +359,54 @@ configured but unreachable, the endpoint returns HTTP 503 with
 `status: "degraded"`.
 
 ## Nanopayments (x402 + on-chain batch settlement)
+
+### Live economy ticker
+
+The landing page and agents page show a **real-time economy ticker** that
+streams agent verdicts, verified tips, on-chain settlements, and
+pay-per-play events as they happen:
+
+- **SSE-backed**: subscribes to `/api/events` for `economy-event` updates
+  and fetches `/api/economy/activity` for initial content on load
+- **5 event kinds**: `review` (agent verdict), `tip` (x402 verified),
+  `tip_batch_settled` (on-chain batch), `leg_settled` (payout leg),
+  `play` (per-play royalty)
+- **ArcScan links**: every event with a tx hash links to the explorer
+- **Honest mock badges**: mock events are badged so the demo never
+  overclaims on-chain finality
+- **Emitted from 5 service points**: `agents.ts` (review), `tip/route.ts`
+  (tip), `tips.ts` (batch settled), `settlement.ts` (leg settled),
+  `ar.ts` (play)
+
+Files: `src/components/economy/EconomyTicker.tsx`,
+`src/app/api/economy/activity/route.ts`, `src/lib/event-bus.ts` (EconomyEvent),
+`src/lib/explorer.ts` (txUrl helper), `src/lib/agent-identity.ts`.
+
+### Submission pipeline stepper
+
+The agent monitor shows a **horizontal pipeline stepper** for the selected
+submission, deriving stage states from the submission status + agent rating
+count: Submit → Pay → Agent Review (X/3) → Publish → Settle. Queue rows gain
+inline status chips so judges can see the lifecycle position at a glance.
+
+Files: `src/components/economy/PipelineStepper.tsx`.
+
+### x402 settlement confirmation
+
+After a listener tips an artist, the TipButton shows an **inline settlement
+confirmation** with the tx hash and an ArcScan link, auto-clearing after 8
+seconds. Mock tips are badged honestly ("Tip recorded (mock)").
+
+Files: `src/components/wallet/TipButton.tsx`.
+
+### Staged verdict reveal
+
+When a judge selects a submission, agent review cards **animate in with a
+staggered reveal** (120 ms per card) using framer-motion. When a new agent
+verdict arrives over SSE while the judge is watching, the review pane
+auto-refreshes and the new card animates in.
+
+Files: `src/components/curation/AgentMonitor.tsx`.
 
 The artist dashboard exposes a **Tip** button that lets a listener send a
 sub-cent USDC nanopayment to any artist on Arc. The flow uses the
@@ -631,6 +744,5 @@ curl http://localhost:3000/api/v1/embeddings/backfill
 
 ## Known issues
 
-1. **Turbopack `workStore` invariant** — see "Why `--experimental-build-mode compile`" above.
-2. **`.env.example` is now checked in** — it documents every env var referenced by `src/lib/config.ts` (Zod schema), `src/lib/services.ts`, `src/lib/ipfs.ts`, `src/lib/wagmi.ts`, and the submit-config pair. Copy it to `.env` and fill in the required values (`DATABASE_URL`, `NEXTAUTH_SECRET`). All adapter vars (Arc, LLM, Gateway, Pinata) are optional — omitting them runs the respective adapter in mock mode.
-3. **Homebrew `pg_dump` version mismatch** — the local Homebrew `pg_dump` is `14.22` while the Neon server runs Postgres `18.4`. `pg_dump --table=placement_briefs "$DATABASE_URL" > brief.bak` aborts with `server version: 18.4; pg_dump version: 14.22` before producing any output, so the revert path documented in the Deploy runbook above does NOT work until the local client is upgraded to ≥18. **Inline `psql -c "..."` queries still work fine** against the 18 server (the smoke-update `BEGIN; UPDATE 0; COMMIT;` ran end-to-end on real Neon this way). Fix: `brew install postgresql@18 && brew link --force postgresql@18`.
+1. **`.env.example` is checked in** — it documents every env var referenced by `src/lib/config.ts` (Zod schema), `src/lib/services.ts`, `src/lib/ipfs.ts`, `src/lib/wagmi.ts`, and the submit-config pair. Copy it to `.env` and fill in the required values (`DATABASE_URL`, `NEXTAUTH_SECRET`). All adapter vars (Arc, LLM, Gateway, Pinata) are optional — omitting them runs the respective adapter in mock mode.
+2. **Homebrew `pg_dump` version mismatch** — the local Homebrew `pg_dump` is `14.22` while the Neon server runs Postgres `18.4`. `pg_dump --table=placement_briefs "$DATABASE_URL" > brief.bak` aborts with `server version: 18.4; pg_dump version: 14.22` before producing any output, so the revert path documented in the Deploy runbook above does NOT work until the local client is upgraded to ≥18. **Inline `psql -c "..."` queries still work fine** against the 18 server (the smoke-update `BEGIN; UPDATE 0; COMMIT;` ran end-to-end on real Neon this way). Fix: `brew install postgresql@18 && brew link --force postgresql@18`.

@@ -1,5 +1,4 @@
 [build]
-  # Run npm install twice: workaround for npm bug #4828 (optional deps skipped on first install)
   command = "npm install && npm run build"
   # The Next.js runtime adapter requires the publish dir to be .next (not the
   # repo root). Set here to override a stale repo-root value from the UI.
@@ -7,9 +6,21 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # Client-side env vars inlined at build time. Set these in the Netlify
+  # dashboard (Site settings → Environment variables) to override the
+  # defaults. NEXT_PUBLIC_WC_PROJECT_ID must be set for mobile wallets.
+  NEXT_PUBLIC_ARC_RPC_URL = "https://rpc.testnet.arc.network"
+  NEXT_PUBLIC_ARC_EXPLORER_URL = "https://testnet.arcscan.app"
+  NEXT_PUBLIC_SUBMIT_RECEIPT_TIMEOUT_MS = "60000"
 
 # Explicitly run the Next.js runtime adapter so SSR/API routes and routing
 # are wired up. Without it Netlify publishes the repo root and every route
 # returns Netlify's default 404 page.
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+# SSE connections (/api/events) need a longer function timeout than the
+# 10 s default. The client auto-reconnects on drop, but a longer timeout
+# keeps the stream alive for the live economy ticker + agent monitor.
+[functions]
+  timeout = 30
