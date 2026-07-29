@@ -8,18 +8,12 @@ export default function AgentsPage() {
     <ToastProvider>
       <div className="flex flex-col flex-1">
         <SiteHeader active="agents" />
-        <main className="flex-1 px-6 md:px-12 py-12">
-          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-4">
-            Section 02 — Agent Reviews
-          </p>
-          <h2 className="font-serif text-4xl md:text-5xl font-black tracking-tight mb-6">
-            Three autonomous agents, one review.
+        <main className="flex-1 px-6 md:px-12 py-12 max-w-5xl mx-auto w-full">
+          <h2 className="font-serif text-3xl md:text-4xl font-black tracking-tight text-center mb-2">
+            Agents.
           </h2>
-          <p className="font-serif text-lg text-[var(--color-ink-2)] leading-snug max-w-2xl mb-12">
-            Production, Performance, and Market agents evaluate every submission
-            automatically — no human in the loop. Watch the queue and inspect
-            what each agent decided, then see the version publish once all three
-            agree.
+          <p className="font-serif text-base text-[var(--color-ink-3)] text-center mb-10">
+            Three AI agents review every track. No human in the loop.
           </p>
           <div className="grid lg:grid-cols-[1fr_360px] gap-12 items-start">
             <AgentMonitor />
