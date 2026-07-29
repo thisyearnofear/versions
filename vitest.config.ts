@@ -23,10 +23,10 @@ export default defineConfig({
     // rest of the suite in parallel.
     poolOptions: {
       forks: {
-        maxForks: 4,
+        maxForks: 2,
       },
     },
-    hookTimeout: 30000,
+    hookTimeout: 60000,
     testTimeout: 30000,
   },
 });

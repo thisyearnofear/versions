@@ -206,10 +206,10 @@ src/
 │   ├── settlement.ts         # Fee split + settlement legs
 │   ├── agents.ts             # AI agent auto-review
 │   ├── ar.ts                 # A&R playlist generation
+│   ├── tips.ts               # x402 nanotip batch settler
 │   └── taste-graph.ts        # Rating aggregation
 ├── adapters/
-│   ├── arc.ts                # Arc blockchain adapter
-│   ├── gateway.ts            # Circle Gateway adapter (x402 nanopayments)
+│   ├── arc.ts                # Arc blockchain adapter (multi-signer)
 │   └── llm.ts                # LLM adapter (agent reviews)
 ├── lib/
 │   ├── api-client.ts         # Typed fetch client
@@ -293,12 +293,12 @@ both supported without hardcoding.
 configured but unreachable, the endpoint returns HTTP 503 with
 `status: "degraded"`.
 
-## Nanopayments (x402 + Circle Gateway)
+## Nanopayments (x402 + on-chain batch settlement)
 
 The artist dashboard exposes a **Tip** button that lets a listener send a
 sub-cent USDC nanopayment to any artist on Arc. The flow uses the
-[x402 protocol](https://docs.x402.org) with **Circle Gateway** as the
-batched settlement layer:
+[x402 protocol](https://docs.x402.org) with a DB-queued **batch settler**
+that aggregates tips into real on-chain USDC transfers:
 
 1. **Client → Server (no payment proof):** `POST /api/x402/tip` with
    `{artistWallet, amountUsdc}`. The route returns **HTTP 402** with a
@@ -314,14 +314,19 @@ batched settlement layer:
      `puid`, `validUntil`)
    - recovers the tipper wallet from the EIP-712 signature
    - persists the proof to `x402_proofs` (replay-protected by a
-     unique index on `puid`)
-   - submits the tip to **Circle Gateway** (`POST {GATEWAY_API_URL}/v1/tips`)
+     unique index on `puid`) — verified rows ARE the settlement queue
+   - **aggregates every queued tip for the artist into ONE on-chain
+     USDC transfer** (platform → artist) via the arc adapter, flipping
+     the rows to `settled` with the shared tx hash
    - emits a `tip-received` event on the bus for real-time dashboards
+
+   A failed batch leaves rows `verified` (queued); the settlement
+   sweeper (`/api/cron/sweep`) retries them via `tips.flushAll()`.
 
 ### Amounts and the lepton primitive
 
 USDC has 6 decimals. The smallest unit — **1 lepton** = `$0.000001` =
-`1` micro-USDC — is the floor of the Gateway. Presets on the TipButton:
+`1` micro-USDC — is the settlement floor. Presets on the TipButton:
 
 - **1 lepton** (`$0.000001`) — literally the smallest settleable unit
 - **1¢** (`$0.01`) = 10,000 leptons
@@ -331,30 +336,26 @@ USDC has 6 decimals. The smallest unit — **1 lepton** = `$0.000001` =
 
 ### Environment variables
 
-```
-GATEWAY_API_URL=https://gateway.circle.com   # optional; mock mode if absent
-GATEWAY_API_KEY=...                         # optional; Bearer token
-GATEWAY_BATCH_INTERVAL_MS=500               # hint for the batcher
-```
-
-The Gateway adapter is **mock-first** (same pattern as the arc
-adapter): with no `GATEWAY_API_URL` set, `submitTip` returns a
-deterministic hash and tags the response with `mock: true` so the
-demo and tests are reproducible.
+Tip settlement rides the same Arc envs as the rest of settlement
+(`ARC_RPC_URL`, `ARC_USDC_CONTRACT`, `PLATFORM_WALLET`,
+`PLATFORM_WALLET_PRIVATE_KEY`). No separate gateway config exists.
+With no `ARC_RPC_URL`, batches settle as deterministic mocks tagged
+`mock: true` so the demo and tests are reproducible.
 
 ### Files
 
 - `src/lib/x402.ts` — EIP-712 domain/types, `verifyProof`, `offerMatches`,
   `parseAmountToMicroUsdc`, `formatMicroUsdc`, base64 header codecs
-- `src/adapters/gateway.ts` — mock-first Gateway client (`submitTip`,
-  `getInfo`, `getTipStatus`)
+- `src/services/tips.ts` — batch settler (`settleQueuedFor`, `flushAll`,
+  `getTipStatus`)
 - `src/app/api/x402/tip/route.ts` — the two-shot route
 - `src/components/wallet/TipButton.tsx` — the client UI
 - `src/lib/format.ts` — `fmtLeptons` (sub-cent formatter)
 - `src/lib/event-bus.ts` — `'tip-received'` event
 - `src/lib/schema.ts` — `x402_proofs` table
 - `tests/unit/x402.test.ts` — verifyProof with a real viem test wallet,
-  Gateway mock, route 402/200/401/409
+  route 402/200/401/409; `tests/unit/tips.test.ts` — batch aggregation,
+  retry, idempotency
 
 ## Supervisor inverse-search
 
@@ -482,7 +483,8 @@ npm run db:push              # push the schema (version_embeddings table)
   triggers a full-catalog CLAP embedding backfill; `GET` returns status
   (has_embeddings + mock flag).
 - **Health/ready endpoint** — now reports `embedding.mock`,
-  `gateway.mock`, and `ipfs.configured` alongside the existing `arc.mock`
+  `gateway.mock` (arc-derived: on-chain tip settlement mock flag), and
+  `ipfs.configured` alongside the existing `arc.mock`
   and `llm.mock` flags.
 - **Dockerfile** — multi-stage Docker build with standalone Next.js output
   for deployment to any container platform.

@@ -20,7 +20,7 @@
 import type { NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
 import { eq } from 'drizzle-orm';
-import { services, requestIdFor, corsPreflight, jsonResponse, errorResponse } from '@/lib/services';
+import { services, requestIdFor, jsonResponse, errorResponse } from '@/lib/services';
 import { db } from '@/lib/db';
 import { x402Proofs } from '@/lib/schema';
 import { emit } from '@/lib/event-bus';
@@ -138,8 +138,6 @@ export async function POST(req: NextRequest) {
       return errorResponse(rid, 400, 'AMOUNT_TOO_LARGE', 'per-tip cap is 1 USDC; use the submission flow for larger amounts');
     }
 
-    const gateway = services().gateway;
-    const gatewayInfo = await gateway.getInfo();
     // MODULAR: use the actual Arc chainId (or 1 fallback if
     // getInfo returned null in a fully offline env) so the
     // EIP-712 domain matches the chain the wallet is connected to.
@@ -262,27 +260,13 @@ export async function POST(req: NextRequest) {
       return errorResponse(rid, 409, 'DUPLICATE_PROOF', 'this puid has already been settled', { err: (err as Error).message });
     }
 
-    let result: Awaited<ReturnType<typeof gateway.submitTip>>;
-    try {
-      result = await gateway.submitTip({
-        from: tipperWallet,
-        to: body.artistWallet,
-        amountUsdc: body.amountUsdc,
-        puid: submitted.offer.puid,
-        message: body.message,
-      });
-    } catch (err) {
-      await db
-        .update(x402Proofs)
-        .set({ status: 'failed' })
-        .where(eq(x402Proofs.id, proofId));
-      return errorResponse(rid, 502, 'GATEWAY_FAILED', (err as Error).message);
-    }
-
-    await db
-      .update(x402Proofs)
-      .set({ status: 'settled', txHash: result.hash, settledAt: new Date() })
-      .where(eq(x402Proofs.id, proofId));
+    // MODULAR: the proof row is the queue entry. Settlement is
+    // batched: settleQueuedFor aggregates every queued tip for this
+    // artist (including this one) into a single on-chain USDC
+    // transfer. A failed batch leaves rows queued for the sweeper —
+    // the tip is verified either way, so this returns 200 with
+    // status 'queued' rather than an error.
+    const result = await services().tips.settleQueuedFor(body.artistWallet);
 
     // MODULAR: emit on the bus so artist dashboards and the SSE
     // stream can react in real time.
@@ -303,8 +287,9 @@ export async function POST(req: NextRequest) {
       amount: body.amountUsdc,
       from: tipperWallet,
       to: body.artistWallet,
+      status: result.status,
+      batchedCount: result.settledCount,
       mock: result.mock,
-      network: gatewayInfo.network,
     });
 
     return jsonResponse(200, {
@@ -319,7 +304,7 @@ export async function POST(req: NextRequest) {
         amountUsdc: body.amountUsdc,
         tipperWallet,
         artistWallet: body.artistWallet,
-        settledAt: result.batchedAt,
+        settledAt: new Date().toISOString(),
       },
     }, rid, corsExposeHeaders);
   } catch (err) {

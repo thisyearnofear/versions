@@ -11,6 +11,8 @@ import { emit } from '../lib/event-bus';
 import { submissions as submissionsTable, ratings as ratingsTable, settlementLegs as legsTable } from '../lib/schema';
 import type { SubmissionStatus, VersionType } from '../lib/types';
 import type { ArcAdapter } from '../adapters/arc';
+import { microUsdcToBigInt } from '../adapters/arc';
+import { decodeErc20TransferCalldata } from '../lib/erc20-transfer';
 
 export const SUBMISSION_MESSAGE = 'VERSIONS_LEPTON_SUBMIT';
 export const FEE_QUOTE_USDC = '0.50';
@@ -190,9 +192,11 @@ export async function listQueueAsync({
 export function createSubmissionsService({
   arc,
   platformWallet,
+  usdcContract,
 }: {
   arc: ArcAdapter;
   platformWallet?: string;
+  usdcContract?: string;
 }): SubmissionsService {
   return {
     feeQuoteUsdc: FEE_QUOTE_USDC,
@@ -322,14 +326,46 @@ export function createSubmissionsService({
         return { ok: false, error: `Cannot verify payment for status ${row.status}` };
       }
 
+      // Replay guard: one payment tx verifies at most one submission.
+      const [replay] = await db
+        .select({ id: submissionsTable.id })
+        .from(submissionsTable)
+        .where(eq(submissionsTable.paymentTxHash, txHash))
+        .limit(1);
+      if (replay && replay.id !== id) {
+        return { ok: false, error: 'Transaction already used for another submission' };
+      }
+
       const tx = await arc.getTransaction(txHash);
       if (!tx) return { ok: false, error: 'Transaction not found' };
       if (tx.status !== 'finalized' && tx.status !== '0x1') {
         return { ok: false, error: `Transaction not finalized (status=${tx.status})` };
       }
       if (!tx.mock) {
-        if (tx.to && platformWallet && tx.to.toLowerCase() !== platformWallet.toLowerCase()) {
-          return { ok: false, error: 'Payment recipient does not match platform wallet' };
+        // An ERC-20 fee payment is a call INTO the USDC contract; the
+        // real recipient lives in the transfer calldata.
+        if (usdcContract && tx.to && tx.to.toLowerCase() !== usdcContract.toLowerCase()) {
+          return { ok: false, error: 'Transaction is not a USDC contract call' };
+        }
+        if (tx.from && tx.from.toLowerCase() !== row.artistWallet.toLowerCase()) {
+          return { ok: false, error: 'Payment sender does not match the submitting artist' };
+        }
+        if (tx.input) {
+          let decoded: { to: `0x${string}`; amount: bigint };
+          try {
+            decoded = decodeErc20TransferCalldata(tx.input);
+          } catch (err) {
+            return { ok: false, error: `Not a USDC transfer: ${(err as Error).message}` };
+          }
+          if (platformWallet && decoded.to.toLowerCase() !== platformWallet.toLowerCase()) {
+            return { ok: false, error: 'Payment recipient does not match platform wallet' };
+          }
+          const feeMicro = microUsdcToBigInt(row.feeQuoteUsdc);
+          if (decoded.amount < feeMicro) {
+            return { ok: false, error: `Payment amount below fee (${row.feeQuoteUsdc} USDC)` };
+          }
+        } else if (platformWallet) {
+          return { ok: false, error: 'Transaction has no transfer calldata to verify' };
         }
       }
 

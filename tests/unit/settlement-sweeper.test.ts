@@ -7,7 +7,7 @@ import { vi } from 'vitest';
 vi.mock('@/lib/db', () => ({
   get db() { return getTestDb(); },
 }));
-import { TEST_IDS, TEST_PLATFORM_WALLET } from '../helpers/fixtures';
+import { TEST_IDS } from '../helpers/fixtures';
 import { submissions as submissionsTable, settlementLegs as legsTable } from '../../src/lib/schema';
 import { createSweeper, findStuckLegs, STUCK_THRESHOLD_MS } from '../../src/services/settlement-sweeper';
 

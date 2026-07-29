@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
-const { getTestDb: _getTestDb, initTestDb: _initTestDb, resetTestDb: _resetTestDb, getTestPg: _getTestPg } = await import('../helpers/db');
+const { getTestDb: _getTestDb, initTestDb: _initTestDb, resetTestDb: _resetTestDb } = await import('../helpers/db');
 vi.mock('@/lib/db', () => ({
   get db() { return _getTestDb(); },
 }));
@@ -141,6 +141,104 @@ describe('verifyPayment', () => {
   it('rejects unknown submission', async () => {
     const r = await service.verifyPayment('nope', '0x' + 'd'.repeat(64));
     expect(r.ok).toBe(false);
+  });
+
+  it('rejects a tx hash already used by another submission (replay guard)', async () => {
+    const sub1 = await createVerifiedSubmission(1);
+    const sub2 = await createVerifiedSubmission(2);
+    const tx = '0x' + 'e'.repeat(64);
+    const r1 = await service.verifyPayment(sub1.id, tx);
+    expect(r1.ok).toBe(true);
+    const r2 = await service.verifyPayment(sub2.id, tx);
+    expect(r2.ok).toBe(false);
+    if (!r2.ok) expect(r2.error).toMatch(/already used/);
+  });
+});
+
+describe('verifyPayment (real mode: calldata decode)', () => {
+  // MODULAR: a fee payment is an ERC-20 call INTO the USDC contract;
+  // the true recipient + amount live in the transfer calldata. These
+  // tests stub arc.getTransaction with mock: false to exercise the
+  // real-mode decode path.
+  const USDC = '0x' + 'aa'.repeat(20);
+  const FEE_MICRO = 500_000n; // 0.50 USDC
+
+  function calldata(to: string, amountMicro: bigint): string {
+    return '0xa9059cbb' + '0'.repeat(24) + to.slice(2).toLowerCase() + amountMicro.toString(16).padStart(64, '0');
+  }
+
+  function realService(tx: Partial<{ to: string; from: string; input: string | null }>) {
+    const stubArc = {
+      ...arc,
+      getTransaction: async () => ({
+        hash: '0x' + 'f'.repeat(64),
+        status: 'finalized' as const,
+        blockNumber: '1',
+        confirmations: 1,
+        to: USDC,
+        input: calldata(TEST_PLATFORM_WALLET, FEE_MICRO),
+        mock: false,
+        ...tx,
+      }),
+    };
+    return createSubmissionsService({
+      arc: stubArc as typeof arc,
+      platformWallet: TEST_PLATFORM_WALLET,
+      usdcContract: USDC,
+    });
+  }
+
+  it('accepts a finalized USDC transfer to the platform for at least the fee', async () => {
+    const sub = await createVerifiedSubmission(1);
+    const svc = realService({ from: TEST_ADDRESSES.acc1 });
+    const r = await svc.verifyPayment(sub.id, '0x' + 'f'.repeat(64));
+    expect(r.ok).toBe(true);
+  });
+
+  it('rejects when tx.to is not the USDC contract', async () => {
+    const sub = await createVerifiedSubmission(1);
+    const svc = realService({ from: TEST_ADDRESSES.acc1, to: TEST_PLATFORM_WALLET });
+    const r = await svc.verifyPayment(sub.id, '0x' + 'f'.repeat(64));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/USDC contract/);
+  });
+
+  it('rejects when the sender is not the submitting artist', async () => {
+    const sub = await createVerifiedSubmission(1);
+    const svc = realService({ from: TEST_ADDRESSES.acc2 });
+    const r = await svc.verifyPayment(sub.id, '0x' + 'f'.repeat(64));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/sender/);
+  });
+
+  it('rejects when the decoded recipient is not the platform wallet', async () => {
+    const sub = await createVerifiedSubmission(1);
+    const svc = realService({
+      from: TEST_ADDRESSES.acc1,
+      input: calldata(TEST_ADDRESSES.acc2, FEE_MICRO),
+    });
+    const r = await svc.verifyPayment(sub.id, '0x' + 'f'.repeat(64));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/recipient/);
+  });
+
+  it('rejects when the decoded amount is below the fee', async () => {
+    const sub = await createVerifiedSubmission(1);
+    const svc = realService({
+      from: TEST_ADDRESSES.acc1,
+      input: calldata(TEST_PLATFORM_WALLET, FEE_MICRO - 1n),
+    });
+    const r = await svc.verifyPayment(sub.id, '0x' + 'f'.repeat(64));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/amount below fee/);
+  });
+
+  it('rejects when the tx has no transfer calldata', async () => {
+    const sub = await createVerifiedSubmission(1);
+    const svc = realService({ from: TEST_ADDRESSES.acc1, input: null });
+    const r = await svc.verifyPayment(sub.id, '0x' + 'f'.repeat(64));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/no transfer calldata/);
   });
 });
 

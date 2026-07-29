@@ -95,6 +95,7 @@ export interface TransferReceipt {
   confirmations: number;
   from?: string | null;
   to?: string | null;
+  input?: string | null;
   logs?: unknown[];
   mock: boolean;
 }
@@ -127,17 +128,37 @@ export function createArcAdapter({
   usdcContract,
   platformWallet,
   platformWalletPrivateKey,
+  signers,
   requestTimeoutMs = DEFAULT_TIMEOUT,
 }: {
   rpcUrl?: string;
   usdcContract?: string;
   platformWallet?: string;
   platformWalletPrivateKey?: string;
+  /** lowercase address → 0x private key; lets agents sign their own sends */
+  signers?: Record<string, `0x${string}`>;
   requestTimeoutMs?: number;
 }): ArcAdapter {
   const useMock = !rpcUrl;
   let cachedChainId: string | null = null;
   let cachedUsdcDecimals: number | null = null;
+
+  // MODULAR: one lookup for every signing key this adapter may use.
+  // The legacy platformWalletPrivateKey is merged in so existing
+  // callers/tests keep working; its derived address doubles as the
+  // default signer when `from` is empty.
+  const signerMap: Record<string, `0x${string}`> = {};
+  for (const [addr, key] of Object.entries(signers ?? {})) {
+    signerMap[addr.toLowerCase()] = key;
+  }
+  let defaultSignerAddress: string | null = null;
+  if (platformWalletPrivateKey) {
+    const normalizedKey = platformWalletPrivateKey.trim();
+    const key = (normalizedKey.startsWith('0x') ? normalizedKey : `0x${normalizedKey}`) as `0x${string}`;
+    const account = privateKeyToAccount(key);
+    signerMap[account.address.toLowerCase()] = key;
+    defaultSignerAddress = account.address.toLowerCase();
+  }
 
   // PERFORMANT: cache the "is RPC reachable?" check so we don't ping on
   // every request. Reset to null on a real failure so we re-check next call.
@@ -329,7 +350,7 @@ export function createArcAdapter({
           mock: true,
         };
       }
-      const data = await requestJson<{ result?: { from?: string; to?: string; blockNumber?: string } | null }>(
+      const data = await requestJson<{ result?: { from?: string; to?: string; blockNumber?: string; input?: string } | null }>(
         rpcUrl!,
         {
           method: 'POST',
@@ -353,6 +374,7 @@ export function createArcAdapter({
         blockNumber: result.blockNumber ? BigInt(result.blockNumber).toString() : null,
         from: result.from || null,
         to: result.to || null,
+        input: result.input || null,
         mock: false,
       };
     },
@@ -383,9 +405,11 @@ export function createArcAdapter({
     },
 
     /**
-     * Server-side send. When a platform private key is configured and Arc
-     * is reachable, sign and broadcast an ERC-20 transfer. Otherwise fall
-     * back to the deterministic mock hash so tests and demos stay green.
+     * Server-side send. Resolves the signing key for `from` out of the
+     * signer map (platform key + any agent keys). A transfer whose
+     * `from` has no configured key settles as a flagged mock instead of
+     * throwing — real legs and mock legs can coexist in one settlement
+     * run, and callers decide what to gate on via `mock`.
      */
     async sendTransfer({ from, to, amountUsdc }: SendTransferArgs): Promise<TransferResult> {
       const up = await isReachable();
@@ -393,20 +417,15 @@ export function createArcAdapter({
         return { hash: deterministicHash({ from, to, amountUsdc, ts: Date.now() }), mock: true };
       }
       if (!usdcContract) throw new Error('ARC_USDC_CONTRACT is not set');
-      if (!platformWalletPrivateKey) {
+
+      const fromKey = from
+        ? from.toLowerCase()
+        : defaultSignerAddress ?? platformWallet?.toLowerCase() ?? null;
+      const signerKey = fromKey ? signerMap[fromKey] : undefined;
+      if (!signerKey) {
         return { hash: deterministicHash({ from, to, amountUsdc, ts: Date.now() }), mock: true };
       }
-
-      const normalizedKey = platformWalletPrivateKey.trim();
-      const account = privateKeyToAccount(
-        (normalizedKey.startsWith('0x') ? normalizedKey : `0x${normalizedKey}`) as `0x${string}`,
-      );
-      const effectiveFrom = from ? from : account.address;
-      if (effectiveFrom.toLowerCase() !== account.address.toLowerCase()) {
-        throw new Error(
-          `sendTransfer 'from' (${effectiveFrom}) does not match PLATFORM_WALLET_PRIVATE_KEY derived address (${account.address})`,
-        );
-      }
+      const account = privateKeyToAccount(signerKey);
 
       const chainIdHex = await fetchChainId();
       if (!chainIdHex) throw new Error('Unable to fetch Arc chainId from RPC');

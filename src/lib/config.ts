@@ -19,20 +19,19 @@ const envSchema = z.object({
   LLM_API_KEY: z.string().optional(),
   LLM_MODEL: z.string().default('gpt-4o-mini'),
 
-  // Agent wallets (Circle programmable wallets)
+  // Agent wallets. Explicit addresses override the defaults derived
+  // from AGENT_KEY_SEED (or the address-only fallback when no seed).
   AGENT_WALLET_PRODUCTION: z.string().optional(),
   AGENT_WALLET_PERFORMANCE: z.string().optional(),
   AGENT_WALLET_MARKET: z.string().optional(),
   AR_WALLET: z.string().optional(),
+  // Seed for deterministic per-agent testnet signing keys. When set,
+  // each agent holds a wallet the arc adapter can sign with.
+  AGENT_KEY_SEED: z.string().optional(),
 
   // IPFS (Pinata JWT is read directly in src/lib/ipfs.ts)
   PINATA_JWT: z.string().optional(),
   PINATA_GATEWAY: z.string().optional(),
-
-  // Circle Gateway (x402 nanopayments)
-  GATEWAY_API_URL: z.string().url().optional(),
-  GATEWAY_API_KEY: z.string().optional(),
-  GATEWAY_BATCH_INTERVAL_MS: z.coerce.number().int().positive().default(500),
 
   // Server tunables
   JSON_BODY_LIMIT: z.string().default('256kb'),

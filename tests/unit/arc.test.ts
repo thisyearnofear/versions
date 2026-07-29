@@ -111,6 +111,15 @@ describe('arc: live mode via stub server', () => {
         };
       }
       if (parsed.method === 'eth_sendRawTransaction') return '0x' + 'd'.repeat(64);
+      if (parsed.method === 'eth_getTransactionByHash') {
+        return {
+          hash: '0xabc',
+          from: '0x' + '11'.repeat(20),
+          to: '0x' + 'aa'.repeat(20),
+          blockNumber: '0x10',
+          input: '0xa9059cbb' + '0'.repeat(24) + 'bb'.repeat(20) + (500_000n).toString(16).padStart(64, '0'),
+        };
+      }
       return null;
     });
   });
@@ -178,7 +187,10 @@ describe('arc: live mode via stub server', () => {
     expect(q.willSucceed).toBe(true);
   });
 
-  it('sendTransfer validates from address against private key when configured', async () => {
+  it('sendTransfer falls back to a flagged mock when no signer exists for `from`', async () => {
+    // MODULAR: unknown `from` no longer throws — real and mock legs
+    // can coexist in a single settlement run. The result is honest:
+    // deterministic hash + mock: true.
     const arc = createArcAdapter({
       rpcUrl: stub.url,
       usdcContract: '0x' + 'aa'.repeat(20),
@@ -186,9 +198,49 @@ describe('arc: live mode via stub server', () => {
       platformWalletPrivateKey: '0x' + 'db'.repeat(32),
       requestTimeoutMs: 2000,
     });
+    const r = await arc.sendTransfer({
+      from: '0x' + 'bb'.repeat(20),
+      to: '0x' + 'cc'.repeat(20),
+      amountUsdc: '0.50',
+    });
+    expect(r.mock).toBe(true);
+    expect(r.hash).toMatch(/^0x[0-9a-f]{64}$/);
+  });
+
+  it('sendTransfer resolves agent signers from the signers map (no fallback to mock)', async () => {
+    // The signer map covers the agent address, so the adapter picks
+    // its key up and proceeds down the real signing path (which then
+    // fails against the stub server — proving it did NOT mock-fallback).
+    const { privateKeyToAccount } = await import('viem/accounts');
+    const agentKey = ('0x' + 'ec'.repeat(32)) as `0x${string}`;
+    const agentAddr = privateKeyToAccount(agentKey).address;
+    const arc = createArcAdapter({
+      rpcUrl: stub.url,
+      usdcContract: '0x' + 'aa'.repeat(20),
+      platformWallet: '0x' + '11'.repeat(20),
+      signers: { [agentAddr.toLowerCase()]: agentKey },
+      requestTimeoutMs: 2000,
+    });
+    // The stub server can't service a full viem sendTransaction
+    // (no eth_getTransactionCount etc.), so a real-path attempt
+    // rejects — a mock fallback would have resolved with mock: true.
     await expect(
-      arc.sendTransfer({ from: '0x' + 'bb'.repeat(20), to: '0x' + 'cc'.repeat(20), amountUsdc: '0.50' }),
-    ).rejects.toThrow(/does not match PLATFORM_WALLET_PRIVATE_KEY derived address/);
+      arc.sendTransfer({ from: agentAddr, to: '0x' + 'cc'.repeat(20), amountUsdc: '0.50' }),
+    ).rejects.toThrow();
+  });
+
+  it('getTransaction returns from/to/input calldata in live mode', async () => {
+    const arc = createArcAdapter({
+      rpcUrl: stub.url,
+      usdcContract: '0x' + 'aa'.repeat(20),
+      platformWallet: '0x' + '11'.repeat(20),
+      requestTimeoutMs: 2000,
+    });
+    const tx = await arc.getTransaction('0xabc');
+    expect(tx?.mock).toBe(false);
+    expect(tx?.from).toBe('0x' + '11'.repeat(20));
+    expect(tx?.to).toBe('0x' + 'aa'.repeat(20));
+    expect(tx?.input).toMatch(/^0xa9059cbb/);
   });
 });
 

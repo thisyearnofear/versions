@@ -1,8 +1,8 @@
 // MODULAR: x402 nanopayment tests. Covers the EIP-712 verify path
 // with a real viem test wallet (not a mock signature), the amount
-// helpers, the Gateway adapter in mock mode, and the route handler
-// (402 on no header, 200 on valid proof, 401 on bad signature,
-// 409 on duplicate puid).
+// helpers, and the route handler wired to the real tip batch
+// settlement service (402 on no header, 200 on valid proof, 401 on
+// bad signature, 409 on duplicate puid).
 
 import { describe, it, expect, beforeEach, afterAll, beforeAll, vi } from 'vitest';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
@@ -20,29 +20,10 @@ vi.mock('@/lib/event-bus', () => ({
   clearSubscriptions: vi.fn(),
 }));
 
-// Mock the services registry so the route can resolve gateway
-// + arc + config without touching real adapters.
-const mockGateway = {
-  getInfo: vi.fn(async () => ({
-    apiUrl: null,
-    network: 'arc-testnet' as const,
-    usdcContract: null,
-    batchIntervalMs: 500,
-    mock: true,
-  })),
-  submitTip: vi.fn(async (args: { from: string; to: string; amountUsdc: string; puid: string; message?: string }) => ({
-    hash: '0xmockhash_' + args.puid.slice(0, 8),
-    status: 'settled' as const,
-    batchedAt: new Date().toISOString(),
-    mock: true,
-  })),
-  getTipStatus: vi.fn(async (puid: string) => ({
-    status: 'settled' as const,
-    hash: '0xmockhash_' + puid.slice(0, 8),
-    mock: true,
-  })),
-};
-
+// Mock the services registry so the route can resolve tips
+// + arc + config without touching real adapters. The tips
+// service is the REAL createTipSettlementService running against
+// the PGlite test DB — only the arc adapter underneath is stubbed.
 const mockArc = {
   getInfo: vi.fn(async () => ({
     chainId: '0x4d2', // Arc testnet placeholder
@@ -59,16 +40,25 @@ const mockArc = {
   getTransactionReceipt: vi.fn(),
   getTransaction: vi.fn(),
   quoteTransfer: vi.fn(),
-  sendTransfer: vi.fn(),
+  sendTransfer: vi.fn(async () => ({
+    hash: ('0x' + 'ab'.repeat(32)) as `0x${string}`,
+    mock: true,
+  })),
   sendRawTransaction: vi.fn(),
   waitForFinality: vi.fn(),
 };
 
+const PLATFORM_WALLET = '0x000000000000000000000000000000000000d3ad';
+let tipsService: TipSettlementService | null = null;
+
 vi.mock('@/lib/services', () => ({
   services: () => ({
-    gateway: mockGateway,
+    tips: (tipsService ??= createTipSettlementService({
+      arc: mockArc as unknown as import('../../src/adapters/arc').ArcAdapter,
+      platformWallet: PLATFORM_WALLET,
+    })),
     arc: mockArc,
-    config: { platformWallet: '0x000000000000000000000000000000000000d3ad' },
+    config: { platformWallet: PLATFORM_WALLET },
   }),
   requestIdFor: (req: { headers: { get: (k: string) => string | null } }) =>
     req.headers.get('x-request-id') ?? 'test-rid',
@@ -101,7 +91,7 @@ import {
   hashOffer,
   type X402Offer,
 } from '../../src/lib/x402';
-import { createGatewayAdapter } from '../../src/adapters/gateway';
+import { createTipSettlementService, type TipSettlementService } from '../../src/services/tips';
 import { POST as tipRoute } from '../../src/app/api/x402/tip/route';
 import { x402Proofs } from '../../src/lib/schema';
 import { eq } from 'drizzle-orm';
@@ -320,54 +310,6 @@ describe('x402 module edge cases', () => {
   });
 });
 
-// ── Gateway adapter tests ──────────────────────────────
-
-describe('Gateway adapter (mock mode)', () => {
-  it('submitTip returns a deterministic hash + mock: true when GATEWAY_API_URL is missing', async () => {
-    const gw = createGatewayAdapter();
-    const r = await gw.submitTip({
-      from: '0x0000000000000000000000000000000000000001',
-      to: '0x000000000000000000000000000000000000d3ad',
-      amountUsdc: '0.000001',
-      puid: 'mock-puid-1',
-    });
-    expect(r.mock).toBe(true);
-    expect(r.hash).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(r.status).toBe('settled');
-  });
-
-  it('submitTip rejects self-tips', async () => {
-    const gw = createGatewayAdapter();
-    await expect(
-      gw.submitTip({
-        from: '0x000000000000000000000000000000000000d3ad',
-        to: '0x000000000000000000000000000000000000d3ad',
-        amountUsdc: '0.01',
-        puid: 'self',
-      }),
-    ).rejects.toThrow(/self-tip/);
-  });
-
-  it('submitTip rejects zero/negative amounts', async () => {
-    const gw = createGatewayAdapter();
-    await expect(
-      gw.submitTip({
-        from: '0x0000000000000000000000000000000000000001',
-        to: '0x000000000000000000000000000000000000d3ad',
-        amountUsdc: '0',
-        puid: 'zero',
-      }),
-    ).rejects.toThrow();
-  });
-
-  it('getInfo reports mock: true when no apiUrl', async () => {
-    const gw = createGatewayAdapter();
-    const info = await gw.getInfo();
-    expect(info.mock).toBe(true);
-    expect(info.network).toBe('arc-testnet');
-  });
-});
-
 // ── Route handler tests ────────────────────────────────
 
 function makeReq(body: unknown, headers: Record<string, string> = {}): Request {
@@ -385,7 +327,7 @@ describe('x402 tip route', () => {
 
   beforeEach(async () => {
     await resetTestDb();
-    mockGateway.submitTip.mockClear();
+    mockArc.sendTransfer.mockClear();
   });
 
   afterAll(async () => {
@@ -455,13 +397,15 @@ describe('x402 tip route', () => {
     const [row] = await getTestDb().select().from(x402Proofs).where(eq(x402Proofs.puid, challenge.puid));
     expect(row).toBeDefined();
     expect(row.status).toBe('settled');
+    expect(row.txHash).toBe('0x' + 'ab'.repeat(32));
     expect(row.tipperWallet.toLowerCase()).toBe(account.address.toLowerCase());
 
-    // Gateway was called once with the right shape
-    expect(mockGateway.submitTip).toHaveBeenCalledTimes(1);
-    const callArgs = mockGateway.submitTip.mock.calls[0][0];
+    // Batch settlement: one aggregated on-chain transfer platform → artist
+    expect(mockArc.sendTransfer).toHaveBeenCalledTimes(1);
+    const callArgs = mockArc.sendTransfer.mock.calls[0][0] as { from: string; to: string; amountUsdc: string };
+    expect(callArgs.from).toBe('0x000000000000000000000000000000000000d3ad');
+    expect(callArgs.to).toBe('0x000000000000000000000000000000000000d3ad');
     expect(callArgs.amountUsdc).toBe('0.000001');
-    expect(callArgs.puid).toBe(challenge.puid);
   });
 
   it('returns 401 on an invalid signature', async () => {

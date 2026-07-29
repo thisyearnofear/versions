@@ -11,8 +11,8 @@
 import type { NextRequest } from 'next/server';
 import path from 'node:path';
 import { createArcAdapter, type ArcAdapter } from '../adapters/arc';
-import { createGatewayAdapter, type GatewayAdapter } from '../adapters/gateway';
-import { createLlmAdapter, type LlmAdapter } from '../adapters/llm';
+import { createTipSettlementService, type TipSettlementService } from '../services/tips';
+import { createLlmAdapter } from '../adapters/llm';
 import { createEmbeddingAdapter } from '../adapters/embedding';
 import { createSubmissionsService, type SubmissionsService } from '../services/submissions';
 import { createSettlementService, type SettlementService } from '../services/settlement';
@@ -28,22 +28,15 @@ import { createListenerService, type ListenerService } from '../services/listene
 import { createSupervisorDashboardService, type SupervisorDashboardService } from '../services/supervisor';
 import { log } from './logger';
 
-// MODULAR: deterministic agent wallets when env is missing.
-// Matches the legacy proxy-server.js behaviour so the same wallet
-// shows up across restarts when the operator hasn't configured keys.
-import { createHash } from 'crypto';
-function deterministicAgentWallet(label: string, slice: number): string {
-  return (
-    'agent_' +
-    label +
-    '_' +
-    createHash('sha256').update(label).digest('hex').slice(0, slice)
-  );
-}
+// MODULAR: deterministic agent wallets when env is missing. With
+// AGENT_KEY_SEED set, each agent gets a derived address whose key
+// the arc adapter can sign with; without a seed the address is a
+// stable valid-format identity (no spendable key exists).
+import { buildSignerMap, deterministicAddress } from './signers';
 
 export interface ServiceRegistry {
   arc: ArcAdapter;
-  gateway: GatewayAdapter;
+  tips: TipSettlementService;
   submissions: SubmissionsService;
   settlement: SettlementService;
   curation: CurationService;
@@ -81,35 +74,46 @@ function build(): ServiceRegistry {
   const llmApiKey = process.env.LLM_API_KEY || '';
   const llmModel = process.env.LLM_MODEL || 'gpt-4o-mini';
 
+  // MODULAR: seed-derived agent signers. AGENT_KEY_SEED gives each
+  // agent a testnet wallet the arc adapter can sign with; explicit
+  // AGENT_WALLET_* env vars still override the address (sends from an
+  // overridden address without a matching key settle as mock).
+  const agentKeySeed = process.env.AGENT_KEY_SEED || '';
+  const agentLabels = ['production', 'performance', 'market', 'ar'];
+  const { signers, addresses: derivedAddresses } = buildSignerMap({
+    platformWalletPrivateKey: process.env.PLATFORM_WALLET_PRIVATE_KEY || undefined,
+    agentKeySeed: agentKeySeed || undefined,
+    labels: agentLabels,
+  });
+  const defaultWallet = (label: string) =>
+    derivedAddresses[label] ?? deterministicAddress(label);
+
   const agentWallets: string[] = [
-    process.env.AGENT_WALLET_PRODUCTION || deterministicAgentWallet('production', 32),
-    process.env.AGENT_WALLET_PERFORMANCE || deterministicAgentWallet('performance', 30),
-    process.env.AGENT_WALLET_MARKET || deterministicAgentWallet('market', 34),
+    process.env.AGENT_WALLET_PRODUCTION || defaultWallet('production'),
+    process.env.AGENT_WALLET_PERFORMANCE || defaultWallet('performance'),
+    process.env.AGENT_WALLET_MARKET || defaultWallet('market'),
   ];
-  const arWallet =
-    process.env.AR_WALLET || deterministicAgentWallet('ar', 35);
+  const arWallet = process.env.AR_WALLET || defaultWallet('ar');
 
   const arc = createArcAdapter({
     rpcUrl: arcRpcUrl || undefined,
     usdcContract: arcUsdcContract || undefined,
     platformWallet: platformWallet || undefined,
     platformWalletPrivateKey: process.env.PLATFORM_WALLET_PRIVATE_KEY || undefined,
+    signers,
   });
 
-  // MODULAR: Circle Gateway for sub-cent USDC nanopayments. Mock-first
-  // (same pattern as the arc adapter): when GATEWAY_API_URL is missing
-  // the adapter returns deterministic mock responses so the x402 tip
-  // route and TipButton work without credentials. Setting GATEWAY_API_URL
-  // + GATEWAY_API_KEY in env switches to real batched settlement.
-  const gateway = createGatewayAdapter({
-    apiUrl: process.env.GATEWAY_API_URL || undefined,
-    apiKey: process.env.GATEWAY_API_KEY || undefined,
-    network: 'arc-testnet',
+  // MODULAR: nanotip batch settlement. Verified x402 proofs queue in
+  // the DB; the tips service aggregates them per artist and settles
+  // each batch as one USDC transfer through the arc adapter. Mock
+  // status follows the arc adapter (no separate credentials).
+  const tips = createTipSettlementService({ arc, platformWallet });
+
+  const submissions = createSubmissionsService({
+    arc,
+    platformWallet: platformWallet ?? undefined,
     usdcContract: arcUsdcContract || undefined,
-    batchIntervalMs: Number(process.env.GATEWAY_BATCH_INTERVAL_MS) || 500,
   });
-
-  const submissions = createSubmissionsService({ arc, platformWallet: platformWallet ?? undefined });
   const settlement = createSettlementService({ arc: arc as ArcAdapter, platformWallet: platformWallet ?? undefined });
   const curation = createCurationService({ settlement });
   const embeddingAdapter = createEmbeddingAdapter();
@@ -120,7 +124,7 @@ function build(): ServiceRegistry {
   const ar = createArService({ arc, arWallet });
   const listeners = createListenerService();
   const supervisor = createSupervisorDashboardService();
-  const sweeper = createSweeper({ settlement });
+  const sweeper = createSweeper({ settlement, tips });
   const ipfs = createIpfsFromEnv();
 
   const windowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000;
@@ -136,7 +140,7 @@ function build(): ServiceRegistry {
 
   return {
     arc,
-    gateway,
+    tips,
     submissions,
     settlement,
     curation,
@@ -157,7 +161,9 @@ function build(): ServiceRegistry {
       llmModel,
       arcMock: !arcRpcUrl,
       llmMock: !llmApiKey,
-      gatewayMock: !process.env.GATEWAY_API_URL,
+      // Tips settle through the arc adapter; the flag name is kept
+      // for the health endpoint contract.
+      gatewayMock: !arcRpcUrl,
       embeddingMock: embeddingAdapter.mock,
       uploadDir,
       ipfsConfigured: ipfs.isConfigured(),

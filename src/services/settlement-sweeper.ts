@@ -15,6 +15,7 @@ import { db } from '../lib/db';
 import { settlementLegs as legsTable } from '../lib/schema';
 import { log } from '../lib/logger';
 import type { SettlementService } from './settlement';
+import type { TipSettlementService } from './tips';
 // MODULAR: server-side submit config (Next.js enforces server-only
 // bundling via the .server.ts suffix). The sweeper's default
 // polling cadence reads the same env-overridable knob as the
@@ -73,7 +74,13 @@ export async function findStuckLegs(): Promise<
   }));
 }
 
-export function createSweeper({ settlement }: { settlement: SettlementService }): Sweeper {
+export function createSweeper({
+  settlement,
+  tips = null,
+}: {
+  settlement: SettlementService;
+  tips?: TipSettlementService | null;
+}): Sweeper {
   let timer: ReturnType<typeof setInterval> | null = null;
   let running = false;
   let lastRunAt: string | null = null;
@@ -84,6 +91,20 @@ export function createSweeper({ settlement }: { settlement: SettlementService })
     running = true;
     const startMs = Date.now();
     try {
+      // MODULAR: tip batches first — they are independent of legs and
+      // a legs failure shouldn't strand queued tips (or vice versa).
+      if (tips) {
+        try {
+          const flushed = await tips.flushAll();
+          if (flushed.settled > 0) {
+            log.info('sweeper settled queued tips', flushed);
+          }
+        } catch (err) {
+          log.warn('sweeper tip flush failed', {
+            err: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
       const stuck = await findStuckLegs();
       if (stuck.length === 0) {
         lastRunStats = { retried: 0, settled: 0, failed: 0, durationMs: Date.now() - startMs };
