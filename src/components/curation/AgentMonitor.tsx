@@ -19,6 +19,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { PipelineStepper } from "@/components/economy/PipelineStepper";
 import { apiClient, type AgentReviewRecord, type FeedRow, type QueueSubmission } from "@/lib/api-client";
+import type { AgentStreamEvent } from "@/lib/event-bus";
+import { useTypewriter } from "@/lib/use-typewriter";
 import { parseMoodTags } from "@/lib/format";
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
@@ -44,6 +46,32 @@ type SseStatus = "connecting" | "live" | "reconnecting";
 // humanRelativeTime(r.published_at) was called from JSX.
 type PublishedRow = FeedRow & { published_at: string };
 
+// ── Streaming session state ─────────────────────────────
+// Populated by `agent-stream` SSE events while a review is in flight.
+// Cards reveal sequentially (production → performance → market) via a
+// revealCursor; the consensus banner lands once all three are done.
+
+const STREAM_AGENT_ORDER = ["production", "performance", "market"] as const;
+
+interface StreamAgentState {
+  phase: "thinking" | "verdict" | "failed";
+  verdict?: AgentReviewRecord;
+}
+
+interface ConsensusState {
+  ratingCount: number;
+  published: boolean;
+  avgSolo: number | null;
+  avgVocal: number | null;
+  mock: boolean;
+}
+
+interface StreamSession {
+  submissionId: string;
+  agents: Partial<Record<string, StreamAgentState>>;
+  consensus?: ConsensusState;
+}
+
 export function AgentMonitor() {
   const [queue, setQueue] = useState<QueueSubmission[]>([]);
   const [queueLoading, setQueueLoading] = useState(true);
@@ -57,6 +85,12 @@ export function AgentMonitor() {
   // open/error lifecycle — no parallel reconnect machinery needed.
   const [recentVerdicts, setRecentVerdicts] = useState<PublishedRow[]>([]);
   const [sseStatus, setSseStatus] = useState<SseStatus>("connecting");
+  // Live streaming session (agent-stream SSE). Last-writer-wins: a new
+  // submissionId replaces the session. revealCursor sequences the
+  // typewriter reveals in STREAM_AGENT_ORDER.
+  const [stream, setStream] = useState<StreamSession | null>(null);
+  const [revealCursor, setRevealCursor] = useState(0);
+  const streamSubRef = useRef<string | null>(null);
 
   const refreshQueue = useCallback(async () => {
     setQueueLoading(true);
@@ -150,6 +184,68 @@ export function AgentMonitor() {
           /* malformed — ignore */
         }
       });
+      es.addEventListener("agent-stream", (msg) => {
+        try {
+          const e = JSON.parse((msg as MessageEvent).data) as AgentStreamEvent;
+          if (e.type === "agent_started" && streamSubRef.current !== e.submissionId) {
+            streamSubRef.current = e.submissionId;
+            setRevealCursor(0);
+          }
+          if (e.type === "agent_started") setSelectedId(e.submissionId);
+          setStream((prev) => {
+            const base: StreamSession =
+              prev && prev.submissionId === e.submissionId
+                ? prev
+                : { submissionId: e.submissionId, agents: {} };
+            switch (e.type) {
+              case "agent_started":
+                return { ...base, agents: { ...base.agents, [e.agentName]: { phase: "thinking" as const } } };
+              case "agent_verdict":
+                return {
+                  ...base,
+                  agents: {
+                    ...base.agents,
+                    [e.agentName]: {
+                      phase: "verdict" as const,
+                      verdict: {
+                        submission_id: e.submissionId,
+                        agent_name: e.agentName as AgentReviewRecord["agent_name"],
+                        notes: e.notes,
+                        mood_tags: e.moodTags,
+                        solo_intensity: e.solo,
+                        vocal_quality: e.vocal,
+                        energy_vs_studio: e.energy as AgentReviewRecord["energy_vs_studio"],
+                        tempo_feel: e.tempo as AgentReviewRecord["tempo_feel"],
+                      },
+                    },
+                  },
+                };
+              case "agent_failed":
+                return { ...base, agents: { ...base.agents, [e.agentName]: { phase: "failed" as const } } };
+              case "consensus":
+                return {
+                  ...base,
+                  consensus: {
+                    ratingCount: e.ratingCount,
+                    published: e.published,
+                    avgSolo: e.avgSolo,
+                    avgVocal: e.avgVocal,
+                    mock: e.mock,
+                  },
+                };
+            }
+            return base;
+          });
+          if (e.type === "consensus") {
+            apiClient.getReviews(e.submissionId).then((data) => {
+              setReviews(Array.isArray(data) ? data : []);
+            }).catch(() => { /* silent */ });
+            loadRecentVerdictsRef.current();
+          }
+        } catch {
+          /* malformed — ignore */
+        }
+      });
       es.addEventListener("error", () => {
         setSseStatus("reconnecting");
         es?.close();
@@ -177,6 +273,11 @@ export function AgentMonitor() {
       setReviewsLoading(false);
     }
   }, []);
+
+  const streamActive = stream !== null && stream.submissionId === selectedId;
+  const streamedVerdictCount = streamActive && stream
+    ? Object.values(stream.agents).filter((a) => a?.phase === "verdict").length
+    : 0;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-[var(--color-ink)] pt-8">
@@ -322,9 +423,14 @@ export function AgentMonitor() {
             <PipelineStepper
               status={
                 queue.find((q) => q.id === selectedId)?.status ??
-                (reviews.length >= 3 ? "published" : undefined)
+                (reviews.length >= 3 || (streamActive && stream?.consensus?.published)
+                  ? "published"
+                  : undefined)
               }
-              ratingCount={queue.find((q) => q.id === selectedId)?.ratingCount ?? reviews.length}
+              ratingCount={Math.max(
+                queue.find((q) => q.id === selectedId)?.ratingCount ?? reviews.length,
+                streamedVerdictCount,
+              )}
             />
           </div>
         )}
@@ -332,6 +438,73 @@ export function AgentMonitor() {
           <p className="font-serif italic text-[var(--color-ink-3)] py-10 text-center border-t border-b border-[var(--color-hair)]">
             Select a submission from the queue to inspect agent reviews.
           </p>
+        ) : streamActive && stream ? (
+          <div className="flex flex-col gap-4">
+            {stream.consensus && revealCursor >= 3 && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                className="border border-[var(--color-rust)] bg-[var(--color-paper-2)]/60 px-4 py-3"
+              >
+                <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-1">
+                  Consensus
+                </div>
+                <div className="font-serif text-sm">
+                  {stream.consensus.ratingCount}/3 verdicts in
+                  {stream.consensus.avgSolo != null && stream.consensus.avgVocal != null &&
+                    ` · avg solo ${stream.consensus.avgSolo.toFixed(1)} / vocal ${stream.consensus.avgVocal.toFixed(1)}`}
+                </div>
+                <div className="flex items-center gap-2 mt-1 font-mono text-[10px] uppercase tracking-[0.14em]">
+                  {stream.consensus.published && (
+                    <span className="text-[var(--color-rust)]">● Published</span>
+                  )}
+                  {stream.consensus.mock && (
+                    <span className="border border-[var(--color-hair-strong)] px-1.5 py-px text-[9px] text-[var(--color-ink-3)]">
+                      mock
+                    </span>
+                  )}
+                </div>
+              </motion.div>
+            )}
+            <AnimatePresence mode="popLayout">
+              {STREAM_AGENT_ORDER.map((name, idx) => {
+                const st = stream.agents[name];
+                const fetched = reviews.find(
+                  (r) => r.agent_name === name && r.submission_id === selectedId,
+                );
+                if (!st && !fetched) return null;
+                const meta = AGENT_META[name] ?? { icon: "🤖", label: name, color: "var(--color-ink)" };
+                const review = fetched ?? st?.verdict;
+                return (
+                  <motion.div
+                    key={`${selectedId}-${name}`}
+                    initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    {st?.phase === "failed" && !review ? (
+                      <StreamFailedCard
+                        meta={meta}
+                        onSettled={() => setRevealCursor((c) => Math.max(c, idx + 1))}
+                      />
+                    ) : !review ? (
+                      <AgentThinkingCard meta={meta} />
+                    ) : (
+                      <AgentReviewCard
+                        review={review}
+                        meta={meta}
+                        typewriter={{
+                          enabled: revealCursor >= idx,
+                          onDone: () => setRevealCursor((c) => Math.max(c, idx + 1)),
+                        }}
+                      />
+                    )}
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
         ) : reviewsLoading ? (
           <ReviewCardSkeleton count={3} />
         ) : reviews.length === 0 ? (
@@ -367,9 +540,11 @@ export function AgentMonitor() {
 function AgentReviewCard({
   review,
   meta,
+  typewriter,
 }: {
   review: AgentReviewRecord;
   meta: { icon: string; label: string; color: string };
+  typewriter?: { enabled: boolean; onDone?: () => void };
 }) {
   // MODULAR: parseMoodTags (lib/format) handles BOTH wire shapes
   // the api-client envelope can land as -- a JSON-stringified
@@ -386,6 +561,15 @@ function AgentReviewCard({
   // ScoreRow label. Single computation per card keeps the mood_tags
   // iteration out of both render sites.
   const valence = useMemo(() => deriveValence(moodTags), [moodTags]);
+
+  // Hooks must run unconditionally: when no typewriter prop is passed
+  // the hook is disabled (no timer) and the plain notes render.
+  const tw = useTypewriter(review.notes ?? "", {
+    enabled: typewriter?.enabled ?? false,
+    onDone: typewriter?.onDone,
+  });
+  const notesDisplay = typewriter ? tw.display : review.notes;
+  const notesTyping = typewriter !== undefined && typewriter.enabled && !tw.done;
 
   const tagMarkup = moodTags
     .map((t: string) => `<span class="feed-tag">${escapeHtml(t)}</span>`)
@@ -456,10 +640,66 @@ function AgentReviewCard({
             Rationale
           </div>
           <p className="font-serif text-sm text-[var(--color-ink-2)] leading-snug">
-            {review.notes}
+            {notesDisplay}
+            {notesTyping && (
+              <span aria-hidden="true" className="text-[var(--color-rust)] animate-pulse">
+                ▌
+              </span>
+            )}
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+// Lightweight variant shown between agent_started and agent_verdict.
+function AgentThinkingCard({ meta }: { meta: { icon: string; label: string; color: string } }) {
+  return (
+    <div className="border border-[var(--color-hair-strong)] p-4">
+      <div className="flex items-center gap-2 mb-3 border-b border-[var(--color-hair)] pb-2">
+        <span className="text-lg">{meta.icon}</span>
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em]" style={{ color: meta.color }}>
+          {meta.label}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 py-2">
+        <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-[var(--color-rust)] animate-pulse" />
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+          analyzing the track…
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Failed slot advances the reveal cursor on mount so later cards are
+// never blocked waiting on a typewriter that will not run.
+function StreamFailedCard({
+  meta,
+  onSettled,
+}: {
+  meta: { icon: string; label: string; color: string };
+  onSettled: () => void;
+}) {
+  const onSettledRef = useRef(onSettled);
+  useEffect(() => {
+    onSettledRef.current = onSettled;
+  }, [onSettled]);
+  useEffect(() => {
+    onSettledRef.current();
+  }, []);
+  return (
+    <div className="border border-[var(--color-hair-strong)] p-4 opacity-70">
+      <div className="flex items-center gap-2 mb-3 border-b border-[var(--color-hair)] pb-2">
+        <span className="text-lg">{meta.icon}</span>
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em]" style={{ color: meta.color }}>
+          {meta.label}
+        </span>
+      </div>
+      <p className="font-serif italic text-sm text-[var(--color-ink-3)] py-1">
+        Review failed — this agent could not file a verdict.
+      </p>
     </div>
   );
 }

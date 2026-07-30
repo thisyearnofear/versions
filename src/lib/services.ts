@@ -121,7 +121,7 @@ function build(): ServiceRegistry {
   const embeddings = createEmbeddingService(embeddingAdapter);
   const llm = createLlmAdapter({ apiUrl: llmApiUrl || undefined, apiKey: llmApiKey || undefined, model: llmModel });
   const agents = createAgentService({ llm, settlement, agentWallets });
-  const ar = createArService({ arc, arWallet });
+  const ar = createArService({ arc, arWallet, llm });
   const listeners = createListenerService();
   const supervisor = createSupervisorDashboardService();
   const sweeper = createSweeper({ settlement, tips });

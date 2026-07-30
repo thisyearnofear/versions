@@ -10,7 +10,8 @@ export type EventName =
   | 'submission-created'
   | 'playlist-update'
   | 'tip-received'
-  | 'economy-event';
+  | 'economy-event'
+  | 'agent-stream';
 
 export interface FeedUpdateEvent {
   type: 'published';
@@ -34,6 +35,12 @@ export interface SubmissionCreatedEvent {
 export interface PlaylistUpdateEvent {
   type: 'generated';
   generated: number;
+  playlists?: Array<{
+    id: string;
+    name: string;
+    genre: string | null;
+    reasoning: string | null;
+  }>;
   timestamp: string;
 }
 
@@ -86,13 +93,62 @@ export interface EconomyEvent {
   mock?: boolean;
 }
 
+// MODULAR: per-agent review lifecycle events for the streaming reasoning
+// surfaces (/agents monitor, landing demo snippets). Emitted when the fact
+// actually happens: 'agent_started' just before the LLM call, 'agent_verdict'
+// after the review row is persisted, 'consensus' when the third verdict
+// triggers publish. The client typewriter is presentation only — these
+// events carry real text and honest mock flags.
+export type AgentStreamEvent =
+  | {
+      type: 'agent_started';
+      submissionId: string;
+      agentName: string;
+      title: string | null;
+      artistName: string | null;
+      mock: boolean;
+      timestamp: string;
+    }
+  | {
+      type: 'agent_verdict';
+      submissionId: string;
+      agentName: string;
+      reviewId: string;
+      notes: string;
+      solo: number;
+      vocal: number;
+      energy: string;
+      tempo: string;
+      moodTags: string[];
+      mock: boolean;
+      timestamp: string;
+    }
+  | {
+      type: 'agent_failed';
+      submissionId: string;
+      agentName: string;
+      error: string;
+      timestamp: string;
+    }
+  | {
+      type: 'consensus';
+      submissionId: string;
+      ratingCount: number;
+      published: boolean;
+      avgSolo: number | null;
+      avgVocal: number | null;
+      mock: boolean;
+      timestamp: string;
+    };
+
 export type BusEvent =
   | FeedUpdateEvent
   | QueueUpdateEvent
   | SubmissionCreatedEvent
   | PlaylistUpdateEvent
   | TipReceivedEvent
-  | EconomyEvent;
+  | EconomyEvent
+  | AgentStreamEvent;
 
 type Handler = (data: BusEvent) => void;
 

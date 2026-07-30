@@ -5,7 +5,7 @@
 //        operator wallets). The settlement service pays agent wallets on publish.
 
 import { randomUUID } from 'crypto';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '../lib/db';
 import { assertMoodTagsShape } from '../lib/format';
 import {
@@ -273,9 +273,6 @@ export function createAgentService({
         return { ok: false as const, error: `Cannot review submission in status ${sub.status}` };
       }
 
-      const reviews: AgentReviewSummary[] = [];
-      let brief: ParsedReview['placement_brief'] | null = null;
-
       // PERF: Insert all claims in parallel first (fast, independent DB writes)
       await Promise.all(
         agentWallets.map((wallet) =>
@@ -291,40 +288,48 @@ export function createAgentService({
         ),
       );
 
-      // PERF: Run all 3 LLM calls in parallel — this is the main latency bottleneck
-      const llmResults = await Promise.all(
-        AGENT_NAMES.map((agentName, i) =>
-          llm
-            .complete({
-              system: SYSTEM_PROMPTS[agentName],
-              user: buildUserPrompt({
-                title: sub.title,
-                artist_name: sub.artistName,
-                version_type: sub.versionType,
-                genre: sub.genre,
-                mood: sub.artistMood,
-                description: sub.description,
-                audio_duration_seconds: sub.audioDurationSeconds,
-                musicbrainz_id: sub.musicbrainzId,
-              }),
-              agentName,
-              genre: sub.genre || 'rock',
-              versionType: sub.versionType || 'live',
-            })
-            .then((result) => ({ agentName, wallet: agentWallets[i], result })),
-        ),
-      );
+      interface ChainOutcome {
+        review?: AgentReviewSummary;
+        brief?: ParsedReview['placement_brief'];
+        published?: PublishedSummary;
+        publishError?: PublishLegIncompleteError;
+      }
 
-      // Parse all results
-  const agentResults: Array<{
-    agentName: AgentName;
-    wallet: string;
-    parsed: ParsedReview;
-    mock: boolean;
-    rawText: string;
-  }> = [];
+      // Each agent runs as an independent chain: LLM call → parse → DB writes
+      // → lifecycle emits. Chains never throw; the outer merge assembles the
+      // legacy return shape. The atomic ratingCount increment with .returning()
+      // guarantees exactly one chain observes the publish threshold.
+      const runAgentChain = async (
+        agentName: AgentName,
+        wallet: string,
+      ): Promise<ChainOutcome> => {
+        emit('agent-stream', {
+          type: 'agent_started',
+          submissionId,
+          agentName,
+          title: sub.title,
+          artistName: sub.artistName,
+          mock: llm.mock === true,
+          timestamp: new Date().toISOString(),
+        });
 
-      for (const { agentName, wallet, result } of llmResults) {
+        const result = await llm.complete({
+          system: SYSTEM_PROMPTS[agentName],
+          user: buildUserPrompt({
+            title: sub.title,
+            artist_name: sub.artistName,
+            version_type: sub.versionType,
+            genre: sub.genre,
+            mood: sub.artistMood,
+            description: sub.description,
+            audio_duration_seconds: sub.audioDurationSeconds,
+            musicbrainz_id: sub.musicbrainzId,
+          }),
+          agentName,
+          genre: sub.genre || 'rock',
+          versionType: sub.versionType || 'live',
+        });
+
         let parsed: ParsedReview | null =
           result.parsed || parseAgentResponse(result.text, agentName);
         if (!parsed) {
@@ -337,35 +342,39 @@ export function createAgentService({
                     sub.genre || 'rock',
                     sub.versionType || 'live',
                   ) ?? null;
-          if (!fallback) continue;
+          if (!fallback) {
+            emit('agent-stream', {
+              type: 'agent_failed',
+              submissionId,
+              agentName,
+              error: 'unparseable response',
+              timestamp: new Date().toISOString(),
+            });
+            return {};
+          }
           parsed = fallback;
         }
-    agentResults.push({ agentName, wallet, parsed, mock: result.mock, rawText: result.text });
-  }
+        const mock = result.mock;
 
-  // Batch-insert all agent reviews and ratings sequentially (fast — local DB writes)
-  for (const { agentName, wallet, parsed, mock, rawText } of agentResults) {
-    const reviewId = randomUUID();
-    const ratingId = randomUUID();
+        const reviewId = randomUUID();
+        await db.insert(agentReviewsTable).values({
+          id: reviewId,
+          submissionId,
+          agentName,
+          curatorWallet: wallet,
+          soloIntensity: parsed.solo_intensity,
+          vocalQuality: parsed.vocal_quality,
+          energyVsStudio: parsed.energy_vs_studio,
+          tempoFeel: parsed.tempo_feel,
+          moodTags: assertMoodTagsShape(parsed.mood_tags),
+          notes: parsed.notes,
+          rawResponse: result.text,
+        });
 
-    await db.insert(agentReviewsTable).values({
-      id: reviewId,
-      submissionId,
-      agentName,
-      curatorWallet: wallet,
-      soloIntensity: parsed.solo_intensity,
-      vocalQuality: parsed.vocal_quality,
-      energyVsStudio: parsed.energy_vs_studio,
-      tempoFeel: parsed.tempo_feel,
-      moodTags: assertMoodTagsShape(parsed.mood_tags),
-      notes: parsed.notes,
-      rawResponse: rawText,
-    });
-
-        await db
+        const ratingInserted = await db
           .insert(ratingsTable)
           .values({
-            id: ratingId,
+            id: randomUUID(),
             submissionId,
             curatorWallet: wallet,
             soloIntensity: parsed.solo_intensity,
@@ -375,8 +384,10 @@ export function createAgentService({
             moodTags: assertMoodTagsShape(parsed.mood_tags),
             notes: parsed.notes,
           })
-          .onConflictDoNothing();
+          .onConflictDoNothing()
+          .returning({ id: ratingsTable.id });
 
+        let chainBrief: ParsedReview['placement_brief'] | undefined;
         if (agentName === 'market' && parsed.placement_brief) {
           const pb = parsed.placement_brief;
           await db
@@ -400,7 +411,7 @@ export function createAgentService({
                 audienceSummary: pb.audience_summary || '',
               },
             });
-          brief = {
+          chainBrief = {
             scene_tags: pb.scene_tags || [],
             instruments: pb.instruments || [],
             emotional_arcs: pb.emotional_arcs || [],
@@ -409,7 +420,7 @@ export function createAgentService({
           };
         }
 
-        reviews.push({
+        const review: AgentReviewSummary = {
           id: reviewId,
           agent_name: agentName,
           curator_wallet: wallet,
@@ -420,7 +431,7 @@ export function createAgentService({
           mood_tags: parsed.mood_tags,
           notes: parsed.notes,
           mock,
-        });
+        };
 
         // Economy ticker: one event per filed verdict.
         emit('economy-event', {
@@ -437,36 +448,45 @@ export function createAgentService({
           mock,
           timestamp: new Date().toISOString(),
         });
-      }
 
-      // Set rating count atomically to the actual number of successful reviews
-      await db
-        .update(submissionsTable)
-        .set({ ratingCount: agentResults.length })
-        .where(eq(submissionsTable.id, submissionId));
+        emit('agent-stream', {
+          type: 'agent_verdict',
+          submissionId,
+          agentName,
+          reviewId,
+          notes: parsed.notes,
+          solo: parsed.solo_intensity,
+          vocal: parsed.vocal_quality,
+          energy: parsed.energy_vs_studio,
+          tempo: parsed.tempo_feel,
+          moodTags: parsed.mood_tags,
+          mock,
+          timestamp: new Date().toISOString(),
+        });
 
-      const [refreshed] = await db
-        .select({ ratingCount: submissionsTable.ratingCount })
-        .from(submissionsTable)
-        .where(eq(submissionsTable.id, submissionId))
-        .limit(1);
+        const outcome: ChainOutcome = { review, brief: chainBrief };
 
-      let published: PublishedSummary | null = null;
-      if ((refreshed?.ratingCount ?? 0) >= PUBLISH_THRESHOLD) {
+        if (ratingInserted.length === 0) return outcome;
+
+        const [row] = await db
+          .update(submissionsTable)
+          .set({ ratingCount: sql`${submissionsTable.ratingCount} + 1` })
+          .where(eq(submissionsTable.id, submissionId))
+          .returning({ ratingCount: submissionsTable.ratingCount });
+        const newCount = row?.ratingCount ?? 0;
+
+        if (newCount < PUBLISH_THRESHOLD) return outcome;
+
         let publishResult;
         try {
           publishResult = await publishSubmission(submissionId, settlement);
         } catch (err) {
-          // MODULAR: catch the named error so the caller gets a clean
-          // { ok: false, error } response instead of an unhandled
+          // MODULAR: record the named error so the outer merge returns a
+          // clean { ok: false, error } response instead of an unhandled
           // exception. The agent reviews and ratings are already
           // persisted (we don't roll them back); the curator can retry.
           if (err instanceof PublishLegIncompleteError) {
-            return {
-              ok: false as const,
-              error: `Publish failed: missing settlement legs — ${err.message}`,
-              code: err.code,
-            };
+            return { ...outcome, publishError: err };
           }
           throw err;
         }
@@ -475,16 +495,56 @@ export function createAgentService({
           const { settlementLegs: legsTable } = await import('../lib/schema');
           const finalLegs = await db.select().from(legsTable).where(eq(legsTable.submissionId, submissionId));
           const [version] = await db.select().from(pvTable).where(eq(pvTable.submissionId, submissionId)).limit(1);
-          published = {
-            alreadyPublished: false,
-            version,
-            settlement_legs: finalLegs,
-            settle_results: settleResults,
+          emit('agent-stream', {
+            type: 'consensus',
+            submissionId,
+            ratingCount: newCount,
+            published: true,
+            avgSolo: version?.avgSoloIntensity ?? null,
+            avgVocal: version?.avgVocalQuality ?? null,
+            mock,
+            timestamp: new Date().toISOString(),
+          });
+          return {
+            ...outcome,
+            published: {
+              alreadyPublished: false,
+              version,
+              settlement_legs: finalLegs,
+              settle_results: settleResults,
+            },
           };
-        } else {
-          published = { alreadyPublished: true };
+        }
+        return { ...outcome, published: { alreadyPublished: true } };
+      };
+
+      const outcomes = await Promise.all(
+        AGENT_NAMES.map((agentName, i) => runAgentChain(agentName, agentWallets[i])),
+      );
+
+      const reviews: AgentReviewSummary[] = [];
+      let brief: ParsedReview['placement_brief'] | null = null;
+      let published: PublishedSummary | null = null;
+      for (const o of outcomes) {
+        if (o.publishError) {
+          return {
+            ok: false as const,
+            error: `Publish failed: missing settlement legs — ${o.publishError.message}`,
+            code: o.publishError.code,
+          };
+        }
+        if (o.review) reviews.push(o.review);
+        if (o.brief) brief = o.brief;
+        if (o.published && (published === null || published.alreadyPublished)) {
+          published = o.published;
         }
       }
+
+      const [refreshed] = await db
+        .select({ ratingCount: submissionsTable.ratingCount })
+        .from(submissionsTable)
+        .where(eq(submissionsTable.id, submissionId))
+        .limit(1);
 
       return { ok: true as const, reviews, brief, rating_count: refreshed?.ratingCount ?? 0, published };
     },

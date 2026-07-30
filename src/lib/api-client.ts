@@ -229,6 +229,7 @@ export interface Playlist {
   description?: string | null;
   genre?: string | null;
   mood?: string | null;
+  reasoning?: string | null;
   track_count: number;
   tracks?: FeedRow[];
 }
@@ -245,6 +246,29 @@ export interface EarningsResponse {
     settled_at?: string | null;
   }>;
   recent_total?: number;
+}
+
+export type ReceiptSource = 'split' | 'tip' | 'play';
+
+export interface ReceiptRowResponse {
+  id: string;
+  source: ReceiptSource;
+  amount_usdc: string;
+  tx_hash: string | null;
+  status: string;
+  occurred_at: string | null;
+  counterparty: string | null;
+  submission_id: string | null;
+  title: string | null;
+  detail: string | null;
+}
+
+export interface ReceiptsResponse {
+  wallet: string;
+  totals: { all: number; splits: number; tips: number; plays: number };
+  counts: { splits: number; tips: number; plays: number };
+  rows: ReceiptRowResponse[];
+  total_rows: number;
 }
 
 export interface ArtistVersionsResponse {
@@ -575,6 +599,15 @@ export const apiClient = {
     if (opts?.dateTo) params.set("dateTo", opts.dateTo);
     return api.get<EarningsResponse>(
       `/api/v1/artists/${encodeURIComponent(wallet)}/earnings?${params.toString()}`,
+    );
+  },
+  getArtistReceipts(wallet: string, opts?: { limit?: number; offset?: number; source?: ReceiptSource }): Promise<ReceiptsResponse> {
+    const params = new URLSearchParams();
+    params.set("limit", String(opts?.limit ?? 20));
+    params.set("offset", String(opts?.offset ?? 0));
+    if (opts?.source) params.set("source", opts.source);
+    return api.get<ReceiptsResponse>(
+      `/api/v1/artists/${encodeURIComponent(wallet)}/receipts?${params.toString()}`,
     );
   },
 

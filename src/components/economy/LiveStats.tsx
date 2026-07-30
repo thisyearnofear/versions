@@ -11,14 +11,25 @@ import { useEffect, useRef, useState } from "react";
 import { animate, motion } from "framer-motion";
 import type { EconomyEvent } from "@/lib/event-bus";
 import { fmtUsdc } from "@/lib/format";
+import { SettlementSplitBar, type SplitLeg } from "@/components/economy/SettlementSplitBar";
 
 interface Stats {
   tracksPublished: number;
   agentReviews: number;
   usdcSettled: number;
+  medianReviewLatencySeconds: number | null;
+  settlementSplit: SplitLeg[];
+  marketPull: { briefSearches: number; licensingInterests: number };
 }
 
-const INITIAL: Stats = { tracksPublished: 0, agentReviews: 0, usdcSettled: 0 };
+const INITIAL: Stats = {
+  tracksPublished: 0,
+  agentReviews: 0,
+  usdcSettled: 0,
+  medianReviewLatencySeconds: null,
+  settlementSplit: [],
+  marketPull: { briefSearches: 0, licensingInterests: 0 },
+};
 
 export function LiveStats() {
   const [stats, setStats] = useState<Stats>(INITIAL);
@@ -31,10 +42,23 @@ export function LiveStats() {
       .then((r) => (r.ok ? r.json() : null))
       .then((body) => {
         if (cancelled || !body?.data) return;
+        const d = body.data;
+        const split = Array.isArray(d.settlementSplit)
+          ? (d.settlementSplit as SplitLeg[])
+          : [];
         setStats({
-          tracksPublished: Number(body.data.tracksPublished ?? 0),
-          agentReviews: Number(body.data.agentReviews ?? 0),
-          usdcSettled: Number(body.data.usdcSettled ?? 0),
+          tracksPublished: Number(d.tracksPublished ?? 0),
+          agentReviews: Number(d.agentReviews ?? 0),
+          usdcSettled: Number(d.usdcSettled ?? 0),
+          medianReviewLatencySeconds:
+            d.medianReviewLatencySeconds != null
+              ? Number(d.medianReviewLatencySeconds)
+              : null,
+          settlementSplit: split,
+          marketPull: {
+            briefSearches: Number(d.marketPull?.briefSearches ?? 0),
+            licensingInterests: Number(d.marketPull?.licensingInterests ?? 0),
+          },
         });
         setLoaded(true);
       })
@@ -60,7 +84,24 @@ export function LiveStats() {
               if (e.amountUsdc) next.usdcSettled += Number(e.amountUsdc);
               break;
             case "leg_settled":
-              if (e.amountUsdc) next.usdcSettled += Number(e.amountUsdc);
+              if (e.amountUsdc) {
+                const amt = Number(e.amountUsdc);
+                next.usdcSettled += amt;
+                const role = e.recipientRole;
+                if (role) {
+                  const split = prev.settlementSplit.map((s) => ({ ...s }));
+                  const idx = split.findIndex((s) => s.role === role);
+                  if (idx >= 0) {
+                    split[idx].totalUsdc = String(
+                      Number(split[idx].totalUsdc) + amt,
+                    );
+                    split[idx].legCount += 1;
+                  } else {
+                    split.push({ role, totalUsdc: String(amt), legCount: 1 });
+                  }
+                  next.settlementSplit = split;
+                }
+              }
               break;
             case "play":
               if (e.amountUsdc) next.usdcSettled += Number(e.amountUsdc);
@@ -75,26 +116,57 @@ export function LiveStats() {
     return () => es.close();
   }, []);
 
+  const latency = stats.medianReviewLatencySeconds;
+  const speedCaption =
+    latency != null && latency > 0
+      ? latency < 90
+        ? `~${latency}s`
+        : `~${Math.round(latency / 60)}m`
+      : null;
+
+  const { briefSearches, licensingInterests } = stats.marketPull;
+  const pullSegments: string[] = [];
+  if (briefSearches > 0)
+    pullSegments.push(
+      `${briefSearches} brief ${briefSearches === 1 ? "search" : "searches"}`,
+    );
+  if (licensingInterests > 0)
+    pullSegments.push(
+      `${licensingInterests} licensing ${licensingInterests === 1 ? "interest" : "interests"}`,
+    );
+
   return (
-    <div className="flex justify-center gap-5 sm:gap-10 md:gap-16 py-2">
-      <StatItem
-        label="Tracks"
-        value={stats.tracksPublished}
-        loaded={loaded}
-      />
-      <Divider />
-      <StatItem
-        label="Agent Reviews"
-        value={stats.agentReviews}
-        loaded={loaded}
-      />
-      <Divider />
-      <StatItem
-        label="USDC Settled"
-        value={stats.usdcSettled}
-        loaded={loaded}
-        format="usdc"
-      />
+    <div className="py-2">
+      <div className="flex justify-center gap-5 sm:gap-10 md:gap-16">
+        <StatItem label="Tracks" value={stats.tracksPublished} loaded={loaded} />
+        <Divider />
+        <StatItem
+          label="Agent Reviews"
+          value={stats.agentReviews}
+          loaded={loaded}
+        />
+        <Divider />
+        <StatItem
+          label="USDC Settled"
+          value={stats.usdcSettled}
+          loaded={loaded}
+          format="usdc"
+        />
+      </div>
+
+      {speedCaption && (
+        <div className="mt-3 text-center font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+          Agents return a verdict in {speedCaption} · no humans in the loop
+        </div>
+      )}
+
+      <SettlementSplitBar split={stats.settlementSplit} />
+
+      {pullSegments.length > 0 && (
+        <div className="mt-3 text-center font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+          Market pull · {pullSegments.join(" · ")}
+        </div>
+      )}
     </div>
   );
 }

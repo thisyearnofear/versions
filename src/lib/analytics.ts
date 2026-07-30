@@ -40,7 +40,8 @@ export type AnalyticsEvent =
   | "listener_profile_failed"
   | "sse_reconnect"
   | "brief_search"
-  | "demo_run";
+  | "demo_run"
+  | "ar_rationale_expand";
 
 export interface AnalyticsProps {
   [key: string]: string | number | boolean | null | undefined;

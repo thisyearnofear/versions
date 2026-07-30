@@ -10,9 +10,15 @@
 // trail reads "this was the artist's attribution leg".
 
 import { randomUUID } from 'crypto';
-import { eq, sql, desc, and, gte, lte } from 'drizzle-orm';
+import { eq, sql, desc, and, gte, lte, inArray } from 'drizzle-orm';
 import { db } from '../lib/db';
-import { submissions as submissionsTable, settlementLegs as legsTable } from '../lib/schema';
+import {
+  submissions as submissionsTable,
+  settlementLegs as legsTable,
+  x402Proofs as proofsTable,
+  arPlayEvents as playsTable,
+  publishedVersions as pvTable,
+} from '../lib/schema';
 import { emit } from '../lib/event-bus';
 import type { SettlementStatus, RecipientRole } from '../lib/types';
 import type { ArcAdapter } from '../adapters/arc';
@@ -159,6 +165,35 @@ export interface EarningsReport {
   recent_total: number;
 }
 
+// ── Receipts (unified per-artist money streams) ─────────
+// Merges the three ways agents pay an artist: publish-fee splits
+// (settlement_legs), x402 tips (x402_proofs), and per-play payouts
+// (ar_play_events). listEarnings stays legs-only — the curator
+// dashboard depends on its exact shape.
+
+export type ReceiptSource = 'split' | 'tip' | 'play';
+
+export interface ReceiptRow {
+  id: string;
+  source: ReceiptSource;
+  amount_usdc: string;
+  tx_hash: string | null;
+  status: string;
+  occurred_at: Date | null;
+  counterparty: string | null;
+  submission_id: string | null;
+  title: string | null;
+  detail: string | null;
+}
+
+export interface ReceiptsReport {
+  wallet: string;
+  totals: { all: number; splits: number; tips: number; plays: number };
+  counts: { splits: number; tips: number; plays: number };
+  rows: ReceiptRow[];
+  total_rows: number;
+}
+
 export interface SettlementService {
   splits: typeof SPLITS;
   insertLegsAtomic: (args: {
@@ -179,6 +214,7 @@ export interface SettlementService {
   getLegsForSubmission: (submissionId: string) => Promise<LegRow[]>;
   sumSettledFor: (wallet: string) => Promise<number>;
   listEarnings: (wallet: string, opts?: { limit?: number; offset?: number; role?: string; dateFrom?: string; dateTo?: string }) => Promise<EarningsReport>;
+  listReceipts: (wallet: string, opts?: { limit?: number; offset?: number; source?: ReceiptSource }) => Promise<ReceiptsReport>;
 }
 
 export function createSettlementService({
@@ -452,6 +488,184 @@ export function createSettlementService({
           artist_name: r.artist_name,
         })),
         recent_total: Number(countRow?.n ?? 0),
+      };
+    },
+
+    async listReceipts(wallet: string, { limit = 20, offset = 0, source } = {}): Promise<ReceiptsReport> {
+      const fetchCap = offset + limit;
+
+      const legsWhere = and(eq(legsTable.recipientWallet, wallet), eq(legsTable.status, 'settled'));
+      const tipsWhere = and(
+        eq(proofsTable.artistWallet, wallet),
+        inArray(proofsTable.status, ['verified', 'settled']),
+      );
+      const playsWhere = and(eq(playsTable.artistWallet, wallet), eq(playsTable.status, 'settled'));
+
+      const [splitAgg, tipAgg, playAgg] = await Promise.all([
+        db
+          .select({
+            total: sql<string>`COALESCE(SUM(CAST(${legsTable.amountUsdc} AS NUMERIC)), 0)`,
+            n: sql<number>`COUNT(*)::int`,
+          })
+          .from(legsTable)
+          .where(legsWhere),
+        db
+          .select({
+            total: sql<string>`COALESCE(SUM(CAST(${proofsTable.amountMicroUsdc} AS NUMERIC)) / 1000000, 0)`,
+            n: sql<number>`COUNT(*)::int`,
+          })
+          .from(proofsTable)
+          .where(tipsWhere),
+        db
+          .select({
+            total: sql<string>`COALESCE(SUM(CAST(${playsTable.artistPayoutUsdc} AS NUMERIC)), 0)`,
+            n: sql<number>`COUNT(*)::int`,
+          })
+          .from(playsTable)
+          .where(playsWhere),
+      ]);
+
+      const totals = {
+        splits: Number(splitAgg[0]?.total ?? 0),
+        tips: Number(tipAgg[0]?.total ?? 0),
+        plays: Number(playAgg[0]?.total ?? 0),
+        all: 0,
+      };
+      totals.all = totals.splits + totals.tips + totals.plays;
+      const counts = {
+        splits: Number(splitAgg[0]?.n ?? 0),
+        tips: Number(tipAgg[0]?.n ?? 0),
+        plays: Number(playAgg[0]?.n ?? 0),
+      };
+
+      // PERFORMANT: each stream over-fetches offset+limit rows (demo
+      // scale), then JS merges and slices — avoids fighting unionAll
+      // column-shape alignment across three differently-shaped tables.
+      const rowFetches: Array<Promise<ReceiptRow[]>> = [];
+
+      if (!source || source === 'split') {
+        rowFetches.push(
+          db
+            .select({
+              id: legsTable.id,
+              amount: legsTable.amountUsdc,
+              tx_hash: legsTable.txHash,
+              status: legsTable.status,
+              occurred_at: legsTable.settledAt,
+              submission_id: legsTable.submissionId,
+              title: submissionsTable.title,
+              role: legsTable.recipientRole,
+            })
+            .from(legsTable)
+            .leftJoin(submissionsTable, eq(submissionsTable.id, legsTable.submissionId))
+            .where(legsWhere)
+            .orderBy(desc(legsTable.settledAt))
+            .limit(fetchCap)
+            .then((rows) =>
+              rows.map((r) => ({
+                id: r.id,
+                source: 'split' as const,
+                amount_usdc: r.amount,
+                tx_hash: r.tx_hash,
+                status: r.status,
+                occurred_at: r.occurred_at,
+                counterparty: null,
+                submission_id: r.submission_id,
+                title: r.title,
+                detail: r.role,
+              })),
+            ),
+        );
+      }
+
+      if (!source || source === 'tip') {
+        rowFetches.push(
+          db
+            .select({
+              id: proofsTable.id,
+              amount_micro: proofsTable.amountMicroUsdc,
+              tx_hash: proofsTable.txHash,
+              status: proofsTable.status,
+              settled_at: proofsTable.settledAt,
+              created_at: proofsTable.createdAt,
+              tipper: proofsTable.tipperWallet,
+              message: proofsTable.message,
+            })
+            .from(proofsTable)
+            .where(tipsWhere)
+            .orderBy(desc(proofsTable.createdAt))
+            .limit(fetchCap)
+            .then((rows) =>
+              rows.map((r) => ({
+                id: r.id,
+                source: 'tip' as const,
+                amount_usdc: fromMicroUsdc(BigInt(r.amount_micro)),
+                tx_hash: r.tx_hash,
+                status: r.status,
+                occurred_at: r.settled_at ?? r.created_at,
+                counterparty: r.tipper,
+                submission_id: null,
+                title: null,
+                detail: r.message,
+              })),
+            ),
+        );
+      }
+
+      if (!source || source === 'play') {
+        rowFetches.push(
+          db
+            .select({
+              id: playsTable.id,
+              amount: playsTable.artistPayoutUsdc,
+              tx_hash: playsTable.artistTxHash,
+              status: playsTable.status,
+              occurred_at: playsTable.playedAt,
+              submission_id: playsTable.versionId,
+              title: pvTable.title,
+              listener: playsTable.listenerWallet,
+              play_type: playsTable.playType,
+            })
+            .from(playsTable)
+            .leftJoin(pvTable, eq(pvTable.submissionId, playsTable.versionId))
+            .where(playsWhere)
+            .orderBy(desc(playsTable.playedAt))
+            .limit(fetchCap)
+            .then((rows) =>
+              rows.map((r) => ({
+                id: r.id,
+                source: 'play' as const,
+                amount_usdc: r.amount,
+                tx_hash: r.tx_hash,
+                status: r.status,
+                occurred_at: r.occurred_at,
+                counterparty: r.listener,
+                submission_id: r.submission_id,
+                title: r.title,
+                detail: r.play_type,
+              })),
+            ),
+        );
+      }
+
+      const merged = (await Promise.all(rowFetches))
+        .flat()
+        .sort((a, b) => (b.occurred_at?.getTime() ?? 0) - (a.occurred_at?.getTime() ?? 0));
+
+      const total_rows = source
+        ? source === 'split'
+          ? counts.splits
+          : source === 'tip'
+            ? counts.tips
+            : counts.plays
+        : counts.splits + counts.tips + counts.plays;
+
+      return {
+        wallet,
+        totals,
+        counts,
+        rows: merged.slice(offset, offset + limit),
+        total_rows,
       };
     },
   };

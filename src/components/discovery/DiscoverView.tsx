@@ -5,7 +5,7 @@
 // per-play payout indicator. Clicking the play button hits the
 // /api/v1/ar/play endpoint to settle the $0.0005 USDC payment.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -18,6 +18,8 @@ import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/analytics";
+import { useTypewriter } from "@/lib/use-typewriter";
+import { reasoningRevealMode } from "@/lib/playlist-reasoning-ui";
 import { ListenerHub } from "@/components/listener/ListenerHub";
 
 export function DiscoverView() {
@@ -27,6 +29,7 @@ export function DiscoverView() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [newBadges, setNewBadges] = useState<ListenerBadgeResponse[]>([]);
+  const [freshIds, setFreshIds] = useState<ReadonlySet<string>>(new Set());
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -39,6 +42,52 @@ export function DiscoverView() {
       setLoading(false);
     }
   }, [showToast]);
+
+  // MODULAR: SSE keeps a second tab live when the A&R agent regenerates
+  // playlists elsewhere. The event carries the fresh playlist ids so
+  // only those cards auto-expand and typewrite their rationale. Refs
+  // keep the EventSource stable across re-renders (FeedView pattern).
+  const refreshRef = useRef(refresh);
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
+
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function connect() {
+      es = new EventSource("/api/events");
+
+      es.addEventListener("playlist-update", (evt) => {
+        try {
+          const data = JSON.parse((evt as MessageEvent).data) as {
+            playlists?: Array<{ id: string }>;
+          };
+          const ids = (data.playlists ?? []).map((p) => p.id);
+          if (ids.length > 0) setFreshIds(new Set(ids));
+        } catch {
+          // Malformed payload — still refresh below.
+        }
+        void refreshRef.current();
+      });
+
+      es.addEventListener("error", () => {
+        track("sse_reconnect", { target: "discover" });
+        es?.close();
+        reconnectTimer = setTimeout(() => {
+          connect();
+        }, 3000);
+      });
+    }
+
+    connect();
+
+    return () => {
+      es?.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -117,6 +166,7 @@ export function DiscoverView() {
             <PlaylistCard
               key={pl.id}
               playlist={pl}
+              fresh={freshIds.has(pl.id)}
               listenerWallet={address}
               isConnected={isConnected}
               onNewBadges={(badges) => setNewBadges((prev) => [...prev, ...badges])}
@@ -130,11 +180,13 @@ export function DiscoverView() {
 
 function PlaylistCard({
   playlist,
+  fresh,
   listenerWallet,
   isConnected,
   onNewBadges,
 }: {
   playlist: Playlist;
+  fresh: boolean;
   listenerWallet: string | undefined;
   isConnected: boolean;
   onNewBadges?: (badges: ListenerBadgeResponse[]) => void;
@@ -207,6 +259,13 @@ function PlaylistCard({
         <p className="font-serif text-base text-[var(--color-ink-2)] leading-snug max-w-[60ch] mb-4">
           {playlist.description}
         </p>
+      )}
+      {playlist.reasoning && (
+        <ReasoningDisclosure
+          playlistId={playlist.id}
+          reasoning={playlist.reasoning}
+          fresh={fresh}
+        />
       )}
       <ul className="border-t border-[var(--color-hair)]">
         {(playlist.tracks ?? []).map((t, i) => {
@@ -287,6 +346,66 @@ function PlaylistCard({
         })}
       </ul>
     </article>
+  );
+}
+
+// ── A&R Rationale ───────────────────────────────────────
+// MODULAR: same reasoning-transparency register as AgentMonitor's
+// verdict cards — mono eyebrow + serif body + pulsing rust cursor.
+// The typewriter fires once per card per session (fresh arrival via
+// generate/SSE auto-expands; otherwise first manual expand); later
+// toggles show the text instantly. Reveal decision lives in the pure
+// reasoningRevealMode helper so it stays unit-testable.
+function ReasoningDisclosure({
+  playlistId,
+  reasoning,
+  fresh,
+}: {
+  playlistId: string;
+  reasoning: string;
+  fresh: boolean;
+}) {
+  const [expanded, setExpanded] = useState(fresh);
+  const [played, setPlayed] = useState(false);
+
+  useEffect(() => {
+    if (fresh) setExpanded(true);
+  }, [fresh]);
+
+  const mode = reasoningRevealMode({ expanded, played });
+  const { display, done } = useTypewriter(reasoning, {
+    enabled: mode === "typewriter",
+    onDone: () => setPlayed(true),
+  });
+  const typing = mode === "typewriter" && !done;
+
+  return (
+    <div className="mb-4">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => {
+          setExpanded((prev) => !prev);
+          if (!expanded) track("ar_rationale_expand", { playlistId });
+        }}
+        className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] hover:text-[var(--color-rust-dark)] transition-colors"
+      >
+        <span aria-hidden="true" className="inline-block w-3">
+          {expanded ? "▾" : "▸"}
+        </span>
+        A&amp;R rationale
+      </button>
+      {expanded && (
+        <p className="font-serif text-sm text-[var(--color-ink-2)] leading-snug max-w-[60ch] mt-2 border-l border-[var(--color-hair-strong)] pl-3">
+          {mode === "typewriter" ? display : reasoning}
+          {typing && (
+            <span aria-hidden="true" className="text-[var(--color-rust)] animate-pulse">
+              ▌
+            </span>
+          )}
+        </p>
+      )}
+    </div>
   );
 }
 

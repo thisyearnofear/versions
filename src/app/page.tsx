@@ -13,6 +13,7 @@ import { Tour } from "@/components/ui/Tour";
 import { EconomyTicker } from "@/components/economy/EconomyTicker";
 import { LiveStats } from "@/components/economy/LiveStats";
 import { WaveformGallery } from "@/components/home/WaveformGallery";
+import { HowItWorks } from "@/components/home/HowItWorks";
 import { LiveDemoButton } from "@/components/home/LiveDemoButton";
 import { track } from "@/lib/analytics";
 
@@ -24,12 +25,13 @@ export default function Home() {
         <Hero />
         <DemoBand />
         <StatsBand />
+        <HowItWorks />
         <TickerBand />
         <WaveformGallery />
         <SectionNav />
       </main>
       <Footer />
-      <Tour autoStart withTrigger />
+      <Tour withTrigger />
     </div>
   );
 }
@@ -136,12 +138,14 @@ function SectionNav() {
               <Link
                 href={s.href}
                 onClick={() => track("nav_click", { to: s.href, source: "section_nav" })}
-                className="group relative inline-flex items-center gap-2 border border-[var(--color-hair-strong)] px-5 py-3 hover:border-[var(--color-ink)] transition-colors"
+                className="group relative flex flex-col items-center gap-1 border border-[var(--color-hair-strong)] px-5 py-3 hover:border-[var(--color-ink)] transition-colors"
               >
-                <span className="font-mono text-[9px] text-[var(--color-ink-3)]">{s.num}</span>
-                <span className="font-serif text-lg font-medium">{s.label}</span>
-                {/* Progressive disclosure: blurb appears on hover */}
-                <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                <span className="inline-flex items-center gap-2">
+                  <span className="font-mono text-[9px] text-[var(--color-ink-3)]">{s.num}</span>
+                  <span className="font-serif text-lg font-medium">{s.label}</span>
+                </span>
+                {/* Progressive disclosure: static under md, hover-reveal on md+ */}
+                <span className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] md:absolute md:top-full md:left-1/2 md:-translate-x-1/2 md:mt-2 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity md:pointer-events-none">
                   {s.blurb}
                 </span>
               </Link>

@@ -12,6 +12,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { setSoundEnabled } from "@/lib/audio-feedback";
 import { track } from "@/lib/analytics";
+import { agentIdentity } from "@/lib/agent-identity";
+import type { AgentStreamEvent } from "@/lib/event-bus";
 
 type StepStatus = "pending" | "active" | "done" | "failed";
 
@@ -25,6 +27,71 @@ const STEP_LABELS = ["Submit", "Pay", "Agent review", "Publish", "Tip"] as const
 
 function initialSteps(): Step[] {
   return STEP_LABELS.map((label) => ({ label, status: "pending" }));
+}
+
+// MODULAR: progressive-enhancement snippets for the review step. Listens
+// to agent-stream SSE scoped to one submissionId and paces one line per
+// ~1.4s so a mock-mode burst still reads as agents working. Consensus
+// flushes the queue. Polling remains the completion authority — on SSE
+// error we close silently and the static detail stands.
+function subscribeAgentSnippets(
+  submissionId: string,
+  onLine: (line: string, done: boolean) => void,
+): () => void {
+  const queue: string[] = [];
+  let timer: ReturnType<typeof setInterval> | null = null;
+  let closed = false;
+  const es = new EventSource("/api/events");
+
+  const stop = () => {
+    if (closed) return;
+    closed = true;
+    es.close();
+    if (timer) clearInterval(timer);
+    timer = null;
+  };
+
+  const drain = () => {
+    const line = queue.shift();
+    if (line === undefined) {
+      if (timer) clearInterval(timer);
+      timer = null;
+      return;
+    }
+    onLine(line, false);
+  };
+
+  es.addEventListener("agent-stream", (msg) => {
+    if (closed) return;
+    try {
+      const e = JSON.parse((msg as MessageEvent).data) as AgentStreamEvent;
+      if (e.submissionId !== submissionId) return;
+      if (e.type === "consensus") {
+        queue.length = 0;
+        if (timer) clearInterval(timer);
+        timer = null;
+        onLine("3/3 verdicts in", true);
+        return;
+      }
+      if (e.type !== "agent_started" && e.type !== "agent_verdict") return;
+      const id = agentIdentity(e.agentName);
+      const line =
+        e.type === "agent_started"
+          ? `${id.icon} ${id.shortName}: reading the track…`
+          : `${id.icon} ${id.shortName}: “${(e.notes ?? "").slice(0, 64)}…”`;
+      if (timer) {
+        queue.push(line);
+      } else {
+        onLine(line, false);
+        timer = setInterval(drain, 1400);
+      }
+    } catch {
+      /* malformed — ignore */
+    }
+  });
+  es.onerror = () => stop();
+
+  return stop;
 }
 
 // 1s of silence at 8kHz/16-bit/mono — built in memory, zero fixtures.
@@ -89,6 +156,8 @@ export function LiveDemoButton() {
     track("demo_run", { source: "landing" });
 
     let failedStep = 0;
+    let stopSnippets: (() => void) | null = null;
+    let snippetSeen = false;
     try {
       // Step 1 — submit a silent demo track with a throwaway wallet.
       failedStep = 0;
@@ -117,6 +186,13 @@ export function LiveDemoButton() {
       setStep(0, "done", "track submitted");
 
       // Step 2 — verify payment (mock tx), which auto-fires the agent review.
+      // Subscribe to agent-stream snippets BEFORE verify-payment: the review
+      // starts server-side during that call, so the SSE connection must
+      // already be open to catch the burst in mock mode.
+      stopSnippets = subscribeAgentSnippets(submissionId, (line, done) => {
+        snippetSeen = true;
+        setStep(2, done ? "done" : "active", line);
+      });
       failedStep = 1;
       setStep(1, "active");
       const verifyRes = await fetch(`/api/v1/submissions/${submissionId}/verify-payment`, {
@@ -129,7 +205,7 @@ export function LiveDemoButton() {
 
       // Step 3 + 4 — three agents review in parallel; publish fires at consensus.
       failedStep = 2;
-      setStep(2, "active", "3 agents reviewing…");
+      if (!snippetSeen) setStep(2, "active", "3 agents reviewing…");
       const start = Date.now();
       let status = "in_curation";
       while (Date.now() - start < 60_000) {
@@ -138,10 +214,12 @@ export function LiveDemoButton() {
         const pollJson = await pollRes.json().catch(() => null);
         status = pollJson?.data?.status ?? pollJson?.status ?? status;
         if (status === "published") break;
-        if (status === "awaiting_curation" || status === "in_curation") {
+        if ((status === "awaiting_curation" || status === "in_curation") && !snippetSeen) {
           setStep(2, "active", "3 agents reviewing…");
         }
       }
+      stopSnippets();
+      stopSnippets = null;
       if (status !== "published") throw new Error(`review did not complete (last status: ${status})`);
       setStep(2, "done", "3/3 verdicts in");
       setStep(3, "done", "consensus reached");
@@ -199,6 +277,7 @@ export function LiveDemoButton() {
       setError(e instanceof Error ? e.message : String(e));
       setPhase("error");
     } finally {
+      stopSnippets?.();
       runningRef.current = false;
     }
   }

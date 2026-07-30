@@ -27,6 +27,7 @@ import { deriveValence } from "@/services/taste-graph";
 import { cn } from "@/lib/utils";
 import { parseMoodTags } from "@/lib/format";
 import { EarningsHistoryTable, ROLE_LABELS } from "@/components/earnings/EarningsHistoryTable";
+import { ReceiptsFeed } from "@/components/earnings/ReceiptsFeed";
 import { TipButton } from "@/components/wallet/TipButton";
 
 // ── Types ──────────────────────────────────────────────
@@ -398,6 +399,7 @@ export function ArtistDashboard({ wallet }: { wallet: string }) {
 
       {activeTab === "earnings" && (
         <EarningsTab
+          wallet={wallet}
           earnings={earningsCache ?? data.earnings}
           onFetchPage={fetchEarningsPage}
           page={earningsPage}
@@ -629,6 +631,7 @@ function VersionsTab({
 // ── Earnings Tab ───────────────────────────────────────
 
 function EarningsTab({
+  wallet,
   earnings,
   onFetchPage,
   page,
@@ -640,6 +643,7 @@ function EarningsTab({
   onFilterDateFromChange,
   onFilterDateToChange,
 }: {
+  wallet: string;
   earnings: EarningsResponse;
   onFetchPage: (page: number) => void;
   page: number;
@@ -675,6 +679,11 @@ function EarningsTab({
             </div>
           ))}
         </div>
+      </section>
+
+      {/* Unified "agents paid me" receipts — splits + tips + plays */}
+      <section className="lg:col-span-2">
+        <ReceiptsFeed wallet={wallet} />
       </section>
 
       {/* Recent transactions — shared component */}

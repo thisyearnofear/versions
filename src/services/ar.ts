@@ -12,10 +12,12 @@ import {
   arPlayEvents as playEventsTable,
   publishedVersions as pvTable,
   submissions as submissionsTable,
+  agentReviews as agentReviewsTable,
 } from '../lib/schema';
 import { cached } from '../lib/cache';
 import { emit } from '../lib/event-bus';
 import type { ArcAdapter } from '../adapters/arc';
+import type { LlmAdapter } from '../adapters/llm';
 
 // MODULAR: short TTL + event-bus invalidation. Playlists change
 // infrequently (only when the A&R agent generates fresh ones).
@@ -47,12 +49,118 @@ function mockPlaylistDescription(genre: string, mood: string | null): string {
     `compatibility, production quality, and listener engagement patterns.`;
 }
 
+// ── A&R reasoning ──────────────────────────────────────
+// Derived from real catalog data (pool size, actual ranking rule,
+// mood-tag counts, agent-review excerpts) so mock mode stays honest.
+
+export interface ReasoningInput {
+  genre: string;
+  topMood: string | null;
+  moodCounts: Array<[string, number]>;
+  selected: Array<{
+    title: string;
+    artistName: string;
+    avgSoloIntensity: number | null;
+    avgVocalQuality: number | null;
+    versionType: string;
+  }>;
+  totalCandidates: number;
+  reviewSnippets: Array<{ title: string; note: string }>;
+}
+
+export function firstSentence(text: string, maxLen = 140): string {
+  const trimmed = text.trim();
+  const match = trimmed.match(/^.*?[.!?](?=\s|$)/);
+  const sentence = (match ? match[0] : trimmed).trim();
+  return sentence.length > maxLen ? `${sentence.slice(0, maxLen - 1).trimEnd()}…` : sentence;
+}
+
+const REASONING_MAX_CHARS = 480;
+
+export function buildPlaylistReasoning(input: ReasoningInput): string {
+  const { genre, topMood, moodCounts, selected, totalCandidates, reviewSnippets } = input;
+  if (selected.length === 0) return '';
+
+  const parts: string[] = [];
+  const pool =
+    totalCandidates > selected.length
+      ? `Picked ${selected.length} of ${totalCandidates} published ${genre} versions`
+      : `Picked all ${selected.length} published ${genre} version${selected.length === 1 ? '' : 's'}`;
+  const top = selected[0];
+  const solo = top.avgSoloIntensity != null ? top.avgSoloIntensity.toFixed(1) : null;
+  const vocal = top.avgVocalQuality != null ? top.avgVocalQuality.toFixed(1) : null;
+  const scoreBit =
+    solo && vocal ? ` scores solo ${solo} / vocal ${vocal}` : '';
+  parts.push(
+    `${pool}, ranked by combined solo intensity and vocal quality — top pick "${top.title}" by ${top.artistName}${scoreBit}.`,
+  );
+
+  if (topMood) {
+    const count = moodCounts.find(([tag]) => tag === topMood)?.[1] ?? 0;
+    if (count > 1) {
+      parts.push(`"${topMood}" is the mood consensus, tagged on ${count} of ${selected.length} tracks.`);
+    } else {
+      parts.push(`"${topMood}" sets the mood.`);
+    }
+  }
+
+  for (const snippet of reviewSnippets.slice(0, 2)) {
+    const excerpt = firstSentence(snippet.note);
+    if (!excerpt) continue;
+    const candidate = `On "${snippet.title}": “${excerpt}”`;
+    if (parts.join(' ').length + candidate.length + 1 > REASONING_MAX_CHARS) break;
+    parts.push(candidate);
+  }
+
+  return parts.join(' ');
+}
+
+const AR_REASONING_SYSTEM =
+  'You are the A&R agent for a live-music version marketplace. Given JSON data ' +
+  'about a playlist you just assembled (genre pool size, ranking rule, per-track ' +
+  'rubric scores, mood tag counts, review excerpts), write 2-4 sentences explaining ' +
+  'why these tracks made the cut. Only cite facts present in the data. Respond as a ' +
+  'JSON object: {"reasoning": "<your explanation>"}.';
+
+async function generateReasoning(
+  llm: LlmAdapter | null | undefined,
+  input: ReasoningInput,
+): Promise<string> {
+  const derived = buildPlaylistReasoning(input);
+  if (!llm || llm.mock) return derived;
+  try {
+    const result = await llm.complete({
+      system: AR_REASONING_SYSTEM,
+      user: JSON.stringify(input),
+      agentName: 'market',
+      genre: input.genre,
+      versionType: 'mixed',
+    });
+    // Adapter falls back to canned review JSON on API errors — never
+    // let that leak into reasoning presented as honest.
+    if (result.mock) return derived;
+    const parsed: unknown = JSON.parse(result.text);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof (parsed as { reasoning?: unknown }).reasoning === 'string' &&
+      (parsed as { reasoning: string }).reasoning.trim().length > 0
+    ) {
+      return (parsed as { reasoning: string }).reasoning.trim().slice(0, REASONING_MAX_CHARS * 2);
+    }
+    return derived;
+  } catch {
+    return derived;
+  }
+}
+
 export interface PlaylistSummary {
   id: string;
   name: string;
   description: string | null;
   genre: string | null;
   mood: string | null;
+  reasoning: string | null;
   ar_wallet: string;
   track_count: number;
   createdAt?: Date;
@@ -117,9 +225,11 @@ export interface ArService {
 export function createArService({
   arc,
   arWallet,
+  llm,
 }: {
   arc: ArcAdapter;
   arWallet: string;
+  llm?: LlmAdapter | null;
 }): ArService {
   return {
     listenerFee: LISTENER_FEE_USDC,
@@ -141,6 +251,24 @@ export function createArService({
       const genreBySubmission = new Map<string, string | null>();
       for (const r of subRows) {
         genreBySubmission.set(r.id, r.genre);
+      }
+
+      // One batched fetch of review notes for the whole catalog; the
+      // per-playlist reasoning quotes at most two excerpts from these.
+      const reviewRows = versionIds.length
+        ? await db
+            .select({
+              submissionId: agentReviewsTable.submissionId,
+              notes: agentReviewsTable.notes,
+            })
+            .from(agentReviewsTable)
+            .where(inArray(agentReviewsTable.submissionId, versionIds))
+        : [];
+      const noteBySubmission = new Map<string, string>();
+      for (const r of reviewRows) {
+        if (r.notes && !noteBySubmission.has(r.submissionId)) {
+          noteBySubmission.set(r.submissionId, r.notes);
+        }
       }
 
       const playlists: PlaylistSummary[] = [];
@@ -175,17 +303,49 @@ export function createArService({
         const name = mockPlaylistName(genre, topMood);
         const description = mockPlaylistDescription(genre, topMood);
 
+        const selected = sorted.slice(0, 10);
+
+        // Mood counts scoped to the selected tracks so the reasoning's
+        // "tagged on N of M" claim matches what's actually in the playlist.
+        const selectedMoodCounts = new Map<string, number>();
+        for (const t of selected) {
+          const tags = Array.isArray(t.aggregatedMoodTags) ? t.aggregatedMoodTags : [];
+          for (const tag of tags) {
+            selectedMoodCounts.set(tag, (selectedMoodCounts.get(tag) || 0) + 1);
+          }
+        }
+        const reviewSnippets: Array<{ title: string; note: string }> = [];
+        for (const t of selected) {
+          const note = noteBySubmission.get(t.submissionId);
+          if (note) reviewSnippets.push({ title: t.title, note });
+          if (reviewSnippets.length >= 2) break;
+        }
+        const reasoning = await generateReasoning(llm, {
+          genre,
+          topMood,
+          moodCounts: [...selectedMoodCounts.entries()].sort((a, b) => b[1] - a[1]),
+          selected: selected.map((t) => ({
+            title: t.title,
+            artistName: t.artistName,
+            avgSoloIntensity: t.avgSoloIntensity,
+            avgVocalQuality: t.avgVocalQuality,
+            versionType: t.versionType,
+          })),
+          totalCandidates: sorted.length,
+          reviewSnippets,
+        });
+
         await db.insert(playlistsTable).values({
           id: playlistId,
           name,
           description,
           genre,
           mood: topMood,
+          reasoning: reasoning || null,
           arWallet,
           trackCount: 0,
         });
 
-        const selected = sorted.slice(0, 10);
         if (selected.length > 0) {
           await db.insert(playlistTracksTable).values(
             selected.map((track, idx) => ({
@@ -207,6 +367,7 @@ export function createArService({
           description,
           genre,
           mood: topMood,
+          reasoning: reasoning || null,
           ar_wallet: arWallet,
           track_count: selected.length,
         });
@@ -217,6 +378,12 @@ export function createArService({
       emit('playlist-update', {
         type: 'generated',
         generated: playlists.length,
+        playlists: playlists.map((p) => ({
+          id: p.id,
+          name: p.name,
+          genre: p.genre,
+          reasoning: p.reasoning,
+        })),
         timestamp: new Date().toISOString(),
       });
 
@@ -273,6 +440,7 @@ export function createArService({
           description: p.description,
           genre: p.genre,
           mood: p.mood,
+          reasoning: p.reasoning,
           ar_wallet: p.arWallet,
           track_count: p.trackCount,
           createdAt: p.createdAt,
@@ -329,6 +497,7 @@ export function createArService({
         description: p.description,
         genre: p.genre,
         mood: p.mood,
+        reasoning: p.reasoning,
         ar_wallet: p.arWallet,
         track_count: p.trackCount,
         createdAt: p.createdAt,

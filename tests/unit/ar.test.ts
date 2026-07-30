@@ -14,6 +14,8 @@ const { createAgentService } = await import('../../src/services/agents');
 const { createArService } = await import('../../src/services/ar');
 const { signMessage, TEST_ADDRESSES } = await import('../helpers/sig');
 const { clearCache } = await import('../../src/lib/cache');
+const { subscribe, clearSubscriptions } = await import('../../src/lib/event-bus');
+type PlaylistUpdateEvent = import('../../src/lib/event-bus').PlaylistUpdateEvent;
 
 const TEST_PLATFORM_WALLET = TEST_ADDRESSES.acc0;
 const TEST_AR_WALLET = TEST_ADDRESSES.acc1;
@@ -154,5 +156,53 @@ describe('ar: constants', () => {
   it('exposes listener fee + artist payout', () => {
     expect(ar.listenerFee).toBe('0.001');
     expect(ar.artistPayout).toBe('0.0005');
+  });
+});
+
+describe('ar: reasoning', () => {
+  it('persists derived reasoning citing real catalog data', async () => {
+    const playlists = await ar.generatePlaylists();
+    const rock = playlists.find((p) => p.genre === 'rock');
+    expect(rock).toBeDefined();
+    expect(rock!.reasoning).toBeTruthy();
+    expect(rock!.reasoning).toContain('rock');
+    expect(rock!.reasoning).toContain('AR Test');
+    expect(rock!.reasoning!.length).toBeLessThanOrEqual(480);
+  });
+
+  it('reasoning is deterministic across regenerations', async () => {
+    const first = await ar.generatePlaylists();
+    const second = await ar.generatePlaylists();
+    const a = first.find((p) => p.genre === 'rock')!.reasoning;
+    const b = second.find((p) => p.genre === 'rock')!.reasoning;
+    expect(a).toBe(b);
+  });
+
+  it('list + get return the persisted reasoning', async () => {
+    await ar.generatePlaylists();
+    clearCache();
+    const listed = await ar.listPlaylists();
+    const rock = listed.find((p) => p.genre === 'rock');
+    expect(rock!.reasoning).toBeTruthy();
+    const detail = await ar.getPlaylist(rock!.id);
+    expect(detail!.reasoning).toBe(rock!.reasoning);
+  });
+
+  it('playlist-update event carries slim playlists with reasoning', async () => {
+    const events: PlaylistUpdateEvent[] = [];
+    subscribe('playlist-update', (e) => events.push(e as PlaylistUpdateEvent));
+    try {
+      await ar.generatePlaylists();
+      expect(events.length).toBe(1);
+      const payload = events[0];
+      expect(payload.playlists).toBeDefined();
+      expect(payload.playlists!.length).toBeGreaterThan(0);
+      const rock = payload.playlists!.find((p) => p.genre === 'rock');
+      expect(rock!.reasoning).toBeTruthy();
+      expect(rock!.id).toBeTruthy();
+      expect(rock!.name).toBeTruthy();
+    } finally {
+      clearSubscriptions();
+    }
   });
 });

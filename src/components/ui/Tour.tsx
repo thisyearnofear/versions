@@ -1,14 +1,12 @@
 "use client";
 
-// MODULAR: First-visit guided tour. A 3-step overlay that walks
-// through the Submit / Curate / Feed flow. State (seen flag,
-// current step) is held in the component; persistence is via
-// localStorage so the tour shows once per browser.
+// MODULAR: On-demand guided tour. A 4-step overlay that walks through
+// Connect / Submit / Review / Earn. It never auto-opens — cold visitors
+// meet the passive HowItWorks strip instead — and opens only when the
+// user clicks the "?" trigger. State is ephemeral; nothing is persisted.
 
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-
-const STORAGE_KEY = "lepton_tour_seen";
 
 interface TourStep {
   title: string;
@@ -29,52 +27,27 @@ const STEPS: TourStep[] = [
   {
     title: "03 · AI agent curators",
     body:
-      "Three autonomous AI agents review every submission — Production (mix &amp; mastering), Performance (delivery &amp; feel), and Market (placement &amp; fit). Each rates across four dimensions: solo intensity, vocal quality, energy, and tempo. No human in the loop — results appear in seconds.",
+      "Three autonomous AI agents review every submission — Production (mix & mastering), Performance (delivery & feel), and Market (placement & fit). Each rates across four dimensions: solo intensity, vocal quality, energy, and tempo. No human in the loop — results appear in seconds.",
   },
   {
-    title: "04 · Discover &amp; earn",
+    title: "04 · Discover & earn",
     body:
-      "The feed is the catalog of published versions with aggregated taste-graph ratings. The Discover tab features A&amp;R agent-curated playlists — play a track and the artist earns $0.0005 USDC instantly. Listeners get 10 free plays daily, reputation scores, and milestone badges as they explore.",
+      "The feed is the catalog of published versions with aggregated taste-graph ratings. The Discover tab features A&R agent-curated playlists — play a track and the artist earns $0.0005 USDC instantly. Listeners get 10 free plays daily, reputation scores, and milestone badges as they explore.",
   },
 ];
 
 export interface TourProps {
-  /** Open the tour on mount (used to seed the first-visit experience). */
-  autoStart?: boolean;
-  /** Render a "?" trigger in the bottom-left that re-opens the tour. */
+  /** Render a "?" trigger in the bottom-left that opens the tour. */
   withTrigger?: boolean;
   className?: string;
 }
 
-export function Tour({ autoStart = false, withTrigger = true, className }: TourProps) {
+export function Tour({ withTrigger = true, className }: TourProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
-  const [, setSeen] = useState(true); // assume seen until we know otherwise (avoids flash)
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const v = window.localStorage.getItem(STORAGE_KEY);
-      const isSeen = v === "1";
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSeen(isSeen);
-      if (autoStart && !isSeen) {
-        setOpen(true);
-        setStep(0);
-      }
-    } catch {
-      /* localStorage blocked — silently skip */
-    }
-  }, [autoStart]);
 
   const close = useCallback(() => {
     setOpen(false);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, "1");
-    } catch {
-      /* ignore */
-    }
-    setSeen(true);
   }, []);
 
   const next = useCallback(() => {
@@ -86,15 +59,19 @@ export function Tour({ autoStart = false, withTrigger = true, className }: TourP
   }, [close, step]);
 
   const reset = useCallback(() => {
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* ignore */
-    }
-    setSeen(false);
     setStep(0);
     setOpen(true);
   }, []);
+
+  // Escape closes the dialog while open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, close]);
 
   if (!open) {
     return withTrigger ? (
@@ -120,9 +97,13 @@ export function Tour({ autoStart = false, withTrigger = true, className }: TourP
     <div
       role="dialog"
       aria-modal="true"
+      aria-label="How VERSIONS works"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) close();
+      }}
       className="fixed inset-0 z-[1000] grid place-items-center px-5 bg-[rgba(244,239,229,0.92)] animate-[tourFade_0.18s_ease-out]"
     >
-      <div className="bg-[var(--color-paper)] border border-[var(--color-ink)] p-8 md:p-10 max-w-[520px] w-full shadow-[8px_8px_0_var(--color-ink)]">
+      <div className="bg-[var(--color-paper)] border border-[var(--color-ink)] p-8 md:p-10 max-w-[520px] w-full max-h-[calc(100dvh-4rem)] overflow-y-auto shadow-[8px_8px_0_var(--color-ink)]">
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mb-3">
           Step {step + 1} of {STEPS.length}
         </p>

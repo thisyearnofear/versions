@@ -210,6 +210,7 @@ export const arPlaylists = pgTable('ar_playlists', {
   description: text('description'),
   genre: text('genre'),
   mood: text('mood'),
+  reasoning: text('reasoning'),
   arWallet: text('ar_wallet').notNull(),
   trackCount: integer('track_count').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow().notNull(),

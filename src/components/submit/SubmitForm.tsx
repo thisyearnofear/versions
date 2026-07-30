@@ -669,7 +669,7 @@ export function SubmitForm() {
         )}
       </form>
 
-      <Tour autoStart withTrigger />
+      <Tour withTrigger />
     </>
   );
 }

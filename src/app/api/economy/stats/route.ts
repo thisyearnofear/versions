@@ -9,8 +9,11 @@ import { db } from '../../../../lib/db';
 import {
   agentReviews,
   arPlayEvents,
+  briefSearches,
+  licensingInterests,
   publishedVersions,
   settlementLegs,
+  submissions,
   x402Proofs,
 } from '../../../../lib/schema';
 import { jsonResponse, requestIdFor } from '../../../../lib/services';
@@ -32,7 +35,8 @@ export function OPTIONS() {
 export async function GET(req: NextRequest): Promise<Response> {
   const rid = requestIdFor(req);
   try {
-    const [pubRes, reviewRes, legRes, tipRes, playRes] = await Promise.allSettled([
+    const [pubRes, reviewRes, legRes, tipRes, playRes, latencyRes, splitRes, searchRes, interestRes] =
+      await Promise.allSettled([
       db.select({ c: count() }).from(publishedVersions),
       db.select({ c: count() }).from(agentReviews),
       db
@@ -47,6 +51,33 @@ export async function GET(req: NextRequest): Promise<Response> {
         .select({ total: sql<string>`COALESCE(SUM(${arPlayEvents.artistPayoutUsdc}::numeric), 0)` })
         .from(arPlayEvents)
         .where(eq(arPlayEvents.status, 'settled')),
+
+      // Median per-review latency (submit → verdict), in seconds. Guarded
+      // to a sane window so seeded/backfilled rows can't poison the median.
+      db
+        .select({
+          median: sql<string | null>`percentile_cont(0.5) WITHIN GROUP (
+            ORDER BY EXTRACT(EPOCH FROM (${agentReviews.submittedAt} - ${submissions.submittedAt})))`,
+        })
+        .from(agentReviews)
+        .innerJoin(submissions, eq(submissions.id, agentReviews.submissionId))
+        .where(sql`${agentReviews.submittedAt} > ${submissions.submittedAt}
+          AND ${agentReviews.submittedAt} - ${submissions.submittedAt} < interval '1 hour'`),
+
+      // Per-role settlement split (curator|platform|musicbrainz).
+      db
+        .select({
+          role: settlementLegs.recipientRole,
+          total: sql<string>`COALESCE(SUM(${settlementLegs.amountUsdc}::numeric), 0)`,
+          legCount: sql<number>`COUNT(*)::int`,
+        })
+        .from(settlementLegs)
+        .where(eq(settlementLegs.status, 'settled'))
+        .groupBy(settlementLegs.recipientRole),
+
+      // Market-pull demand signals.
+      db.select({ c: count() }).from(briefSearches),
+      db.select({ c: count() }).from(licensingInterests),
     ]);
 
     const tracksPublished =
@@ -60,6 +91,26 @@ export async function GET(req: NextRequest): Promise<Response> {
     const playsUsdc = playRes.status === 'fulfilled' ? Number(playRes.value[0]?.total ?? 0) : 0;
     const usdcSettled = legsUsdc + tipsUsdc + playsUsdc;
 
+    const medianRaw =
+      latencyRes.status === 'fulfilled' ? latencyRes.value[0]?.median : null;
+    const medianReviewLatencySeconds =
+      medianRaw != null && Number(medianRaw) > 0 ? Math.round(Number(medianRaw)) : null;
+
+    const settlementSplit =
+      splitRes.status === 'fulfilled'
+        ? splitRes.value.map((r) => ({
+            role: r.role,
+            totalUsdc: String(r.total ?? '0'),
+            legCount: Number(r.legCount ?? 0),
+          }))
+        : [];
+
+    const marketPull = {
+      briefSearches: searchRes.status === 'fulfilled' ? Number(searchRes.value[0]?.c ?? 0) : 0,
+      licensingInterests:
+        interestRes.status === 'fulfilled' ? Number(interestRes.value[0]?.c ?? 0) : 0,
+    };
+
     return jsonResponse(
       200,
       {
@@ -68,6 +119,9 @@ export async function GET(req: NextRequest): Promise<Response> {
           tracksPublished,
           agentReviews: agentReviewsCount,
           usdcSettled: usdcSettled.toFixed(2),
+          medianReviewLatencySeconds,
+          settlementSplit,
+          marketPull,
         },
       },
       rid,
@@ -77,7 +131,17 @@ export async function GET(req: NextRequest): Promise<Response> {
     // Never 500 — return zeros so the landing page counter still renders.
     return jsonResponse(
       200,
-      { success: true, data: { tracksPublished: 0, agentReviews: 0, usdcSettled: '0.00' } },
+      {
+        success: true,
+        data: {
+          tracksPublished: 0,
+          agentReviews: 0,
+          usdcSettled: '0.00',
+          medianReviewLatencySeconds: null,
+          settlementSplit: [],
+          marketPull: { briefSearches: 0, licensingInterests: 0 },
+        },
+      },
       rid,
     );
   }

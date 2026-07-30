@@ -38,6 +38,12 @@ export async function GET(req: Request): Promise<Response> {
         controller.enqueue(new TextEncoder().encode(payload));
       });
 
+      // Per-agent review lifecycle: started / verdict / failed / consensus.
+      const unsubAgentStream = subscribe('agent-stream', (data) => {
+        const payload = `event: agent-stream\ndata: ${JSON.stringify(data)}\n\n`;
+        controller.enqueue(new TextEncoder().encode(payload));
+      });
+
       // Heartbeat every 30s keeps load-balancer / proxy timeouts at bay.
       const heartbeat = setInterval(() => {
         controller.enqueue(new TextEncoder().encode(': heartbeat\n\n'));
@@ -53,6 +59,7 @@ export async function GET(req: Request): Promise<Response> {
         unsubQueueUpdate();
         unsubPlaylistUpdate();
         unsubEconomy();
+        unsubAgentStream();
         clearInterval(heartbeat);
       });
     },

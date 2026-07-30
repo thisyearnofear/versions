@@ -152,6 +152,7 @@ CREATE TABLE IF NOT EXISTS ar_playlists (
   description TEXT,
   genre TEXT,
   mood TEXT,
+  reasoning TEXT,
   ar_wallet TEXT NOT NULL,
   track_count INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
