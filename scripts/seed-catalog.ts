@@ -1,17 +1,24 @@
 // MODULAR: Seed script — populates the catalog with demo data so judges
 // see a non-empty app on first load. Creates:
 //   1. 3 curator wallets + 1 artist wallet (if not exist)
-//   2. 4 submissions (1 awaiting_curation, 3 published)
+//   2. 8 submissions (1 awaiting_curation, 7 published)
 //   3. Agent reviews + ratings for each published submission
 //   4. Published versions + settlement legs (pending)
 //   4.5. Placement briefs (inverse-search index per submission)
 //   5. One A&R playlist with tracks
 //
+// Each track gets a real playable audio file: a silent WAV written to
+// the uploads dir (data/uploads/seed-<id>.wav) so the AudioPlayer
+// actually loads instead of 404-ing on the old fictional seeds/*.mp3
+// paths. Regenerate by wiping the DB (db:push) then re-running.
+//
 // Run:   npx tsx scripts/seed-catalog.ts
 //        DATABASE_URL=postgres://... npx tsx scripts/seed-catalog.ts
 
 import { randomUUID } from 'crypto';
-import { eq } from 'drizzle-orm';
+import fs from 'node:fs';
+import path from 'node:path';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../src/lib/db';
 import {
   users as usersTable,
@@ -26,6 +33,8 @@ import {
 } from '../src/lib/schema';
 import { buildLegs } from '../src/services/settlement';
 import { assertMoodTagsShape } from '../src/lib/format';
+import { generateRatingCover } from '../src/lib/cover-gen';
+import { deriveValence } from '../src/services/taste-graph';
 import type { AgentName, Energy, Tempo } from '../src/lib/types';
 
 // ── Deterministic UUIDs for reproducibility ─────────────
@@ -42,7 +51,59 @@ const IDS = {
   subNeon:   'demo-published-0002-0000-000000000002',
   subAutumn: 'demo-published-0003-0000-000000000003',
   subStreet: 'demo-published-0004-0000-000000000004',
+  subChrome: 'demo-published-0005-0000-000000000005',
+  subDust:   'demo-published-0006-0000-000000000006',
+  subVelvet: 'demo-published-0007-0000-000000000007',
+  subGlass:  'demo-published-0008-0000-000000000008',
 };
+
+// ── Seed audio ──────────────────────────────────────────
+// MODULAR: silent WAV generator + writer so seeded tracks are
+// playable. Mirrors scripts/demo.ts's makeSilentWav (8 kHz / 16-bit
+// / mono, zero samples) and writes to the uploads dir the uploads
+// route serves from (data/uploads by default, same as services.ts).
+function makeSilentWav(durationSeconds = 1): Buffer {
+  const sampleRate = 8000;
+  const numSamples = durationSeconds * sampleRate;
+  const dataLength = numSamples * 2;
+  const buf = Buffer.alloc(44 + dataLength);
+  buf.write('RIFF', 0);
+  buf.writeUInt32LE(36 + dataLength, 4);
+  buf.write('WAVE', 8);
+  buf.write('fmt ', 12);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20); // PCM
+  buf.writeUInt16LE(1, 22); // mono
+  buf.writeUInt32LE(sampleRate, 24);
+  buf.writeUInt32LE(sampleRate * 2, 28);
+  buf.writeUInt16LE(2, 32); // block align
+  buf.writeUInt16LE(16, 34); // bits/sample
+  buf.write('data', 36);
+  buf.writeUInt32LE(dataLength, 40);
+  return buf;
+}
+
+// MODULAR: resolve the uploads dir exactly like services.ts does
+// (UPLOAD_DIR env override, else VERCEL /tmp/uploads, else
+// <cwd>/data/uploads) and write the seed wav if missing.
+function uploadDir(): string {
+  return (
+    process.env.UPLOAD_DIR ||
+    (process.env.VERCEL ? '/tmp/uploads' : path.resolve(process.cwd(), 'data', 'uploads'))
+  );
+}
+
+function ensureSeedAudio(id: string, durationSeconds: number): string {
+  const dir = uploadDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const filename = `seed-${id}.wav`;
+  const full = path.join(dir, filename);
+  if (!fs.existsSync(full)) {
+    fs.writeFileSync(full, makeSilentWav(durationSeconds));
+    console.log(`    wrote ${filename} (${durationSeconds}s silent wav)`);
+  }
+  return `data/uploads/${filename}`;
+}
 
 // ── Track definitions ────────────────────────────────────
 
@@ -123,6 +184,70 @@ const TRACKS: TrackDef[] = [
     audioPath: 'seeds/street-poetry.mp3',
     audioDurationSeconds: 248,
     audioSizeBytes: 5950,
+    contentType: 'audio/mpeg',
+    feeQuoteUsdc: '0.50',
+    status: 'published',
+    coverSvg: null,
+  },
+  {
+    id: IDS.subChrome,
+    title: 'Chrome Sunset',
+    artistName: 'The Night Shift',
+    versionType: 'studio',
+    genre: 'synthwave',
+    mood: 'retro',
+    description: 'A gleaming studio take — analog synths, gated reverb, a drive that never quits.',
+    audioPath: 'seeds/chrome-sunset.mp3',
+    audioDurationSeconds: 286,
+    audioSizeBytes: 6860,
+    contentType: 'audio/mpeg',
+    feeQuoteUsdc: '0.50',
+    status: 'published',
+    coverSvg: null,
+  },
+  {
+    id: IDS.subDust,
+    title: 'Dust & Diesel',
+    artistName: 'The Wandering Folk',
+    versionType: 'live',
+    genre: 'americana',
+    mood: 'earnest',
+    description: 'A highway-bar live take. Steel guitar, room noise, and a singer who means it.',
+    audioPath: 'seeds/dust-and-diesel.mp3',
+    audioDurationSeconds: 241,
+    audioSizeBytes: 5780,
+    contentType: 'audio/mpeg',
+    feeQuoteUsdc: '0.50',
+    status: 'published',
+    coverSvg: null,
+  },
+  {
+    id: IDS.subVelvet,
+    title: 'Velvet Static',
+    artistName: 'Kaya Moon',
+    versionType: 'remix',
+    genre: 'r&b',
+    mood: 'sultry',
+    description: 'A slowed, tape-warped remix of the soul original. Warmth over polish.',
+    audioPath: 'seeds/velvet-static.mp3',
+    audioDurationSeconds: 223,
+    audioSizeBytes: 5350,
+    contentType: 'audio/mpeg',
+    feeQuoteUsdc: '0.50',
+    status: 'published',
+    coverSvg: null,
+  },
+  {
+    id: IDS.subGlass,
+    title: 'Glass Morning',
+    artistName: 'Paper Birds',
+    versionType: 'acoustic',
+    genre: 'indie-folk',
+    mood: 'hopeful',
+    description: 'A sunlit one-take acoustic demo. Fingerpicking, close vocal, birds in the background.',
+    audioPath: 'seeds/glass-morning.mp3',
+    audioDurationSeconds: 198,
+    audioSizeBytes: 4750,
     contentType: 'audio/mpeg',
     feeQuoteUsdc: '0.50',
     status: 'published',
@@ -236,6 +361,122 @@ const REVIEWS: Record<string, ReviewDef[]> = {
       notes: 'The live band remix angle is a strong differentiator. Fits the alternative hip-hop space — think COLORS, NPR Tiny Desk hip-hop editions, and Lyrical Lemonade. The raw energy is marketable.',
     },
   ],
+  [IDS.subChrome]: [
+    {
+      agentName: 'production',
+      soloIntensity: 8,
+      vocalQuality: 6,
+      energyVsStudio: 'same',
+      tempoFeel: 'locked',
+      moodTags: ['Retro', 'Sleek', 'Analog'],
+      notes: 'Analog warmth with crisp transients. The gated reverb on the snare is the signature — spacious without washing the mix. Stereo spread is wide and confident.',
+    },
+    {
+      agentName: 'performance',
+      soloIntensity: 7,
+      vocalQuality: 6,
+      energyVsStudio: 'higher',
+      tempoFeel: 'rushing',
+      moodTags: ['Nostalgic', 'Driving', 'Uplifting'],
+      notes: 'A persistent forward drive that rewards long cuts. The chorus lift lands hard every time. Strong candidate for montage and title-sequence work.',
+    },
+    {
+      agentName: 'market',
+      soloIntensity: 8,
+      vocalQuality: 5,
+      energyVsStudio: 'same',
+      tempoFeel: 'locked',
+      moodTags: ['Synthwave', 'Night Drive', 'Retrowave'],
+      notes: 'Textbook synthwave appeal — nostalgia-forward, instantly placeable in automotive and retro-tech spots. The analog texture reads as premium, not pastiche.',
+    },
+  ],
+  [IDS.subDust]: [
+    {
+      agentName: 'production',
+      soloIntensity: 6,
+      vocalQuality: 8,
+      energyVsStudio: 'lower',
+      tempoFeel: 'dragging',
+      moodTags: ['Earnest', 'Warm', 'Live Room'],
+      notes: 'A live room captured honestly — room bleed included, and it serves the song. Steel guitar sits beautifully against the vocal. Raw in the best way.',
+    },
+    {
+      agentName: 'performance',
+      soloIntensity: 7,
+      vocalQuality: 9,
+      energyVsStudio: 'same',
+      tempoFeel: 'locked',
+      moodTags: ['Heartfelt', 'Grounded', 'Honest'],
+      notes: 'The vocalist sells every line. A lived-in take that sounds like the last call of a long night. Emotional weight without theatrics.',
+    },
+    {
+      agentName: 'market',
+      soloIntensity: 5,
+      vocalQuality: 8,
+      energyVsStudio: 'lower',
+      tempoFeel: 'dragging',
+      moodTags: ['Americana', 'Heartland', 'Singer-Songwriter'],
+      notes: 'A natural fit for heartland dramas, road-trip montages, and whiskey-commercial energy. The room noise is a feature — it grounds the track in a place.',
+    },
+  ],
+  [IDS.subVelvet]: [
+    {
+      agentName: 'production',
+      soloIntensity: 6,
+      vocalQuality: 9,
+      energyVsStudio: 'lower',
+      tempoFeel: 'dragging',
+      moodTags: ['Sultry', 'Warm', 'Analog'],
+      notes: 'Tape-warped warmth with a low-slung groove. The vocal sits forward and intimate; the fuzz on the bass adds weight without clutter. A late-night mix.',
+    },
+    {
+      agentName: 'performance',
+      soloIntensity: 5,
+      vocalQuality: 9,
+      energyVsStudio: 'same',
+      tempoFeel: 'dragging',
+      moodTags: ['Intimate', 'Slow Burn', 'Sensual'],
+      notes: 'Restraint is the performance — the singer holds back until the final chorus and lets it spill. Slow-burn structure that rewards attention.',
+    },
+    {
+      agentName: 'market',
+      soloIntensity: 6,
+      vocalQuality: 8,
+      energyVsStudio: 'lower',
+      tempoFeel: 'dragging',
+      moodTags: ['R&B', 'Soul', 'Late Night'],
+      notes: 'Late-night R&B with a boutique feel. Strong sync potential for intimate scenes, slow-dance sequences, and candlelight-branded advertising.',
+    },
+  ],
+  [IDS.subGlass]: [
+    {
+      agentName: 'production',
+      soloIntensity: 7,
+      vocalQuality: 8,
+      energyVsStudio: 'lower',
+      tempoFeel: 'locked',
+      moodTags: ['Bright', 'Airy', 'Acoustic'],
+      notes: 'A one-take with a lovely natural reverb. Fingerpicking is crisp and the close vocal has presence. The birdsong in the tail is a keeper.',
+    },
+    {
+      agentName: 'performance',
+      soloIntensity: 6,
+      vocalQuality: 9,
+      energyVsStudio: 'same',
+      tempoFeel: 'locked',
+      moodTags: ['Hopeful', 'Gentle', 'Sincere'],
+      notes: 'An effortlessly optimistic read. The chorus arrives like morning light — no fireworks, just warmth. Perfect for scene openings.',
+    },
+    {
+      agentName: 'market',
+      soloIntensity: 6,
+      vocalQuality: 8,
+      energyVsStudio: 'lower',
+      tempoFeel: 'locked',
+      moodTags: ['Indie-Folk', 'Morning', 'Positive'],
+      notes: 'Bright indie-folk that reads instantly as “fresh start.” Strong fit for breakfast-scene ad work, lifestyle brands, and daytime reality segments.',
+    },
+  ],
 };
 
 // MODULAR: per-track placement_brief for the supervisor inverse-search
@@ -280,6 +521,42 @@ const PLACEMENT_BRIEFS: Record<string, {
     ],
     audienceSummary: 'Gritty and authentic hip-hop with strong drive, suitable for alt-sports and urban drama.',
   },
+  [IDS.subChrome]: {
+    sceneTags: ['night drive', 'title sequence', 'retro-tech spot'],
+    instruments: ['synth_led', 'drum_machine', 'long_arc'],
+    emotionalArcs: ['steady forward drive opening into a wide melodic chorus'],
+    syncComparables: [
+      { name: 'The Midnight — Days of Thunder', why: 'analog synth nostalgia over a persistent pulse' },
+    ],
+    audienceSummary: 'Nostalgia-forward synthwave built for automotive, tech-launch, and montage sequences.',
+  },
+  [IDS.subDust]: {
+    sceneTags: ['road trip', 'barroom scene', 'heartland drama'],
+    instruments: ['guitar_led', 'steel_guitar', 'live_room'],
+    emotionalArcs: ['lived-in verse settling into an open-hearted chorus'],
+    syncComparables: [
+      { name: 'Jason Isbell — Southeastern', why: 'plainspoken heartland storytelling over acoustic grit' },
+    ],
+    audienceSummary: 'Earnest Americana for road-trip montages, heartland dramas, and honest-product advertising.',
+  },
+  [IDS.subVelvet]: {
+    sceneTags: ['late-night scene', 'slow dance', 'candlelit dinner'],
+    instruments: ['bass_led', 'analog_keys', 'fuzz_guitar'],
+    emotionalArcs: ['restrained opening blooming into a fuzzed-out final chorus'],
+    syncComparables: [
+      { name: 'D\'Angelo — Voodoo', why: 'low-slung soul that holds intimacy without rushing' },
+    ],
+    audienceSummary: 'Sultry late-night R&B for intimate scenes, slow dances, and boutique lifestyle brands.',
+  },
+  [IDS.subGlass]: {
+    sceneTags: ['morning reveal', 'breakfast scene', 'hopeful opening'],
+    instruments: ['acoustic', 'guitar_led', 'light_percussion'],
+    emotionalArcs: ['gentle fingerpicked verse lifting into a warm singalong chorus'],
+    syncComparables: [
+      { name: 'The Shins — Chutes Too Narrow', why: 'bright acoustic optimism for daytime openings' },
+    ],
+    audienceSummary: 'Bright acoustic indie-folk that reads as a fresh start, ideal for daytime and feel-good spots.',
+  },
 };
 
 // ── Main ─────────────────────────────────────────────────
@@ -312,6 +589,62 @@ async function main() {
   }
   console.log(`    ${userWallets.length} wallets ready.`);
 
+  // ── 1.5 Seed audio ──────────────────────────────────
+  // MODULAR: write a playable silent wav per track BEFORE inserting,
+  // and repoint the audio_path so the AudioPlayer 404s no longer.
+  // Repoints BOTH submissions and published_versions — the feed and
+  // discover surfaces read from published_versions, so a re-seed on an
+  // existing DB must fix those rows too (their insert is skipped by the
+  // "already published" guard, but the repoint update still applies).
+  console.log('  Writing seed audio...');
+  for (const t of TRACKS) {
+    const realPath = ensureSeedAudio(t.id, t.audioDurationSeconds);
+    await db
+      .update(submissionsTable)
+      .set({ audioPath: realPath })
+      .where(eq(submissionsTable.id, t.id));
+    if (t.status === 'published') {
+      await db
+        .update(pvTable)
+        .set({ audioPath: realPath })
+        .where(eq(pvTable.submissionId, t.id));
+      // MODULAR: repoint null covers to generated art so existing
+      // seeded rows on a re-seed get covers without a wipe (matches
+      // the audio repoint; FeedView also falls back client-side).
+      const reviews = REVIEWS[t.id];
+      if (reviews) {
+        const allTags = [...new Set(reviews.flatMap((r) => r.moodTags))];
+        const energyConsensus = Object.entries(
+          reviews.reduce<Record<string, number>>((m, r) => {
+            m[r.energyVsStudio] = (m[r.energyVsStudio] || 0) + 1;
+            return m;
+          }, {}),
+        ).sort((a, b) => b[1] - a[1])[0]?.[0];
+        const tempoConsensus = Object.entries(
+          reviews.reduce<Record<string, number>>((m, r) => {
+            m[r.tempoFeel] = (m[r.tempoFeel] || 0) + 1;
+            return m;
+          }, {}),
+        ).sort((a, b) => b[1] - a[1])[0]?.[0];
+        const avgSolo = reviews.reduce((s, r) => s + r.soloIntensity, 0) / reviews.length;
+        const avgVocal = reviews.reduce((s, r) => s + r.vocalQuality, 0) / reviews.length;
+        const coverSvg = generateRatingCover({
+          title: t.title,
+          avgSolo,
+          avgVocal,
+          energy: energyConsensus ?? 'same',
+          tempo: tempoConsensus ?? 'locked',
+          valence: deriveValence(allTags) ?? undefined,
+          moodTags: allTags,
+        });
+        await db
+          .update(pvTable)
+          .set({ coverSvg })
+          .where(and(eq(pvTable.submissionId, t.id), sql`${pvTable.coverSvg} IS NULL`));
+      }
+    }
+  }
+
   // ── 2. Submissions ───────────────────────────────────
   console.log('  Creating submissions...');
   for (const t of TRACKS) {
@@ -333,10 +666,10 @@ async function main() {
       genre: t.genre,
       artistMood: t.mood,
       description: t.description,
-      audioPath: t.audioPath,
+      audioPath: `data/uploads/seed-${t.id}.wav`,
       audioDurationSeconds: t.audioDurationSeconds,
       audioSizeBytes: t.audioSizeBytes,
-      contentType: t.contentType,
+      contentType: 'audio/wav',
       feeQuoteUsdc: t.feeQuoteUsdc,
       status: t.status,
       coverSvg: t.coverSvg,
@@ -426,15 +759,31 @@ async function main() {
     const tempoConsensus = Object.entries(tempoCounts).sort((a, b) => b[1] - a[1])[0][0];
     const uniqueTags = [...new Set(allTags)];
 
+    // MODULAR: seeded tracks get deterministic rating-driven cover art
+    // (valence → palette, energy → amplitude, tempo → density) so every
+    // surface — feed, discover, artist page — shows unique art with no
+    // audio decoding and no stored assets.
+    const coverSvg =
+      t.coverSvg ??
+      generateRatingCover({
+        title: t.title,
+        avgSolo,
+        avgVocal,
+        energy: energyConsensus,
+        tempo: tempoConsensus,
+        valence: deriveValence(uniqueTags) ?? undefined,
+        moodTags: uniqueTags,
+      });
+
     await db.insert(pvTable).values({
       submissionId: t.id,
       artistWallet: IDS.artistWallet,
       title: t.title,
       artistName: t.artistName,
       versionType: t.versionType,
-      audioPath: t.audioPath,
+      audioPath: `data/uploads/seed-${t.id}.wav`,
       musicbrainzId: null,
-      coverSvg: t.coverSvg,
+      coverSvg,
       avgSoloIntensity: avgSolo,
       avgVocalQuality: avgVocal,
       energyConsensus,
