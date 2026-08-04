@@ -77,6 +77,39 @@ See `.env.example` for the full list. The health endpoint
 (`GET /api/health/ready`) reports `arc.mock`, `signerConfigured`, and
 `platformBalance` so you can verify real-mode status at a glance.
 
+**One-command readiness check** (new):
+
+```bash
+npm run check:arc
+```
+
+Prints mock/live flags, chain id, USDC contract, platform balance, and
+signer status; exits `0` only when live Arc is configured and
+reachable. Go-live checklist for the demo:
+
+1. `npm run check:arc` → exits 0 (if it exits 1, the demo still runs
+   in mock — settlements will be deterministic mock hashes).
+2. Fund `PLATFORM_WALLET` with testnet USDC on the RPC's chain; verify
+   `platformUsdcBalance` prints a non-zero value.
+3. Set `AGENT_KEY_SEED` (or per-agent `AGENT_WALLET_*` + keys) so agent
+   payout legs sign from real wallets instead of falling back to mock.
+4. Run the demo loop (`pnpm demo` or the in-browser LiveDemo button)
+   and watch the ticker emit `leg_settled` / `tip_batch_settled` events
+   with real ArcScan links (no `mock` badge).
+
+### Wallet-free supervisor journey (guest sessions)
+
+Supervisors can search, save briefs, log searches, and mark licensing
+interests **without connecting a wallet**. The client keeps a per-device
+ID in `localStorage` and sends it as the `x-supervisor-guest` header;
+the server derives a deterministic pseudo-wallet
+(`src/lib/supervisor-identity.ts`) and routes the row through the same
+`supervisor_wallet` tables — zero schema change. A connected wallet
+takes precedence over the guest header, so wallet sign-in is an
+optional cross-device upgrade rather than a gate. Guest rows are
+per-device by design; they are not merged when a wallet later connects
+(demo-stage trade-off).
+
 ## Stack
 
 - **Next.js** 16.2.9 (App Router, Turbopack, React 19.2)
@@ -196,6 +229,20 @@ work. Get a free project ID at [cloud.walletconnect.com](https://cloud.walletcon
 All external adapters are **mock-first**: omitting their env vars
 falls back to deterministic mock mode so the full demo loop runs with
 zero external dependencies. See `.env.example` for the complete list.
+
+## Seeded demo catalog
+
+`npm run seed` (or `npx tsx scripts/seed-catalog.ts`) populates a
+non-empty catalog: 8 submissions (1 awaiting curation, 7 published)
+across rock, electronic, folk, hip-hop, synthwave, Americana, R&B, and
+indie-folk — each with 3 agent reviews, a placement brief for the
+inverse-search, and a **playable silent WAV** written to the uploads dir
+(`data/uploads/seed-<id>.wav`; the old fictional `seeds/*.mp3` paths
+404'd in the AudioPlayer and are repointed on re-seed).
+
+The Discover page ships one-click **example briefs**
+(`src/lib/example-briefs.ts`) tuned to the seeded placement briefs, so
+a cold visitor can paste a realistic supervisor query in one click.
 
 ## Routes
 
@@ -728,28 +775,67 @@ names.
 npm run db:rename-briefs
 ```
 
-### 2. Enable pgvector + create version_embeddings table
+### 2. Enable pgvector (extension only)
 
-Enables the `vector` extension and creates the `version_embeddings`
-table with a `vector(512)` column + ivfflat cosine index. Required
-only if you want semantic search (CLAP embeddings). The structured-
-tag scorer works without it.
+Enables the `vector` extension. Required only if you want semantic
+search (CLAP embeddings); the structured-tag scorer works without it.
 
 ```bash
 npm run db:pgvector
 ```
 
-On Neon, pgvector is available on all plans. On other Postgres
-providers, install the extension first: `CREATE EXTENSION vector;`.
+The `version_embeddings` table is owned by the Drizzle migration
+(`drizzle/0000_*.sql`) — this script only runs
+`CREATE EXTENSION IF NOT EXISTS vector;` so there is no double-create
+between `db:pgvector` and `db:migrate`. On other Postgres providers,
+install the extension first: `CREATE EXTENSION vector;`.
 
-### 3. Push schema
+**ivfflat index:** the Drizzle schema does not declare the
+approximate-NN index, so the migration creates none. For catalogs
+over ~10k embeddings, create it once manually:
 
-After the SQL scripts, push the Drizzle schema to create/update all
-tables:
+```sql
+CREATE INDEX IF NOT EXISTS idx_version_embeddings_vector
+  ON version_embeddings USING ivfflat (embedding vector_cosine_ops)
+  WITH (lists = 100);
+```
+
+### 3. Apply schema (migrate, not push, for forward changes)
+
+A **baseline Drizzle migration** is checked in at `drizzle/`
+(`0000_friendly_harry_osborn.sql`, all 18 tables). The workflow for
+**new schema changes** is generate → review → migrate, never push:
 
 ```bash
-npm run db:push
+npm run db:generate   # write a new migration from src/lib/schema.ts
+# review the SQL in drizzle/<timestamp>_*.sql (spot-check columns + unique indexes)
+npm run db:migrate    # apply pending migrations
 ```
+
+For **fresh databases** (CI, a new Neon branch, a local dev box),
+`npm run db:migrate` from the baseline creates everything — no `db:push`
+needed.
+
+For **existing databases** that were previously kept in sync with
+`npm run db:push`, the baseline must be marked as applied once so
+`db:migrate` starts from a clean ledger:
+
+```bash
+psql "$DATABASE_URL" -c "CREATE TABLE IF NOT EXISTS __drizzle_migrations (id serial PRIMARY KEY, hash text NOT NULL, created_at bigint);"
+# then apply ONLY the drift-free forward migrations; or run
+npm run db:push       # one last time on the drifted DB to align it, then db:migrate forward
+```
+
+**Drift caveat:** `drizzle-kit push` still works for quick local demos,
+but it asks interactive questions when the live DB has drifted from
+`src/lib/schema.ts` — it fails with "Interactive prompts require a TTY"
+in non-interactive shells. A drifted DB will bite in specific ways: a
+missing `submissions.audio_sha256` column 500s the submit route, a
+missing `uq_legs_submission_wallet_role` unique index makes publish
+roll back (its `ON CONFLICT` needs the index to exist), and missing
+`x402_proofs` / `telemetry_events` tables break tips and analytics.
+Prefer `db:generate` + `db:migrate` for anything that outlives the
+demo.
 
 **Drift caveat:** `drizzle-kit push` asks interactive questions when
 the live DB has drifted from `src/lib/schema.ts` — it fails with

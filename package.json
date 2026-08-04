@@ -17,7 +17,9 @@
     "db:purge:apply": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/purge-legacy-placement-briefs.apply.sql",
     "db:rename-briefs": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/rename-placement-briefs-columns.sql",
     "db:pgvector": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/create-pgvector-extension.sql",
-    "demo": "tsx scripts/demo.ts"
+    "demo": "tsx scripts/demo.ts",
+    "check:arc": "tsx scripts/check-arc-live.ts",
+    "seed": "tsx scripts/seed-catalog.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.74",
