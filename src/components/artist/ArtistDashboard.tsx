@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
+import { RatingCover } from "@/components/cover/RatingCover";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -22,6 +23,7 @@ import {
   type BriefResponse,
   type AgentReviewRecord,
 } from "@/lib/api-client";
+import { type RatingCoverInput } from "@/lib/cover-gen";
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
 import { cn } from "@/lib/utils";
@@ -51,6 +53,30 @@ type PublishedData = NonNullable<ArtistVersionsResponse["rows"][number]["publish
 type PublishedVersionRow = Omit<ArtistVersionsResponse["rows"][number], "published"> & {
   published: PublishedData;
 };
+
+// MODULAR: build the rating-cover input from a published row in ONE
+// place — every tab (Overview / Versions / Placements) renders the
+// same deterministic art identity for the same track, and the
+// valence/moodTags mapping can't drift between copies.
+// MODULAR: build the rating-cover input from a published row's title
+// + published payload in ONE place — every tab (Overview / Versions /
+// Placements) renders the same deterministic art identity for the
+// same track, and the valence/moodTags mapping can't drift between
+// copies. `published` is passed already-narrowed so the helper works
+// for both the pre-filtered publishedVersions list and the raw
+// VersionsTab rows (whose published is optional until guarded).
+function coverInputFor(title: string, published: PublishedData): RatingCoverInput {
+  const tags = parseMoodTags(published.aggregated_mood_tags);
+  return {
+    title,
+    avgSolo: published.avg_solo_intensity,
+    avgVocal: published.avg_vocal_quality,
+    energy: published.energy_consensus,
+    tempo: published.tempo_consensus,
+    valence: deriveValence(tags) ?? undefined,
+    moodTags: tags,
+  };
+}
 
 // MODULAR: per-row 5-axis radar block. The hook lives INSIDE this
 // component, so each .map() call site simply does
@@ -465,16 +491,28 @@ function OverviewTab({
                   key={v.id}
                   className="py-4 border-t border-[var(--color-hair)] last:border-b"
                 >
-                  <div className="font-serif text-base font-medium">{v.title}</div>
-                  <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mt-1">
-                    Edition {edition} · {v.versionType} · solo{" "}
-                    {(v.published.avg_solo_intensity ?? 0).toFixed(1)} · vocal{" "}
-                    {(v.published.avg_vocal_quality ?? 0).toFixed(1)} ·{" "}
-                    {v.published.energy_consensus ?? "-"} · {v.published.tempo_consensus ?? "-"} ·{" "}
-                    {valence ?? "-"} · {v.ratingCount} ratings
-                  </div>
-                  <div className="flex gap-3 mt-2">
-                    <PublishedRowRadar published={v.published} size={80} />
+                  {/* MODULAR: rating-driven cover thumb so the
+                      Overview list carries the same art identity as
+                      the feed — the ratings ARE the artwork. */}
+                  <div className="flex gap-4">
+                    <RatingCover
+                      input={coverInputFor(v.title, v.published)}
+                      size={56}
+                      className="mt-0.5 border border-[var(--color-hair-strong)]"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-serif text-base font-medium">{v.title}</div>
+                      <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mt-1">
+                        Edition {edition} · {v.versionType} · solo{" "}
+                        {(v.published.avg_solo_intensity ?? 0).toFixed(1)} · vocal{" "}
+                        {(v.published.avg_vocal_quality ?? 0).toFixed(1)} ·{" "}
+                        {v.published.energy_consensus ?? "-"} · {v.published.tempo_consensus ?? "-"} ·{" "}
+                        {valence ?? "-"} · {v.ratingCount} ratings
+                      </div>
+                      <div className="flex gap-3 mt-2">
+                        <PublishedRowRadar published={v.published} size={80} />
+                      </div>
+                    </div>
                   </div>
                 </li>
               );
@@ -614,7 +652,12 @@ function VersionsTab({
                     </div>
                   </div>
                   {v.published && (
-                    <div className="shrink-0">
+                    <div className="shrink-0 flex items-start gap-3">
+                      <RatingCover
+                        input={coverInputFor(v.title, v.published)}
+                        size={72}
+                        className="border border-[var(--color-hair-strong)]"
+                      />
                       <PublishedRowRadar published={v.published} size={80} />
                     </div>
                   )}
@@ -790,6 +833,11 @@ function PlacementsTab({
                   contextual reminder, not the full Overview/Versions
                   treatment. */}
               <div className="px-3 py-2 flex items-center gap-3 border-b border-[var(--color-hair)]">
+                <RatingCover
+                  input={coverInputFor(v.title, v.published)}
+                  size={56}
+                  className="border border-[var(--color-hair-strong)]"
+                />
                 <PublishedRowRadar published={v.published} size={60} />
                 <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]">
                   solo {(v.published.avg_solo_intensity ?? 0).toFixed(1)} · vocal{" "}

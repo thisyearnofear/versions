@@ -24,7 +24,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useSignTypedData, useAccount } from 'wagmi';
 import { getAddress } from 'viem';
 import { useToast } from '@/components/ui/Toast';
+import { RatingCover } from '@/components/cover/RatingCover';
 import { cn } from '@/lib/utils';
+import { parseMoodTags } from '@/lib/format';
 import { shortHash, txUrl } from '@/lib/explorer';
 import { apiClient, type ArtistTipCardResponse } from '@/lib/api-client';
 import {
@@ -183,6 +185,11 @@ export function TipButton({ artistWallet, artistName, variant = 'inline', onSett
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
+      // MODULAR: drop any stale card from a previous wallet before
+      // the fetch starts — otherwise the hero cover / published rows
+      // from the last hovered artist would flash while this one
+      // loads, and the hero art makes that flash very visible.
+      setCardData(null);
       setCardLoading(true);
       apiClient
         .getArtistTipCard(artistWallet)
@@ -333,6 +340,17 @@ export function TipButton({ artistWallet, artistName, variant = 'inline', onSett
           `Tipped ${artistName ?? artistWallet} ${niceAmount}${json.data.mock ? ' (mock)' : ''}`,
           'success',
         );
+
+        // MODULAR: micro-delight — a short haptic tap on settlement so
+        // mobile judges feel the money move, not just see it. Guarded
+        // + best-effort; unsupported browsers no-op.
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+          try {
+            navigator.vibrate(12);
+          } catch {
+            /* unsupported — ignore */
+          }
+        }
 
         // MODULAR: surface on-chain (or mock) confirmation inline with
         // an ArcScan link so the tipper sees verifiable settlement.
@@ -564,10 +582,29 @@ function TipRecipientHoverCard({
       onMouseEnter={(e) => e.stopPropagation()}
     >
       {/* Eyebrow */}
-      <div className="flex items-baseline justify-between gap-2 mb-2 pb-2 border-b border-[var(--color-hair)]">
-        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)]">
-          Recipient
-        </span>
+      <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-[var(--color-hair)]">
+        <div className="flex items-center gap-2 min-w-0">
+          {/* MODULAR: the most recent published version's rating cover
+              as the card's hero art — the tipper recognizes the artist
+              by the same art identity used across every other surface. */}
+          {data && data.recent_published[0] && (
+            <RatingCover
+              input={{
+                title: data.recent_published[0].title,
+                avgSolo: data.recent_published[0].avg_solo_intensity,
+                avgVocal: data.recent_published[0].avg_vocal_quality,
+                energy: data.recent_published[0].energy_consensus,
+                tempo: data.recent_published[0].tempo_consensus,
+                moodTags: parseMoodTags(data.recent_published[0].aggregated_mood_tags),
+              }}
+              size={36}
+              className="border border-[var(--color-hair-strong)]"
+            />
+          )}
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)]">
+            Recipient
+          </span>
+        </div>
         <span
           className="font-mono text-[10px] text-[var(--color-ink-3)] truncate"
           title={artistWallet}
@@ -592,8 +629,20 @@ function TipRecipientHoverCard({
             {data.recent_published.map((r) => (
               <li
                 key={r.submission_id}
-                className="flex items-baseline gap-2 py-1 border-b border-[var(--color-hair)] last:border-b-0"
+                className="flex items-center gap-2 py-1 border-b border-[var(--color-hair)] last:border-b-0"
               >
+                <RatingCover
+                  input={{
+                    title: r.title,
+                    avgSolo: r.avg_solo_intensity,
+                    avgVocal: r.avg_vocal_quality,
+                    energy: r.energy_consensus,
+                    tempo: r.tempo_consensus,
+                    moodTags: parseMoodTags(r.aggregated_mood_tags),
+                  }}
+                  size={24}
+                  className="border border-[var(--color-hair)]"
+                />
                 <span className="font-serif text-[12px] font-medium truncate flex-1 min-w-0">
                   {r.title}
                 </span>
