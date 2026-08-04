@@ -1,17 +1,16 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
 import { services, successResponse, errorResponse, requestIdFor } from "@/lib/services";
+import { resolveSupervisorIdentity } from "@/lib/supervisor-identity";
 import { SupervisorProfileUpdateSchema } from "@/lib/validation";
 
 export async function GET(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const session = await auth();
-  const wallet = (session?.user as { walletAddress?: string } | undefined)?.walletAddress;
-  if (!wallet) {
+  const identity = await resolveSupervisorIdentity(req);
+  if (!identity) {
     return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to view your supervisor profile.");
   }
 
-  const profile = await services().supervisor.getProfile(wallet);
+  const profile = await services().supervisor.getProfile(identity.wallet);
   if (!profile) {
     return successResponse(200, { profile: null }, requestId);
   }
@@ -20,9 +19,8 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const session = await auth();
-  const wallet = (session?.user as { walletAddress?: string } | undefined)?.walletAddress;
-  if (!wallet) {
+  const identity = await resolveSupervisorIdentity(req);
+  if (!identity) {
     return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to update your supervisor profile.");
   }
 
@@ -39,7 +37,7 @@ export async function PUT(req: NextRequest) {
   }
 
   const profile = await services().supervisor.upsertProfile({
-    wallet,
+    wallet: identity.wallet,
     email: parsed.data.email,
     name: parsed.data.name,
     company: parsed.data.company,

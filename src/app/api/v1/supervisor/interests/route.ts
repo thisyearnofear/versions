@@ -1,13 +1,12 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
 import { services, successResponse, errorResponse, requestIdFor, parsePositiveIntParam } from "@/lib/services";
+import { resolveSupervisorIdentity } from "@/lib/supervisor-identity";
 import { LicensingInterestSchema, LicensingInterestUpdateSchema } from "@/lib/validation";
 
 export async function GET(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const session = await auth();
-  const wallet = (session?.user as { walletAddress?: string } | undefined)?.walletAddress;
-  if (!wallet) {
+  const identity = await resolveSupervisorIdentity(req);
+  if (!identity) {
     return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to view licensing interests.");
   }
 
@@ -16,17 +15,16 @@ export async function GET(req: NextRequest) {
   const offset = parsePositiveIntParam(searchParams.get("offset"), 0);
 
   const [rows, total] = await Promise.all([
-    services().supervisor.listInterests(wallet, { limit, offset }),
-    services().supervisor.countInterests(wallet),
+    services().supervisor.listInterests(identity.wallet, { limit, offset }),
+    services().supervisor.countInterests(identity.wallet),
   ]);
   return successResponse(200, { rows, total }, requestId);
 }
 
 export async function POST(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const session = await auth();
-  const wallet = (session?.user as { walletAddress?: string } | undefined)?.walletAddress;
-  if (!wallet) {
+  const identity = await resolveSupervisorIdentity(req);
+  if (!identity) {
     return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to mark a licensing interest.");
   }
 
@@ -43,7 +41,7 @@ export async function POST(req: NextRequest) {
   }
 
   const row = await services().supervisor.addInterest({
-    supervisorWallet: wallet,
+    supervisorWallet: identity.wallet,
     submissionId: parsed.data.submissionId,
     status: parsed.data.status,
     notes: parsed.data.notes ?? undefined,
@@ -54,9 +52,8 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const session = await auth();
-  const wallet = (session?.user as { walletAddress?: string } | undefined)?.walletAddress;
-  if (!wallet) {
+  const identity = await resolveSupervisorIdentity(req);
+  if (!identity) {
     return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to update a licensing interest.");
   }
 
@@ -76,7 +73,7 @@ export async function PATCH(req: NextRequest) {
   if (parsed.data.status) updates.status = parsed.data.status;
   if (parsed.data.notes !== undefined) updates.notes = parsed.data.notes ?? undefined;
 
-  const row = await services().supervisor.updateInterest(parsed.data.id, wallet, updates);
+  const row = await services().supervisor.updateInterest(parsed.data.id, identity.wallet, updates);
   if (!row) {
     return errorResponse(requestId, 404, "NOT_FOUND", "Interest not found.");
   }

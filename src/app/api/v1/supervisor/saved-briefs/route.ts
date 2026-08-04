@@ -1,13 +1,12 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
 import { services, successResponse, errorResponse, requestIdFor, parsePositiveIntParam } from "@/lib/services";
+import { resolveSupervisorIdentity } from "@/lib/supervisor-identity";
 import { BriefTextInputSchema } from "@/lib/validation";
 
 export async function GET(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const session = await auth();
-  const wallet = (session?.user as { walletAddress?: string } | undefined)?.walletAddress;
-  if (!wallet) {
+  const identity = await resolveSupervisorIdentity(req);
+  if (!identity) {
     return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to view saved briefs.");
   }
 
@@ -17,17 +16,16 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search") ?? undefined;
 
   const [rows, total] = await Promise.all([
-    services().supervisor.listSavedBriefs(wallet, { limit, offset, search }),
-    services().supervisor.countSavedBriefs(wallet, { search }),
+    services().supervisor.listSavedBriefs(identity.wallet, { limit, offset, search }),
+    services().supervisor.countSavedBriefs(identity.wallet, { search }),
   ]);
   return successResponse(200, { rows, total }, requestId);
 }
 
 export async function POST(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const session = await auth();
-  const wallet = (session?.user as { walletAddress?: string } | undefined)?.walletAddress;
-  if (!wallet) {
+  const identity = await resolveSupervisorIdentity(req);
+  if (!identity) {
     return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to save a brief.");
   }
 
@@ -44,7 +42,7 @@ export async function POST(req: NextRequest) {
   }
 
   const row = await services().supervisor.saveBrief({
-    supervisorWallet: wallet,
+    supervisorWallet: identity.wallet,
     briefText: parsed.data.briefText,
     filters: parsed.data.filters,
   });
@@ -54,9 +52,8 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const session = await auth();
-  const wallet = (session?.user as { walletAddress?: string } | undefined)?.walletAddress;
-  if (!wallet) {
+  const identity = await resolveSupervisorIdentity(req);
+  if (!identity) {
     return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to delete a saved brief.");
   }
 
@@ -66,6 +63,6 @@ export async function DELETE(req: NextRequest) {
     return errorResponse(requestId, 400, "MISSING_ID", "id query param is required.");
   }
 
-  const result = await services().supervisor.deleteSavedBrief(id, wallet);
+  const result = await services().supervisor.deleteSavedBrief(id, identity.wallet);
   return successResponse(200, result, requestId);
 }

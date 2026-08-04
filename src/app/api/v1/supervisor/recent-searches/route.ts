@@ -1,13 +1,12 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
 import { services, successResponse, errorResponse, requestIdFor, parsePositiveIntParam } from "@/lib/services";
+import { resolveSupervisorIdentity } from "@/lib/supervisor-identity";
 import { BriefTextInputSchema } from "@/lib/validation";
 
 export async function GET(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const session = await auth();
-  const wallet = (session?.user as { walletAddress?: string } | undefined)?.walletAddress;
-  if (!wallet) {
+  const identity = await resolveSupervisorIdentity(req);
+  if (!identity) {
     return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to view recent searches.");
   }
 
@@ -17,17 +16,16 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search") ?? undefined;
 
   const [rows, total] = await Promise.all([
-    services().supervisor.listRecentSearches(wallet, { limit, offset, search }),
-    services().supervisor.countRecentSearches(wallet, { search }),
+    services().supervisor.listRecentSearches(identity.wallet, { limit, offset, search }),
+    services().supervisor.countRecentSearches(identity.wallet, { search }),
   ]);
   return successResponse(200, { rows, total }, requestId);
 }
 
 export async function POST(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const session = await auth();
-  const wallet = (session?.user as { walletAddress?: string } | undefined)?.walletAddress;
-  if (!wallet) {
+  const identity = await resolveSupervisorIdentity(req);
+  if (!identity) {
     return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to log a search.");
   }
 
@@ -44,7 +42,7 @@ export async function POST(req: NextRequest) {
   }
 
   const row = await services().supervisor.logSearch({
-    supervisorWallet: wallet,
+    supervisorWallet: identity.wallet,
     briefText: parsed.data.briefText,
     filters: parsed.data.filters,
     resultsCount: typeof body.resultsCount === "number" ? body.resultsCount : 0,

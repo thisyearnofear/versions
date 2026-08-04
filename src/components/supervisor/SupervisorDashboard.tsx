@@ -12,7 +12,7 @@ import { AudioPlayer } from "@/components/audio/AudioPlayer";
 const PAGE_SIZE = 10;
 
 export function SupervisorDashboard() {
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
   const { showToast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -65,7 +65,6 @@ export function SupervisorDashboard() {
   }, [showToast]);
 
   const refreshProfileAndInterests = useCallback(async () => {
-    if (!isConnected || !address) return;
     setLoading(true);
     try {
       const [profileRes, interestsRes] = await Promise.all([
@@ -79,10 +78,9 @@ export function SupervisorDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [address, isConnected, showToast]);
+  }, [showToast]);
 
   const refreshLists = useCallback(async () => {
-    if (!isConnected || !address) return;
     setListsLoading(true);
     try {
       await Promise.all([
@@ -92,7 +90,7 @@ export function SupervisorDashboard() {
     } finally {
       setListsLoading(false);
     }
-  }, [address, isConnected, fetchSavedBriefs, fetchRecentSearches, savedBriefsPage, savedBriefsSearch, recentSearchesPage, recentSearchesSearch]);
+  }, [fetchSavedBriefs, fetchRecentSearches, savedBriefsPage, savedBriefsSearch, recentSearchesPage, recentSearchesSearch]);
 
   useEffect(() => {
     void refreshProfileAndInterests();
@@ -101,16 +99,6 @@ export function SupervisorDashboard() {
   useEffect(() => {
     void refreshLists();
   }, [refreshLists]);
-
-  if (!isConnected) {
-    return (
-      <div className="border-t border-b border-[var(--color-hair)] py-12 text-center">
-        <p className="font-serif text-lg text-[var(--color-ink-2)]">
-          Connect your wallet to view your supervisor dashboard.
-        </p>
-      </div>
-    );
-  }
 
   const onAutoSave = async () => {
     if (!briefFromUrl) return;
@@ -127,8 +115,17 @@ export function SupervisorDashboard() {
     }
   };
 
+  // MODULAR: wallet-free supervisor journey. No wallet gate — the
+  // dashboard renders for guests (device-scoped identity via the
+  // x-supervisor-guest header). A connected wallet is an optional
+  // upgrade that syncs the same surfaces to a cross-device identity.
   return (
     <div className="flex flex-col gap-16">
+      {!isConnected && (
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+          Saved on this device — connect a wallet to carry your shortlist anywhere.
+        </p>
+      )}
       {!loading && !listsLoading && briefFromUrl && !isBriefSaved && (
         <section className="border border-[var(--color-rust)] p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>

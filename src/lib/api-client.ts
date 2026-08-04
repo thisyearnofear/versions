@@ -3,6 +3,7 @@
 // Backed by the Next.js App Router (the same origin serves the page
 // and the /api routes), so the base URL is empty.
 
+import { getGuestId } from "./guest-id";
 import type {
   AgentName,
   AgentReview,
@@ -54,6 +55,16 @@ export class ApiError extends Error {
 
 type Envelope<T> = { data?: T; success?: boolean; error?: { message: string; code?: string } };
 
+// MODULAR: wallet-free supervisor journey. Attach the per-device
+// guest identity (when present) to every request so supervisor
+// routes can resolve it server-side (see supervisor-identity.ts).
+// Server-side importers (normalizeFeedRow etc.) never hit this
+// because getGuestId() returns null without a window.
+function guestHeaders(): Record<string, string> {
+  const id = getGuestId();
+  return id ? { "x-supervisor-guest": id } : {};
+}
+
 async function request<T>(
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
@@ -61,7 +72,10 @@ async function request<T>(
 ): Promise<T> {
   const init: RequestInit = {
     method,
-    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...guestHeaders(),
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: "same-origin",
   };
@@ -355,6 +369,7 @@ export interface ListenerProfileResponse {
   totalFreePlays: number;
   distinctTracksPlayed: number;
   lastPlayedAt: string | null;
+  streakDays: number;
   badges: ListenerBadgeResponse[];
 }
 
