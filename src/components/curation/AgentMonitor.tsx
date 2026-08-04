@@ -25,6 +25,7 @@ import { parseMoodTags } from "@/lib/format";
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
 import { escapeHtml } from "@/lib/utils";
+import { isSoundEnabled, playPublishFanfare } from "@/lib/audio-feedback";
 import DOMPurify from "dompurify";
 
 // ── Agent identity kit ─────────────────────────────────
@@ -237,6 +238,13 @@ export function AgentMonitor() {
             return base;
           });
           if (e.type === "consensus") {
+            // MODULAR: celebration moment — when the 3rd verdict lands
+            // and the track publishes, play the fanfare (respecting the
+            // ♪ sound toggle) so the judge hears the win, not just reads
+            // it. Deliberately OUTSIDE the setStream updater so the side
+            // effect stays pure w.r.t. React (updaters can be invoked
+            // twice in StrictMode dev, which would double-fire the sound).
+            if (e.published && isSoundEnabled()) playPublishFanfare();
             apiClient.getReviews(e.submissionId).then((data) => {
               setReviews(Array.isArray(data) ? data : []);
             }).catch(() => { /* silent */ });
@@ -442,13 +450,26 @@ export function AgentMonitor() {
           <div className="flex flex-col gap-4">
             {stream.consensus && revealCursor >= 3 && (
               <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
                 className="border border-[var(--color-rust)] bg-[var(--color-paper-2)]/60 px-4 py-3"
               >
-                <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-1">
-                  Consensus
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-rust)]">
+                    Consensus
+                  </span>
+                  {stream.consensus.published && (
+                    <motion.span
+                      aria-hidden="true"
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: [0.5, 1.35, 1], opacity: 1 }}
+                      transition={{ duration: 0.7, delay: 0.15, ease: "easeOut" }}
+                      className="font-mono text-[9px] uppercase tracking-[0.18em] border border-[var(--color-rust)] px-1.5 py-px text-[var(--color-rust)]"
+                    >
+                      ● Published
+                    </motion.span>
+                  )}
                 </div>
                 <div className="font-serif text-sm">
                   {stream.consensus.ratingCount}/3 verdicts in
@@ -456,9 +477,6 @@ export function AgentMonitor() {
                     ` · avg solo ${stream.consensus.avgSolo.toFixed(1)} / vocal ${stream.consensus.avgVocal.toFixed(1)}`}
                 </div>
                 <div className="flex items-center gap-2 mt-1 font-mono text-[10px] uppercase tracking-[0.14em]">
-                  {stream.consensus.published && (
-                    <span className="text-[var(--color-rust)]">● Published</span>
-                  )}
                   {stream.consensus.mock && (
                     <span className="border border-[var(--color-hair-strong)] px-1.5 py-px text-[9px] text-[var(--color-ink-3)]">
                       mock

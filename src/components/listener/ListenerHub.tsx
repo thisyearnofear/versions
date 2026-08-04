@@ -105,7 +105,7 @@ export function ListenerHub() {
 
   if (!profile) return null;
 
-  const { freePlaysRemaining, freePlaysDailyLimit, reputationScore, badges } = profile;
+  const { freePlaysRemaining, freePlaysDailyLimit, reputationScore, streakDays, badges } = profile;
   const freePct = freePlaysDailyLimit > 0 ? (freePlaysRemaining / freePlaysDailyLimit) * 100 : 0;
   const repLevel = reputationScore >= 500 ? "Tastemaker" : reputationScore >= 200 ? "Curator" : reputationScore >= 50 ? "Explorer" : "Listener";
 
@@ -135,17 +135,40 @@ export function ListenerHub() {
           </p>
         </div>
 
-        {/* Reputation */}
-        <div className="text-right">
-          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mb-0.5">
-            Reputation
+        {/* Reputation + streak */}
+        <div className="flex items-end gap-6">
+          <div className="text-right">
+            <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mb-0.5">
+              Reputation
+            </div>
+            <div className="font-mono text-lg font-bold tracking-tight text-[var(--color-ink)]">
+              {reputationScore}
+            </div>
+            <div className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
+              {repLevel}
+            </div>
           </div>
-          <div className="font-mono text-lg font-bold tracking-tight text-[var(--color-ink)]">
-            {reputationScore}
-          </div>
-          <div className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
-            {repLevel}
-          </div>
+          {/* MODULAR: listening streak — consecutive days with a play.
+              A flame meter makes progress visible between badges. */}
+          {streakDays > 0 && (
+            <div
+              className="text-right"
+              title={`${streakDays} day${streakDays === 1 ? "" : "s"} in a row`}
+            >
+              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mb-0.5">
+                Streak
+              </div>
+              <div
+                className={`font-mono text-lg font-bold tracking-tight ${streakDays >= 7 ? "text-[var(--color-rust)]" : "text-[var(--color-ink)]"}`}
+              >
+                <span aria-hidden="true" className="mr-1">🔥</span>
+                {streakDays}
+              </div>
+              <div className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
+                {streakDays === 1 ? "day" : "days"}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

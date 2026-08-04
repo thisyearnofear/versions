@@ -10,6 +10,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { apiClient, type FeedRow } from "@/lib/api-client";
 import { playNoteAt, resumeAudio } from "@/lib/audio-feedback";
+import { generateRatingCover } from "@/lib/cover-gen";
+import { parseMoodTags } from "@/lib/format";
 
 const WAVE_WIDTH = 1600;
 const WAVE_HEIGHT = 280;
@@ -54,6 +56,11 @@ interface CoverItem {
   title: string;
   artist: string;
   coverSvg: string | null;
+  energy?: string | null;
+  tempo?: string | null;
+  avgSolo?: number | null;
+  avgVocal?: number | null;
+  moodTags?: string[] | null;
 }
 
 export function WaveformGallery() {
@@ -101,6 +108,11 @@ export function WaveformGallery() {
             title: r.title,
             artist: r.artist_name,
             coverSvg: r.cover_svg ?? null,
+            energy: r.energy_consensus,
+            tempo: r.tempo_consensus,
+            avgSolo: r.avg_solo_intensity,
+            avgVocal: r.avg_vocal_quality,
+            moodTags: parseMoodTags(r.aggregated_mood_tags),
           }));
         while (items.length < 4) {
           items.push({ id: `placeholder-${items.length}`, title: "", artist: "", coverSvg: null });
@@ -220,11 +232,22 @@ export function WaveformGallery() {
                       {cover.coverSvg ? (
                         <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: cover.coverSvg }} />
                       ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-[var(--color-rust)] to-[var(--color-rust-dark)] flex items-center justify-center">
-                          <span className="font-serif text-base sm:text-lg text-[var(--color-paper)] font-black">
-                            {cover.title.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
+                        <div
+                          className="w-full h-full"
+                          dangerouslySetInnerHTML={{
+                            // MODULAR: deterministic rating-driven fallback so
+                            // the hero shows unique art even for legacy rows
+                            // with null cover_svg.
+                            __html: generateRatingCover({
+                              title: cover.title || cover.id,
+                              avgSolo: cover.avgSolo,
+                              avgVocal: cover.avgVocal,
+                              energy: cover.energy,
+                              tempo: cover.tempo,
+                              moodTags: cover.moodTags ?? [],
+                            }),
+                          }}
+                        />
                       )}
                       <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-2)] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                         {cover.title} · {cover.artist}

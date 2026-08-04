@@ -15,16 +15,10 @@ import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
 import { escapeHtml } from "@/lib/utils";
 import { track } from "@/lib/analytics";
-import DOMPurify from "dompurify";
+import { generateRatingCover } from "@/lib/cover-gen";
+import { sanitizeCoverSvg } from "@/lib/cover-sanitize";
+import { usePlayingTrackKey } from "@/lib/player-bridge";
 import { AnimatePresence, motion } from "framer-motion";
-
-// Sanitize SVG/HTML with DOMPurify — allow only safe SVG tags and attributes.
-function sanitize(unsafe: string): string {
-  return DOMPurify.sanitize(unsafe, {
-    ALLOWED_TAGS: ["svg", "path", "circle", "polygon", "rect", "line", "text", "g", "defs", "linearGradient", "stop", "span"],
-    ALLOWED_ATTR: ["d", "viewBox", "width", "height", "fill", "stroke", "strokeWidth", "stroke-width", "strokeLinejoin", "stroke-linejoin", "cx", "cy", "r", "x", "y", "points", "textAnchor", "dominantBaseline", "fontFamily", "fontSize", "letterSpacing", "class", "data-tg-polygon", "data-tg-axis", "aria-hidden", "xmlns", "role"],
-  });
-}
 
 interface Filters {
   mood: string;
@@ -297,11 +291,29 @@ function FeedSkeleton({ count = 5 }: { count?: number }) {
 
 function FeedRowItem({ row, animationDelay = 0 }: { row: FeedRow; animationDelay?: number }) {
   const [expanded, setExpanded] = useState(false);
+  const playingKey = usePlayingTrackKey();
+  const spinning = playingKey === row.submission_id;
   const tags = useMemo(() => parseMoodTags(row.aggregated_mood_tags), [row.aggregated_mood_tags]);
   const valence = useMemo(() => deriveValence(tags), [tags]);
 
   const audioUrl = `/api/v1/uploads/${row.audio_path?.split("/").pop() ?? ""}`;
-  const cover = row.cover_svg;
+  // MODULAR: seeded tracks (and any legacy row without cover_svg)
+  // fall back to a deterministic rating-driven cover — the track's
+  // agent consensus literally becomes its art. Pure + memoized.
+  const cover = useMemo(
+    () =>
+      row.cover_svg ??
+      generateRatingCover({
+        title: row.title,
+        avgSolo: row.avg_solo_intensity,
+        avgVocal: row.avg_vocal_quality,
+        energy: row.energy_consensus,
+        tempo: row.tempo_consensus,
+        valence: valence ?? undefined,
+        moodTags: tags,
+      }),
+    [row, tags, valence],
+  );
   const tagMarkup = tags
     .map((t) => `<span class="feed-tag">${escapeHtml(t)}</span>`)
     .join("");
@@ -322,12 +334,14 @@ function FeedRowItem({ row, animationDelay = 0 }: { row: FeedRow; animationDelay
         className="w-full flex items-center gap-4 py-4 text-left group"
         aria-expanded={expanded}
       >
-        {/* Vinyl-style circular cover */}
+        {/* Vinyl-style circular cover — spins while this track plays */}
         <div
-          className="shrink-0 w-12 h-12 rounded-full overflow-hidden border-2 border-[var(--color-hair-strong)] bg-[var(--color-paper-2)] grid place-items-center transition-transform group-hover:rotate-90 duration-500"
+          className={`shrink-0 w-12 h-12 rounded-full overflow-hidden border-2 border-[var(--color-hair-strong)] bg-[var(--color-paper-2)] grid place-items-center ${
+            spinning ? "animate-[spin_3s_linear_infinite]" : "transition-transform group-hover:rotate-90 duration-500"
+          }`}
         >
           {cover ? (
-            <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: sanitize(cover) }} />
+            <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: sanitizeCoverSvg(cover) }} />
           ) : (
             <span className="font-serif text-lg font-black text-[var(--color-rust)]">
               {row.title.charAt(0).toUpperCase()}
@@ -383,7 +397,7 @@ function FeedRowItem({ row, animationDelay = 0 }: { row: FeedRow; animationDelay
                 {tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-4" dangerouslySetInnerHTML={{ __html: tagMarkup }} />
                 )}
-                <AudioPlayer src={audioUrl} title={row.title} by={row.artist_name} />
+                <AudioPlayer src={audioUrl} title={row.title} by={row.artist_name} trackKey={row.submission_id} />
               </div>
               <div className="flex items-start justify-center md:justify-end">
                 <TasteGraphMini

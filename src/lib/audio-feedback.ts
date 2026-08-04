@@ -80,6 +80,16 @@ export function playSettlementChime(): void {
   playTone({ freq: NOTES.G4, duration: 0.4, type: "sine", volume: 0.04, delay: 0.12 });
 }
 
+/** Bright ascending fanfare for a publish — C-E-G arpeggio over a
+ *  soft root. Slightly louder + longer than the chimes so it reads
+ *  as a win moment, not background noise. */
+export function playPublishFanfare(): void {
+  playTone({ freq: NOTES.C4, duration: 0.55, type: "sine", volume: 0.05 });
+  playTone({ freq: NOTES.E4, duration: 0.45, type: "triangle", volume: 0.045, delay: 0.07 });
+  playTone({ freq: NOTES.G4, duration: 0.4, type: "triangle", volume: 0.045, delay: 0.14 });
+  playTone({ freq: NOTES.C5, duration: 0.7, type: "triangle", volume: 0.05, delay: 0.21 });
+}
+
 /** Soft sine ping for play events. */
 export function playPlayChime(): void {
   playTone({ freq: NOTES.G5, duration: 0.15, type: "sine", volume: 0.03 });

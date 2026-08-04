@@ -10,11 +10,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { fmtTimecode } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { getPlayingTrackKey, setPlayingTrackKey } from "@/lib/player-bridge";
 
 export interface AudioPlayerProps {
   src: string;
   title: string;
   by?: string;
+  /** MODULAR: identity key published to the playing-track bridge so
+   *  other surfaces (vinyl covers, radars) can react to what's on. */
+  trackKey?: string;
   onPlay?: () => void;
   onPause?: () => void;
   onEnded?: () => void;
@@ -31,6 +35,7 @@ export function AudioPlayer({
   src,
   title,
   by,
+  trackKey,
   onPlay,
   onPause,
   onEnded,
@@ -48,7 +53,12 @@ export function AudioPlayer({
   useEffect(() => {
     return () => {
       if (audioRef.current) audioRef.current.pause();
+      // MODULAR: unmounting a playing player must clear the bridge so
+      // no orphaned key keeps a cover spinning — but only if THIS
+      // player still owns it (a newer track may have taken over).
+      if (trackKey && getPlayingTrackKey() === trackKey) setPlayingTrackKey(null);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggle = useCallback(() => {
@@ -159,16 +169,21 @@ export function AudioPlayer({
         preload="metadata"
         onPlay={() => {
           setPlaying(true);
+          if (trackKey) setPlayingTrackKey(trackKey);
           onPlay?.();
         }}
         onPause={() => {
           setPlaying(false);
+          // MODULAR: only clear the bridge if THIS player owns it (a
+          // newer track may have taken over in a multi-player list).
+          if (trackKey && getPlayingTrackKey() === trackKey) setPlayingTrackKey(null);
           onPause?.();
         }}
         onEnded={() => {
           setPlaying(false);
           setProgress(0);
           setCurrentTime(0);
+          if (trackKey && getPlayingTrackKey() === trackKey) setPlayingTrackKey(null);
           onEnded?.();
         }}
         onTimeUpdate={onTimeUpdate}

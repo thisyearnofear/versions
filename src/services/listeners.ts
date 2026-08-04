@@ -47,6 +47,10 @@ export interface ListenerProfile {
   totalFreePlays: number;
   distinctTracksPlayed: number;
   lastPlayedAt: string | null;
+  /** MODULAR: consecutive-day listening streak (days with ≥1 play)
+   *  ending today, or yesterday if today has no play yet (streak
+   *  still alive until a full day is missed). 0 = no active streak. */
+  streakDays: number;
   badges: ListenerBadge[];
 }
 
@@ -105,6 +109,34 @@ function isNewDay(lastReset: Date): boolean {
   );
 }
 
+// MODULAR: compute the current streak from a set of play-day timestamps.
+// Counts consecutive distinct UTC days ending at `anchorDay` (today, or
+// yesterday when today has no plays — the streak is still alive until a
+// full day is missed). Deterministic + pure so it is unit-testable.
+export function computeStreakDays(
+  playTimestamps: Array<string | Date>,
+  anchorDay: Date = new Date(),
+): number {
+  if (playTimestamps.length === 0) return 0;
+  const daySet = new Set<number>();
+  for (const ts of playTimestamps) {
+    const d = new Date(ts);
+    daySet.add(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  }
+  const startOfDay = (d: Date): number => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const DAY_MS = 86_400_000;
+  const today = startOfDay(anchorDay);
+  // If the user hasn't played today, a streak ending yesterday still
+  // counts (they can keep it alive by playing today).
+  let cursor = daySet.has(today) ? today : today - DAY_MS;
+  let streak = 0;
+  while (daySet.has(cursor)) {
+    streak++;
+    cursor -= DAY_MS;
+  }
+  return streak;
+}
+
 function resetDailyFreePlays(): { used: number; resetAt: Date } {
   return { used: 0, resetAt: new Date() };
 }
@@ -120,6 +152,20 @@ export function createListenerService(): ListenerService {
         .where(eq(profilesTable.wallet, wallet))
         .limit(1);
 
+      // MODULAR: streak needs the play history; query once and reuse
+      // for both the empty-profile and populated-profile paths.
+      // Bounded to the most recent 500 plays: streaks beyond ~1.4
+      // years of daily listening are unrealistic, so the cap never
+      // affects correctness while keeping the per-profile scan cheap
+      // (getProfile is called on every play via ensureProfile).
+      const playRows = await db
+        .select({ playedAt: playEventsTable.playedAt })
+        .from(playEventsTable)
+        .where(eq(playEventsTable.listenerWallet, wallet))
+        .orderBy(desc(playEventsTable.playedAt))
+        .limit(500);
+      const streakDays = computeStreakDays(playRows.map((r) => r.playedAt));
+
       if (!profile) {
         return {
           wallet,
@@ -132,6 +178,7 @@ export function createListenerService(): ListenerService {
           totalFreePlays: 0,
           distinctTracksPlayed: 0,
           lastPlayedAt: null,
+          streakDays,
           badges: [],
         };
       }
@@ -175,6 +222,7 @@ export function createListenerService(): ListenerService {
         totalFreePlays: profile.totalFreePlays,
         distinctTracksPlayed: profile.distinctTracksPlayed,
         lastPlayedAt: profile.lastPlayedAt?.toISOString() ?? null,
+        streakDays,
         badges,
       };
     },
