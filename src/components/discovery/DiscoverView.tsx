@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { track } from "@/lib/analytics";
 import { useTypewriter } from "@/lib/use-typewriter";
 import { reasoningRevealMode } from "@/lib/playlist-reasoning-ui";
+import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
 import { ListenerHub } from "@/components/listener/ListenerHub";
 
 export function DiscoverView() {
@@ -421,7 +422,6 @@ function ReasoningDisclosure({
 
 function MatchSearch() {
   const { showToast } = useToast();
-  const { isConnected } = useAccount();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [brief, setBrief] = useState("");
@@ -438,8 +438,12 @@ function MatchSearch() {
     }
   }, [searchParams]);
 
-  const onSearch = useCallback(async () => {
-    const trimmed = brief.trim();
+  // MODULAR: single search entry point shared by the Match button,
+  // the auto-search effect, and the example-brief quick-fill chips.
+  // No wallet gate: guests search + log via the x-supervisor-guest
+  // identity, wallet users via their session.
+  const runSearch = useCallback(async (text: string) => {
+    const trimmed = text.trim();
     if (trimmed.length < 3 || trimmed.length > 500) {
       showToast(`Brief must be 3–500 characters (got ${trimmed.length}).`, "error");
       return;
@@ -453,32 +457,30 @@ function MatchSearch() {
       if (res.rows.length === 0) {
         showToast("No matches yet — try a less specific brief.", "info");
       }
-      // Log search for supervisor dashboard (best-effort; no await)
-      if (isConnected) {
-        void apiClient.logSearch({ briefText: trimmed, resultsCount: res.total }).catch(() => {
-          // ignore — dashboard is optional
-        });
-      }
+      // Log search for supervisor dashboard (best-effort; no await).
+      void apiClient.logSearch({ briefText: trimmed, resultsCount: res.total }).catch(() => {
+        // ignore — dashboard is optional
+      });
     } catch (err) {
       showToast(`Search failed: ${(err as Error).message}`, "error");
       setResults(null);
     } finally {
       setLoading(false);
     }
-  }, [brief, showToast, isConnected]);
+  }, [showToast]);
+
+  const onSearch = useCallback(() => {
+    void runSearch(brief);
+  }, [brief, runSearch]);
 
   // Auto-search if brief was pre-filled from URL
   useEffect(() => {
     if (brief.trim().length >= 3 && !submitAttempted && !results) {
-      void onSearch();
+      void runSearch(brief);
     }
-  }, [brief, onSearch, submitAttempted, results]);
+  }, [brief, runSearch, submitAttempted, results]);
 
   const onInterest = async (row: BriefSearchRow) => {
-    if (!isConnected) {
-      showToast("Connect your wallet to save licensing interests.", "error");
-      return;
-    }
     try {
       await apiClient.addInterest({ submissionId: row.submission_id });
       showToast("Added to your licensing shortlist", "success");
@@ -488,10 +490,6 @@ function MatchSearch() {
   };
 
   const onSaveBrief = async () => {
-    if (!isConnected) {
-      showToast("Connect your wallet to save briefs.", "error");
-      return;
-    }
     const trimmed = brief.trim();
     if (trimmed.length < 3 || trimmed.length > 500) {
       showToast(`Brief must be 3–500 characters (got ${trimmed.length}).`, "error");
@@ -515,18 +513,17 @@ function MatchSearch() {
       className="mb-16 border-t border-[var(--color-ink)] pt-8"
     >
       <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-2">
-        Supervisor's inverse-search
+        For supervisors &amp; A&amp;R
       </p>
       <h3
         id="match-brief-heading"
         className="font-serif text-2xl md:text-3xl font-black tracking-tight mb-3"
       >
-        Match a brief to the catalog.
+        Describe the scene. Find the track.
       </h3>
       <p className="font-serif text-base text-[var(--color-ink-2)] leading-snug max-w-2xl mb-5">
-        Paste a scene in plain English. We score every published version against
-        scene context, instrumentation, emotional arcs, and audience summary.
-        Top 20 ranked by fit. No wallet needed — search is free.
+        Paste a brief in plain English. No wallet needed — search is free. We rank
+        the top 20 versions by fit.
       </p>
       <div className="flex flex-col gap-3 max-w-2xl">
         <label
@@ -558,6 +555,12 @@ function MatchSearch() {
             {loading ? "Searching\u2026" : "Match"}
           </button>
         </div>
+        <ExampleBriefChips
+          onPick={(text) => {
+            setBrief(text);
+            void runSearch(text);
+          }}
+        />
       </div>
       {loading && (
         <div className="mt-6" role="status" aria-live="polite">
@@ -609,31 +612,8 @@ function MatchSearch() {
                   ))}
                 </ul>
               )}
-              {r.brief.scene_tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3" role="list" aria-label="Scene tags">
-                  {r.brief.scene_tags.map((tag, i) => (
-                    <span
-                      key={i}
-                      role="listitem"
-                      className="bg-[var(--color-paper-2)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink)]"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {r.brief.instruments.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2" role="list" aria-label="Instruments flagged">
-                  {r.brief.instruments.map((inst, i) => (
-                    <span
-                      key={i}
-                      role="listitem"
-                      className="border border-[var(--color-hair-strong)] px-2 py-1 font-mono text-[10px] tracking-wide text-[var(--color-ink-2)]"
-                    >
-                      {inst}
-                    </span>
-                  ))}
-                </div>
+              {(r.brief.scene_tags.length > 0 || r.brief.instruments.length > 0) && (
+                <MatchProfileDisclosure sceneTags={r.brief.scene_tags} instruments={r.brief.instruments} />
               )}
               <div className="flex flex-wrap gap-2 mt-4">
                 <button
@@ -670,6 +650,84 @@ function MatchSearch() {
         </p>
       )}
     </section>
+  );
+}
+
+// ── Example brief quick-fill ────────────────────────────
+// MODULAR: one-click chips so a cold visitor can try the
+// inverse-search with zero typing. Each brief is tuned to score
+// against at least one seeded placement brief (see
+// src/lib/example-briefs.ts).
+function ExampleBriefChips({ onPick }: { onPick: (brief: string) => void }) {
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2"
+      role="group"
+      aria-label="Try an example brief"
+    >
+      <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+        Try:
+      </span>
+      {EXAMPLE_BRIEFS.map((e) => (
+        <button
+          key={e.id}
+          type="button"
+          onClick={() => onPick(e.brief)}
+          className="border border-[var(--color-hair-strong)] px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide text-[var(--color-ink-2)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
+        >
+          {e.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Progressive disclosure: per-track profile ──────────
+// MODULAR: scene tags + instruments stay collapsed behind one
+// toggle so the result card leads with the match rationale
+// (why_fits) and playback, not a wall of chips.
+function MatchProfileDisclosure({
+  sceneTags,
+  instruments,
+}: {
+  sceneTags: string[];
+  instruments: string[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => setExpanded((s) => !s)}
+        aria-expanded={expanded}
+        className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
+      >
+        <span aria-hidden="true" className="inline-block w-3">
+          {expanded ? "▾" : "▸"}
+        </span>
+        Track profile
+      </button>
+      {expanded && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {sceneTags.map((tag, i) => (
+            <span
+              key={`tag-${i}`}
+              className="bg-[var(--color-paper-2)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink)]"
+            >
+              {tag}
+            </span>
+          ))}
+          {instruments.map((inst, i) => (
+            <span
+              key={`inst-${i}`}
+              className="border border-[var(--color-hair-strong)] px-2 py-1 font-mono text-[10px] tracking-wide text-[var(--color-ink-2)]"
+            >
+              {inst}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
