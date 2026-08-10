@@ -19,6 +19,7 @@ import { HowItWorks } from "@/components/home/HowItWorks";
 import { LiveDemoButton } from "@/components/home/LiveDemoButton";
 import { track } from "@/lib/analytics";
 import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
+import { Container, Eyebrow } from "@/components/ui/primitives";
 
 export default function Home() {
   return (
@@ -47,9 +48,7 @@ function DemoBand() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.35 }}
     >
-      <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]">
-        For the demo · watch the agentic loop settle on Arc
-      </p>
+      <Eyebrow className="mb-4">For the demo · watch the agentic loop settle on Arc</Eyebrow>
       <LiveDemoButton />
     </motion.section>
   );
@@ -57,7 +56,7 @@ function DemoBand() {
 
 function Hero() {
   return (
-    <section className="px-6 py-16 md:py-24 text-center max-w-2xl mx-auto">
+    <section className="px-6 py-12 text-center max-w-2xl mx-auto md:py-20">
       <motion.p
         className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-6"
         initial={{ opacity: 0, y: 8 }}
@@ -160,17 +159,17 @@ function BriefSearchBar() {
 
 function StatsBand() {
   return (
-    <div className="px-6 py-6">
+    <Container size="wide" className="py-4">
       <LiveStats />
-    </div>
+    </Container>
   );
 }
 
 function TickerBand() {
   return (
-    <div className="border-t border-b border-[var(--color-hair-strong)] px-6 md:px-12 py-6">
+    <Container size="wide" className="border-t border-b border-[var(--color-hair-strong)] py-4">
       <EconomyTicker limit={5} />
-    </div>
+    </Container>
   );
 }
 
@@ -183,9 +182,8 @@ function SectionNav() {
   ];
 
   return (
-    <section className="px-6 py-12">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex flex-wrap justify-center gap-3">
+    <Container className="py-10">
+      <div className="flex flex-wrap justify-center gap-3">
           {sections.map((s, i) => (
             <motion.div
               key={s.num}
@@ -211,8 +209,7 @@ function SectionNav() {
             </motion.div>
           ))}
         </div>
-      </div>
-    </section>
+    </Container>
   );
 }
 
