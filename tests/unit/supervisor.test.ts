@@ -10,6 +10,7 @@ _vi.mock('@/lib/db', () => ({
 
 const { createSupervisorDashboardService } = await import('../../src/services/supervisor');
 const { submissions, publishedVersions } = await import('../../src/lib/schema');
+const { matchBriefHash } = await import('../../src/lib/match-benchmark');
 
 const WALLET = '0x' + 'a'.repeat(40);
 
@@ -137,5 +138,101 @@ describe('supervisor service', () => {
 
     const interests = await service.listInterests(WALLET, { limit: 10 });
     expect(interests.length).toBe(1);
+  });
+
+  it('records match feedback and computes a benchmark', async () => {
+    const service = makeService();
+    await seedPublishedVersion('sub-fb-1');
+    await seedPublishedVersion('sub-fb-2');
+
+    const hash = matchBriefHash('car chase');
+    await service.recordMatchFeedback({
+      supervisorWallet: WALLET,
+      briefHash: hash,
+      briefText: 'car chase',
+      submissionId: 'sub-fb-1',
+      fitScoreShown: 0.9,
+      rankShown: 1,
+      verdict: 'good_fit',
+    });
+    await service.recordMatchFeedback({
+      supervisorWallet: WALLET,
+      briefHash: hash,
+      briefText: 'car chase',
+      submissionId: 'sub-fb-2',
+      fitScoreShown: 0.3,
+      rankShown: 2,
+      verdict: 'wrong_fit',
+    });
+
+    const report = await service.benchmarkMatchFeedback();
+    expect(report.queryCount).toBe(1);
+    expect(report.judgmentCount).toBe(2);
+    expect(report.goodFits).toBe(1);
+    expect(report.mrr).toBe(1); // best take already #1
+    expect(report.rankOfFirstGood).toBe(1);
+    expect(report.precisionAt[3]).toBe(0.5);
+    expect(report.scoreDiscrimination.goodAvgFit).toBeCloseTo(0.9, 6);
+
+    // Upsert: re-labeling a take does not create a duplicate row.
+    await service.recordMatchFeedback({
+      supervisorWallet: WALLET,
+      briefHash: hash,
+      briefText: 'car chase',
+      submissionId: 'sub-fb-1',
+      fitScoreShown: 0.95,
+      rankShown: 1,
+      verdict: 'wrong_fit',
+    });
+    const mine = await service.listMatchFeedback(WALLET);
+    expect(mine.length).toBe(2);
+    const after = await service.benchmarkMatchFeedback();
+    expect(after.judgmentCount).toBe(2);
+    expect(after.goodFits).toBe(0); // both now wrong_fit
+    expect(after.mrr).toBe(0);
+  });
+
+  it('creates and settles a license for a matched take', async () => {
+    const service = makeService();
+    await seedPublishedVersion('sub-lic-1');
+
+    const license = await service.createLicense({
+      supervisorWallet: WALLET,
+      submissionId: 'sub-lic-1',
+      briefHash: matchBriefHash('car chase'),
+      briefText: 'car chase',
+      usageType: 'sync_tv_film',
+    });
+    expect(license).not.toBeNull();
+    expect(license!.status).toBe('pending_payment');
+    expect(license!.fee_usdc).toBe('250.00');
+    expect(license!.submission_id).toBe('sub-lic-1');
+    expect(license!.title).toBe('Seed sub-lic-1');
+    expect(license!.artist_wallet).toBe(WALLET.toLowerCase());
+
+    // Mark paid with a (mocked) on-chain hash, as the pay route would.
+    const paid = await service.markLicensePaid(license!.id, WALLET, { txHash: '0x' + 'b'.repeat(64), mock: true });
+    expect(paid).not.toBeNull();
+    expect(paid!.status).toBe('paid');
+    expect(paid!.payment_tx_hash).toBe('0x' + 'b'.repeat(64));
+    expect(paid!.payment_mock).toBe(true);
+    expect(paid!.settled_at).not.toBeNull();
+
+    const got = await service.getLicense(license!.id, WALLET);
+    expect(got!.status).toBe('paid');
+    expect((await service.listLicenses(WALLET)).length).toBe(1);
+    expect(await service.countLicenses(WALLET)).toBe(1);
+  });
+
+  it('returns null when licensing a take that is not published', async () => {
+    const service = makeService();
+    const license = await service.createLicense({
+      supervisorWallet: WALLET,
+      submissionId: 'does-not-exist',
+      briefHash: matchBriefHash('car chase'),
+      briefText: 'car chase',
+      usageType: 'sync_ad',
+    });
+    expect(license).toBeNull();
   });
 });

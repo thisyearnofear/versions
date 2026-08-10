@@ -23,10 +23,22 @@ export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" |
         <Link href="/" className="flex items-baseline gap-4">
           <div className="font-serif text-2xl font-black tracking-tight">VERSIONS</div>
           <div className="hidden md:block font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
-            A marketplace for alternate takes
+            Sync search · alternate takes by brief
           </div>
         </Link>
-        <WagmiConnectButton variant="default" />
+        <div className="flex items-center gap-4">
+          <span className="hidden xl:block font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+            free to search · no wallet needed
+          </span>
+          <Link
+            href="/discover"
+            onClick={() => track("nav_click", { to: "/discover", source: "site_header_cta" })}
+            className="hidden md:inline-flex items-center bg-[var(--color-ink)] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-paper)] hover:bg-[var(--color-rust)] transition-colors"
+          >
+            Find a track
+          </Link>
+          <WagmiConnectButton variant="compact" />
+        </div>
       </div>
       <nav role="tablist" className="px-6 md:px-12 flex overflow-x-auto border-t border-[var(--color-hair)]">
         {tabs.map((t) => (

@@ -40,6 +40,8 @@ export type AnalyticsEvent =
   | "listener_profile_failed"
   | "sse_reconnect"
   | "brief_search"
+  | "hero_brief_search"
+  | "hero_brief_example"
   | "demo_run"
   | "ar_rationale_expand";
 

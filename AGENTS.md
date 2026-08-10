@@ -4,6 +4,28 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+## Product positioning (context for agents)
+
+Before touching product or UI code, hold the strategic frame. Full thesis:
+
+- `STRATEGY.md` — source of truth (moat mechanics, incumbent disincentive)
+- `POSITIONING.md` — distilled one-pager for external stakeholders
+
+The short version:
+
+- **We are** the autonomous curation + per-play settlement layer for music
+  licensing. Positioned as a **wedge built on one agentic primitive**: an
+  *autonomous brief → licensed-track pipeline* (three AI agents rank the
+  long tail of alternate takes by fit + per-play micro-settlement on Arc USDC).
+- **Supervisor-first.** The primary user is the music supervisor/A&R; the
+  primary action is searching the catalog by brief. Search is guest-friendly —
+  no wallet required. The consumer catalog/feed/tips are beachhead and
+  distribution, **not** the business model.
+- **Keep the outcome we sell clear in the UI.** Lead with the supervisor
+  job (brief → ranked, license-ready tracks); treat the agent economy and
+  wallet as the proof/rail underneath, not the headline. Don't regress the
+  supervisor-first framing or put the wallet back at the front door.
+
 ## Mood-tag wire-format convention
 
 Read-side envelope fields in `src/lib/api-client.ts` can arrive in

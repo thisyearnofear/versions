@@ -3,7 +3,7 @@
 // sync-first workflow.
 
 import { randomUUID } from 'crypto';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../lib/db';
 import {
   users as usersTable,
@@ -11,8 +11,12 @@ import {
   savedBriefs as savedBriefsTable,
   briefSearches as briefSearchesTable,
   licensingInterests as interestsTable,
+  matchFeedback as matchFeedbackTable,
+  licenses as licensesTable,
   publishedVersions as pvTable,
 } from '../lib/schema';
+import { computeMatchBenchmark, type MatchBenchmarkReport, type MatchFeedbackVerdict } from '../lib/match-benchmark';
+import { licenseFeeUsdc, type LicenseUsageType } from '../lib/pricing';
 
 export type SupervisorRole = 'supervisor' | 'sync_house' | 'aandr';
 
@@ -85,6 +89,58 @@ export interface LicensingInterestRow {
   updated_at: Date;
 }
 
+export interface MatchFeedbackInput {
+  supervisorWallet: string;
+  briefHash: string;
+  briefText: string;
+  submissionId: string;
+  fitScoreShown: number;
+  rankShown?: number | null;
+  verdict: MatchFeedbackVerdict;
+}
+
+export interface MatchFeedbackRow {
+  id: string;
+  supervisor_wallet: string;
+  brief_hash: string;
+  brief_text: string;
+  submission_id: string;
+  fit_score_shown: number;
+  rank_shown: number | null;
+  verdict: MatchFeedbackVerdict;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface LicenseInput {
+  supervisorWallet: string;
+  submissionId: string;
+  briefHash: string;
+  briefText: string;
+  usageType: LicenseUsageType;
+}
+
+export interface LicenseRow {
+  id: string;
+  supervisor_wallet: string;
+  submission_id: string;
+  brief_hash: string;
+  brief_text: string;
+  usage_type: LicenseUsageType;
+  territory: string;
+  term_months: number;
+  fee_usdc: string;
+  status: 'pending_payment' | 'paid';
+  payment_tx_hash: string | null;
+  payment_mock: boolean;
+  settled_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+  title?: string | null;
+  artist_name?: string | null;
+  artist_wallet?: string | null;
+}
+
 export interface SupervisorDashboardService {
   upsertProfile: (input: SupervisorProfileInput) => Promise<SupervisorProfileRow>;
   getProfile: (wallet: string) => Promise<SupervisorProfileRow | null>;
@@ -99,6 +155,14 @@ export interface SupervisorDashboardService {
   updateInterest: (id: string, wallet: string, updates: Partial<Omit<LicensingInterestInput, 'supervisorWallet' | 'submissionId'>>) => Promise<LicensingInterestRow | null>;
   listInterests: (wallet: string, opts?: { limit?: number; offset?: number }) => Promise<LicensingInterestRow[]>;
   countInterests: (wallet: string) => Promise<number>;
+  recordMatchFeedback: (input: MatchFeedbackInput) => Promise<MatchFeedbackRow>;
+  listMatchFeedback: (wallet: string, opts?: { limit?: number; offset?: number }) => Promise<MatchFeedbackRow[]>;
+  benchmarkMatchFeedback: () => Promise<MatchBenchmarkReport>;
+  createLicense: (input: LicenseInput) => Promise<LicenseRow | null>;
+  markLicensePaid: (id: string, wallet: string, payment: { txHash: string; mock: boolean }) => Promise<LicenseRow | null>;
+  getLicense: (id: string, wallet: string) => Promise<LicenseRow | null>;
+  listLicenses: (wallet: string, opts?: { limit?: number; offset?: number }) => Promise<LicenseRow[]>;
+  countLicenses: (wallet: string) => Promise<number>;
 }
 
 function rowToProfile(row: typeof profilesTable.$inferSelect): SupervisorProfileRow {
@@ -157,6 +221,52 @@ function rowToInterest(
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
+}
+
+function rowToMatchFeedback(row: typeof matchFeedbackTable.$inferSelect): MatchFeedbackRow {
+  return {
+    id: row.id,
+    supervisor_wallet: row.supervisorWallet,
+    brief_hash: row.briefHash,
+    brief_text: row.briefText,
+    submission_id: row.submissionId,
+    fit_score_shown: row.fitScoreShown,
+    rank_shown: row.rankShown,
+    verdict: row.verdict as MatchFeedbackVerdict,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
+  };
+}
+
+function rowToLicense(
+  row: typeof licensesTable.$inferSelect,
+  version?: { title?: string | null; artistName?: string | null; artistWallet?: string | null },
+): LicenseRow {
+  return {
+    id: row.id,
+    supervisor_wallet: row.supervisorWallet,
+    submission_id: row.submissionId,
+    brief_hash: row.briefHash,
+    brief_text: row.briefText,
+    usage_type: row.usageType as LicenseUsageType,
+    territory: row.territory,
+    term_months: row.termMonths,
+    fee_usdc: row.feeUsdc,
+    status: row.status as 'pending_payment' | 'paid',
+    payment_tx_hash: row.paymentTxHash,
+    payment_mock: row.paymentMock,
+    settled_at: row.settledAt,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
+    title: version?.title ?? null,
+    artist_name: version?.artistName ?? null,
+    artist_wallet: version?.artistWallet ?? null,
+  };
+}
+
+async function getVersionRow(submissionId: string) {
+  const [row] = await db.select().from(pvTable).where(eq(pvTable.submissionId, submissionId)).limit(1);
+  return row;
 }
 
 async function ensureUser(wallet: string) {
@@ -364,6 +474,144 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
         .select({ count: sql<number>`count(*)`.as('count') })
         .from(interestsTable)
         .where(eq(interestsTable.supervisorWallet, wallet.toLowerCase()));
+      return row?.count ?? 0;
+    },
+
+    async recordMatchFeedback(input) {
+      await ensureProfile(input.supervisorWallet);
+      const now = new Date();
+      const [row] = await db
+        .insert(matchFeedbackTable)
+        .values({
+          id: randomUUID(),
+          supervisorWallet: input.supervisorWallet.toLowerCase(),
+          briefHash: input.briefHash,
+          briefText: input.briefText,
+          submissionId: input.submissionId,
+          fitScoreShown: input.fitScoreShown,
+          rankShown: input.rankShown ?? null,
+          verdict: input.verdict,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [matchFeedbackTable.supervisorWallet, matchFeedbackTable.briefHash, matchFeedbackTable.submissionId],
+          set: {
+            fitScoreShown: input.fitScoreShown,
+            rankShown: input.rankShown ?? null,
+            verdict: input.verdict,
+            updatedAt: now,
+          },
+        })
+        .returning();
+      return rowToMatchFeedback(row);
+    },
+
+    async listMatchFeedback(wallet, { limit = 100, offset = 0 } = {}) {
+      const rows = await db
+        .select()
+        .from(matchFeedbackTable)
+        .where(eq(matchFeedbackTable.supervisorWallet, wallet.toLowerCase()))
+        .orderBy(desc(matchFeedbackTable.createdAt))
+        .limit(limit)
+        .offset(offset);
+      return rows.map(rowToMatchFeedback);
+    },
+
+    async benchmarkMatchFeedback() {
+      const rows = await db.select().from(matchFeedbackTable).orderBy(asc(matchFeedbackTable.createdAt));
+      return computeMatchBenchmark(
+        rows.map((r) => ({
+          briefHash: r.briefHash,
+          submissionId: r.submissionId,
+          fitScoreShown: r.fitScoreShown,
+          rankShown: r.rankShown,
+          verdict: r.verdict as MatchFeedbackVerdict,
+        })),
+      );
+    },
+
+    async createLicense(input) {
+      await ensureProfile(input.supervisorWallet);
+      const version = await getVersionRow(input.submissionId);
+      if (!version) return null; // not a published take
+      const fee = licenseFeeUsdc(input.usageType);
+      const now = new Date();
+      const [row] = await db
+        .insert(licensesTable)
+        .values({
+          id: randomUUID(),
+          supervisorWallet: input.supervisorWallet.toLowerCase(),
+          submissionId: input.submissionId,
+          briefHash: input.briefHash,
+          briefText: input.briefText,
+          usageType: input.usageType,
+          territory: 'worldwide',
+          termMonths: 12,
+          feeUsdc: fee,
+          status: 'pending_payment',
+          paymentMock: false,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [licensesTable.supervisorWallet, licensesTable.submissionId, licensesTable.briefHash],
+          set: {
+            briefText: input.briefText,
+            usageType: input.usageType,
+            feeUsdc: fee,
+            updatedAt: now,
+          },
+        })
+        .returning();
+      return rowToLicense(row, version);
+    },
+
+    async markLicensePaid(id, wallet, payment) {
+      const now = new Date();
+      const [row] = await db
+        .update(licensesTable)
+        .set({
+          status: 'paid',
+          paymentTxHash: payment.txHash,
+          paymentMock: payment.mock,
+          settledAt: now,
+          updatedAt: now,
+        })
+        .where(and(eq(licensesTable.id, id), eq(licensesTable.supervisorWallet, wallet.toLowerCase())))
+        .returning();
+      if (!row) return null;
+      const version = await getVersionRow(row.submissionId);
+      return rowToLicense(row, version ?? undefined);
+    },
+
+    async getLicense(id, wallet) {
+      const [row] = await db
+        .select({ license: licensesTable, version: pvTable })
+        .from(licensesTable)
+        .leftJoin(pvTable, eq(licensesTable.submissionId, pvTable.submissionId))
+        .where(and(eq(licensesTable.id, id), eq(licensesTable.supervisorWallet, wallet.toLowerCase())))
+        .limit(1);
+      return row ? rowToLicense(row.license, row.version ?? undefined) : null;
+    },
+
+    async listLicenses(wallet, { limit = 50, offset = 0 } = {}) {
+      const rows = await db
+        .select({ license: licensesTable, version: pvTable })
+        .from(licensesTable)
+        .leftJoin(pvTable, eq(licensesTable.submissionId, pvTable.submissionId))
+        .where(eq(licensesTable.supervisorWallet, wallet.toLowerCase()))
+        .orderBy(desc(licensesTable.createdAt))
+        .limit(limit)
+        .offset(offset);
+      return rows.map((r) => rowToLicense(r.license, r.version ?? undefined));
+    },
+
+    async countLicenses(wallet) {
+      const [row] = await db
+        .select({ count: sql<number>`count(*)`.as('count') })
+        .from(licensesTable)
+        .where(eq(licensesTable.supervisorWallet, wallet.toLowerCase()));
       return row?.count ?? 0;
     },
   };

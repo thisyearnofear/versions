@@ -508,6 +508,42 @@ export interface LicensingInterest {
   updated_at: string;
 }
 
+export interface MatchFeedbackRow {
+  id: string;
+  supervisor_wallet: string;
+  brief_hash: string;
+  brief_text: string;
+  submission_id: string;
+  fit_score_shown: number;
+  rank_shown: number | null;
+  verdict: "good_fit" | "wrong_fit";
+  created_at: string;
+  updated_at: string;
+}
+
+export type LicenseUsageType = "sync_ad" | "sync_tv_film" | "sync_digital" | "other";
+
+export interface LicenseRow {
+  id: string;
+  supervisor_wallet: string;
+  submission_id: string;
+  brief_hash: string;
+  brief_text: string;
+  usage_type: LicenseUsageType;
+  territory: string;
+  term_months: number;
+  fee_usdc: string;
+  status: "pending_payment" | "paid";
+  payment_tx_hash: string | null;
+  payment_mock: boolean;
+  settled_at: string | null;
+  created_at: string;
+  updated_at: string;
+  title?: string | null;
+  artist_name?: string | null;
+  artist_wallet?: string | null;
+}
+
 // ---------- typed wrappers ----------
 
 export const apiClient = {
@@ -692,6 +728,41 @@ export const apiClient = {
   },
   updateInterest(body: { id: string; status?: string; notes?: string }): Promise<{ row: LicensingInterest }> {
     return api.patch<{ row: LicensingInterest }>("/api/v1/supervisor/interests", body);
+  },
+  /** Record supervisor ground-truth on a shown (brief → take) match. */
+  recordMatchFeedback(body: {
+    briefHash: string;
+    briefText: string;
+    submissionId: string;
+    fitScoreShown: number;
+    rankShown?: number | null;
+    verdict: "good_fit" | "wrong_fit";
+  }): Promise<{ row: MatchFeedbackRow }> {
+    return api.post<{ row: MatchFeedbackRow }>("/api/v1/discover/brief/feedback", body);
+  },
+  /** Create a license for a matched take (usage → fee derived server-side). */
+  createLicense(body: {
+    submissionId: string;
+    briefHash: string;
+    briefText: string;
+    usageType: LicenseUsageType;
+  }): Promise<{ license: LicenseRow }> {
+    return api.post<{ license: LicenseRow }>("/api/v1/licenses", body);
+  },
+  getLicenses(opts?: { limit?: number; offset?: number }): Promise<{ rows: LicenseRow[]; total: number }> {
+    const params = new URLSearchParams();
+    if (opts?.limit !== undefined) params.set("limit", String(opts.limit));
+    if (opts?.offset !== undefined) params.set("offset", String(opts.offset));
+    const qs = params.toString();
+    return api.get<{ rows: LicenseRow[]; total: number }>(`/api/v1/licenses${qs ? `?${qs}` : ""}`);
+  },
+  getLicense(id: string): Promise<{ license: LicenseRow }> {
+    return api.get<{ license: LicenseRow }>(`/api/v1/licenses/${encodeURIComponent(id)}`);
+  },
+  payLicense(id: string): Promise<{ license: LicenseRow; settled?: { txHash: string; mock: boolean } }> {
+    return api.post<{ license: LicenseRow; settled?: { txHash: string; mock: boolean } }>(
+      `/api/v1/licenses/${encodeURIComponent(id)}/pay`,
+    );
   },
 };
 

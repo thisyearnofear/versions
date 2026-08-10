@@ -8,6 +8,20 @@
       "when": 1785859730923,
       "tag": "0000_friendly_harry_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786382038347,
+      "tag": "0001_panoramic_catseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786383277092,
+      "tag": "0002_absent_abomination",
+      "breakpoints": true
     }
   ]
 }

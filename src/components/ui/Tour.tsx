@@ -15,24 +15,24 @@ interface TourStep {
 
 const STEPS: TourStep[] = [
   {
-    title: "01 · Connect your wallet",
+    title: "01 · Describe the scene",
     body:
-      "VERSIONS uses a crypto wallet to sign submissions, verify payments, and track attribution. Just connect any EVM wallet (MetaMask, Coinbase Wallet, WalletConnect, or Rainbow). No gas is needed — the 0.50 USDC fee settles on Arc L1, a low-cost sidechain, not Ethereum mainnet. Your wallet is your identity on VERSIONS — it acts as your artist profile, curator badge, and listener pass.",
+      "Paste a brief in plain English — the scene, the mood, the tempo you need. Search is free and needs no wallet: guests browse with a private session identity, and connecting a wallet is optional.",
   },
   {
-    title: "02 · Submit a version",
+    title: "02 · Match the catalog",
     body:
-      "Upload an audio file, fill in the metadata, and pay 0.50 USDC to put a take in the curation queue. The fee funds the curator pool — split 70/20/10 between the AI agent curators, the platform, and your MusicBrainz attribution. After three agent ratings your version publishes to the feed.",
+      "Three autonomous AI agents — Production, Performance, and Market — score every alternate take against your brief and return a ranked top 20 with a why-it-fits rationale. No humans in the loop.",
   },
   {
-    title: "03 · AI agent curators",
+    title: "03 · Shortlist & license",
     body:
-      "Three autonomous AI agents review every submission — Production (mix & mastering), Performance (delivery & feel), and Market (placement & fit). Each rates across four dimensions: solo intensity, vocal quality, energy, and tempo. No human in the loop — results appear in seconds.",
+      "Save briefs to your supervisor dashboard, mark tracks interested, and move them through contacted → licensed. Run the whole sync funnel from one workspace.",
   },
   {
-    title: "04 · Discover & earn",
+    title: "04 · Earn on play",
     body:
-      "The feed is the catalog of published versions with aggregated taste-graph ratings. The Discover tab features A&R agent-curated playlists — play a track and the artist earns $0.0005 USDC instantly. Listeners get 10 free plays daily, reputation scores, and milestone badges as they explore.",
+      "When a licensed track plays, royalties settle in USDC on Arc instantly — no middlemen. Artists get paid per play; listeners get 10 free plays daily and earn reputation badges.",
   },
 ];
 

@@ -7,10 +7,10 @@
 import { motion } from "framer-motion";
 
 const STEPS = [
-  { num: "01", title: "Connect", body: "Any EVM wallet. No gas — fees settle on Arc L1." },
-  { num: "02", title: "Submit", body: "Upload a take. 0.50 USDC funds the curator pool." },
-  { num: "03", title: "AI review", body: "Three agents rate it in seconds. No humans in the loop." },
-  { num: "04", title: "Get paid", body: "Publish to the feed. Plays pay USDC instantly." },
+  { num: "01", title: "Describe", body: "Paste a brief in plain English — the scene, the mood, the tempo you need." },
+  { num: "02", title: "Match", body: "Three AI agents rank every alternate take by fit. No humans in the loop." },
+  { num: "03", title: "Shortlist", body: "Save briefs and mark tracks interested. Run the licensing funnel from one dashboard." },
+  { num: "04", title: "Pay on play", body: "Licensed tracks settle in USDC on Arc the moment they play." },
 ];
 
 export function HowItWorks() {
@@ -39,6 +39,9 @@ export function HowItWorks() {
           </motion.div>
         ))}
       </div>
+      <p className="mt-8 text-center font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+        Artists submit alternate takes — the same agents publish the strong ones.
+      </p>
     </section>
   );
 }

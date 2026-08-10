@@ -12,11 +12,12 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { useToast } from "@/components/ui/Toast";
-import { apiClient, type Playlist, type ListenerBadgeResponse, type BriefSearchResponse, type BriefSearchRow } from "@/lib/api-client";
+import { apiClient, type Playlist, type ListenerBadgeResponse, type BriefSearchResponse, type BriefSearchRow, type LicenseUsageType } from "@/lib/api-client";
 import { parseMoodTags } from "@/lib/format";
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
 import { cn } from "@/lib/utils";
+import { matchBriefHash } from "@/lib/match-benchmark";
 import { track } from "@/lib/analytics";
 import { useTypewriter } from "@/lib/use-typewriter";
 import { reasoningRevealMode } from "@/lib/playlist-reasoning-ui";
@@ -429,6 +430,11 @@ function MatchSearch() {
   const [savingBrief, setSavingBrief] = useState(false);
   const [results, setResults] = useState<BriefSearchResponse | null>(null);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  // Ground-truth: which results a supervisor has already labeled.
+  const [feedbackSent, setFeedbackSent] = useState<Record<string, "good_fit" | "wrong_fit">>({});
+  // License action: chosen usage type + which takes have an opened license.
+  const [licenseUsage, setLicenseUsage] = useState<LicenseUsageType>("sync_tv_film");
+  const [licensedFor, setLicensedFor] = useState<Record<string, boolean>>({});
 
   // Pre-fill brief from ?brief= query param (e.g. from saved briefs / recent searches)
   useEffect(() => {
@@ -486,6 +492,43 @@ function MatchSearch() {
       showToast("Added to your licensing shortlist", "success");
     } catch (err) {
       showToast(`Interest failed: ${(err as Error).message}`, "error");
+    }
+  };
+
+  // MODULAR: record ground-truth (good_fit / wrong_fit) for the shown
+  // (brief → take) match. brief_hash buckets the query so the benchmark can
+  // aggregate across supervisors; rank is the 1-based display position.
+  const onFeedback = async (row: BriefSearchRow, rank: number, verdict: "good_fit" | "wrong_fit") => {
+    try {
+      await apiClient.recordMatchFeedback({
+        briefHash: matchBriefHash(brief),
+        briefText: brief,
+        submissionId: row.submission_id,
+        fitScoreShown: row.fit_score,
+        rankShown: rank,
+        verdict,
+      });
+      setFeedbackSent((prev) => ({ ...prev, [row.submission_id]: verdict }));
+      showToast(verdict === "good_fit" ? "Good fit — logged to the benchmark" : "Wrong fit — logged to the benchmark", "success");
+    } catch (err) {
+      showToast(`Feedback failed: ${(err as Error).message}`, "error");
+    }
+  };
+
+  // MODULAR: open a license for a matched take. The price is derived
+  // server-side from usage_type; the supervisor settles it on the dashboard.
+  const onLicense = async (row: BriefSearchRow) => {
+    try {
+      await apiClient.createLicense({
+        submissionId: row.submission_id,
+        briefHash: matchBriefHash(brief),
+        briefText: brief,
+        usageType: licenseUsage,
+      });
+      setLicensedFor((prev) => ({ ...prev, [row.submission_id]: true }));
+      showToast("License created — settle it on your dashboard", "success");
+    } catch (err) {
+      showToast(`License failed: ${(err as Error).message}`, "error");
     }
   };
 
@@ -572,7 +615,7 @@ function MatchSearch() {
           <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]">
             {results.total} match{results.total === 1 ? "" : "es"}
           </div>
-          {results.rows.map((r) => (
+          {results.rows.map((r, i) => (
             <article
               key={r.submission_id}
               role="listitem"
@@ -630,6 +673,62 @@ function MatchSearch() {
                   className="border border-[var(--color-ink)] font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors disabled:opacity-50"
                 >
                   {savingBrief ? "Saving…" : "Save brief"}
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em]">
+                <span className="text-[var(--color-ink-3)]">Match quality:</span>
+                <button
+                  type="button"
+                  onClick={() => void onFeedback(r, i + 1, "good_fit")}
+                  disabled={!!feedbackSent[r.submission_id]}
+                  aria-pressed={feedbackSent[r.submission_id] === "good_fit"}
+                  className={cn(
+                    "border px-2.5 py-1 transition-colors",
+                    feedbackSent[r.submission_id] === "good_fit"
+                      ? "border-[var(--color-rust)] text-[var(--color-rust)]"
+                      : "border-[var(--color-hair-strong)] text-[var(--color-ink-2)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
+                    feedbackSent[r.submission_id] ? "cursor-default opacity-60" : "cursor-pointer",
+                  )}
+                >
+                  {feedbackSent[r.submission_id] === "good_fit" ? "✓ Good fit" : "Good fit"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onFeedback(r, i + 1, "wrong_fit")}
+                  disabled={!!feedbackSent[r.submission_id]}
+                  aria-pressed={feedbackSent[r.submission_id] === "wrong_fit"}
+                  className={cn(
+                    "border px-2.5 py-1 transition-colors",
+                    feedbackSent[r.submission_id] === "wrong_fit"
+                      ? "border-[var(--color-ink)] text-[var(--color-ink)]"
+                      : "border-[var(--color-hair-strong)] text-[var(--color-ink-2)] hover:border-[var(--color-ink)] hover:text-[var(--color-ink)]",
+                    feedbackSent[r.submission_id] ? "cursor-default opacity-60" : "cursor-pointer",
+                  )}
+                >
+                  {feedbackSent[r.submission_id] === "wrong_fit" ? "✕ Wrong fit" : "Wrong fit"}
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em]">
+                <span className="text-[var(--color-ink-3)]">License this take:</span>
+                <select
+                  aria-label="Usage type"
+                  value={licenseUsage}
+                  onChange={(e) => setLicenseUsage(e.target.value as LicenseUsageType)}
+                  disabled={!!licensedFor[r.submission_id]}
+                  className="border border-[var(--color-ink)] bg-[var(--color-paper)] p-1 font-mono text-[10px] uppercase tracking-[0.1em]"
+                >
+                  <option value="sync_tv_film">TV/Film</option>
+                  <option value="sync_ad">Ad</option>
+                  <option value="sync_digital">Digital</option>
+                  <option value="other">Other</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void onLicense(r)}
+                  disabled={!!licensedFor[r.submission_id]}
+                  className="border border-[var(--color-ink)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors disabled:opacity-50"
+                >
+                  {licensedFor[r.submission_id] ? "Licensed ✓" : "License this take"}
                 </button>
               </div>
               {r.brief.sync_comparables.length > 0 && (

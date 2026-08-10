@@ -12,12 +12,13 @@ export default function DiscoverPage() {
         <main className="flex-1 px-6 md:px-12 py-12 max-w-4xl mx-auto w-full">
           <FadeIn>
             <h2 className="font-serif text-3xl md:text-4xl font-black tracking-tight text-center mb-2">
-              Discover.
+              Find the version.
             </h2>
           </FadeIn>
           <FadeIn delay={0.1}>
             <p className="font-serif text-base text-[var(--color-ink-3)] text-center mb-10">
-              Paste a brief. Find the track.
+              Describe a scene in plain English — get ranked alternate takes
+              for sync. Free to search, no wallet needed.
             </p>
           </FadeIn>
           <FadeIn delay={0.2}>

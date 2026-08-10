@@ -320,6 +320,42 @@ CREATE TABLE IF NOT EXISTS licensing_interests (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_interest_supermission ON licensing_interests(supervisor_wallet, submission_id);
 CREATE INDEX IF NOT EXISTS idx_licensing_interests_supervisor ON licensing_interests(supervisor_wallet, created_at);
+
+CREATE TABLE IF NOT EXISTS match_feedback (
+  id TEXT PRIMARY KEY,
+  supervisor_wallet TEXT NOT NULL REFERENCES supervisor_profiles(wallet),
+  brief_hash TEXT NOT NULL,
+  brief_text TEXT NOT NULL,
+  submission_id TEXT NOT NULL REFERENCES published_versions(submission_id),
+  fit_score_shown REAL NOT NULL,
+  rank_shown INTEGER,
+  verdict TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_match_feedback_super_brief_sub ON match_feedback(supervisor_wallet, brief_hash, submission_id);
+CREATE INDEX IF NOT EXISTS idx_match_feedback_brief_hash ON match_feedback(brief_hash);
+CREATE INDEX IF NOT EXISTS idx_match_feedback_verdict_created ON match_feedback(verdict, created_at);
+
+CREATE TABLE IF NOT EXISTS licenses (
+  id TEXT PRIMARY KEY,
+  supervisor_wallet TEXT NOT NULL REFERENCES supervisor_profiles(wallet),
+  submission_id TEXT NOT NULL REFERENCES published_versions(submission_id),
+  brief_hash TEXT NOT NULL,
+  brief_text TEXT NOT NULL,
+  usage_type TEXT NOT NULL,
+  territory TEXT NOT NULL DEFAULT 'worldwide',
+  term_months INTEGER NOT NULL DEFAULT 12,
+  fee_usdc TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending_payment',
+  payment_tx_hash TEXT,
+  payment_mock BOOLEAN NOT NULL DEFAULT FALSE,
+  settled_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_license_super_sub_brief ON licenses(supervisor_wallet, submission_id, brief_hash);
+CREATE INDEX IF NOT EXISTS idx_licenses_supervisor ON licenses(supervisor_wallet, created_at);
 `;
 
 export async function initTestDb(): Promise<ReturnType<typeof drizzle<typeof schema>>> {
@@ -350,6 +386,8 @@ export async function resetTestDb(): Promise<void> {
   // Drop all rows from every test table. Cheaper than recreating the instance.
   const tables = [
     'licensing_interests',
+    'licenses',
+    'match_feedback',
     'saved_briefs',
     'brief_searches',
     'supervisor_profiles',

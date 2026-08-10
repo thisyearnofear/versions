@@ -1,14 +1,26 @@
 # VERSIONS · Next.js (production architecture)
 
-VERSIONS is a sync-first music search engine. Music supervisors, A&R
-teams, and sync houses paste a plain-English brief and get ranked
-matches from a catalog of alternate takes. Artists submit versions;
-AI agents review and tag them; supervisors find the right track in
-seconds.
+VERSIONS is the **autonomous curation and per-play settlement layer for
+music licensing**. It is a sync-first search engine: music supervisors,
+A&R teams, and sync houses paste a plain-English brief and get ranked,
+license-ready matches from a catalog of alternate takes. Artists submit
+versions; AI agents review and rank them; and Arc USDC settles every
+payment — submission fees, agent payouts, per-play royalties, and
+listener tips — with no human in the loop.
+
+Strategically, VERSIONS is a **wedge from an agentic primitive**: the
+"autonomous brief → licensed-track pipeline with per-play micro-settlement"
+is a picks-and-shovels primitive that incumbents (labels, production-music
+catalogs, DSPs) are structurally disincentivized to build — pursuing it
+cannibalizes their curated-catalog premium and their human-sync labor
+model. The consumer-facing catalog is our beachhead and distribution, not
+the business model. The moat is a compounding ground-truth dataset plus
+settlement liquidity plus zero-marginal-cost scale. See
+[STRATEGY.md](./STRATEGY.md) for the full thesis.
 
 This repo is the production-grade rebuild of the VERSIONS Lepton
 Submission Marketplace, ported from the vanilla Node.js + SQLite +
-browser-ESM architecture at `../versions` to **Next.js 16.2** with
+browser-ESM architecture at `../versions` to **Next.js 16.3** with
 **PostgreSQL** (Neon serverless), **NextAuth v5** (wallet credentials),
 **Wagmi v2** + **RainbowKit**, **Drizzle ORM**, and the **Vercel AI SDK**.
 
@@ -22,6 +34,12 @@ payment** — submission fees, agent payouts, per-play royalties, and
 listener tips — with zero human intervention.
 
 ### Why this wins the Agentic Economy track
+
+This build is the working **proof of the primitive** behind VERSIONS: three
+fully autonomous agents and every money movement settling on Arc. The
+agents and the economy ticker are not the product pitch — they are the
+evidence that the agentic pipeline is real, replayable, and can own the
+ground-truth data incumbents can't. See **Strategy & positioning** below.
 
 - **Three autonomous AI agents** (Production, Performance, Market)
   review every submission in parallel, score it on a 5-axis rubric,
@@ -112,7 +130,7 @@ per-device by design; they are not merged when a wallet later connects
 
 ## Stack
 
-- **Next.js** 16.2.9 (App Router, Turbopack, React 19.2)
+- **Next.js** 16.3.0 (App Router, Turbopack, React 19.2)
 - **TypeScript** 5, strict
 - **Tailwind CSS** v4 with the VERSIONS design system (cream / ink / rust, Fraunces serif, JetBrains Mono)
 - **Drizzle ORM** + `@neondatabase/serverless`
@@ -170,20 +188,52 @@ single-sourced from `expectedLegCountFor(curatorCount)`; the sweeper
 recovers any legs stuck `pending` beyond 30 s; and every x402 tip is
 replay-protected by a unique `puid` index.
 
-## Strategy
+## Strategy & positioning
 
-VERSIONS is intentionally **sync-first, B2B-first**. The consumer
-features (feed, playlists, listener tips) exist as secondary
-optionality: they keep the platform alive, demonstrate the Arc / x402
-payment story, and may one day supply engagement data to supervisors.
-But the near-term go-to-market is the supervisor inverse-search.
+VERSIONS is **sync-first and B2B-first**, positioned as a
+**picks-and-shovels wedge built on an agentic primitive** — not as a
+catalog marketplace competing on library size.
+
+**The wedge — one agentic primitive.** The primitive is an *autonomous
+brief → licensed-track pipeline*: paste a brief, and three AI agents rank
+the long tail of alternate takes by fit — with a `why_fits` rationale, per
+take — and settle per-play micro-payments on Arc USDC. We sell the
+*outcome* (pre-cleared, attributed, micro-settled licenses) that
+incumbents can't cheaply reproduce.
+
+**Why incumbents are structurally disincentivized (innovator's dilemma).**
+Labels and production-music catalogs monetize premium curated catalogs and
+human sync teams; autonomously clearing and micro-licensing the long tail
+cannibalizes that margin and that labor model. DSPs under-invest because
+sync licensing is a messy "schlep" that conflicts with their ad/sub model.
+The result: the primitive stays un-cloned.
+
+**Moat.** The compounding asset is the **ground-truth dataset** —
+brief→fit verdicts and accept/reject/license-won feedback, cross-catalog —
+which is a two-sided data network effect. Underneath it: zero-marginal-cost
+scale (ranking track #N costs ~nothing) and **settlement liquidity**. Our
+bet is to become *the memory of what actually licenses and settles, per
+take, per play.*
+
+**Marketplace = beachhead + distribution, not the business model.** The
+supervisor surface is where we win a niche, generate the ground-truth data,
+and earn pricing leverage. Distribution is built into the product: x402
+settlement is a visible brand moment (Stripe-style), the live ticker is
+proof-of-life, and each catalog integration is a channel. We aim to be the
+**best operator, not a network-neutral rail** — win our own catalog first,
+then let others consume the outcome.
 
 **Primary motion:** supervisors and A&R teams paste briefs → artists
 submit versions → AI agents tag and rank → supervisors license tracks.
 
 **Secondary motion:** listeners browse the feed, play tracks, and tip
-artists. This is not the business model; it is a live demo of the
-catalog and a future data layer.
+artists. This is not the business model; it is a live demo of the catalog
+and a future data layer.
+
+The full thesis — Thiel's monopoly-vs-commodity test and building
+distribution into the product, Graham's "schlep," the moat mechanics, the
+beachhead→expand path, and honest risks — lives in
+[STRATEGY.md](./STRATEGY.md).
 
 ## Build commands
 
@@ -826,27 +876,17 @@ psql "$DATABASE_URL" -c "CREATE TABLE IF NOT EXISTS __drizzle_migrations (id ser
 npm run db:push       # one last time on the drifted DB to align it, then db:migrate forward
 ```
 
-**Drift caveat:** `drizzle-kit push` still works for quick local demos,
-but it asks interactive questions when the live DB has drifted from
-`src/lib/schema.ts` — it fails with "Interactive prompts require a TTY"
-in non-interactive shells. A drifted DB will bite in specific ways: a
-missing `submissions.audio_sha256` column 500s the submit route, a
-missing `uq_legs_submission_wallet_role` unique index makes publish
-roll back (its `ON CONFLICT` needs the index to exist), and missing
-`x402_proofs` / `telemetry_events` tables break tips and analytics.
-Prefer `db:generate` + `db:migrate` for anything that outlives the
-demo.
-
-**Drift caveat:** `drizzle-kit push` asks interactive questions when
-the live DB has drifted from `src/lib/schema.ts` — it fails with
-"Interactive prompts require a TTY" in non-interactive shells, so run
-it from a real terminal. A drifted DB will bite in specific ways: a
-missing `submissions.audio_sha256` column 500s the submit route, a
-missing `uq_legs_submission_wallet_role` unique index makes publish
-roll back (its `ON CONFLICT` needs the index to exist), and missing
-`x402_proofs` / `telemetry_events` tables break tips and analytics.
-All of these are created by a clean `db:push`; if push can't run,
-mirror the DDL from `src/lib/schema.ts` via `psql`.
+**Drift caveat:** `drizzle-kit push` still works for quick local demos, it
+asks interactive questions when the live DB has drifted from
+`src/lib/schema.ts`, and it fails with "Interactive prompts require a TTY"
+in non-interactive shells — so run it from a real terminal. A drifted DB
+will bite in specific ways: a missing `submissions.audio_sha256` column
+500s the submit route, a missing `uq_legs_submission_wallet_role` unique
+index makes publish roll back (its `ON CONFLICT` needs the index to
+exist), and missing `x402_proofs` / `telemetry_events` tables break tips
+and analytics. All of these are created by a clean `db:push`; if push
+can't run, mirror the DDL from `src/lib/schema.ts` via `psql`. Prefer
+`db:generate` + `db:migrate` for anything that outlives the demo.
 
 ### 4. Backfill embeddings (optional)
 

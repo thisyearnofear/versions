@@ -3,6 +3,7 @@
 
 import { z } from 'zod';
 import type { VersionType, Energy, Tempo } from './types';
+import { LICENSE_USAGE_TYPES } from './pricing';
 
 export const VERSION_TYPES = ['demo', 'live', 'acoustic', 'remix', 'remaster', 'studio', 'other'] as const;
 export const ENERGIES = ['lower', 'same', 'higher'] as const;
@@ -141,5 +142,29 @@ export const LicensingInterestUpdateSchema = z.object({
   notes: z.string().max(MAX_NOTES_LEN).optional().nullable(),
 });
 export type LicensingInterestUpdateValidated = z.infer<typeof LicensingInterestUpdateSchema>;
+
+// ── Match feedback (ground truth) validation ────────────
+
+export const MATCH_FEEDBACK_VERDICTS = ['good_fit', 'wrong_fit'] as const;
+
+export const MatchFeedbackSchema = z.object({
+  briefHash: z.string().trim().min(8).max(32),
+  briefText: z.string().trim().min(3).max(500),
+  submissionId: z.string().trim().min(1),
+  fitScoreShown: z.number().finite(),
+  rankShown: z.number().int().min(1).optional().nullable(),
+  verdict: z.enum(MATCH_FEEDBACK_VERDICTS),
+});
+export type MatchFeedbackValidated = z.infer<typeof MatchFeedbackSchema>;
+
+// ── License creation validation ─────────────────────────
+
+export const LicenseCreateSchema = z.object({
+  submissionId: z.string().trim().min(1),
+  briefHash: z.string().trim().min(8).max(32),
+  briefText: z.string().trim().min(3).max(500),
+  usageType: z.enum(LICENSE_USAGE_TYPES),
+});
+export type LicenseCreateValidated = z.infer<typeof LicenseCreateSchema>;
 
 export type { VersionType, Energy, Tempo };

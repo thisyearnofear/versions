@@ -434,3 +434,58 @@ export const licensingInterests = pgTable('licensing_interests', {
   unique('uq_interest_supermission').on(table.supervisorWallet, table.submissionId),
   index('idx_licensing_interests_supervisor').on(table.supervisorWallet, table.createdAt),
 ]);
+
+// ── Match Feedback (ground truth) ───────────────────────
+// MODULAR: supervisor-labeled relevance (good_fit / wrong_fit) on a
+// specific (brief → take) match, captured at the moment it's shown.
+// This is the labeled set that powers the online benchmark (MRR /
+// precision@k / nDCG) and, later, scorer tuning. brief_hash is a stable
+// hash of the normalized brief so the same query text across supervisors
+// + sessions aggregates into one benchmark query. fit_score_shown /
+// rank_shown snapshot the state the supervisor actually saw.
+
+export const matchFeedback = pgTable('match_feedback', {
+  id: text('id').primaryKey(),
+  supervisorWallet: text('supervisor_wallet').notNull().references(() => supervisorProfiles.wallet),
+  briefHash: text('brief_hash').notNull(),
+  briefText: text('brief_text').notNull(),
+  submissionId: text('submission_id').notNull().references(() => publishedVersions.submissionId),
+  fitScoreShown: real('fit_score_shown').notNull(),
+  rankShown: integer('rank_shown'),
+  verdict: text('verdict').notNull(), // good_fit | wrong_fit
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  unique('uq_match_feedback_super_brief_sub').on(table.supervisorWallet, table.briefHash, table.submissionId),
+  index('idx_match_feedback_brief_hash').on(table.briefHash),
+  index('idx_match_feedback_verdict_created').on(table.verdict, table.createdAt),
+]);
+
+// ── Licenses ────────────────────────────────────────────
+// MODULAR: turning the "licensed" status string into a real, settled
+// outcome. A license records the deal (take + brief + usage + fee) and
+// the on-chain payment that clears it. Status: pending_payment → paid
+// (tx_hash + mock flag + settled_at). The price is derived from usage
+// via src/lib/pricing.ts. settlement happens in the pay route via the
+// Arc adapter (platform-brokered in this first non-scaling cut).
+
+export const licenses = pgTable('licenses', {
+  id: text('id').primaryKey(),
+  supervisorWallet: text('supervisor_wallet').notNull().references(() => supervisorProfiles.wallet),
+  submissionId: text('submission_id').notNull().references(() => publishedVersions.submissionId),
+  briefHash: text('brief_hash').notNull(),
+  briefText: text('brief_text').notNull(),
+  usageType: text('usage_type').notNull(), // sync_ad | sync_tv_film | sync_digital | other
+  territory: text('territory').notNull().default('worldwide'),
+  termMonths: integer('term_months').notNull().default(12),
+  feeUsdc: text('fee_usdc').notNull(),
+  status: text('status').notNull().default('pending_payment'), // pending_payment | paid
+  paymentTxHash: text('payment_tx_hash'),
+  paymentMock: boolean('payment_mock').notNull().default(false),
+  settledAt: timestamp('settled_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  unique('uq_license_super_sub_brief').on(table.supervisorWallet, table.submissionId, table.briefHash),
+  index('idx_licenses_supervisor').on(table.supervisorWallet, table.createdAt),
+]);
