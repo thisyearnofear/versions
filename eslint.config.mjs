@@ -13,6 +13,21 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Prevent dynamic imports of Node built-ins in API routes (causes NFT trace bloat / secret leaks)
+  {
+    files: ["src/app/api/**/*.ts", "src/app/api/**/*.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "ImportExpression[source.value=/^(crypto|fs|path|os|child_process|net|tls|dns|cluster)$/]",
+          message:
+            "Use a static top-level import for Node built-ins in API routes. Dynamic import() causes @vercel/nft to trace the entire project root, leaking .git and .env into the bundle.",
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

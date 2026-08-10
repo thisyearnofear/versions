@@ -1,4 +1,7 @@
 import type { NextRequest } from 'next/server';
+import crypto from 'crypto';
+import path from 'path';
+import fs from 'fs';
 import {
   services,
   successResponse,
@@ -81,10 +84,7 @@ export async function POST(req: NextRequest) {
     }
 
     const ext = (audioContentType || 'audio/mpeg').replace(/^audio\//, '').replace(/[^a-z0-9]/gi, '') || 'mp3';
-    const crypto = await import('crypto');
     const filename = `${crypto.randomUUID()}.${ext}`;
-    const path = await import('path');
-    const fs = await import('fs');
     // MODULAR: sha256 of the raw audio bytes — captured ONCE here
     // so the dedup check matches the actual upload content
     // (content-addressed against intent, not the storage

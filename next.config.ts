@@ -4,6 +4,21 @@ import path from "node:path";
 const projectRoot = path.resolve(__dirname);
 
 const nextConfig: NextConfig = {
+  outputFileTracingExcludes: {
+    "*": [
+      ".git/**",
+      "data/**",
+      ".env",
+      ".env.local",
+      ".env.example",
+      "*.pdf",
+      "*.pptx",
+      ".qoder/**",
+      "scripts/**",
+      "drizzle/**",
+      "docs/**",
+    ],
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "50mb",

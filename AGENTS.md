@@ -108,3 +108,26 @@ directly (not via HTTP). They use the same PGlite test DB as unit
 tests but don't mock the service registry — they exercise the full
 service chain. The `version_embeddings` table uses TEXT (not vector)
 in PGlite since pgvector isn't available.
+
+
+## Node built-in imports in API routes (security rule)
+
+**Never use dynamic `await import(...)` for Node built-ins** (`crypto`,
+`fs`, `path`, `os`, etc.) inside `src/app/api/` route handlers. Always
+use static top-level imports:
+
+```ts
+// GOOD — static, traceable
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+
+// BAD — causes @vercel/nft to trace the entire project root,
+// leaking .git/, .env, data/uploads/ into the serverless bundle
+const crypto = await import('crypto');
+```
+
+The ESLint config enforces this (`no-restricted-syntax` on
+`ImportExpression` in `src/app/api/**`). The `postbuild` script
+(`scripts/audit-nft-traces.sh`) also hard-fails if `.git`, `.env`, or
+`data/uploads` appear in any `.nft.json` trace.
