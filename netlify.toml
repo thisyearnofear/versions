@@ -25,3 +25,15 @@
 [functions]
   [functions.timeout]
     value = 30
+
+# Keep the SSR handler function under Netlify's 250 MB limit by excluding
+# dev-only heavy packages from the server bundle (none are used at runtime).
+[functions."___netlify-server-handler".excluded_node_modules]
+  "@electric-sql/pglite" = true
+  "drizzle-kit" = true
+  "vitest" = true
+  "@vitest" = true
+  "tsx" = true
+  "@tailwindcss" = true
+  "lightningcss" = true
+  "typescript" = true
