@@ -235,7 +235,9 @@ distribution into the product, Graham's "schlep," the moat mechanics, the
 beachhead→expand path, and honest risks — lives in
 [STRATEGY.md](./STRATEGY.md). The versioned primitive contract — the wedge
 external catalogs could consume — is specified in
-[docs/primitive-api.md](./docs/primitive-api.md).
+[docs/primitive-api.md](./docs/primitive-api.md). The beachhead bootstrapping
+playbook (vertical slice, recruiting script, label capture, success metrics)
+is in [docs/beachhead.md](./docs/beachhead.md).
 
 ## Build commands
 
