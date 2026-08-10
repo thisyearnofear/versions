@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { LicensesSection } from "@/components/supervisor/LicensesSection";
+import { MatchBenchmarkPanel } from "@/components/supervisor/MatchBenchmarkPanel";
 
 const PAGE_SIZE = 10;
 
@@ -175,6 +176,7 @@ export function SupervisorDashboard() {
       />
       <InterestsSection interests={interests} onChange={refreshProfileAndInterests} />
       <LicensesSection />
+      <MatchBenchmarkPanel />
       {loading && (
         <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
           Loading…

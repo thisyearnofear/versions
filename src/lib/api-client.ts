@@ -12,6 +12,7 @@ import type {
   PlacementBrief,
   RecipientRole,
 } from "./types";
+import type { MatchBenchmarkReport } from "./match-benchmark";
 
 // MODULAR: every api-client field that carries user-curator mood
 // tags arrives in one of two wire shapes -- a JSON-stringified
@@ -763,6 +764,10 @@ export const apiClient = {
     return api.post<{ license: LicenseRow; settled?: { txHash: string; mock: boolean } }>(
       `/api/v1/licenses/${encodeURIComponent(id)}/pay`,
     );
+  },
+  /** Read-only match-quality report (ground-truth moat). */
+  getMatchBenchmark(): Promise<{ report: MatchBenchmarkReport }> {
+    return api.get<{ report: MatchBenchmarkReport }>("/api/v1/discover/benchmark");
   },
 };
 
