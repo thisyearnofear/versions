@@ -81,7 +81,7 @@ export function LicensesSection() {
                   {l.title ?? "Untitled"} <span className="text-[var(--color-ink-3)]">·</span>{" "}
                   {l.artist_name ?? "Unknown artist"}
                 </p>
-                <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-ink-3)]">
+                <p className="mt-1 font-serif text-sm text-[var(--color-ink-2)]">
                   {USAGE_LABELS[l.usage_type]} · ${l.fee_usdc} USDC · {l.territory} · {l.term_months} mo
                   <span className={l.status === "paid" ? "ml-2 text-[var(--color-rust)]" : "ml-2 text-[var(--color-ink)]"}>
                     {l.status === "paid" ? "PAID" : "PENDING"}

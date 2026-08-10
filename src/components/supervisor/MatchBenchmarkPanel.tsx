@@ -78,7 +78,7 @@ export function MatchBenchmarkPanel() {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--color-ink-3)]">{label}</dt>
+      <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-2)]">{label}</dt>
       <dd className="mt-1 font-serif text-2xl font-bold leading-none">{value}</dd>
     </div>
   );

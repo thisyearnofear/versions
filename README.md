@@ -829,10 +829,12 @@ names.
 npm run db:rename-briefs
 ```
 
-### 2. Enable pgvector (extension only)
+### 2. Enable pgvector (extension only) — **required before `db:migrate`**
 
-Enables the `vector` extension. Required only if you want semantic
-search (CLAP embeddings); the structured-tag scorer works without it.
+Enables the `vector` extension. The baseline migration creates a
+`version_embeddings` table whose `embedding` column is typed
+`vector(512)`, so `npm run db:migrate` **hard-fails** until the
+extension exists. Run this first on any fresh database:
 
 ```bash
 npm run db:pgvector
@@ -843,6 +845,10 @@ The `version_embeddings` table is owned by the Drizzle migration
 `CREATE EXTENSION IF NOT EXISTS vector;` so there is no double-create
 between `db:pgvector` and `db:migrate`. On other Postgres providers,
 install the extension first: `CREATE EXTENSION vector;`.
+
+> Note: `DROP SCHEMA public CASCADE` also drops the extension (it lives
+> in the `public` schema). After resetting a database that way, re-run
+> `npm run db:pgvector` before `db:migrate`.
 
 **ivfflat index:** the Drizzle schema does not declare the
 approximate-NN index, so the migration creates none. For catalogs
@@ -856,8 +862,9 @@ CREATE INDEX IF NOT EXISTS idx_version_embeddings_vector
 
 ### 3. Apply schema (migrate, not push, for forward changes)
 
-A **baseline Drizzle migration** is checked in at `drizzle/`
-(`0000_friendly_harry_osborn.sql`, all 18 tables). The workflow for
+A **baseline Drizzle migration set** is checked in at `drizzle/`
+(`0000_friendly_harry_osborn.sql` + `0001`/`0002` forward migrations,
+all 23 tables). The workflow for
 **new schema changes** is generate → review → migrate, never push:
 
 ```bash
@@ -866,19 +873,24 @@ npm run db:generate   # write a new migration from src/lib/schema.ts
 npm run db:migrate    # apply pending migrations
 ```
 
-For **fresh databases** (CI, a new Neon branch, a local dev box),
-`npm run db:migrate` from the baseline creates everything — no `db:push`
-needed.
+For **fresh databases** (CI, a new Neon branch, a local dev box), make
+sure `npm run db:pgvector` ran first (§2), then `npm run db:migrate`
+from the baseline creates everything — no `db:push` needed.
 
 For **existing databases** that were previously kept in sync with
 `npm run db:push`, the baseline must be marked as applied once so
 `db:migrate` starts from a clean ledger:
 
 ```bash
-psql "$DATABASE_URL" -c "CREATE TABLE IF NOT EXISTS __drizzle_migrations (id serial PRIMARY KEY, hash text NOT NULL, created_at bigint);"
+psql "$DATABASE_URL" -c "CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (id serial PRIMARY KEY, hash text NOT NULL, created_at bigint);"
 # then apply ONLY the drift-free forward migrations; or run
 npm run db:push       # one last time on the drifted DB to align it, then db:migrate forward
 ```
+
+(The migration ledger lives in the `drizzle` schema, not `public` — the
+table above is `drizzle.__drizzle_migrations`. In practice, re-aligning a
+heavily drifted database is faster done as a clean reset; see the
+non-transactional note below.)
 
 **Drift caveat:** `drizzle-kit push` still works for quick local demos, it
 asks interactive questions when the live DB has drifted from
@@ -891,6 +903,14 @@ exist), and missing `x402_proofs` / `telemetry_events` tables break tips
 and analytics. All of these are created by a clean `db:push`; if push
 can't run, mirror the DDL from `src/lib/schema.ts` via `psql`. Prefer
 `db:generate` + `db:migrate` for anything that outlives the demo.
+
+**Migrate is non-transactional per file:** `drizzle-kit migrate` runs each
+migration's statements without a wrapping transaction, so a failure
+mid-file leaves partial tables and **no ledger entry** for that migration
+(`drizzle.__drizzle_migrations` stays empty). Re-running then fails on
+"relation already exists". Recovery is a clean reset: drop both schemas
+(`DROP SCHEMA public CASCADE; DROP SCHEMA drizzle CASCADE;`), re-create
+the `vector` extension, and re-run `db:migrate`.
 
 ### 4. Backfill embeddings (optional)
 

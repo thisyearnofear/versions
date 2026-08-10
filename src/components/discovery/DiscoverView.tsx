@@ -624,11 +624,11 @@ function MatchSearch() {
               <div className="flex flex-wrap items-baseline justify-between gap-3 mb-2">
                 <div className="min-w-0 flex-1">
                   <div className="font-serif text-xl font-black">{r.title}</div>
-                  <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mt-1">
+                  <div className="mt-1 font-serif text-sm text-[var(--color-ink-2)]">
                     {r.artist_name} · {r.version_type} · {r.rating_count} ratings
                   </div>
                 </div>
-                <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] tabular-nums">
+                <div className="font-serif text-sm font-semibold text-[var(--color-rust)] tabular-nums">
                   fit {r.fit_score.toFixed(2)}
                 </div>
               </div>
@@ -648,7 +648,7 @@ function MatchSearch() {
                     <li
                       key={i}
                       role="listitem"
-                      className="border border-[var(--color-rust)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--color-rust)]"
+                      className="border border-[var(--color-rust)] px-2 py-1 font-serif text-[13px] text-[var(--color-rust)]"
                     >
                       {w}
                     </li>
