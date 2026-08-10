@@ -288,7 +288,7 @@ export function AgentMonitor() {
     : 0;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-[var(--color-ink)] pt-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-[var(--color-hair-strong)] pt-8">
       {/* Recent Verdicts strip — full-width above the queue/reviews grid */}
       <section className="md:col-span-2 mb-2" aria-live="polite">
         <div className="flex items-baseline justify-between mb-3">

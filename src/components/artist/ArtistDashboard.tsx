@@ -352,7 +352,7 @@ export function ArtistDashboard({ wallet }: { wallet: string }) {
   return (
     <div>
       {/* ── Dashboard header ────────────────────────────── */}
-      <header className="border-t border-[var(--color-ink)] pt-8 pb-6 mb-8">
+      <header className="border-t border-[var(--color-hair-strong)] pt-8 pb-6 mb-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-3">
@@ -555,7 +555,7 @@ function OverviewTab({
       </section>
 
       {/* Fee split info */}
-      <section className="lg:col-span-2 border-t border-[var(--color-ink)] pt-6">
+      <section className="lg:col-span-2 border-t border-[var(--color-hair-strong)] pt-6">
         <div className="grid md:grid-cols-3 gap-6">
           <div className="border border-[var(--color-hair-strong)] p-5">
             <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] mb-2">Curator pool</div>
@@ -1002,7 +1002,7 @@ function PlacementsTab({
 function DashboardSkeleton() {
   return (
     <div>
-      <div className="border-t border-[var(--color-ink)] pt-8 pb-6 mb-8">
+      <div className="border-t border-[var(--color-hair-strong)] pt-8 pb-6 mb-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-3">
             <div className="skel h-3 w-32" />

@@ -2,6 +2,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { FeedView } from "@/components/feed/FeedView";
 import { FadeIn } from "@/components/ui/FadeIn";
 import { ToastProvider } from "@/components/ui/Toast";
+import { Container } from "@/components/ui/primitives";
 import { services } from "@/lib/services";
 import { normalizeFeedRow, type FeedRow } from "@/lib/api-client";
 
@@ -20,20 +21,22 @@ export default async function FeedPage() {
     <ToastProvider>
       <div className="flex flex-col flex-1">
         <SiteHeader active="feed" />
-        <main className="flex-1 px-6 md:px-12 py-12 max-w-4xl mx-auto w-full">
-          <FadeIn>
-            <h2 className="font-serif text-3xl md:text-4xl font-black tracking-tight text-center mb-2">
-              The feed.
-            </h2>
-          </FadeIn>
-          <FadeIn delay={0.1}>
-            <p className="font-serif text-base text-[var(--color-ink-3)] text-center mb-10">
-              AI-reviewed tracks, cleared for sync.
-            </p>
-          </FadeIn>
-          <FadeIn delay={0.2}>
-            <FeedView initialRows={initialRows} />
-          </FadeIn>
+        <main className="flex-1">
+          <Container className="py-10">
+            <FadeIn>
+              <h2 className="mb-2 text-center font-serif text-3xl font-black tracking-tight md:text-4xl">
+                The feed.
+              </h2>
+            </FadeIn>
+            <FadeIn delay={0.1}>
+              <p className="mb-10 text-center font-serif text-base text-[var(--color-ink-2)]">
+                AI-reviewed tracks, cleared for sync.
+              </p>
+            </FadeIn>
+            <FadeIn delay={0.2}>
+              <FeedView initialRows={initialRows} />
+            </FadeIn>
+          </Container>
         </main>
       </div>
     </ToastProvider>

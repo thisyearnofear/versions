@@ -225,7 +225,7 @@ function ProfileSection({
   };
 
   return (
-    <section className="border-t border-[var(--color-ink)] pt-8">
+    <section className="border-t border-[var(--color-hair-strong)] pt-8">
       <h3 className="font-serif text-2xl font-black tracking-tight mb-4">Profile</h3>
       {editing ? (
         <div className="flex flex-col gap-3 max-w-xl">
@@ -345,7 +345,7 @@ function SavedBriefsSection({
   };
 
   return (
-    <section className="border-t border-[var(--color-ink)] pt-8">
+    <section className="border-t border-[var(--color-hair-strong)] pt-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <h3 className="font-serif text-2xl font-black tracking-tight">Saved briefs</h3>
         <input
@@ -431,7 +431,7 @@ function RecentSearchesSection({
     timeoutRef.current = setTimeout(() => { onSearch(value); }, 300);
   };
   return (
-    <section className="border-t border-[var(--color-ink)] pt-8">
+    <section className="border-t border-[var(--color-hair-strong)] pt-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <h3 className="font-serif text-2xl font-black tracking-tight">Recent searches</h3>
         <input
@@ -501,7 +501,7 @@ function InterestsSection({
   };
 
   return (
-    <section className="border-t border-[var(--color-ink)] pt-8">
+    <section className="border-t border-[var(--color-hair-strong)] pt-8">
       <h3 className="font-serif text-2xl font-black tracking-tight mb-4">Licensing interests</h3>
       {interests.length === 0 ? (
         <p className="font-serif text-[var(--color-ink-2)]">

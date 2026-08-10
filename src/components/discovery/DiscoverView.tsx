@@ -238,7 +238,7 @@ function PlaylistCard({
   );
 
   return (
-    <article className="border-t border-[var(--color-ink)] pt-6">
+    <article className="border-t border-[var(--color-hair-strong)] pt-6">
       <header className="flex flex-wrap items-start justify-between gap-4 mb-3">
         <div>
           <h3 className="font-serif text-3xl font-normal tracking-tight mb-1">{playlist.name}</h3>
@@ -553,7 +553,7 @@ function MatchSearch() {
   return (
     <section
       aria-labelledby="match-brief-heading"
-      className="mb-16 border-t border-[var(--color-ink)] pt-8"
+      className="mb-16 border-t border-[var(--color-hair-strong)] pt-8"
     >
       <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-2">
         For supervisors &amp; A&amp;R
@@ -998,7 +998,7 @@ function DiscoverSkeleton({ count = 2 }: { count?: number }) {
   return (
     <div className="flex flex-col gap-8">
       {Array.from({ length: count }).map((_, i) => (
-        <article key={i} className="border-t border-[var(--color-ink)] pt-6">
+        <article key={i} className="border-t border-[var(--color-hair-strong)] pt-6">
           <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
             <div className="space-y-2 flex-1">
               <div className="skel h-[28px] w-full max-w-[300px]" />

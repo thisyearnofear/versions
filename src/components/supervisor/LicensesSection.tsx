@@ -57,7 +57,7 @@ export function LicensesSection() {
   };
 
   return (
-    <section className="border-t border-[var(--color-ink)] pt-8">
+    <section className="border-t border-[var(--color-hair-strong)] pt-8">
       <h3 className="mb-1 font-serif text-2xl font-black tracking-tight">Licenses</h3>
       <p className="mb-4 font-serif text-sm text-[var(--color-ink-3)]">
         Your settled licensing outcomes from matched takes.

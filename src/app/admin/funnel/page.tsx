@@ -274,7 +274,7 @@ function FunnelChart() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border-t border-[var(--color-ink)] pt-3">
+    <div className="border-t border-[var(--color-hair-strong)] pt-3">
       <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] mb-1">
         {label}
       </div>
@@ -322,7 +322,7 @@ function FunnelSkeleton() {
       {/* Summary skeleton */}
       <div className="grid grid-cols-3 gap-6 mb-10">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="border-t border-[var(--color-ink)] pt-3">
+          <div key={i} className="border-t border-[var(--color-hair-strong)] pt-3">
             <div className="skel h-[10px] w-[80px] mb-2" />
             <div className="skel h-[28px] w-[60px]" />
           </div>

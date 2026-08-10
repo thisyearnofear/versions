@@ -258,7 +258,7 @@ export function ListenerDashboard({ wallet }: { wallet: string }) {
   return (
     <div>
       {/* ── Dashboard header ────────────────────────────── */}
-      <header className="border-t border-[var(--color-ink)] pt-8 pb-6 mb-8">
+      <header className="border-t border-[var(--color-hair-strong)] pt-8 pb-6 mb-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-3">
@@ -712,7 +712,7 @@ function BadgeProgressCard({
 function DashboardSkeleton() {
   return (
     <div>
-      <div className="border-t border-[var(--color-ink)] pt-8 pb-6 mb-8">
+      <div className="border-t border-[var(--color-hair-strong)] pt-8 pb-6 mb-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-3">
             <div className="skel h-3 w-40" />
