@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 const RAW = readFileSync(
-  new URL('../../data/labels/beachhead-starter.labels.json', import.meta.url),
+  new URL('../../scripts/labels/beachhead-starter.labels.json', import.meta.url),
   'utf8',
 );
 const LABELS = JSON.parse(RAW) as Array<{ brief: string; submissionId: string; verdict: string }>;

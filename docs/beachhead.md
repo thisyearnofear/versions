@@ -64,7 +64,7 @@ different sides (sync house, ad, film) so the labels aren't from one viewpoint.
   record offline, use the curation tool. A starter set for the tense-chase slice
   is checked in — run it to seed ground truth before labelers arrive:
   ```bash
-  npm run curate -- --set data/labels/beachhead-starter.labels.json
+  npm run curate -- --set scripts/labels/beachhead-starter.labels.json
   ```
   (Seed the catalog first so the `demo-published-*` takes exist:
   `npm run seed`.)
