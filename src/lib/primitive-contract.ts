@@ -21,7 +21,7 @@ export type PrimitiveMatchResponse = BriefSearchResponse;
 
 // ── record ground-truth on a shown match ────────────────
 export interface PrimitiveVerdictRequest {
-  brief: string;
+  briefText: string;
   briefHash: string; // stable hash of the normalized brief (matchBriefHash)
   submissionId: string; // a take from the match response
   fitScoreShown: number;
@@ -63,6 +63,6 @@ export const PRIMITIVE_ENDPOINTS = {
   verdict: '/api/v1/discover/brief/feedback',
   license: '/api/v1/licenses',
   receipt: (id: string) => `/api/v1/licenses/${encodeURIComponent(id)}`,
-  settle: (id: string) => `/api/v1/licenses/${encodeURIComponent(id)}/pay`,
+  settle: (id: string) => `/api/v1/licenses/${encodeURIComponent(id)}`,
   benchmark: '/api/v1/discover/benchmark',
 } as const;

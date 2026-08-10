@@ -69,7 +69,7 @@ async function main() {
   // 2. Verdict — record ground truth on the #1 result.
   const briefHash = matchBriefHash(BRIEF);
   const verdictReq: PrimitiveVerdictRequest = {
-    brief: BRIEF,
+    briefText: BRIEF,
     briefHash,
     submissionId: top.submission_id,
     fitScoreShown: top.fit_score,

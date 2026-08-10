@@ -59,7 +59,7 @@ Ranked alternate takes for a plain-English brief.
 
 ### 2. `POST /verdict` — record ground truth
 Label a shown match as a good fit / wrong fit (feeds the benchmark moat).
-- Body: `{ brief, briefHash, submissionId, fitScoreShown, rankShown?, verdict: "good_fit"|"wrong_fit" }`
+- Body: `{ briefText, briefHash, submissionId, fitScoreShown, rankShown?, verdict: "good_fit"|"wrong_fit" }`
 - Response `data`: `{ row: MatchFeedbackRow }`
 
 ### 3. `POST /license` — open a license for a matched take
