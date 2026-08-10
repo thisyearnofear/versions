@@ -20,6 +20,7 @@
     "demo": "tsx scripts/demo.ts",
     "check:arc": "tsx scripts/check-arc-live.ts",
     "benchmark": "tsx scripts/benchmark.ts",
+    "primitive:demo": "tsx scripts/primitive-demo.ts",
     "seed": "tsx scripts/seed-catalog.ts"
   },
   "dependencies": {

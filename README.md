@@ -233,7 +233,9 @@ and a future data layer.
 The full thesis — Thiel's monopoly-vs-commodity test and building
 distribution into the product, Graham's "schlep," the moat mechanics, the
 beachhead→expand path, and honest risks — lives in
-[STRATEGY.md](./STRATEGY.md).
+[STRATEGY.md](./STRATEGY.md). The versioned primitive contract — the wedge
+external catalogs could consume — is specified in
+[docs/primitive-api.md](./docs/primitive-api.md).
 
 ## Build commands
 
