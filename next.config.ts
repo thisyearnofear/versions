@@ -5,7 +5,6 @@ const projectRoot = path.resolve(__dirname);
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: projectRoot,
-  output: "standalone",
   experimental: {
     serverActions: {
       bodySizeLimit: "50mb",

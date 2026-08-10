@@ -32,10 +32,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
 
-# Copy the standalone build output
+# Production deps + the Next build output (next start model — the Netlify
+# deploy does NOT use standalone output, so the Docker image must ship
+# node_modules + .next rather than the slim standalone server).
+COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder /app/next.config.ts /app/package.json /app/tsconfig.json ./
 
 # Copy the scripts directory for DB migration scripts
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
@@ -46,4 +49,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["node_modules/.bin/next", "start"]
