@@ -61,15 +61,18 @@ different sides (sync house, ad, film) so the labels aren't from one viewpoint.
   Discover result cards (wired to `/api/v1/discover/brief/feedback`). Zero
   friction, no sign-up (guest identity).
 - **Secondary — batch / hand-curated:** for anything you (or a labeler) want to
-  record offline, use the curation tool:
-
+  record offline, use the curation tool. A starter set for the tense-chase slice
+  is checked in — run it to seed ground truth before labelers arrive:
   ```bash
-  npm run curate -- --set labels.json
+  npm run curate -- --set data/labels/beachhead-starter.labels.json
   ```
+  (Seed the catalog first so the `demo-published-*` takes exist:
+  `npm run seed`.)
   ```json
   [
-    { "brief": "tense car chase, no vocals, ~120 bpm", "submissionId": "sub_…", "verdict": "good_fit" },
-    { "brief": "tense car chase, no vocals, ~120 bpm", "submissionId": "sub_…", "verdict": "wrong_fit" }
+    { "brief": "tense car chase, no vocals, ~120 bpm", "submissionId": "demo-published-0002-0000-000000000002", "verdict": "good_fit" },
+    { "brief": "tense car chase, no vocals, ~120 bpm", "submissionId": "demo-published-0005-0000-000000000005", "verdict": "good_fit" },
+    { "brief": "tense car chase, no vocals, ~120 bpm", "submissionId": "demo-published-0006-0000-000000000006", "verdict": "wrong_fit" }
   ]
   ```
 
