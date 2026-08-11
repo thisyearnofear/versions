@@ -36,12 +36,14 @@ services:
       - coolify
     # Manual-route Traefik labels. Coolify generates its own equivalent when
     # you deploy via the UI — comment these out if Coolify manages the resource.
+    # NOTE: the Host rule is hardcoded (NOT a ${DOMAIN} interpolation) so that
+    # a bare `docker compose up` can never silently drop the routing.
     labels:
       - traefik.enable=true
       - traefik.docker.network=coolify
       - traefik.http.services.versions-web.loadbalancer.server.port=3000
       - traefik.http.routers.versions-web.entrypoints=https
-      - traefik.http.routers.versions-web.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.versions-web.rule=Host(`versions.persidian.com`)
       - traefik.http.routers.versions-web.tls.certresolver=letsencrypt
 
 networks:
