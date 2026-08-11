@@ -435,6 +435,8 @@ function MatchSearch() {
   // License action: chosen usage type + which takes have an opened license.
   const [licenseUsage, setLicenseUsage] = useState<LicenseUsageType>("sync_tv_film");
   const [licensedFor, setLicensedFor] = useState<Record<string, boolean>>({});
+  // Progressive disclosure: which result cards are expanded (reveal details/play).
+  const [expandedMatch, setExpandedMatch] = useState<Record<string, boolean>>({});
 
   // Pre-fill brief from ?brief= query param (e.g. from saved briefs / recent searches)
   useEffect(() => {
@@ -607,140 +609,85 @@ function MatchSearch() {
       </div>
       {loading && (
         <div className="mt-6" role="status" aria-live="polite">
+          <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]">
+            <span aria-hidden="true" className="inline-block w-3 animate-pulse text-[var(--color-rust)]">
+              ●
+            </span>{" "}
+            Dispatching 3 agents&nbsp;· reading your brief&nbsp;· scoring every alternate take…
+          </p>
           <DiscoverSkeleton count={2} />
         </div>
       )}
-      {results && results.rows.length > 0 && !loading && (
-        <div className="mt-8 flex flex-col gap-4" role="list" aria-label="Match results">
-          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]">
-            {results.total} match{results.total === 1 ? "" : "es"}
+{results && results.rows.length > 0 && !loading && (
+        <div className='mt-8' role='list' aria-label='Match results'>
+          <div className='mb-4 border border-[var(--color-hair-strong)] bg-[var(--color-paper-2)] px-4 py-3'>
+            <p className='font-serif text-base leading-snug text-[var(--color-ink)]'>
+              <span className='font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)]'>Agent verdict&nbsp;·</span>{" "}
+              {results.rows.length} of {results.total} alternate take{results.total === 1 ? "" : "s"} evaluated, ranked to your brief. Top pick:{" "}
+              <span className='font-black'>{results.rows[0].title}</span> by {results.rows[0].artist_name} — best fit{" "}
+              <span className='tabular-nums'>{results.rows[0].fit_score.toFixed(2)}</span>.
+            </p>
+            <div className='mt-2 flex flex-wrap gap-2'>
+              <button type='button' onClick={() => void onSaveBrief()} disabled={savingBrief} className='bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 hover:bg-[var(--color-rust)] transition-colors disabled:opacity-50'>
+                {savingBrief ? "Saving…" : "Save brief"}
+              </button>
+            </div>
           </div>
-          {results.rows.map((r, i) => (
-            <article
-              key={r.submission_id}
-              role="listitem"
-              className="border-t border-[var(--color-hair)] py-4"
-            >
-              <div className="flex flex-wrap items-baseline justify-between gap-3 mb-2">
-                <div className="min-w-0 flex-1">
-                  <div className="font-serif text-xl font-black">{r.title}</div>
-                  <div className="mt-1 font-serif text-sm text-[var(--color-ink-2)]">
-                    {r.artist_name} · {r.version_type} · {r.rating_count} ratings
+          {results.rows.map((r, i) => {
+            const isOpen = !!expandedMatch[r.submission_id];
+            const reason = r.why_fits[0] ?? r.brief.audience_summary ?? null;
+            return (
+              <article key={r.submission_id} role='listitem' className='border-t border-[var(--color-hair)]'>
+                <button type='button' aria-expanded={isOpen} onClick={() => setExpandedMatch((p) => ({ ...p, [r.submission_id]: !isOpen }))} className='group w-full py-4 text-left'>
+                  <div className='flex flex-wrap items-start justify-between gap-3'>
+                    <div className='min-w-0 flex-1'>
+                      <div className='font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]'>#{i + 1} match</div>
+                      <div className='mt-0.5 font-serif text-xl font-black'>{r.title}</div>
+                      <div className='mt-1 font-serif text-sm text-[var(--color-ink-2)]'>{r.artist_name} · {r.version_type} · {r.rating_count} ratings</div>
+                      {reason && <p className='mt-2 font-serif text-sm text-[var(--color-ink-2)] leading-snug max-w-[60ch]'>{reason}</p>}
+                    </div>
+                    <div className='flex flex-col items-end gap-2'>
+                      <span className='font-serif text-sm font-semibold text-[var(--color-rust)] tabular-nums'>fit {r.fit_score.toFixed(2)}</span>
+                      <span className='font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] group-hover:text-[var(--color-rust)] transition-colors'>{isOpen ? "▲ Close" : "▶ Play & details"}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="font-serif text-sm font-semibold text-[var(--color-rust)] tabular-nums">
-                  fit {r.fit_score.toFixed(2)}
-                </div>
-              </div>
-              <AudioPlayer
-                src={`/api/v1/uploads/${r.audio_path?.split("/").pop() ?? ""}`}
-                title={r.title}
-                by={r.artist_name}
-              />
-              {r.brief.audience_summary && (
-                <p className="font-serif text-sm text-[var(--color-ink-2)] leading-snug max-w-[60ch] mt-2">
-                  {r.brief.audience_summary}
-                </p>
-              )}
-              {r.why_fits.length > 0 && (
-                <ul className="flex flex-wrap gap-2 mt-2" role="list" aria-label="Why this fits">
-                  {r.why_fits.map((w, i) => (
-                    <li
-                      key={i}
-                      role="listitem"
-                      className="border border-[var(--color-rust)] px-2 py-1 font-serif text-[13px] text-[var(--color-rust)]"
-                    >
-                      {w}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {(r.brief.scene_tags.length > 0 || r.brief.instruments.length > 0) && (
-                <MatchProfileDisclosure sceneTags={r.brief.scene_tags} instruments={r.brief.instruments} />
-              )}
-              <div className="flex flex-wrap gap-2 mt-4">
-                <button
-                  type="button"
-                  onClick={() => void onInterest(r)}
-                  className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 hover:bg-[var(--color-rust)] transition-colors"
-                >
-                  Interested
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void onSaveBrief()}
-                  disabled={savingBrief}
-                  className="border border-[var(--color-ink)] font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors disabled:opacity-50"
-                >
-                  {savingBrief ? "Saving…" : "Save brief"}
-                </button>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em]">
-                <span className="text-[var(--color-ink-3)]">Match quality:</span>
-                <button
-                  type="button"
-                  onClick={() => void onFeedback(r, i + 1, "good_fit")}
-                  disabled={!!feedbackSent[r.submission_id]}
-                  aria-pressed={feedbackSent[r.submission_id] === "good_fit"}
-                  className={cn(
-                    "border px-2.5 py-1 transition-colors",
-                    feedbackSent[r.submission_id] === "good_fit"
-                      ? "border-[var(--color-rust)] text-[var(--color-rust)]"
-                      : "border-[var(--color-hair-strong)] text-[var(--color-ink-2)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
-                    feedbackSent[r.submission_id] ? "cursor-default opacity-60" : "cursor-pointer",
-                  )}
-                >
-                  {feedbackSent[r.submission_id] === "good_fit" ? "✓ Good fit" : "Good fit"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void onFeedback(r, i + 1, "wrong_fit")}
-                  disabled={!!feedbackSent[r.submission_id]}
-                  aria-pressed={feedbackSent[r.submission_id] === "wrong_fit"}
-                  className={cn(
-                    "border px-2.5 py-1 transition-colors",
-                    feedbackSent[r.submission_id] === "wrong_fit"
-                      ? "border-[var(--color-ink)] text-[var(--color-ink)]"
-                      : "border-[var(--color-hair-strong)] text-[var(--color-ink-2)] hover:border-[var(--color-ink)] hover:text-[var(--color-ink)]",
-                    feedbackSent[r.submission_id] ? "cursor-default opacity-60" : "cursor-pointer",
-                  )}
-                >
-                  {feedbackSent[r.submission_id] === "wrong_fit" ? "✕ Wrong fit" : "Wrong fit"}
-                </button>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em]">
-                <span className="text-[var(--color-ink-3)]">License this take:</span>
-                <select
-                  aria-label="Usage type"
-                  value={licenseUsage}
-                  onChange={(e) => setLicenseUsage(e.target.value as LicenseUsageType)}
-                  disabled={!!licensedFor[r.submission_id]}
-                  className="border border-[var(--color-ink)] bg-[var(--color-paper)] p-1 font-mono text-[10px] uppercase tracking-[0.1em]"
-                >
-                  <option value="sync_tv_film">TV/Film</option>
-                  <option value="sync_ad">Ad</option>
-                  <option value="sync_digital">Digital</option>
-                  <option value="other">Other</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => void onLicense(r)}
-                  disabled={!!licensedFor[r.submission_id]}
-                  className="border border-[var(--color-ink)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors disabled:opacity-50"
-                >
-                  {licensedFor[r.submission_id] ? "Licensed ✓" : "License this take"}
-                </button>
-              </div>
-              {r.brief.sync_comparables.length > 0 && (
-                <div className="font-mono text-[10px] mt-3 text-[var(--color-ink-3)]">
-                  {r.brief.sync_comparables
-                    .slice(0, 2)
-                    .map((c) => `\u201c${c.name}\u201d`)
-                    .join(" \u00b7 ")}
-                </div>
-              )}
-            </article>
-          ))}
+                {isOpen && (
+                  <div className='pb-5'>
+                    <AudioPlayer src={`/api/v1/uploads/${r.audio_path?.split("/").pop() ?? ""}`} title={r.title} by={r.artist_name} />
+                    {r.brief.audience_summary && <p className='font-serif text-sm text-[var(--color-ink-2)] leading-snug max-w-[60ch] mt-2'>{r.brief.audience_summary}</p>}
+                    {r.why_fits.length > 0 && (
+                      <ul className='flex flex-wrap gap-2 mt-2' role='list' aria-label='Why this fits'>
+                        {r.why_fits.map((w, j) => (<li key={j} role='listitem' className='border border-[var(--color-rust)] px-2 py-1 font-serif text-[13px] text-[var(--color-rust)]'>{w}</li>))}
+                      </ul>
+                    )}
+                    {(r.brief.scene_tags.length > 0 || r.brief.instruments.length > 0) && <MatchProfileDisclosure sceneTags={r.brief.scene_tags} instruments={r.brief.instruments} />}
+                    <div className='flex flex-wrap gap-2 mt-4'>
+                      <button type='button' onClick={() => void onInterest(r)} className='bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 hover:bg-[var(--color-rust)] transition-colors'>Interested</button>
+                    </div>
+                    <div className='mt-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em]'>
+                      <span className='text-[var(--color-ink-3)]'>Match quality:</span>
+                      <button type='button' onClick={() => void onFeedback(r, i + 1, 'good_fit')} disabled={!!feedbackSent[r.submission_id]} aria-pressed={feedbackSent[r.submission_id] === 'good_fit'} className={cn('border px-2.5 py-1 transition-colors', feedbackSent[r.submission_id] === 'good_fit' ? 'border-[var(--color-rust)] text-[var(--color-rust)]' : 'border-[var(--color-hair-strong)] text-[var(--color-ink-2)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]', feedbackSent[r.submission_id] ? 'cursor-default opacity-60' : 'cursor-pointer')}>{feedbackSent[r.submission_id] === 'good_fit' ? '✓ Good fit' : 'Good fit'}</button>
+                      <button type='button' onClick={() => void onFeedback(r, i + 1, 'wrong_fit')} disabled={!!feedbackSent[r.submission_id]} aria-pressed={feedbackSent[r.submission_id] === 'wrong_fit'} className={cn('border px-2.5 py-1 transition-colors', feedbackSent[r.submission_id] === 'wrong_fit' ? 'border-[var(--color-ink)] text-[var(--color-ink)]' : 'border-[var(--color-hair-strong)] text-[var(--color-ink-2)] hover:border-[var(--color-ink)] hover:text-[var(--color-ink)]', feedbackSent[r.submission_id] ? 'cursor-default opacity-60' : 'cursor-pointer')}>{feedbackSent[r.submission_id] === 'wrong_fit' ? '✕ Wrong fit' : 'Wrong fit'}</button>
+                    </div>
+                    <div className='mt-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em]'>
+                      <span className='text-[var(--color-ink-3)]'>License this take:</span>
+                      <select aria-label='Usage type' value={licenseUsage} onChange={(e) => setLicenseUsage(e.target.value as LicenseUsageType)} disabled={!!licensedFor[r.submission_id]} className='border border-[var(--color-ink)] bg-[var(--color-paper)] p-1 font-mono text-[10px] uppercase tracking-[0.1em]'>
+                        <option value='sync_tv_film'>TV/Film</option>
+                        <option value='sync_ad'>Ad</option>
+                        <option value='sync_digital'>Digital</option>
+                        <option value='other'>Other</option>
+                      </select>
+                      <button type='button' onClick={() => void onLicense(r)} disabled={!!licensedFor[r.submission_id]} className='border border-[var(--color-ink)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors disabled:opacity-50'>{licensedFor[r.submission_id] ? 'Licensed ✓' : 'License this take'}</button>
+                    </div>
+                    {r.brief.sync_comparables.length > 0 && (
+                      <div className='font-mono text-[10px] mt-3 text-[var(--color-ink-3)]'>{r.brief.sync_comparables.slice(0, 2).map((c) => `\u201c${c.name}\u201d`).join(' \u00b7 ')}</div>
+                    )}
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </div>
       )}
       {results && results.rows.length === 0 && !loading && submitAttempted && (

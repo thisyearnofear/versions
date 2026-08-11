@@ -27,12 +27,9 @@ export default function Home() {
       <SiteHeader />
       <main className="flex-1">
         <Hero />
-        <StatsBand />
         <HowItWorks />
-        <TickerBand />
-        <WaveformGallery />
-        <DemoBand />
         <SectionNav />
+        <LiveLabBand />
       </main>
       <Footer />
       <Tour withTrigger />
@@ -51,6 +48,31 @@ function DemoBand() {
       <Eyebrow className="mb-4">For the demo · watch the agentic loop settle on Arc</Eyebrow>
       <LiveDemoButton />
     </motion.section>
+  );
+}
+
+// MODULAR: the live economy + demo are the *proof/rail*, not the front door.
+// Kept behind one clearly-labelled secondary section so the supervisor's job
+// (brief → ranked tracks) owns the first screen, per positioning.
+function LiveLabBand() {
+  return (
+    <section
+      aria-labelledby="live-lab-heading"
+      className="mt-12 border-t border-[var(--color-hair-strong)] bg-[var(--color-paper-2)]"
+    >
+      <div className="px-6 pt-8 text-center">
+        <h2
+          id="live-lab-heading"
+          className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]"
+        >
+          Live lab · watch the agent economy settle
+        </h2>
+      </div>
+      <StatsBand />
+      <TickerBand />
+      <WaveformGallery />
+      <DemoBand />
+    </section>
   );
 }
 

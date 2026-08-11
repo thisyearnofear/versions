@@ -160,8 +160,8 @@ export function AudioPlayer({
           </motion.div>
         ))}
       </div>
-      <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] tabular-nums w-20 text-right flex-shrink-0 hidden sm:block">
-        {fmtTimecode(currentTime)} / {fmtTimecode(duration)}
+      <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] tabular-nums w-24 text-right flex-shrink-0 hidden sm:block">
+        {duration > 0 ? `${fmtTimecode(currentTime)} / ${fmtTimecode(duration)}` : "Ready to play"}
       </div>
       <audio
         ref={audioRef}
@@ -189,10 +189,12 @@ export function AudioPlayer({
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={onLoadedMetadata}
       />
-      {/* progress hint as a subtle bar (kept off the row layout, sits below on hover) */}
-      <div className="sr-only" aria-hidden="true">
-        progress: {(progress * 100).toFixed(0)}%
-      </div>
+      {/* progress hint — only once metadata is loaded (avoids the "0:00 / 0:00 progress: 0%" no-op leak) */}
+      {duration > 0 && (
+        <div className="sr-only" aria-hidden="true">
+          progress: {(progress * 100).toFixed(0)}%
+        </div>
+      )}
     </div>
   );
 }
