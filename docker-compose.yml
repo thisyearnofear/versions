@@ -32,6 +32,8 @@ services:
     # Coolify manages these in its UI instead; the file only matters for route B.
     env_file:
       - .env
+    volumes:
+      - ./data/uploads:/app/data/uploads
     networks:
       - coolify
     # Manual-route Traefik labels. Coolify generates its own equivalent when
