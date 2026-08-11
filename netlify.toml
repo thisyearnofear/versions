@@ -5,7 +5,8 @@
   publish = ".next"
 
 [build.environment]
-  NODE_VERSION = "22"
+  NODE_VERSION = "20"
+  AWS_LAMBDA_JS_RUNTIME = "nodejs20.x"
   # Client-side env vars inlined at build time. Set these in the Netlify
   # dashboard (Site settings → Environment variables) to override the
   # defaults. NEXT_PUBLIC_WC_PROJECT_ID must be set for mobile wallets.
