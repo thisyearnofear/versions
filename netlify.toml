@@ -37,3 +37,19 @@
   "@tailwindcss" = true
   "lightningcss" = true
   "typescript" = true
+  # Client-only wallet packages (210+78+40+28+22+16+12 = 406 MB saved)
+  "@reown" = true
+  "@walletconnect" = true
+  "@metamask" = true
+  "@coinbase" = true
+  "@base-org" = true
+  "porto" = true
+  "@rainbow-me" = true
+  # Other heavy client-only / build-only deps
+  "@solana" = true
+  "@rolldown" = true
+  "@esbuild" = true
+  "@esbuild-kit" = true
+  "@babel" = true
+  "@img" = true
+  "date-fns" = true
