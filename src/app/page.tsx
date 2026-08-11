@@ -1,117 +1,52 @@
 "use client";
 
-// MODULAR: Landing page — compact, centered, kinetic. The first
-// screen is a centered headline + one CTA. A full-width economy
-// ticker band shows the platform is alive. A waveform gallery
-// rides album covers along an SVG wave for energy. Section nav
-// is compact chips with hover-reveal blurbs (progressive disclosure).
-
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
-import { Tour } from "@/components/ui/Tour";
-import { EconomyTicker } from "@/components/economy/EconomyTicker";
-import { LiveStats } from "@/components/economy/LiveStats";
-import { WaveformGallery } from "@/components/home/WaveformGallery";
-import { HowItWorks } from "@/components/home/HowItWorks";
-import { LiveDemoButton } from "@/components/home/LiveDemoButton";
 import { track } from "@/lib/analytics";
 import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
-import { Container, Eyebrow } from "@/components/ui/primitives";
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1">
+    <div className="flex flex-col flex-1 min-h-[100dvh]">
       <SiteHeader />
-      <main className="flex-1">
+      <main className="flex-1 grid place-items-center px-6">
         <Hero />
-        <HowItWorks />
-        <SectionNav />
-        <LiveLabBand />
       </main>
       <Footer />
-      <Tour withTrigger />
     </div>
-  );
-}
-
-function DemoBand() {
-  return (
-    <motion.section
-      className="px-6 pt-10 pb-4 max-w-2xl mx-auto text-center"
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.35 }}
-    >
-      <Eyebrow className="mb-4">For the demo · watch the agentic loop settle on Arc</Eyebrow>
-      <LiveDemoButton />
-    </motion.section>
-  );
-}
-
-// MODULAR: the live economy + demo are the *proof/rail*, not the front door.
-// Kept behind one clearly-labelled secondary section so the supervisor's job
-// (brief → ranked tracks) owns the first screen, per positioning.
-function LiveLabBand() {
-  return (
-    <section
-      aria-labelledby="live-lab-heading"
-      className="mt-12 border-t border-[var(--color-hair-strong)] bg-[var(--color-paper-2)]"
-    >
-      <div className="px-6 pt-8 text-center">
-        <h2
-          id="live-lab-heading"
-          className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]"
-        >
-          Live lab · watch the agent economy settle
-        </h2>
-      </div>
-      <StatsBand />
-      <TickerBand />
-      <WaveformGallery />
-      <DemoBand />
-    </section>
   );
 }
 
 function Hero() {
   return (
-    <section className="px-6 py-12 text-center max-w-2xl mx-auto md:py-20">
-      <motion.p
-        className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)] mb-6"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-      >
-        Sync search · for supervisors, A&amp;R &amp; sync houses
-      </motion.p>
+    <section className="py-16 text-center max-w-2xl mx-auto md:py-24">
       <motion.h1
         className="font-serif text-5xl md:text-6xl lg:text-7xl font-black leading-[0.95] tracking-tight mb-4"
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.05 }}
+        transition={{ duration: 0.5 }}
       >
         Describe the scene.
         <br />
         <span className="italic font-normal text-[var(--color-rust)]">
-          Find the version.
+          Find the track.
         </span>
       </motion.h1>
       <motion.p
         className="font-serif text-lg md:text-xl text-[var(--color-ink-2)] leading-snug mb-8"
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.15 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
       >
-        Paste a brief in plain English. Three AI agents rank the catalog of
-        alternate takes by fit — free to search, no wallet needed.
+        AI agents rank alternate takes to your brief in seconds.
       </motion.p>
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.25 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
       >
         <BriefSearchBar />
       </motion.div>
@@ -119,9 +54,6 @@ function Hero() {
   );
 }
 
-// Supervisor-first hero search. One field → /discover?brief=<text>, where
-// DiscoverView auto-runs the inverse search. Example chips are one-click
-// seeds so a cold visitor sees ranked matches with zero typing.
 function BriefSearchBar() {
   const router = useRouter();
   const [brief, setBrief] = useState("");
@@ -172,66 +104,10 @@ function BriefSearchBar() {
           </Link>
         ))}
       </div>
-      <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-        Free · no sign-up · ranked results in seconds
+      <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+        Ranked results in ~4 seconds · free · no sign-up
       </p>
     </div>
-  );
-}
-
-function StatsBand() {
-  return (
-    <Container size="wide" className="py-4">
-      <LiveStats />
-    </Container>
-  );
-}
-
-function TickerBand() {
-  return (
-    <Container size="wide" className="border-t border-b border-[var(--color-hair-strong)] py-4">
-      <EconomyTicker limit={5} />
-    </Container>
-  );
-}
-
-function SectionNav() {
-  const sections = [
-    { num: "01", label: "Discover", href: "/discover", blurb: "Paste a brief. Rank the catalog." },
-    { num: "02", label: "Feed", href: "/feed", blurb: "Published versions. Filter by mood." },
-    { num: "03", label: "Submit", href: "/submit", blurb: "Upload. Get rated by AI agents." },
-    { num: "04", label: "Agents", href: "/agents", blurb: "Watch AI review in real time." },
-  ];
-
-  return (
-    <Container className="py-10">
-      <div className="flex flex-wrap justify-center gap-3">
-          {sections.map((s, i) => (
-            <motion.div
-              key={s.num}
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.06, duration: 0.35 }}
-            >
-              <Link
-                href={s.href}
-                onClick={() => track("nav_click", { to: s.href, source: "section_nav" })}
-                className="group relative flex flex-col items-center gap-1 border border-[var(--color-hair-strong)] px-5 py-3 hover:border-[var(--color-ink)] transition-colors"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <span className="font-mono text-[9px] text-[var(--color-ink-3)]">{s.num}</span>
-                  <span className="font-serif text-lg font-medium">{s.label}</span>
-                </span>
-                {/* Progressive disclosure: static under md, hover-reveal on md+ */}
-                <span className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] md:absolute md:top-full md:left-1/2 md:-translate-x-1/2 md:mt-2 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity md:pointer-events-none">
-                  {s.blurb}
-                </span>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
-    </Container>
   );
 }
 
@@ -242,6 +118,7 @@ function Footer() {
         VERSIONS · 2026
       </div>
       <div className="flex gap-6 font-mono text-[10px] uppercase tracking-[0.18em]">
+        <Link href="/agents" className="hover:text-[var(--color-rust)]">How it works</Link>
         <a href="https://github.com/thisyearnofear/versions" className="hover:text-[var(--color-rust)]" target="_blank" rel="noopener noreferrer">GitHub</a>
         <a href="https://docs.arc.network" className="hover:text-[var(--color-rust)]" target="_blank" rel="noopener noreferrer">Arc</a>
       </div>

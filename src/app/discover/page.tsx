@@ -13,17 +13,6 @@ export default function DiscoverPage() {
         <main className="flex-1">
           <Container className="py-10">
             <FadeIn>
-              <h2 className="mb-2 text-center font-serif text-3xl font-black tracking-tight md:text-4xl">
-                Find the version.
-              </h2>
-            </FadeIn>
-            <FadeIn delay={0.1}>
-              <p className="mb-10 text-center font-serif text-base text-[var(--color-ink-2)]">
-                Describe a scene in plain English — get ranked alternate takes
-                for sync. Free to search, no wallet needed.
-              </p>
-            </FadeIn>
-            <FadeIn delay={0.2}>
               <Suspense fallback={<DashboardFallback />}>
                 <DiscoverView />
               </Suspense>

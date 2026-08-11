@@ -12,9 +12,7 @@ export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" |
   const tabs = [
     { id: "discover", label: "Discover", href: "/discover" },
     { id: "supervisor", label: "Dashboard", href: "/supervisor" },
-    { id: "feed", label: "Feed", href: "/feed" },
     { id: "submit", label: "Submit", href: "/submit" },
-    { id: "agents", label: "Agents", href: "/agents" },
   ] as const;
 
   return (
@@ -27,9 +25,6 @@ export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" |
           </div>
         </Link>
         <div className="flex items-center gap-4">
-          <span className="hidden xl:block font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-            free to search · no wallet needed · sign in to settle
-          </span>
           <Link
             href="/discover"
             onClick={() => track("nav_click", { to: "/discover", source: "site_header_cta" })}

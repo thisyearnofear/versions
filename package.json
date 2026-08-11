@@ -51,6 +51,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.3",
+    "@elevenlabs/elevenlabs-js": "^2.63.0",
     "@netlify/plugin-nextjs": "^5.15.12",
     "@tailwindcss/postcss": "^4",
     "@types/dompurify": "^3.0.5",
