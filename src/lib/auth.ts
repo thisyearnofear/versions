@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import { verifyMessage } from "viem";
 
 const { handlers, auth } = NextAuth({
+  trustHost: true,
   providers: [
     Credentials({
       name: "Wallet",
