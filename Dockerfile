@@ -15,7 +15,7 @@ WORKDIR /app
 # NEXT_PUBLIC_* vars are inlined into the browser bundle at build time.
 # .dockerignore excludes .env from the context, so these must be injected
 # as build args (public by definition — safe to bake into the image).
-# Values mirror netlify.toml defaults; override per deploy with --build-arg.
+# Override per deploy with --build-arg.
 ARG NEXT_PUBLIC_ARC_RPC_URL
 ARG NEXT_PUBLIC_ARC_EXPLORER_URL
 ARG NEXT_PUBLIC_SUBMIT_RECEIPT_TIMEOUT_MS
@@ -27,7 +27,7 @@ ENV NEXT_PUBLIC_ARC_RPC_URL=${NEXT_PUBLIC_ARC_RPC_URL} \
 
 # Install all deps (needed for build, including devDeps)
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm install
 
 COPY . .
 
