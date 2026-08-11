@@ -9,7 +9,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import type { MatchBenchmarkReport } from "@/lib/match-benchmark";
-import { useToast } from "@/components/ui/Toast";
+import { Section } from "@/components/ui/primitives";
+import Link from "next/link";
 
 function pct(v: number | null): string {
   return v != null ? `${(v * 100).toFixed(0)}%` : "–";
@@ -18,8 +19,7 @@ function num(v: number | null, d = 3): string {
   return v != null ? v.toFixed(d) : "–";
 }
 
-export function MatchBenchmarkPanel() {
-  const { showToast } = useToast();
+export function MatchBenchmarkPanel({ compact = false }: { compact?: boolean }) {
   const [report, setReport] = useState<MatchBenchmarkReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -41,6 +41,39 @@ export function MatchBenchmarkPanel() {
     void refresh();
   }, [refresh]);
 
+  const content = loading ? (
+    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">Loading…</p>
+  ) : failed ? (
+    <p className="font-serif text-sm text-[var(--color-ink-2)]">
+      Match-quality report unavailable — try again in a moment.
+    </p>
+  ) : !report || report.judgmentCount === 0 ? (
+    <p className="font-serif text-sm text-[var(--color-ink-2)]">
+      No labels yet. On{" "}
+      <Link href="/discover" className="text-[var(--color-rust)] hover:underline">
+        Discover
+      </Link>
+      , tap Good fit / Wrong fit to improve the matcher.
+    </p>
+  ) : (
+    <dl className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <Stat label="Judgments" value={String(report.judgmentCount)} compact={compact} />
+      <Stat label="Good fraction" value={pct(report.goodFraction)} compact={compact} />
+      <Stat label="MRR" value={num(report.mrr)} compact={compact} />
+      <Stat label="Precision@1" value={pct(report.precisionAt[1])} compact={compact} />
+      <Stat label="Precision@3" value={pct(report.precisionAt[3])} compact={compact} />
+      <Stat label="Score Δ" value={report.scoreDiscrimination.delta != null ? num(report.scoreDiscrimination.delta, 2) : "–"} compact={compact} />
+    </dl>
+  );
+
+  if (compact) {
+    return (
+      <Section eyebrow="Quality" title="Match labels" className="py-8">
+        {content}
+      </Section>
+    );
+  }
+
   return (
     <section className="border-t border-[var(--color-hair-strong)] pt-8">
       <h3 className="mb-1 font-serif text-2xl font-black tracking-tight">Match quality</h3>
@@ -48,38 +81,16 @@ export function MatchBenchmarkPanel() {
         Ground truth from your Good/Wrong-fit labels — the asset that makes the
         matcher measurably better.
       </p>
-
-      {loading ? (
-        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">Loading…</p>
-      ) : failed ? (
-        <p className="font-serif text-[var(--color-ink-2)]">
-          Match-quality report unavailable right now — try again in a moment.
-        </p>
-      ) : !report || report.judgmentCount === 0 ? (
-        <p className="font-serif text-[var(--color-ink-2)]">
-          No ground truth yet. Return to <span className="italic text-[var(--color-rust)]">Discover</span>, run a brief,
-          and tap <span className="italic">Good fit</span> / <span className="italic">Wrong fit</span> — the matcher
-          improves with every label.
-        </p>
-      ) : (
-        <dl className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <Stat label="Judgments" value={String(report.judgmentCount)} />
-          <Stat label="Good fraction" value={pct(report.goodFraction)} />
-          <Stat label="MRR" value={num(report.mrr)} />
-          <Stat label="Precision@1" value={pct(report.precisionAt[1])} />
-          <Stat label="Precision@3" value={pct(report.precisionAt[3])} />
-          <Stat label="Score Δ (good−wrong)" value={report.scoreDiscrimination.delta != null ? num(report.scoreDiscrimination.delta, 2) : "–"} />
-        </dl>
-      )}
+      {content}
     </section>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, compact }: { label: string; value: string; compact?: boolean }) {
   return (
-    <div>
-      <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-2)]">{label}</dt>
-      <dd className="mt-1 font-serif text-2xl font-bold leading-none">{value}</dd>
+    <div className="border border-[var(--color-hair)] rounded-sm p-3">
+      <dt className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">{label}</dt>
+      <dd className={compact ? "mt-1 font-serif text-xl font-bold leading-none" : "mt-1 font-serif text-2xl font-bold leading-none"}>{value}</dd>
     </div>
   );
 }

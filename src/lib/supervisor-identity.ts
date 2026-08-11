@@ -51,3 +51,17 @@ export async function resolveSupervisorIdentity(
   if (!guestId || guestId.trim().length === 0) return null;
   return { mode: "guest", wallet: guestWalletFromId(guestId.trim()), guestId: guestId.trim() };
 }
+
+// Stricter resolver for shortlist, licensing, and settlement — requires a
+// signed-in wallet session (NextAuth). Guest identity is read-only for
+// search logging and saved briefs; it cannot persist sync outcomes.
+export async function resolveAuthenticatedSupervisorIdentity(): Promise<{ wallet: string } | null> {
+  try {
+    const session = await auth();
+    const wallet = (session?.user as { walletAddress?: string } | undefined)?.walletAddress;
+    if (wallet) return { wallet };
+  } catch {
+    // auth() unavailable — treat as unauthenticated.
+  }
+  return null;
+}

@@ -6,12 +6,12 @@
 
 import { NextRequest } from 'next/server';
 import { services, successResponse, errorResponse, requestIdFor } from '@/lib/services';
-import { resolveSupervisorIdentity } from '@/lib/supervisor-identity';
+import { resolveAuthenticatedSupervisorIdentity } from '@/lib/supervisor-identity';
 
 export const dynamic = 'force-dynamic';
 
-async function identityOr401(req: NextRequest, requestId: string) {
-  const identity = await resolveSupervisorIdentity(req);
+async function identityOr401(requestId: string) {
+  const identity = await resolveAuthenticatedSupervisorIdentity();
   if (!identity) {
     return { resp: errorResponse(requestId, 401, 'UNAUTHORIZED', 'Sign in to view a license.') };
   }
@@ -20,7 +20,7 @@ async function identityOr401(req: NextRequest, requestId: string) {
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const requestId = requestIdFor(req);
-  const ida = await identityOr401(req, requestId);
+  const ida = await identityOr401(requestId);
   if (ida.resp) return ida.resp;
   const { id } = await ctx.params;
   const license = await services().supervisor.getLicense(id, ida.identity!.wallet);
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const requestId = requestIdFor(req);
-  const ida = await identityOr401(req, requestId);
+  const ida = await identityOr401(requestId);
   if (ida.resp) return ida.resp;
   const { id } = await ctx.params;
 

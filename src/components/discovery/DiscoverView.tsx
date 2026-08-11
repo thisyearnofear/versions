@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAccount } from "wagmi";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { matchBriefHash } from "@/lib/match-benchmark";
 import { track } from "@/lib/analytics";
 import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
+import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
+import { LICENSE_FEES, LICENSE_USAGE_TYPES, type LicenseUsageType } from "@/lib/pricing";
 
 const BRIEF_REFINEMENTS = [
   { id: "no-vocals", label: "no vocals", instruction: "no vocals, instrumental" },
@@ -24,6 +26,13 @@ const BRIEF_REFINEMENTS = [
   { id: "electronic", label: "electronic", instruction: "more electronic-leaning" },
   { id: "raw", label: "lo-fi", instruction: "raw, unpolished feel" },
 ] as const;
+
+const USAGE_LABELS: Record<LicenseUsageType, string> = {
+  sync_ad: "Sync · Ad",
+  sync_tv_film: "Sync · TV/Film",
+  sync_digital: "Sync · Digital",
+  other: "Other",
+};
 
 export function DiscoverView() {
   return <MatchSearch />;
@@ -116,6 +125,7 @@ function AgentTrace({ searchTimeMs, trackCount }: { searchTimeMs: number | null;
 
 function MatchSearch() {
   const { showToast } = useToast();
+  const { isAuthenticated, requireAuth } = useSupervisorAuth();
   const searchParams = useSearchParams();
   const [brief, setBrief] = useState("");
   const [loading, setLoading] = useState(false);
@@ -123,6 +133,7 @@ function MatchSearch() {
   const [searchTimeMs, setSearchTimeMs] = useState<number | null>(null);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [refinements, setRefinements] = useState<string[]>([]);
+  const [shortlistedIds, setShortlistedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fromUrl = searchParams.get("brief");
@@ -158,6 +169,21 @@ function MatchSearch() {
       void runSearch(brief);
     }
   }, [brief, runSearch, submitAttempted, results]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setShortlistedIds(new Set());
+      return;
+    }
+    void apiClient
+      .getInterests({ limit: 100 })
+      .then((res) => setShortlistedIds(new Set(res.rows.map((r) => r.submission_id))))
+      .catch(() => {});
+  }, [isAuthenticated, results?.total]);
+
+  const markShortlisted = useCallback((submissionId: string) => {
+    setShortlistedIds((prev) => new Set(prev).add(submissionId));
+  }, []);
 
   const applyRefinement = useCallback(
     (instruction: string) => {
@@ -273,7 +299,15 @@ function MatchSearch() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: Math.min(i * 0.06, 0.4), duration: 0.3 }}
               >
-                <MatchRow row={r} rank={i + 1} brief={brief} />
+                <MatchRow
+                  row={r}
+                  rank={i + 1}
+                  brief={brief}
+                  isShortlisted={shortlistedIds.has(r.submission_id)}
+                  onShortlisted={markShortlisted}
+                  isAuthenticated={isAuthenticated}
+                  requireAuth={requireAuth}
+                />
               </motion.div>
             ))}
           </div>
@@ -300,34 +334,71 @@ function fitScoreColor(score: number): string {
   return "text-[var(--color-ink-3)]";
 }
 
-function MatchRow({ row, rank, brief }: { row: BriefSearchRow; rank: number; brief: string }) {
+function MatchRow({
+  row,
+  rank,
+  brief,
+  isShortlisted,
+  onShortlisted,
+  isAuthenticated,
+  requireAuth,
+}: {
+  row: BriefSearchRow;
+  rank: number;
+  brief: string;
+  isShortlisted: boolean;
+  onShortlisted: (submissionId: string) => void;
+  isAuthenticated: boolean;
+  requireAuth: (returnTo?: string) => boolean;
+}) {
   const { showToast } = useToast();
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
-  const [shortlisted, setShortlisted] = useState(false);
+  const [showLicensePanel, setShowLicensePanel] = useState(false);
+  const [usageType, setUsageType] = useState<LicenseUsageType>("sync_tv_film");
+  const [licensing, setLicensing] = useState(false);
   const reason = row.why_fits[0] ?? null;
 
+  const returnTo = typeof window !== "undefined"
+    ? `${window.location.pathname}${window.location.search}`
+    : "/discover";
+
   const onShortlist = async () => {
+    if (!requireAuth(returnTo)) return;
     try {
       await apiClient.addInterest({ submissionId: row.submission_id });
-      setShortlisted(true);
-      showToast("Added to shortlist", "success", 2000);
+      onShortlisted(row.submission_id);
+      showToast("Added to shortlist — view on dashboard", "success", 2500);
     } catch (err) {
       showToast(`Failed: ${(err as Error).message}`, "error");
     }
   };
 
-  const onLicense = async () => {
+  const onRequestLicense = async () => {
+    if (!requireAuth(returnTo)) return;
+    setLicensing(true);
     try {
+      await apiClient.addInterest({ submissionId: row.submission_id }).catch(() => {});
+      onShortlisted(row.submission_id);
       await apiClient.createLicense({
         submissionId: row.submission_id,
         briefHash: matchBriefHash(brief),
         briefText: brief,
-        usageType: "sync_tv_film",
+        usageType,
       });
-      showToast("License created — view on dashboard", "success");
+      showToast("License ready — settle on dashboard", "success", 3000);
+      setShowLicensePanel(false);
+      router.push("/supervisor#licenses");
     } catch (err) {
       showToast(`License failed: ${(err as Error).message}`, "error");
+    } finally {
+      setLicensing(false);
     }
+  };
+
+  const onLicenseClick = () => {
+    if (!requireAuth(returnTo)) return;
+    setShowLicensePanel((p) => !p);
   };
 
   return (
@@ -416,28 +487,90 @@ function MatchRow({ row, rank, brief }: { row: BriefSearchRow; rank: number; bri
                   ))}
                 </div>
               )}
-              <div className="flex gap-2 mt-3">
+              <div className="flex flex-wrap gap-2 mt-3">
                 <button
                   type="button"
                   onClick={() => void onShortlist()}
-                  disabled={shortlisted}
+                  disabled={isShortlisted}
                   className={cn(
                     "font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-sm transition-colors",
-                    shortlisted
+                    isShortlisted
                       ? "bg-[var(--color-rust)] text-[var(--color-paper)] opacity-80"
-                      : "bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-rust)]",
+                      : isAuthenticated
+                        ? "bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-rust)]"
+                        : "border border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
                   )}
                 >
-                  {shortlisted ? "✓ Shortlisted" : "Shortlist"}
+                  {isShortlisted ? "✓ Shortlisted" : isAuthenticated ? "Shortlist" : "Sign in to shortlist"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => void onLicense()}
-                  className="font-mono text-[10px] uppercase tracking-[0.12em] border border-[var(--color-ink)] px-3 py-1.5 rounded-sm hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
+                  onClick={onLicenseClick}
+                  className={cn(
+                    "font-mono text-[10px] uppercase tracking-[0.12em] border px-3 py-1.5 rounded-sm transition-colors",
+                    showLicensePanel
+                      ? "border-[var(--color-rust)] text-[var(--color-rust)]"
+                      : isAuthenticated
+                        ? "border-[var(--color-ink)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]"
+                        : "border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
+                  )}
                 >
-                  License
+                  {isAuthenticated ? "License" : "Sign in to license"}
                 </button>
+                {isAuthenticated && (
+                  <Link
+                    href="/supervisor"
+                    className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] px-1 py-1.5 transition-colors"
+                  >
+                    Dashboard →
+                  </Link>
+                )}
               </div>
+
+              <AnimatePresence>
+                {showLicensePanel && isAuthenticated && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-3 pt-3 border-t border-[var(--color-hair)]">
+                      <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] mb-2">
+                        Usage type · fee on Arc USDC
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {LICENSE_USAGE_TYPES.filter((t) => t !== "other").map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setUsageType(t)}
+                            className={cn(
+                              "font-mono text-[9px] uppercase tracking-wide px-2.5 py-1 rounded-sm border transition-colors",
+                              usageType === t
+                                ? "bg-[var(--color-ink)] text-[var(--color-paper)] border-[var(--color-ink)]"
+                                : "border-[var(--color-hair-strong)] text-[var(--color-ink-2)] hover:border-[var(--color-rust)]",
+                            )}
+                          >
+                            {USAGE_LABELS[t]} · ${LICENSE_FEES[t]}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="font-mono text-[9px] text-[var(--color-ink-3)] mb-3">
+                        Worldwide · 12 months · settle on dashboard after request
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void onRequestLicense()}
+                        disabled={licensing}
+                        className="bg-[var(--color-rust)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 rounded-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                      >
+                        {licensing ? "Creating…" : `Request license · $${LICENSE_FEES[usageType]} USDC`}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </motion.div>
         )}

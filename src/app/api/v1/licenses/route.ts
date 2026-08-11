@@ -4,14 +4,14 @@
 
 import { NextRequest } from 'next/server';
 import { services, successResponse, errorResponse, requestIdFor, parsePositiveIntParam } from '@/lib/services';
-import { resolveSupervisorIdentity } from '@/lib/supervisor-identity';
+import { resolveAuthenticatedSupervisorIdentity } from '@/lib/supervisor-identity';
 import { LicenseCreateSchema } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const identity = await resolveSupervisorIdentity(req);
+  const identity = await resolveAuthenticatedSupervisorIdentity();
   if (!identity) {
     return errorResponse(requestId, 401, 'UNAUTHORIZED', 'Sign in to license a take.');
   }
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const identity = await resolveSupervisorIdentity(req);
+  const identity = await resolveAuthenticatedSupervisorIdentity();
   if (!identity) {
     return errorResponse(requestId, 401, 'UNAUTHORIZED', 'Sign in to view your licenses.');
   }

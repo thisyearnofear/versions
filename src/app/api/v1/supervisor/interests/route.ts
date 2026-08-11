@@ -1,13 +1,13 @@
 import { NextRequest } from "next/server";
 import { services, successResponse, errorResponse, requestIdFor, parsePositiveIntParam } from "@/lib/services";
-import { resolveSupervisorIdentity } from "@/lib/supervisor-identity";
+import { resolveAuthenticatedSupervisorIdentity } from "@/lib/supervisor-identity";
 import { LicensingInterestSchema, LicensingInterestUpdateSchema } from "@/lib/validation";
 
 export async function GET(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const identity = await resolveSupervisorIdentity(req);
+  const identity = await resolveAuthenticatedSupervisorIdentity();
   if (!identity) {
-    return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to view licensing interests.");
+    return errorResponse(requestId, 401, "UNAUTHORIZED", "Sign in to view your shortlist.");
   }
 
   const { searchParams } = new URL(req.url);
@@ -23,9 +23,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const identity = await resolveSupervisorIdentity(req);
+  const identity = await resolveAuthenticatedSupervisorIdentity();
   if (!identity) {
-    return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to mark a licensing interest.");
+    return errorResponse(requestId, 401, "UNAUTHORIZED", "Sign in to shortlist a track.");
   }
 
   let body: Record<string, unknown>;
@@ -52,9 +52,9 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const requestId = requestIdFor(req);
-  const identity = await resolveSupervisorIdentity(req);
+  const identity = await resolveAuthenticatedSupervisorIdentity();
   if (!identity) {
-    return errorResponse(requestId, 401, "UNAUTHORIZED", "Connect your wallet to update a licensing interest.");
+    return errorResponse(requestId, 401, "UNAUTHORIZED", "Sign in to update your shortlist.");
   }
 
   let body: Record<string, unknown>;

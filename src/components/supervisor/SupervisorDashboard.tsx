@@ -1,20 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useAccount } from "wagmi";
 import { apiClient, type SavedBrief, type BriefSearchRecord, type LicensingInterest, type SupervisorProfile } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
 import { PaginationControls } from "@/components/ui/PaginationControls";
-import { AudioPlayer } from "@/components/audio/AudioPlayer";
+import { Card, Eyebrow, Section } from "@/components/ui/primitives";
 import { LicensesSection } from "@/components/supervisor/LicensesSection";
 import { MatchBenchmarkPanel } from "@/components/supervisor/MatchBenchmarkPanel";
+import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
+import { LICENSE_FEES, type LicenseUsageType } from "@/lib/pricing";
+import { matchBriefHash } from "@/lib/match-benchmark";
 
 const PAGE_SIZE = 10;
 
 export function SupervisorDashboard() {
-  const { isConnected } = useAccount();
+  const { isAuthenticated, requireAuth } = useSupervisorAuth();
   const { showToast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -67,6 +69,12 @@ export function SupervisorDashboard() {
   }, [showToast]);
 
   const refreshProfileAndInterests = useCallback(async () => {
+    if (!isAuthenticated) {
+      setProfile(null);
+      setInterests([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [profileRes, interestsRes] = await Promise.all([
@@ -80,7 +88,7 @@ export function SupervisorDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, isAuthenticated]);
 
   const refreshLists = useCallback(async () => {
     setListsLoading(true);
@@ -117,72 +125,207 @@ export function SupervisorDashboard() {
     }
   };
 
-  // MODULAR: wallet-free supervisor journey. No wallet gate — the
-  // dashboard renders for guests (device-scoped identity via the
-  // x-supervisor-guest header). A connected wallet is an optional
-  // upgrade that syncs the same surfaces to a cross-device identity.
   return (
-    <div className="flex flex-col gap-16">
-      {!isConnected && (
-        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-          Saved on this device — connect a wallet to carry your shortlist anywhere.
-        </p>
-      )}
-      {!loading && !listsLoading && briefFromUrl && !isBriefSaved && (
-        <section className="border border-[var(--color-rust)] p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div className="flex flex-col gap-2">
+      {!isAuthenticated && (
+        <div className="mb-6 border border-[var(--color-hair-strong)] rounded-sm p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] mb-1">
-              Brief from search
+            <Eyebrow className="mb-1 text-[var(--color-rust)]">Sign in required</Eyebrow>
+            <p className="font-serif text-sm text-[var(--color-ink-2)]">
+              Search stays guest-friendly. Shortlist and license require a signed-in wallet.
             </p>
-            <p className="font-serif text-base">{briefFromUrl}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => requireAuth("/supervisor")}
+            className="shrink-0 bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.14em] px-4 py-2 hover:bg-[var(--color-rust)] transition-colors"
+          >
+            Sign in →
+          </button>
+        </div>
+      )}
+
+      {!loading && !listsLoading && briefFromUrl && !isBriefSaved && (
+        <Card className="mb-6 border-[var(--color-rust)] p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <Eyebrow className="mb-1 text-[var(--color-rust)]">Brief from search</Eyebrow>
+            <p className="font-serif text-sm">{briefFromUrl}</p>
           </div>
           <button
             type="button"
             onClick={() => void onAutoSave()}
             disabled={autoSaving}
-            className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[11px] uppercase tracking-[0.18em] px-5 py-3 hover:bg-[var(--color-rust)] transition-colors disabled:opacity-50"
+            className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.14em] px-4 py-2 hover:bg-[var(--color-rust)] transition-colors disabled:opacity-50"
           >
-            {autoSaving ? "Saving…" : "Save to dashboard"}
+            {autoSaving ? "Saving…" : "Save brief"}
           </button>
-        </section>
+        </Card>
       )}
-      <ProfileSection profile={profile} onUpdate={refreshProfileAndInterests} />
-      <SavedBriefsSection
-        briefs={savedBriefs}
-        total={savedBriefsTotal}
-        page={savedBriefsPage}
-        onPageChange={(p) => {
-          setSavedBriefsPage(p);
-        }}
-        search={savedBriefsSearch}
-        onSearch={(s) => {
-          setSavedBriefsSearch(s);
-          setSavedBriefsPage(0);
-        }}
-        onChange={refreshLists}
+
+      {isAuthenticated && (
+        <ProfileSection profile={profile} onUpdate={refreshProfileAndInterests} />
+      )}
+
+      <ShortlistSection
+        interests={interests}
+        isAuthenticated={isAuthenticated}
+        loading={loading}
+        onChange={refreshProfileAndInterests}
+        requireAuth={requireAuth}
       />
-      <RecentSearchesSection
-        searches={recentSearches}
-        total={recentSearchesTotal}
-        page={recentSearchesPage}
-        onPageChange={(p) => {
-          setRecentSearchesPage(p);
-        }}
-        search={recentSearchesSearch}
-        onSearch={(s) => {
-          setRecentSearchesSearch(s);
-          setRecentSearchesPage(0);
-        }}
-      />
-      <InterestsSection interests={interests} onChange={refreshProfileAndInterests} />
-      <LicensesSection />
-      <MatchBenchmarkPanel />
-      {loading && (
-        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+
+      <Section eyebrow="Activity" title="Recent searches" divider={false} className="py-8">
+        <CompactSearchInput
+          value={recentSearchesSearch}
+          onChange={(s) => {
+            setRecentSearchesSearch(s);
+            setRecentSearchesPage(0);
+          }}
+          placeholder="Filter searches"
+        />
+        {recentSearches.length === 0 ? (
+          <EmptyState text="No recent searches." href="/discover" linkLabel="Run a brief →" />
+        ) : (
+          <ul className="mt-4 space-y-2">
+            {recentSearches.map((s) => (
+              <li key={s.id}>
+                <CompactRow
+                  title={s.brief_text}
+                  meta={`${s.results_count} matches · ${new Date(s.created_at).toLocaleDateString()}`}
+                  action={
+                    <Link
+                      href={`/discover?brief=${encodeURIComponent(s.brief_text)}`}
+                      className="font-mono text-[10px] uppercase tracking-[0.12em] border border-[var(--color-ink)] px-3 py-1.5 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
+                    >
+                      Run again
+                    </Link>
+                  }
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        {recentSearchesTotal > PAGE_SIZE && (
+          <PaginationControls
+            page={recentSearchesPage}
+            pageSize={PAGE_SIZE}
+            total={recentSearchesTotal}
+            onPrev={() => setRecentSearchesPage((p) => p - 1)}
+            onNext={() => setRecentSearchesPage((p) => p + 1)}
+            onGoTo={setRecentSearchesPage}
+          />
+        )}
+      </Section>
+
+      <Section eyebrow="Library" title="Saved briefs" className="py-8">
+        <CompactSearchInput
+          value={savedBriefsSearch}
+          onChange={(s) => {
+            setSavedBriefsSearch(s);
+            setSavedBriefsPage(0);
+          }}
+          placeholder="Filter briefs"
+        />
+        {savedBriefs.length === 0 ? (
+          <EmptyState text="No saved briefs yet." href="/discover" linkLabel="Search catalog →" />
+        ) : (
+          <ul className="mt-4 space-y-2">
+            {savedBriefs.map((b) => (
+              <SavedBriefRow key={b.id} brief={b} onDelete={refreshLists} />
+            ))}
+          </ul>
+        )}
+        {savedBriefsTotal > PAGE_SIZE && (
+          <PaginationControls
+            page={savedBriefsPage}
+            pageSize={PAGE_SIZE}
+            total={savedBriefsTotal}
+            onPrev={() => setSavedBriefsPage((p) => p - 1)}
+            onNext={() => setSavedBriefsPage((p) => p + 1)}
+            onGoTo={setSavedBriefsPage}
+          />
+        )}
+      </Section>
+
+      <div id="licenses">
+        <LicensesSection isAuthenticated={isAuthenticated} requireAuth={requireAuth} />
+      </div>
+
+      <MatchBenchmarkPanel compact />
+
+      {(loading || listsLoading) && (
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] py-4">
           Loading…
-        </div>
+        </p>
       )}
     </div>
+  );
+}
+
+function CompactSearchInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const [input, setInput] = useState(value);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { setInput(value); }, [value]);
+  useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
+
+  const handleChange = (v: string) => {
+    setInput(v);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => onChange(v), 300);
+  };
+
+  return (
+    <input
+      type="text"
+      value={input}
+      onChange={(e) => handleChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full max-w-md border border-[var(--color-hair-strong)] bg-transparent px-3 py-2 font-mono text-[11px] text-[var(--color-ink)] placeholder:text-[var(--color-ink-3)] focus:outline-none focus:border-[var(--color-ink)]"
+    />
+  );
+}
+
+function CompactRow({
+  title,
+  meta,
+  action,
+}: {
+  title: string;
+  meta?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="border border-[var(--color-hair)] rounded-sm p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-[var(--color-ink-3)] transition-colors">
+      <div className="min-w-0">
+        <p className="font-serif text-[14px] truncate">{title}</p>
+        {meta && (
+          <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)] mt-0.5">
+            {meta}
+          </p>
+        )}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function EmptyState({ text, href, linkLabel }: { text: string; href: string; linkLabel: string }) {
+  return (
+    <p className="mt-4 font-serif text-sm text-[var(--color-ink-2)]">
+      {text}{" "}
+      <Link href={href} className="text-[var(--color-rust)] hover:underline">
+        {linkLabel}
+      </Link>
+    </p>
   );
 }
 
@@ -225,275 +368,138 @@ function ProfileSection({
   };
 
   return (
-    <section className="border-t border-[var(--color-hair-strong)] pt-8">
-      <h3 className="font-serif text-2xl font-black tracking-tight mb-4">Profile</h3>
+    <Section eyebrow="Account" title="Profile" divider={false} className="py-8">
       {editing ? (
-        <div className="flex flex-col gap-3 max-w-xl">
-          <input
-            type="text"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Name"
-            className="border border-[var(--color-ink)] bg-[var(--color-paper)] p-3 font-serif text-base"
-          />
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            placeholder="Email"
-            className="border border-[var(--color-ink)] bg-[var(--color-paper)] p-3 font-serif text-base"
-          />
-          <input
-            type="text"
-            value={form.company}
-            onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
-            placeholder="Company"
-            className="border border-[var(--color-ink)] bg-[var(--color-paper)] p-3 font-serif text-base"
-          />            <select
+        <div className="flex flex-col gap-2 max-w-md">
+          {(["name", "email", "company"] as const).map((field) => (
+            <input
+              key={field}
+              type={field === "email" ? "email" : "text"}
+              value={form[field]}
+              onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))}
+              placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+              className="border border-[var(--color-hair-strong)] bg-transparent px-3 py-2 font-serif text-sm focus:outline-none focus:border-[var(--color-ink)]"
+            />
+          ))}
+          <select
             value={form.role}
             onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as SupervisorProfile["role"] }))}
-            className="border border-[var(--color-ink)] bg-[var(--color-paper)] p-3 font-serif text-base"
+            className="border border-[var(--color-hair-strong)] bg-transparent px-3 py-2 font-serif text-sm"
           >
             <option value="supervisor">Music Supervisor</option>
             <option value="sync_house">Sync House</option>
             <option value="aandr">A&R</option>
           </select>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => void onSave()}
-              className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[11px] uppercase tracking-[0.18em] px-5 py-3 hover:bg-[var(--color-rust)] transition-colors"
-            >
+          <div className="flex gap-2 mt-1">
+            <button type="button" onClick={() => void onSave()} className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 hover:bg-[var(--color-rust)] transition-colors">
               Save
             </button>
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              className="border border-[var(--color-ink)] font-mono text-[11px] uppercase tracking-[0.18em] px-5 py-3 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
-            >
+            <button type="button" onClick={() => setEditing(false)} className="font-mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors">
               Cancel
             </button>
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-2 max-w-xl">
-          <div className="font-serif text-lg">{profile?.name || "No name set"}</div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]">
-            {profile?.email && <span className="mr-4">{profile.email}</span>}
-            {profile?.company && <span className="mr-4">{profile.company}</span>}
-            <span className="text-[var(--color-rust)]">{profile?.role ?? "supervisor"}</span>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="font-serif text-base font-semibold">{profile?.name || "No name set"}</p>
+            <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)] mt-1">
+              {[profile?.email, profile?.company, profile?.role ?? "supervisor"].filter(Boolean).join(" · ")}
+            </p>
           </div>
           <button
             type="button"
-            onClick={() => {
-              setForm({
-                name: profile?.name ?? "",
-                email: profile?.email ?? "",
-                company: profile?.company ?? "",
-                role: profile?.role ?? "supervisor",
-              });
-              setEditing(true);
-            }}
-            className="mt-2 text-left font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
+            onClick={() => setEditing(true)}
+            className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors shrink-0"
           >
-            Edit profile →
+            Edit →
           </button>
         </div>
       )}
-    </section>
+    </Section>
   );
 }
 
-function SavedBriefsSection({
-  briefs,
-  total,
-  page,
-  onPageChange,
-  search,
-  onSearch,
-  onChange,
-}: {
-  briefs: SavedBrief[];
-  total: number;
-  page: number;
-  onPageChange: (page: number) => void;
-  search: string;
-  onSearch: (search: string) => void;
-  onChange: () => void;
-}) {
+function SavedBriefRow({ brief, onDelete }: { brief: SavedBrief; onDelete: () => void }) {
   const { showToast } = useToast();
-  const [input, setInput] = useState(search);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { setInput(search); }, [search]);
-  useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
-
-  const handleSearch = (value: string) => {
-    setInput(value);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => { onSearch(value); }, 300);
-  };
-
-  const onDelete = async (id: string) => {
+  const onDeleteClick = async () => {
     try {
-      await apiClient.deleteSavedBrief(id);
+      await apiClient.deleteSavedBrief(brief.id);
       showToast("Brief deleted", "success");
-      onChange();
+      onDelete();
     } catch (err) {
       showToast(`Delete failed: ${(err as Error).message}`, "error");
     }
   };
 
   return (
-    <section className="border-t border-[var(--color-hair-strong)] pt-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-        <h3 className="font-serif text-2xl font-black tracking-tight">Saved briefs</h3>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => handleSearch(e.target.value)}
-          placeholder="Search saved briefs"
-          className="border border-[var(--color-ink)] bg-[var(--color-paper)] p-2 font-serif text-sm max-w-md"
-        />
-      </div>
-      {briefs.length === 0 ? (
-        <p className="font-serif text-[var(--color-ink-2)]">No saved briefs yet.</p>
-      ) : (
-        <>
-          <ul className="flex flex-col gap-3">
-            {briefs.map((b) => (
-              <li
-                key={b.id}
-                className="border border-[var(--color-hair-strong)] p-4 flex flex-col md:flex-row md:items-center justify-between gap-3"
-              >
-                <div>
-                  <p className="font-serif text-base">{b.brief_text}</p>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] mt-1">
-                    {new Date(b.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <Link
-                    href={`/discover?brief=${encodeURIComponent(b.brief_text)}`}
-                    className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[11px] uppercase tracking-[0.18em] px-4 py-2 hover:bg-[var(--color-rust)] transition-colors"
-                  >
-                    Search
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => void onDelete(b.id)}
-                    className="border border-[var(--color-ink)] font-mono text-[11px] uppercase tracking-[0.18em] px-4 py-2 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <PaginationControls
-            page={page}
-            pageSize={PAGE_SIZE}
-            total={total}
-            onPrev={() => onPageChange(page - 1)}
-            onNext={() => onPageChange(page + 1)}
-            onGoTo={onPageChange}
-          />
-        </>
-      )}
-    </section>
+    <CompactRow
+      title={brief.brief_text}
+      meta={new Date(brief.created_at).toLocaleDateString()}
+      action={
+        <div className="flex gap-2 shrink-0">
+          <Link
+            href={`/discover?brief=${encodeURIComponent(brief.brief_text)}`}
+            className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 hover:bg-[var(--color-rust)] transition-colors"
+          >
+            Search
+          </Link>
+          <button
+            type="button"
+            onClick={() => void onDeleteClick()}
+            className="font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      }
+    />
   );
 }
 
-function RecentSearchesSection({
-  searches,
-  total,
-  page,
-  onPageChange,
-  search,
-  onSearch,
-}: {
-  searches: BriefSearchRecord[];
-  total: number;
-  page: number;
-  onPageChange: (page: number) => void;
-  search: string;
-  onSearch: (search: string) => void;
-}) {
-  const [input, setInput] = useState(search);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => { setInput(search); }, [search]);
-  useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
-
-  const handleSearch = (value: string) => {
-    setInput(value);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => { onSearch(value); }, 300);
-  };
-  return (
-    <section className="border-t border-[var(--color-hair-strong)] pt-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-        <h3 className="font-serif text-2xl font-black tracking-tight">Recent searches</h3>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => handleSearch(e.target.value)}
-          placeholder="Search recent searches"
-          className="border border-[var(--color-ink)] bg-[var(--color-paper)] p-2 font-serif text-sm max-w-md"
-        />
-      </div>
-      {searches.length === 0 ? (
-        <p className="font-serif text-[var(--color-ink-2)]">No recent searches.</p>
-      ) : (
-        <>
-          <ul className="flex flex-col gap-3">
-            {searches.map((s) => (
-              <li
-                key={s.id}
-                className="border border-[var(--color-hair-strong)] p-4 flex flex-col md:flex-row md:items-center justify-between gap-3"
-              >
-                <div>
-                  <p className="font-serif text-base">{s.brief_text}</p>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] mt-1">
-                    {s.results_count} matches · {new Date(s.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <Link
-                  href={`/discover?brief=${encodeURIComponent(s.brief_text)}`}
-                  className="border border-[var(--color-ink)] font-mono text-[11px] uppercase tracking-[0.18em] px-4 py-2 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
-                >
-                  Run again
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <PaginationControls
-            page={page}
-            pageSize={PAGE_SIZE}
-            total={total}
-            onPrev={() => onPageChange(page - 1)}
-            onNext={() => onPageChange(page + 1)}
-            onGoTo={onPageChange}
-          />
-        </>
-      )}
-    </section>
-  );
-}
-
-function InterestsSection({
+function ShortlistSection({
   interests,
+  isAuthenticated,
+  loading,
   onChange,
+  requireAuth,
 }: {
   interests: LicensingInterest[];
+  isAuthenticated: boolean;
+  loading: boolean;
   onChange: () => void;
+  requireAuth: (returnTo?: string) => boolean;
 }) {
   const { showToast } = useToast();
+  const router = useRouter();
+  const [licensingId, setLicensingId] = useState<string | null>(null);
 
-  const onUpdateStatus = async (id: string, status: LicensingInterest["status"]) => {
+  const onRequestLicense = async (interest: LicensingInterest) => {
+    if (!requireAuth("/supervisor")) return;
+    setLicensingId(interest.id);
     try {
-      await apiClient.updateInterest({ id, status });
-      showToast("Status updated", "success");
+      const usageType: LicenseUsageType = "sync_tv_film";
+      await apiClient.createLicense({
+        submissionId: interest.submission_id,
+        briefHash: matchBriefHash(`shortlist:${interest.submission_id}`),
+        briefText: "Shortlisted from dashboard",
+        usageType,
+      });
+      showToast(`License created · $${LICENSE_FEES[usageType]} USDC — settle below`, "success");
+      router.push("/supervisor#licenses");
+      onChange();
+    } catch (err) {
+      showToast(`License failed: ${(err as Error).message}`, "error");
+    } finally {
+      setLicensingId(null);
+    }
+  };
+
+  const onRemove = async (id: string) => {
+    try {
+      await apiClient.updateInterest({ id, status: "passed" });
+      showToast("Removed from shortlist", "success");
       onChange();
     } catch (err) {
       showToast(`Update failed: ${(err as Error).message}`, "error");
@@ -501,48 +507,55 @@ function InterestsSection({
   };
 
   return (
-    <section className="border-t border-[var(--color-hair-strong)] pt-8">
-      <h3 className="font-serif text-2xl font-black tracking-tight mb-4">Licensing interests</h3>
-      {interests.length === 0 ? (
-        <p className="font-serif text-[var(--color-ink-2)]">
-          No tracks marked yet. Search the catalog and click “Interested” to build your shortlist.
-        </p>
+    <Section
+      eyebrow="Pipeline"
+      title="Shortlist"
+      intro={isAuthenticated ? "Tracks you are considering for sync. Request a license, then settle below." : undefined}
+      divider={false}
+      className="py-8"
+    >
+      {!isAuthenticated ? (
+        <EmptyState text="Sign in to save tracks from Discover." href="/discover" linkLabel="Search catalog →" />
+      ) : loading ? (
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">Loading…</p>
+      ) : interests.filter((i) => i.status !== "passed").length === 0 ? (
+        <EmptyState text="No shortlisted tracks." href="/discover" linkLabel="Find matches →" />
       ) : (
-        <ul className="flex flex-col gap-3">
-          {interests.map((i) => (
-            <li
-              key={i.id}
-              className="border border-[var(--color-hair-strong)] p-4 flex flex-col md:flex-row md:items-center justify-between gap-3"
-            >
-              <div>
-                <p className="font-serif text-base">
-                  {i.artist_wallet ? (
-                    <Link href={`/artists/${encodeURIComponent(i.artist_wallet)}`} className="hover:text-[var(--color-rust)] transition-colors">
-                      {i.title ?? "Untitled"}
-                    </Link>
-                  ) : (
-                    <span>{i.title ?? "Untitled"}</span>
-                  )}{" "}
-                  <span className="text-[var(--color-ink-3)]">·</span> {i.artist_name ?? "Unknown artist"}
-                </p>
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] mt-1">
-                  {i.submission_id.slice(0, 8)}… · Status: <span className="text-[var(--color-rust)]">{i.status}</span>
-                </p>
+        <ul className="space-y-2">
+          {interests.filter((i) => i.status !== "passed").map((i) => (
+            <li key={i.id}>
+              <div className="border border-[var(--color-hair)] rounded-sm p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-[var(--color-ink-3)] transition-colors">
+                <div className="min-w-0">
+                  <p className="font-serif text-[14px] font-medium truncate">
+                    {i.title ?? "Untitled"}
+                    <span className="text-[var(--color-ink-3)] font-normal"> · {i.artist_name ?? "Unknown"}</span>
+                  </p>
+                  <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)] mt-0.5">
+                    {i.status}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => void onRequestLicense(i)}
+                    disabled={licensingId === i.id}
+                    className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 hover:bg-[var(--color-rust)] transition-colors disabled:opacity-50"
+                  >
+                    {licensingId === i.id ? "…" : "License · $250"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onRemove(i.id)}
+                    className="font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
-              <select
-                value={i.status}
-                onChange={(e) => void onUpdateStatus(i.id, e.target.value as LicensingInterest["status"])}
-                className="border border-[var(--color-ink)] bg-[var(--color-paper)] p-2 font-mono text-[10px] uppercase tracking-[0.12em]"
-              >
-                <option value="interested">Interested</option>
-                <option value="contacted">Contacted</option>
-                <option value="licensed">Licensed</option>
-                <option value="passed">Passed</option>
-              </select>
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </Section>
   );
 }

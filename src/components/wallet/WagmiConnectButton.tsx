@@ -9,6 +9,7 @@
 import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useChainId, useDisconnect, useSignMessage } from "wagmi";
+import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef } from "react";
 import { WalletGlossary } from "@/components/wallet/WalletGlossary";
 import { track } from "@/lib/analytics";
@@ -29,6 +30,8 @@ export interface WagmiConnectButtonProps {
 
 export function WagmiConnectButton({ variant = "default", children, showGlossary = false }: WagmiConnectButtonProps) {
   const { address, isConnected } = useAccount();
+  const { status: sessionStatus } = useSession();
+  const isAuthenticated = sessionStatus === "authenticated";
 
   // MODULAR: fire analytics when the wallet connects / disconnects.
   // Only tracks the boolean (connected: true), not the address — no PII.
@@ -98,10 +101,18 @@ export function WagmiConnectButton({ variant = "default", children, showGlossary
                   type="button"
                   onClick={openConnectModal}
                   className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
-                  title="Search is free without a wallet — sign in to settle & persist"
+                  title="Search is free — sign in to shortlist and license"
                 >
                   Sign in
                 </button>
+              ) : !isAuthenticated ? (
+                <Link
+                  href={`/auth/signin?callbackUrl=${encodeURIComponent(typeof window !== "undefined" ? window.location.pathname + window.location.search : "/discover")}`}
+                  className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] hover:opacity-80 transition-opacity"
+                  title="Wallet connected — sign the message to finish"
+                >
+                  Finish sign in
+                </Link>
               ) : (
                 <button
                   type="button"
