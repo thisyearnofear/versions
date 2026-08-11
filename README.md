@@ -81,6 +81,12 @@ pnpm demo           # auto-submits, pays, reviews, publishes, and tips
 
 ### Going real on Arc testnet
 
+> **Arc network timeline.** VERSIONS currently settles on **Arc testnet**
+> (network live with testnet USDC). **Arc mainnet launches September 16,
+> 2026.** Until then use the testnet `ARC_RPC_URL` / `ARC_USDC_CONTRACT`
+> below; after Sept 16 follow the go-mainnet checklist in the
+> [Arc L1 settlement](#arc-l1-settlement) section.
+
 Set these env vars to switch from mock to real on-chain settlement:
 
 ```
@@ -454,6 +460,14 @@ from the platform treasury wallet. The private key is validated against the
 - **Dynamic chain** — the adapter reads `eth_chainId` from the configured
 RPC and builds the viem `Chain` at runtime, so testnet/mainnet RPCs are
 both supported without hardcoding.
+- **Network timeline** — currently **Arc testnet**; **Arc mainnet launches
+September 16, 2026**. Testnet RPC/contract values are in the
+"Going real on Arc testnet" section. To go mainnet after Sept 16:
+(1) set the mainnet `ARC_RPC_URL` + `ARC_USDC_CONTRACT` in `.env`,
+(2) point `NEXT_PUBLIC_ARC_RPC_URL` / `NEXT_PUBLIC_ARC_EXPLORER_URL` at
+mainnet and **rebuild** the image (they're inlined at build time), and
+(3) use a funded hot wallet — `npm run check:arc` should exit `0` and
+`platformUsdcBalance` should be non-zero.
 - **Health probe** — `GET /api/health/ready` reports `arc.reachable`,
 `chainId`, `platformBalance`, and `signerConfigured`. If real Arc is
 configured but unreachable, the endpoint returns HTTP 503 with
@@ -697,6 +711,10 @@ npm run db:push              # push the schema (version_embeddings table)
 
 ### Up next
 
+- **Arc mainnet go-live (Sept 16, 2026)** — once Arc mainnet launches,
+  point `ARC_RPC_URL` / `ARC_USDC_CONTRACT` (and the `NEXT_PUBLIC_*`
+  build args) at mainnet, fund the treasury hot wallet, and rerun
+  `npm run check:arc` until it exits `0`.
 - **`expectedLegCountFor` prophecy check** — add a Postgres-level invariant
   test that runs against the live DB on `npm run db:doctor` so orphan legs
   in production produce a deploy-blocking alert (catches the carryover from

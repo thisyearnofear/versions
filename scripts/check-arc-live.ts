@@ -4,6 +4,9 @@
 // config) so an operator can switch the demo loop from mock to real
 // Arc testnet money in one glance.
 //
+// NETWORK: currently Arc TESTNET. Arc MAINNET launches 2026-09-16; until
+// then validate against the testnet RPC/contract (see .env.example).
+//
 // Run:   npm run check:arc
 //        ARC_RPC_URL=... ARC_USDC_CONTRACT=... PLATFORM_WALLET=... npm run check:arc
 //
