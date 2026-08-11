@@ -14,9 +14,11 @@ import { WalletGlossary } from "@/components/wallet/WalletGlossary";
 import { track } from "@/lib/analytics";
 
 export interface WagmiConnectButtonProps {
-  // Optional: show the short address chip inline (otherwise RainbowKit's
-  // default button is rendered, which already includes the address).
-  variant?: "default" | "compact";
+  // "default" | "compact" render RainbowKit's built-in button (address chip).
+  // "quiet" is supervisor-first: a subtle, low-emphasis "Sign in" when
+  // disconnected (no wallet CTA at the front door) and a slim address chip
+  // once connected. Search stays guest-first either way.
+  variant?: "default" | "compact" | "quiet";
   // Optional: when true, include the inline "What is a wallet?" glossary
   // below the connect button. Off by default because pages with
   // dedicated dashboard chrome usually have their own explainer.
@@ -76,11 +78,53 @@ export function WagmiConnectButton({ variant = "default", children, showGlossary
     />
   );
 
+  // MODULAR: supervisor-first variant — a quiet "Sign in" affordance when
+  // disconnected (no loud wallet CTA at the front door) and a slim address
+  // chip once connected. The connect/account modal still opens on click, so
+  // the action stays reachable in ≤2 clicks, just not loud.
+  const control =
+    variant === "quiet" ? (
+      <ConnectButton.Custom>
+        {({ account, chain, openAccountModal, openConnectModal, mounted }) => {
+          const ready = mounted;
+          const connected = ready && !!account && !!chain;
+          return (
+            <div
+              {...(!ready ? { "aria-hidden": true } : {})}
+              style={{ opacity: ready ? 1 : 0, pointerEvents: ready ? "auto" : "none" }}
+            >
+              {!connected ? (
+                <button
+                  type="button"
+                  onClick={openConnectModal}
+                  className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
+                  title="Search is free without a wallet — sign in to settle & persist"
+                >
+                  Sign in
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openAccountModal}
+                  className="flex items-center gap-2 border border-[var(--color-hair-strong)] px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-ink)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
+                >
+                  <span aria-hidden="true" className="inline-block h-2 w-2 rounded-full bg-[var(--color-rust)]" />
+                  {account.displayName}
+                </button>
+              )}
+            </div>
+          );
+        }}
+      </ConnectButton.Custom>
+    ) : (
+      button
+    );
+
   return (
     <div className="flex flex-col items-end gap-0">
       <div className="flex items-center gap-3">
         {links}
-        {button}
+        {control}
         {children}
       </div>
       {showGlossary && !isConnected && (

@@ -28,7 +28,7 @@ export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" |
         </Link>
         <div className="flex items-center gap-4">
           <span className="hidden xl:block font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-            free to search · no wallet needed
+            free to search · no wallet needed · sign in to settle
           </span>
           <Link
             href="/discover"
@@ -37,7 +37,7 @@ export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" |
           >
             Find a track
           </Link>
-          <WagmiConnectButton variant="compact" />
+          <WagmiConnectButton variant="quiet" />
         </div>
       </div>
       <nav role="tablist" className="px-6 md:px-12 flex overflow-x-auto border-t border-[var(--color-hair)]">

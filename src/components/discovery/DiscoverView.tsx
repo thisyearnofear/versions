@@ -447,6 +447,9 @@ function ReasoningDisclosure({
 
 function MatchSearch() {
   const { showToast } = useToast();
+  // Contextual sign-in nudge: the wallet is an upgrade at the point of a
+  // paying action, not the front door. Guests search freely either way.
+  const { isConnected: walletConnected } = useAccount();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [brief, setBrief] = useState("");
@@ -691,6 +694,12 @@ function MatchSearch() {
             onReset={resetRefinements}
             disabled={loading}
           />
+
+          {!walletConnected && (
+            <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+              guest session — sign in to settle &amp; persist · search stays free
+            </p>
+          )}
 
           {results.rows.map((r, i) => {
             const isOpen = !!expandedMatch[r.submission_id];
