@@ -49,7 +49,18 @@ const envSchema = z.object({
   POSTHOG_KEY: z.string().optional(),
 });
 
-export const env = envSchema.parse(process.env);
+// During `next build`, Next.js evaluates server-component / route module graphs
+// (this config is transitively imported, e.g. via the feed service) and executes
+// top-level code. Docker builds have no server secrets on disk (.dockerignore
+// excludes .env, and baking creds into image layers would leak DB/auth secrets
+// via `docker history`). So relax the REQUIRED keys during the build phase only;
+// runtime still validates strictly and fails fast if DATABASE_URL/NEXTAUTH_SECRET
+// are missing. Next sets NEXT_PHASE=PHASE_PRODUCTION_BUILD during `next build`.
+const isNextBuild = process.env.NEXT_PHASE === 'phase-production-build';
+
+export const env = (isNextBuild ? envSchema.partial() : envSchema).parse(
+  process.env,
+) as z.infer<typeof envSchema>;
 
 export const config = {
   submissionFee: '0.50',

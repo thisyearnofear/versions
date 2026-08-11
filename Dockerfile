@@ -11,11 +11,30 @@ FROM node:22-alpine AS base
 FROM base AS builder
 WORKDIR /app
 
+# ── Build-time client env ──────────────────────────────
+# NEXT_PUBLIC_* vars are inlined into the browser bundle at build time.
+# .dockerignore excludes .env from the context, so these must be injected
+# as build args (public by definition — safe to bake into the image).
+# Values mirror netlify.toml defaults; override per deploy with --build-arg.
+ARG NEXT_PUBLIC_ARC_RPC_URL
+ARG NEXT_PUBLIC_ARC_EXPLORER_URL
+ARG NEXT_PUBLIC_SUBMIT_RECEIPT_TIMEOUT_MS
+ARG NEXT_PUBLIC_WC_PROJECT_ID
+ENV NEXT_PUBLIC_ARC_RPC_URL=${NEXT_PUBLIC_ARC_RPC_URL} \
+    NEXT_PUBLIC_ARC_EXPLORER_URL=${NEXT_PUBLIC_ARC_EXPLORER_URL} \
+    NEXT_PUBLIC_SUBMIT_RECEIPT_TIMEOUT_MS=${NEXT_PUBLIC_SUBMIT_RECEIPT_TIMEOUT_MS} \
+    NEXT_PUBLIC_WC_PROJECT_ID=${NEXT_PUBLIC_WC_PROJECT_ID}
+
 # Install all deps (needed for build, including devDeps)
 COPY package.json package-lock.json* ./
 RUN npm ci
 
 COPY . .
+
+# `next build` triggers `npm run postbuild` → scripts/audit-nft-traces.sh,
+# which shells out to bash (Alpine ships only busybox ash). Install bash for
+# the builder only; the runner uses plain `node server.js` and stays minimal.
+RUN apk add --no-cache bash
 
 # standalone output traces only what the server actually needs
 RUN npm run build

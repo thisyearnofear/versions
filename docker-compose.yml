@@ -1,0 +1,49 @@
+# VERSIONS — Coolify/Traefik deployment for your vultr box.
+#
+# Matches the exact pattern already running on nuncio-vultr (see persidian-web):
+#   - container joins the shared `coolify` Traefik network (no exposed host port)
+#   - Traefik routes https://<domain> -> app on internal port 3000
+#   - TLS terminated by Traefik via the letsencrypt resolver
+#
+# Two ways to use this:
+#   A) Coolify UI (recommended, matches how your other projects are managed):
+#        New Resource -> Dockerfile -> point at the repo -> set env vars ->
+#        Coolify generates its own Traefik labels + domain.
+#   B) Manual compose on the box:
+#        scp docker-compose.yml + .env to nuncio-vultr, then
+#        docker compose up -d --build
+#   (If you use B, uncomment the env_file and Traefik labels below and set
+#    the DOMAIN + a unique router/network name in the labels.)
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_ARC_RPC_URL: ${NEXT_PUBLIC_ARC_RPC_URL:-https://rpc.testnet.arc.network}
+        NEXT_PUBLIC_ARC_EXPLORER_URL: ${NEXT_PUBLIC_ARC_EXPLORER_URL:-https://testnet.arcscan.app}
+        NEXT_PUBLIC_SUBMIT_RECEIPT_TIMEOUT_MS: ${NEXT_PUBLIC_SUBMIT_RECEIPT_TIMEOUT_MS:-60000}
+        NEXT_PUBLIC_WC_PROJECT_ID: ${NEXT_PUBLIC_WC_PROJECT_ID:-}
+    image: versions:latest
+    container_name: versions
+    restart: unless-stopped
+    # Runtime env is injected from the server's .env (never baked into the image).
+    # Coolify manages these in its UI instead; the file only matters for route B.
+    env_file:
+      - .env
+    networks:
+      - coolify
+    # Manual-route Traefik labels. Coolify generates its own equivalent when
+    # you deploy via the UI — comment these out if Coolify manages the resource.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=coolify
+      - traefik.http.services.versions-web.loadbalancer.server.port=3000
+      - traefik.http.routers.versions-web.entrypoints=https
+      - traefik.http.routers.versions-web.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.versions-web.tls.certresolver=letsencrypt
+
+networks:
+  coolify:
+    external: true
