@@ -1,25 +1,23 @@
 # MODULAR: Multi-stage Dockerfile for VERSIONS Next.js app.
-# Produces a standalone Next.js server image.
+# Uses Next.js standalone output — only the server binary + traced
+# dependencies are copied, not the full node_modules tree.
 #
 # Build:  docker build -t versions .
 # Run:    docker run -p 3000:3000 --env-file .env versions
 
 FROM node:22-alpine AS base
 
-# ── Dependencies ──────────────────────────────────────
-FROM base AS deps
-WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev || npm install --omit=dev
-
 # ── Builder ───────────────────────────────────────────
 FROM base AS builder
 WORKDIR /app
+
+# Install all deps (needed for build, including devDeps)
 COPY package.json package-lock.json* ./
 RUN npm ci
+
 COPY . .
-# MODULAR: Next.js 16.2.9 Turbopack regression workaround.
-# See README "Why --experimental-build-mode compile".
+
+# standalone output traces only what the server actually needs
 RUN npm run build
 
 # ── Runner ────────────────────────────────────────────
@@ -32,16 +30,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
 
-# Production deps + the Next build output (next start model — the Netlify
-# deploy does NOT use standalone output, so the Docker image must ship
-# node_modules + .next rather than the slim standalone server).
-COPY --from=deps /app/node_modules ./node_modules
+# Static assets served by the standalone server
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
-COPY --from=builder /app/next.config.ts /app/package.json /app/tsconfig.json ./
 
-# Copy the scripts directory for DB migration scripts
-COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
+# Standalone server bundle (server.js + traced node_modules)
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Local audio upload directory (fallback when IPFS is not configured)
+RUN mkdir -p data/uploads && chown nextjs:nodejs data/uploads
 
 USER nextjs
 
@@ -49,4 +46,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node_modules/.bin/next", "start"]
+CMD ["node", "server.js"]
