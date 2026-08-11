@@ -24,6 +24,18 @@ import { reasoningRevealMode } from "@/lib/playlist-reasoning-ui";
 import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
 import { ListenerHub } from "@/components/listener/ListenerHub";
 
+// MODULAR: refinement chips turn a one-shot brief search into a back-and-forth
+// with the agents. Each option appends a plain-English constraint to the
+// effective brief and re-dispatches the inverse search (agentic conversation).
+const BRIEF_REFINEMENTS = [
+  { id: "no-vocals", label: "no vocals", instruction: "no vocals, instrumental" },
+  { id: "darker", label: "darker mood", instruction: "darker mood, less bright" },
+  { id: "faster", label: "faster tempo", instruction: "faster tempo" },
+  { id: "acoustic", label: "more acoustic", instruction: "more acoustic-leaning" },
+  { id: "electronic", label: "more electronic", instruction: "more electronic-leaning" },
+  { id: "raw", label: "raw / lo-fi", instruction: "raw, unpolished feel" },
+] as const;
+
 export function DiscoverView() {
   const { address, isConnected } = useAccount();
   const { showToast } = useToast();
@@ -196,10 +208,13 @@ function PlaylistCard({
   const { showToast } = useToast();
   const [payingId, setPayingId] = useState<string | null>(null);
   const [freePlay, setFreePlay] = useState(false);
+  // Per-play settlement beat: which row just confirmed an on-chain pay.
+  const [settledId, setSettledId] = useState<string | null>(null);
 
   const onPlay = useCallback(
     async (versionId: string) => {
       setPayingId(versionId);
+      setSettledId(null);
       track("play_click", { versionId, playlistId: playlist.id, connected: isConnected });
       try {
         const wallet = listenerWallet ?? `anonymous_listener_${Date.now()}`;
@@ -213,6 +228,7 @@ function PlaylistCard({
           );
           setFreePlay(true);
         } else {
+          setSettledId(versionId);
           showToast("Play settled — $0.0005 paid to artist on Arc", "success", 4000);
         }
 
@@ -231,7 +247,11 @@ function PlaylistCard({
         track("play_failed", { versionId, error: (err as Error).message.slice(0, 120) });
         showToast(`Play failed: ${(err as Error).message}`, "error");
       } finally {
-        setTimeout(() => { setPayingId(null); setFreePlay(false); }, 1500);
+        setTimeout(() => {
+          setPayingId(null);
+          setFreePlay(false);
+        }, 1200);
+        setTimeout(() => setSettledId(null), 2600);
       }
     },
     [listenerWallet, playlist.id, showToast],
@@ -327,9 +347,11 @@ function PlaylistCard({
                   "font-mono text-[10px] uppercase tracking-[0.1em] border px-2.5 py-1.5 transition-[transform,colors] duration-150 ease-out active:scale-[0.97]",
                   payingId === t.submission_id
                     ? "border-[var(--color-hair-strong)] text-[var(--color-ink-3)] cursor-wait"
-                    : freePlay
-                      ? "border-[var(--color-hair-strong)] text-[var(--color-ink-3)]"
-                      : "border-[var(--color-rust)] text-[var(--color-rust)] hover:bg-[var(--color-rust)] hover:text-[var(--color-paper)]",
+                    : settledId === t.submission_id
+                      ? "border-[var(--color-rust)] bg-[var(--color-rust)] text-[var(--color-paper)]"
+                      : freePlay
+                        ? "border-[var(--color-hair-strong)] text-[var(--color-ink-3)]"
+                        : "border-[var(--color-rust)] text-[var(--color-rust)] hover:bg-[var(--color-rust)] hover:text-[var(--color-paper)]",
                 )}
                 title={
                   isConnected
@@ -339,9 +361,11 @@ function PlaylistCard({
               >
                 {payingId === t.submission_id
                   ? "Settling…"
-                  : freePlay
-                    ? "Played ✓"
-                    : "→ Play"}
+                  : settledId === t.submission_id
+                    ? "⛓ $0.0005 settled"
+                    : freePlay
+                      ? "Played ✓"
+                      : "→ Play"}
               </button>
             </motion.li>
           );
@@ -437,6 +461,8 @@ function MatchSearch() {
   const [licensedFor, setLicensedFor] = useState<Record<string, boolean>>({});
   // Progressive disclosure: which result cards are expanded (reveal details/play).
   const [expandedMatch, setExpandedMatch] = useState<Record<string, boolean>>({});
+  // Agentic refinement: plain-English constraints appended to re-dispatch.
+  const [refinements, setRefinements] = useState<string[]>([]);
 
   // Pre-fill brief from ?brief= query param (e.g. from saved briefs / recent searches)
   useEffect(() => {
@@ -552,6 +578,29 @@ function MatchSearch() {
     }
   };
 
+  // Agentic refinement: append a constraint to the effective brief and
+  // re-dispatch the inverse search so the user talks to the agents.
+  const applyRefinement = useCallback(
+    (instruction: string) => {
+      const next = [...refinements, instruction];
+      setRefinements(next);
+      void runSearch([brief.trim(), ...next].filter(Boolean).join(" · "));
+    },
+    [brief, refinements, runSearch],
+  );
+  const removeRefinement = useCallback(
+    (instruction: string) => {
+      const next = refinements.filter((r) => r !== instruction);
+      setRefinements(next);
+      void runSearch([brief.trim(), ...next].filter(Boolean).join(" · "));
+    },
+    [brief, refinements, runSearch],
+  );
+  const resetRefinements = useCallback(() => {
+    setRefinements([]);
+    void runSearch(brief);
+  }, [brief, runSearch]);
+
   return (
     <section
       aria-labelledby="match-brief-heading"
@@ -633,6 +682,16 @@ function MatchSearch() {
               </button>
             </div>
           </div>
+
+          <RefineStrip
+            active={refinements}
+            options={BRIEF_REFINEMENTS}
+            onApply={applyRefinement}
+            onRemove={removeRefinement}
+            onReset={resetRefinements}
+            disabled={loading}
+          />
+
           {results.rows.map((r, i) => {
             const isOpen = !!expandedMatch[r.submission_id];
             const reason = r.why_fits[0] ?? r.brief.audience_summary ?? null;
@@ -724,6 +783,75 @@ function ExampleBriefChips({ onPick }: { onPick: (brief: string) => void }) {
           {e.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+// ── Agentic refinement strip ──────────────────────────
+// MODULAR: suggests plain-English constraints that re-dispatch the inverse
+// search, turning a one-shot query into a conversation with the agents.
+// Active constraints are shown as removable chips; Reset clears them.
+function RefineStrip({
+  active,
+  options,
+  onApply,
+  onRemove,
+  onReset,
+  disabled,
+}: {
+  active: string[];
+  options: ReadonlyArray<{ id: string; label: string; instruction: string }>;
+  onApply: (instruction: string) => void;
+  onRemove: (instruction: string) => void;
+  onReset: () => void;
+  disabled: boolean;
+}) {
+  const available = options.filter((o) => !active.includes(o.instruction));
+  return (
+    <div className="mb-4" aria-label="Refine this brief">
+      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
+        Refine the brief →
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {active.map((a) => (
+          <span
+            key={a}
+            className="inline-flex items-center gap-1.5 border border-[var(--color-rust)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--color-rust)]"
+          >
+            {a}
+            <button
+              type="button"
+              onClick={() => onRemove(a)}
+              disabled={disabled}
+              aria-label={`Remove: ${a}`}
+              className="leading-none hover:text-[var(--color-ink)] disabled:opacity-50"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        {available.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => onApply(o.instruction)}
+            disabled={disabled}
+            className="border border-[var(--color-hair-strong)] px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors disabled:opacity-40"
+          >
+            + {o.label}
+          </button>
+        ))}
+        {active.length > 0 && (
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={disabled}
+            className="border border-[var(--color-ink)] px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors disabled:opacity-40"
+          >
+            Reset
+          </button>
+        )}
+      </div>
     </div>
   );
 }
