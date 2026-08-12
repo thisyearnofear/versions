@@ -1,7 +1,6 @@
 # VERSIONS — Positioning One-Pager
 
-*For external stakeholders, partners, and investors. Distilled from
-[STRATEGY.md](./STRATEGY.md); implementation detail lives in [README.md](./README.md).*
+*For external stakeholders. Thesis: [STRATEGY.md](./STRATEGY.md). Build: [README.md](./README.md) · [docs/](./docs/README.md).*
 
 ---
 
@@ -64,4 +63,4 @@ today.
 
 ---
 
-*Strategy: [STRATEGY.md](./STRATEGY.md) · Build: [README.md](./README.md)*
+*Strategy: [STRATEGY.md](./STRATEGY.md) · Build: [README.md](./README.md) · [docs/](./docs/README.md)*

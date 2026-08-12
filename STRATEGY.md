@@ -115,5 +115,5 @@ single incumbent is either able or willing to assemble.
 
 ---
 
-*This file is the source of truth for product strategy. README.md links
-here and should not duplicate the reasoning.*
+*This file is the source of truth for product strategy. Do not duplicate
+the reasoning in README.md — link here. Implementation: [docs/README.md](./docs/README.md).*

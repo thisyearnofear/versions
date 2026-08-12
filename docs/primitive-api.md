@@ -14,11 +14,9 @@ Base path: `/api/v1`.
 
 ## Conventions
 
-**Auth / identity.** Requests carry an operator identity via the header
-`x-supervisor-guest: <id>` (a stable per-operator id) or a connected
-wallet. No wallet is required — search and even settlement work for a
-guest in mock-first mode. When real Arc is configured, settlement
-broadcasts actual USDC transfers.
+**Auth.** Search is guest-friendly (`x-supervisor-guest` or no identity).
+Shortlist and license require a NextAuth wallet session. Settlement on
+live Arc broadcasts real USDC transfers.
 
 **Response envelope.**
 ```json

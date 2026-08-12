@@ -75,7 +75,7 @@ warnings (every row keyed `undefined`).
 ## Build & test commands
 
 ```bash
-npm test              # vitest — 362 tests (359 unit + 3 integration)
+npm test              # vitest
 npm run build         # next build . --experimental-build-mode compile
 npx tsc --noEmit      # typecheck only
 npx eslint src/ tests/ --max-warnings 0  # lint (pre-existing warnings exist)
@@ -135,30 +135,16 @@ The ESLint config enforces this (`no-restricted-syntax` on
 
 ## Production deploy (hard rule)
 
-Live site: `https://versions.persidian.com` on `nuncio-vultr`
-(`/home/linuxuser/versions`). **Git is the only way source reaches the
-server.**
-
-**Do:**
+Live: `https://versions.persidian.com` on `nuncio-vultr`.
+**Git is the only way source reaches the server.**
 
 ```bash
 git push origin master
 ./scripts/deploy-remote.sh
 ```
 
-**Do not:**
+Do not `scp` / `rsync` application source. Do not leave the server tree
+dirty. Env-only: edit server `.env`, then
+`docker compose up -d --force-recreate app`.
 
-- `scp` / `rsync` application source onto the server
-- `docker compose` / `git pull` by hand unless `deploy.sh` is broken
-- commit `.env` or bake secrets into the image
-- leave the server working tree dirty
-
-`deploy-remote.sh` refuses to run unless local `master` matches
-`origin/master`. `deploy.sh` on the server refuses a dirty tree, pulls
-`--ff-only`, rebuilds, then gates on `/api/health/live` and
-`/api/health/ready`.
-
-Env-only changes (no code): edit `/home/linuxuser/versions/.env` on the
-server, then `docker compose up -d --force-recreate app`.
-
-Full runbook: `scripts/DEPLOY.md`.
+Runbook: `docs/deploy.md`. Docs hub: `docs/README.md`.
