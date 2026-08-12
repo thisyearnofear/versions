@@ -50,6 +50,13 @@ ground-truth data incumbents can't. See **Strategy & positioning** below.
   agent/curator payouts (settlement legs), per-play royalties, and
   listener nanopayments (x402 tips) all settle as real USDC transfers
   on the Arc L1.
+- **Licenses are ERC-8183 jobs**: requesting a sync license opens an
+  Agentic Commerce job; settling runs Open → Funded → Submitted →
+  Completed with a deliverable hash of (brief + take + usage). Job IDs
+  and ArcScan links surface on the supervisor dashboard.
+- **Agents have ERC-8004 identity**: Production / Performance / Market
+  expose stable on-chain agent IDs in the Discover agent trace
+  (`GET /api/v1/agents/identities`).
 - **Live economy ticker**: the landing page shows a real-time feed of
   agent verdicts, verified tips, on-chain settlements, and pay-per-play
   events as they happen — with ArcScan tx links and honest mock badges.

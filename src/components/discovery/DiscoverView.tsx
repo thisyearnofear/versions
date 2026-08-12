@@ -42,6 +42,19 @@ export function DiscoverView() {
 
 function AgentTrace({ searchTimeMs, trackCount }: { searchTimeMs: number | null; trackCount: number }) {
   const [expanded, setExpanded] = useState(false);
+  const [agentIds, setAgentIds] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    void apiClient
+      .getAgentIdentities()
+      .then((res) => {
+        const map: Record<string, string> = {};
+        for (const a of res.agents) map[a.label] = a.agentId;
+        setAgentIds(map);
+      })
+      .catch(() => {});
+  }, []);
+
   if (searchTimeMs === null) return null;
 
   const totalSec = (searchTimeMs / 1000).toFixed(1);
@@ -50,9 +63,9 @@ function AgentTrace({ searchTimeMs, trackCount }: { searchTimeMs: number | null;
   const marketTime = (searchTimeMs * 0.35 / 1000).toFixed(1);
 
   const agents = [
-    { label: "Production", time: prodTime, color: "bg-[var(--color-rust)]" },
-    { label: "Performance", time: perfTime, color: "bg-[var(--color-ink)]" },
-    { label: "Market", time: marketTime, color: "bg-[var(--color-ink-2)]" },
+    { label: "Production", key: "production", time: prodTime, color: "bg-[var(--color-rust)]" },
+    { label: "Performance", key: "performance", time: perfTime, color: "bg-[var(--color-ink)]" },
+    { label: "Market", key: "market", time: marketTime, color: "bg-[var(--color-ink-2)]" },
   ];
 
   return (
@@ -67,7 +80,6 @@ function AgentTrace({ searchTimeMs, trackCount }: { searchTimeMs: number | null;
         onClick={() => setExpanded((p) => !p)}
         className="w-full flex items-center gap-3 text-left group"
       >
-        {/* Animated dots showing each agent completed */}
         <div className="flex items-center gap-1">
           {agents.map((a, i) => (
             <motion.span
@@ -106,12 +118,15 @@ function AgentTrace({ searchTimeMs, trackCount }: { searchTimeMs: number | null;
                   <span className={cn("w-1.5 h-1.5 rounded-full", a.color)} />
                   <span className="text-[var(--color-ink-2)]">{a.label}</span>
                   <span className="text-[var(--color-ink-3)]">{a.time}s</span>
+                  {agentIds[a.key] && (
+                    <span className="text-[var(--color-ink-3)]">ERC-8004 #{agentIds[a.key]}</span>
+                  )}
                   <span className="text-[var(--color-rust)]">✓</span>
                 </motion.div>
               ))}
               <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.1em] pt-1 text-[var(--color-ink-3)]">
                 <span className="w-1.5 h-1.5 rounded-full border border-[var(--color-rust)]" />
-                ERC-8183 · USDC · finality {"<"}1s
+                License = ERC-8183 job · USDC escrow · finality {"<"}1s
               </div>
             </div>
           </motion.div>

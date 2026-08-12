@@ -133,6 +133,11 @@ export interface LicenseRow {
   status: 'pending_payment' | 'paid';
   payment_tx_hash: string | null;
   payment_mock: boolean;
+  job_id: string | null;
+  job_status: string | null;
+  deliverable_hash: string | null;
+  job_create_tx_hash: string | null;
+  job_complete_tx_hash: string | null;
   settled_at: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -159,7 +164,29 @@ export interface SupervisorDashboardService {
   listMatchFeedback: (wallet: string, opts?: { limit?: number; offset?: number }) => Promise<MatchFeedbackRow[]>;
   benchmarkMatchFeedback: () => Promise<MatchBenchmarkReport>;
   createLicense: (input: LicenseInput) => Promise<LicenseRow | null>;
-  markLicensePaid: (id: string, wallet: string, payment: { txHash: string; mock: boolean }) => Promise<LicenseRow | null>;
+  attachLicenseJob: (
+    id: string,
+    wallet: string,
+    job: {
+      jobId: string;
+      jobStatus: string;
+      deliverableHash: string;
+      jobCreateTxHash: string | null;
+    },
+  ) => Promise<LicenseRow | null>;
+  markLicensePaid: (
+    id: string,
+    wallet: string,
+    payment: {
+      txHash: string;
+      mock: boolean;
+      jobId?: string | null;
+      jobStatus?: string | null;
+      deliverableHash?: string | null;
+      jobCreateTxHash?: string | null;
+      jobCompleteTxHash?: string | null;
+    },
+  ) => Promise<LicenseRow | null>;
   getLicense: (id: string, wallet: string) => Promise<LicenseRow | null>;
   listLicenses: (wallet: string, opts?: { limit?: number; offset?: number }) => Promise<LicenseRow[]>;
   countLicenses: (wallet: string) => Promise<number>;
@@ -255,6 +282,11 @@ function rowToLicense(
     status: row.status as 'pending_payment' | 'paid',
     payment_tx_hash: row.paymentTxHash,
     payment_mock: row.paymentMock,
+    job_id: row.jobId ?? null,
+    job_status: row.jobStatus ?? null,
+    deliverable_hash: row.deliverableHash ?? null,
+    job_create_tx_hash: row.jobCreateTxHash ?? null,
+    job_complete_tx_hash: row.jobCompleteTxHash ?? null,
     settled_at: row.settledAt,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
@@ -567,6 +599,24 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
       return rowToLicense(row, version);
     },
 
+    async attachLicenseJob(id, wallet, job) {
+      const now = new Date();
+      const [row] = await db
+        .update(licensesTable)
+        .set({
+          jobId: job.jobId,
+          jobStatus: job.jobStatus,
+          deliverableHash: job.deliverableHash,
+          jobCreateTxHash: job.jobCreateTxHash,
+          updatedAt: now,
+        })
+        .where(and(eq(licensesTable.id, id), eq(licensesTable.supervisorWallet, wallet.toLowerCase())))
+        .returning();
+      if (!row) return null;
+      const version = await getVersionRow(row.submissionId);
+      return rowToLicense(row, version ?? undefined);
+    },
+
     async markLicensePaid(id, wallet, payment) {
       const now = new Date();
       const [row] = await db
@@ -575,6 +625,11 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
           status: 'paid',
           paymentTxHash: payment.txHash,
           paymentMock: payment.mock,
+          jobId: payment.jobId ?? undefined,
+          jobStatus: payment.jobStatus ?? undefined,
+          deliverableHash: payment.deliverableHash ?? undefined,
+          jobCreateTxHash: payment.jobCreateTxHash ?? undefined,
+          jobCompleteTxHash: payment.jobCompleteTxHash ?? undefined,
           settledAt: now,
           updatedAt: now,
         })

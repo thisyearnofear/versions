@@ -1,11 +1,13 @@
 // MODULAR: License creation + listing. A supervisor turns a matched take
 // into a real license record (take + brief + usage + fee) — the "outcome"
-// the thesis sells. Settlement happens separately via POST /:id/pay.
+// the thesis sells. Opening a license also opens an ERC-8183 job (Open).
+// Settlement happens separately via POST /:id/pay.
 
 import { NextRequest } from 'next/server';
 import { services, successResponse, errorResponse, requestIdFor, parsePositiveIntParam } from '@/lib/services';
 import { resolveAuthenticatedSupervisorIdentity } from '@/lib/supervisor-identity';
 import { LicenseCreateSchema } from '@/lib/validation';
+import { licenseDeliverableHash } from '@/adapters/erc8183';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +35,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const license = await services().supervisor.createLicense({
+  const svc = services();
+  const license = await svc.supervisor.createLicense({
     supervisorWallet: identity.wallet,
     submissionId: parsed.data.submissionId,
     briefHash: parsed.data.briefHash,
@@ -43,7 +46,54 @@ export async function POST(req: NextRequest) {
   if (!license) {
     return errorResponse(requestId, 404, 'VERSION_NOT_FOUND', 'No published take with that id.');
   }
-  return successResponse(200, { license }, requestId);
+
+  // MODULAR: open an ERC-8183 job for this license (Open state).
+  // Settlement (fund → submit → complete) happens on POST /:id/pay.
+  const client = svc.config.platformWallet ?? identity.wallet;
+  const provider = svc.config.agentWallets[2] ?? client;
+  const deliverableHash = licenseDeliverableHash({
+    briefHash: license.brief_hash,
+    submissionId: license.submission_id,
+    usageType: license.usage_type,
+    feeUsdc: license.fee_usdc,
+  });
+  const description = [
+    'VERSIONS sync license',
+    `take=${license.submission_id}`,
+    `artist=${license.artist_wallet ?? 'unknown'}`,
+    `usage=${license.usage_type}`,
+    `fee=${license.fee_usdc} USDC`,
+    `brief=${license.brief_text.slice(0, 120)}`,
+  ].join(' · ');
+
+  try {
+    const opened = await svc.erc8183.openLicenseJob({
+      clientAddress: client,
+      providerAddress: provider,
+      evaluatorAddress: client,
+      description,
+      budgetUsdc: license.fee_usdc,
+      deliverableHash,
+      jobId: license.job_id,
+    });
+    const withJob = await svc.supervisor.attachLicenseJob(license.id, identity.wallet, {
+      jobId: opened.jobId,
+      jobStatus: opened.status,
+      deliverableHash,
+      jobCreateTxHash: opened.createTxHash,
+    });
+    return successResponse(200, { license: withJob ?? license }, requestId);
+  } catch (err) {
+    // License row still exists; job open failed — surface the row and a warning.
+    return successResponse(
+      200,
+      {
+        license,
+        warning: `ERC-8183 job open failed: ${(err as Error).message}`,
+      },
+      requestId,
+    );
+  }
 }
 
 export async function GET(req: NextRequest) {

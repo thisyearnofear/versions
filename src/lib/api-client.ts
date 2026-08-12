@@ -537,12 +537,27 @@ export interface LicenseRow {
   status: "pending_payment" | "paid";
   payment_tx_hash: string | null;
   payment_mock: boolean;
+  job_id: string | null;
+  job_status: string | null;
+  deliverable_hash: string | null;
+  job_create_tx_hash: string | null;
+  job_complete_tx_hash: string | null;
   settled_at: string | null;
   created_at: string;
   updated_at: string;
   title?: string | null;
   artist_name?: string | null;
   artist_wallet?: string | null;
+}
+
+export interface AgentIdentityRow {
+  label: string;
+  name: string;
+  wallet: string;
+  agentId: string;
+  registry: string;
+  mock: boolean;
+  registered: boolean;
 }
 
 // ---------- typed wrappers ----------
@@ -760,10 +775,35 @@ export const apiClient = {
   getLicense(id: string): Promise<{ license: LicenseRow }> {
     return api.get<{ license: LicenseRow }>(`/api/v1/licenses/${encodeURIComponent(id)}`);
   },
-  payLicense(id: string): Promise<{ license: LicenseRow; settled?: { txHash: string; mock: boolean } }> {
-    return api.post<{ license: LicenseRow; settled?: { txHash: string; mock: boolean } }>(
-      `/api/v1/licenses/${encodeURIComponent(id)}/pay`,
-    );
+  payLicense(id: string): Promise<{
+    license: LicenseRow;
+    settled?: {
+      txHash: string;
+      mock: boolean;
+      jobId?: string;
+      jobStatus?: string;
+      completeTxHash?: string;
+      deliverableHash?: string;
+    };
+  }> {
+    return api.post<{
+      license: LicenseRow;
+      settled?: {
+        txHash: string;
+        mock: boolean;
+        jobId?: string;
+        jobStatus?: string;
+        completeTxHash?: string;
+        deliverableHash?: string;
+      };
+    }>(`/api/v1/licenses/${encodeURIComponent(id)}`);
+  },
+  getAgentIdentities(): Promise<{
+    registry: string;
+    mock: boolean;
+    agents: AgentIdentityRow[];
+  }> {
+    return api.get("/api/v1/agents/identities");
   },
   /** Read-only match-quality report (ground-truth moat). */
   getMatchBenchmark(): Promise<{ report: MatchBenchmarkReport }> {

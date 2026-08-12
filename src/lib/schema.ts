@@ -482,6 +482,12 @@ export const licenses = pgTable('licenses', {
   status: text('status').notNull().default('pending_payment'), // pending_payment | paid
   paymentTxHash: text('payment_tx_hash'),
   paymentMock: boolean('payment_mock').notNull().default(false),
+  // MODULAR: ERC-8183 job receipt — license = Agentic Commerce job.
+  jobId: text('job_id'),
+  jobStatus: text('job_status'), // Open | Funded | Submitted | Completed | …
+  deliverableHash: text('deliverable_hash'),
+  jobCreateTxHash: text('job_create_tx_hash'),
+  jobCompleteTxHash: text('job_complete_tx_hash'),
   settledAt: timestamp('settled_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

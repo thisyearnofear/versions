@@ -210,12 +210,21 @@ describe('supervisor service', () => {
     expect(license!.title).toBe('Seed sub-lic-1');
     expect(license!.artist_wallet).toBe(WALLET.toLowerCase());
 
-    // Mark paid with a (mocked) on-chain hash, as the pay route would.
-    const paid = await service.markLicensePaid(license!.id, WALLET, { txHash: '0x' + 'b'.repeat(64), mock: true });
+    // Mark paid with a (mocked) on-chain hash + ERC-8183 job receipt.
+    const paid = await service.markLicensePaid(license!.id, WALLET, {
+      txHash: '0x' + 'b'.repeat(64),
+      mock: true,
+      jobId: '42',
+      jobStatus: 'Completed',
+      deliverableHash: '0x' + 'c'.repeat(64),
+      jobCompleteTxHash: '0x' + 'd'.repeat(64),
+    });
     expect(paid).not.toBeNull();
     expect(paid!.status).toBe('paid');
     expect(paid!.payment_tx_hash).toBe('0x' + 'b'.repeat(64));
     expect(paid!.payment_mock).toBe(true);
+    expect(paid!.job_id).toBe('42');
+    expect(paid!.job_status).toBe('Completed');
     expect(paid!.settled_at).not.toBeNull();
 
     const got = await service.getLicense(license!.id, WALLET);

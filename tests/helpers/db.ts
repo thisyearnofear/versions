@@ -350,6 +350,11 @@ CREATE TABLE IF NOT EXISTS licenses (
   status TEXT NOT NULL DEFAULT 'pending_payment',
   payment_tx_hash TEXT,
   payment_mock BOOLEAN NOT NULL DEFAULT FALSE,
+  job_id TEXT,
+  job_status TEXT,
+  deliverable_hash TEXT,
+  job_create_tx_hash TEXT,
+  job_complete_tx_hash TEXT,
   settled_at TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()

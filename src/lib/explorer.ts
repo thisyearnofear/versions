@@ -14,6 +14,16 @@ export function addressUrl(address: string): string {
   return `${EXPLORER_BASE}/address/${address}`;
 }
 
+/** ArcScan address page for the ERC-8183 Agentic Commerce contract + job note. */
+export function jobUrl(jobId: string, contractAddress?: string | null): string {
+  const contract =
+    contractAddress ||
+    process.env.NEXT_PUBLIC_ARC_ERC8183_CONTRACT ||
+    process.env.ARC_ERC8183_CONTRACT ||
+    '0x0747EEf0706327138c69792bF28Cd525089e4583';
+  return `${EXPLORER_BASE}/address/${contract}?job=${encodeURIComponent(jobId)}`;
+}
+
 /** 0x1234…abcd — for compact ticker rows. */
 export function shortHash(hash: string): string {
   return hash.length > 12 ? `${hash.slice(0, 6)}…${hash.slice(-4)}` : hash;

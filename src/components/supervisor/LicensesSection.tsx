@@ -5,7 +5,7 @@ import Link from "next/link";
 import { apiClient, type LicenseRow } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
 import { Section } from "@/components/ui/primitives";
-import { txUrl } from "@/lib/explorer";
+import { jobUrl, shortHash, txUrl } from "@/lib/explorer";
 
 const USAGE_LABELS: Record<LicenseRow["usage_type"], string> = {
   sync_ad: "Sync · Ad",
@@ -52,8 +52,11 @@ export function LicensesSection({
     setPayingId(id);
     try {
       const res = await apiClient.payLicense(id);
+      const jobNote = res.settled?.jobId ? ` · ERC-8183 job #${res.settled.jobId}` : "";
       showToast(
-        res.settled?.mock ? "Settled (mock) — license paid" : "License paid & settled on Arc",
+        res.settled?.mock
+          ? `Settled (mock)${jobNote}`
+          : `License paid on Arc${jobNote}`,
         "success",
       );
       await refresh();
@@ -69,9 +72,13 @@ export function LicensesSection({
 
   return (
     <Section
-      eyebrow="Settlement"
+      eyebrow="Settlement · ERC-8183"
       title="Licenses"
-      intro={isAuthenticated ? "Request from Discover or your shortlist, then settle here in USDC on Arc." : undefined}
+      intro={
+        isAuthenticated
+          ? "Each license is an Agentic Commerce job: escrow → deliverable → complete on Arc."
+          : undefined
+      }
       className="py-8"
     >
       {!isAuthenticated ? (
@@ -145,9 +152,36 @@ function LicenseRowItem({
           <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)] mt-0.5">
             {USAGE_LABELS[l.usage_type]} · ${l.fee_usdc} USDC · {l.territory} · {l.term_months} mo
             <span className={isPending ? " ml-2 text-[var(--color-ink)]" : " ml-2 text-[var(--color-rust)]"}>
-              {isPending ? "PENDING" : "PAID"}
+              {isPending ? (l.job_status ?? "OPEN") : "COMPLETED"}
             </span>
           </p>
+          {l.job_id && (
+            <p className="mt-1 font-mono text-[9px] text-[var(--color-ink-3)]">
+              ERC-8183 job #{l.job_id}{" "}
+              <a
+                href={jobUrl(l.job_id)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-[var(--color-rust)]"
+              >
+                ArcScan ↗
+              </a>
+              {l.job_complete_tx_hash && (
+                <>
+                  {" · "}
+                  <a
+                    href={txUrl(l.job_complete_tx_hash)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-[var(--color-rust)]"
+                  >
+                    complete {shortHash(l.job_complete_tx_hash)}
+                  </a>
+                </>
+              )}
+              {l.payment_mock ? " · mock" : ""}
+            </p>
+          )}
           {!isPending && l.payment_tx_hash && (
             <a
               href={txUrl(l.payment_tx_hash)}
@@ -155,7 +189,8 @@ function LicenseRowItem({
               rel="noopener noreferrer"
               className="font-mono text-[9px] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] mt-0.5 inline-block"
             >
-              {l.payment_tx_hash.slice(0, 12)}…{l.payment_mock ? " (mock)" : ""} ↗
+              artist payout {shortHash(l.payment_tx_hash)}
+              {l.payment_mock ? " (mock)" : ""} ↗
             </a>
           )}
         </div>

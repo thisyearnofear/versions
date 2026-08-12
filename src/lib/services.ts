@@ -11,6 +11,8 @@
 import type { NextRequest } from 'next/server';
 import path from 'node:path';
 import { createArcAdapter, type ArcAdapter } from '../adapters/arc';
+import { createErc8183Adapter, type Erc8183Adapter } from '../adapters/erc8183';
+import { createErc8004Adapter, type Erc8004Adapter, type AgentLabel } from '../adapters/erc8004';
 import { createTipSettlementService, type TipSettlementService } from '../services/tips';
 import { createLlmAdapter } from '../adapters/llm';
 import { createEmbeddingAdapter } from '../adapters/embedding';
@@ -36,6 +38,8 @@ import { buildSignerMap, deterministicAddress } from './signers';
 
 export interface ServiceRegistry {
   arc: ArcAdapter;
+  erc8183: Erc8183Adapter;
+  erc8004: Erc8004Adapter;
   tips: TipSettlementService;
   submissions: SubmissionsService;
   settlement: SettlementService;
@@ -56,6 +60,8 @@ export interface ServiceRegistry {
     agentWallets: string[];
     llmModel: string;
     arcMock: boolean;
+    erc8183Mock: boolean;
+    erc8004Mock: boolean;
     llmMock: boolean;
     gatewayMock: boolean;
     embeddingMock: boolean;
@@ -103,6 +109,32 @@ function build(): ServiceRegistry {
     signers,
   });
 
+  // MODULAR: ERC-8183 license jobs. Client = platform (brokers for
+  // supervisor). Provider = Market agent when seed-derived, else
+  // platform — the clearing agent that delivers the license package.
+  const marketLabel = 'market';
+  const marketAddress = (derivedAddresses[marketLabel] ?? agentWallets[2] ?? platformWallet ?? '').toLowerCase();
+  const providerKey =
+    (marketAddress && signers[marketAddress]) ||
+    process.env.PLATFORM_WALLET_PRIVATE_KEY ||
+    undefined;
+  const erc8183 = createErc8183Adapter({
+    rpcUrl: arcRpcUrl || undefined,
+    usdcContract: arcUsdcContract || undefined,
+    clientPrivateKey: process.env.PLATFORM_WALLET_PRIVATE_KEY || undefined,
+    providerPrivateKey: providerKey,
+  });
+
+  const erc8004 = createErc8004Adapter({
+    rpcUrl: arcRpcUrl || undefined,
+    agentWallets: [
+      { label: 'production' as AgentLabel, wallet: agentWallets[0]! },
+      { label: 'performance' as AgentLabel, wallet: agentWallets[1]! },
+      { label: 'market' as AgentLabel, wallet: agentWallets[2]! },
+      { label: 'ar' as AgentLabel, wallet: arWallet },
+    ],
+  });
+
   // MODULAR: nanotip batch settlement. Verified x402 proofs queue in
   // the DB; the tips service aggregates them per artist and settles
   // each batch as one USDC transfer through the arc adapter. Mock
@@ -140,6 +172,8 @@ function build(): ServiceRegistry {
 
   return {
     arc,
+    erc8183,
+    erc8004,
     tips,
     submissions,
     settlement,
@@ -160,6 +194,8 @@ function build(): ServiceRegistry {
       agentWallets,
       llmModel,
       arcMock: !arcRpcUrl,
+      erc8183Mock: erc8183.mock,
+      erc8004Mock: erc8004.mock,
       llmMock: !llmApiKey,
       // Tips settle through the arc adapter; the flag name is kept
       // for the health endpoint contract.
