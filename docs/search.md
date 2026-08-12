@@ -22,11 +22,14 @@ states:
 - **Human gate:** supervisors listen and confirm the opening, vocal space, and
   edit point against picture. VERSIONS does not manufacture a false
   creative-risk verdict when the scorer has not produced one.
-- **Requestability and quote:** every returned published take is
-  `license_availability.status: "requestable"` because it can enter the
-  current authenticated license-job workflow. `license_quote` is the
-  server-derived, `indicative` global schedule for its available usage types,
-  worldwide territory, and 12-month term—not a client-maintained price table.
+- **Catalog provenance:** every result identifies `catalog.source` as
+  `demo` or `live`, while the response reports the returned-catalog mode and
+  result counts. Current seed data is a **guided demo**: its sample takes are
+  for evaluating matching and feedback, not rights offers.
+- **Requestability and quote:** live-catalog takes may be
+  `license_availability.status: "requestable"` and carry a server-derived,
+  `indicative` global schedule. Demo takes are `demo_preview` with a `sample`
+  schedule only; they never open a license job, payment, or settlement.
 - **Clearance disclosure:** every current result explicitly reports
   `clearance.status: "unverified"`. Publication, a wallet, a MusicBrainz ID,
   a placement brief, and curator-review counts are not rights clearance.
@@ -88,9 +91,10 @@ curator-review count.
 
 ## Product progression
 
-1. **Now:** a recommendation, evidence, human gate, feedback capture,
-   requestability, an indicative server-derived quote, and an explicit
-   unverified-clearance disclosure.
+1. **Now:** a provenance-aware recommendation, evidence, human gate, demo
+   feedback capture, and a non-binding guided demo. Live takes can expose
+   requestability plus an indicative server-derived quote, always with an
+   explicit unverified-clearance disclosure.
 2. **Next:** actual per-result agent decision records, rights attestations,
    verification, and quote evidence; show ranking movement when a supervisor
    refines the brief.

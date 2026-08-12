@@ -17,7 +17,7 @@ const { createSettlementService } = await import('../../src/services/settlement'
 const { createLlmAdapter } = await import('../../src/adapters/llm');
 const { createAgentService } = await import('../../src/services/agents');
 const { createArService } = await import('../../src/services/ar');
-const { x402Proofs } = await import('../../src/lib/schema');
+const { x402Proofs, users, supervisorProfiles, licenses } = await import('../../src/lib/schema');
 const { signMessage, TEST_ADDRESSES } = await import('../helpers/sig');
 const { clearCache } = await import('../../src/lib/cache');
 
@@ -36,6 +36,50 @@ let settlement: ReturnType<typeof createSettlementService>;
 let agents: ReturnType<typeof createAgentService>;
 let ar: ReturnType<typeof createArService>;
 let submissionId: string;
+
+async function insertLicense({
+  feeUsdc,
+  status,
+  when,
+}: {
+  feeUsdc: string;
+  status: 'pending_payment' | 'paid';
+  when: Date;
+}) {
+  const supervisorWallet = TEST_PLATFORM_WALLET.toLowerCase();
+  await _getTestDb().insert(users).values({
+    id: 'user-supervisor-receipts',
+    walletAddress: supervisorWallet,
+    email: null,
+    displayName: 'Receipt Supervisor',
+  }).onConflictDoNothing();
+  await _getTestDb().insert(supervisorProfiles).values({
+    wallet: supervisorWallet,
+    email: null,
+    name: 'Receipt Supervisor',
+    company: null,
+    role: 'supervisor',
+  }).onConflictDoNothing();
+  await _getTestDb().insert(licenses).values({
+    id: randomUUID(),
+    supervisorWallet,
+    submissionId,
+    briefHash: `brief-receipt-license-${status}`,
+    briefText: 'A sync placement for a night drive scene',
+    usageType: 'sync_ad',
+    territory: 'worldwide',
+    termMonths: 12,
+    feeUsdc,
+    status,
+    paymentTxHash: status === 'paid' ? MOCK_HASH : null,
+    paymentMock: true,
+    jobId: status === 'paid' ? 'job-receipt-license' : null,
+    jobStatus: status === 'paid' ? 'Completed' : null,
+    settledAt: status === 'paid' ? when : null,
+    createdAt: when,
+    updatedAt: when,
+  });
+}
 
 async function insertTip({
   amountMicroUsdc,
@@ -123,6 +167,8 @@ describe('settlement.listReceipts', () => {
     const sources = new Set(report.rows.map((r) => r.source));
     expect(sources).toEqual(new Set(['split', 'tip', 'play']));
 
+    expect(report.rows.filter((r) => r.source !== 'license').every((r) => r.mock === null)).toBe(true);
+
     const times = report.rows.map((r) => r.occurred_at?.getTime() ?? 0);
     for (let i = 1; i < times.length; i++) {
       expect(times[i - 1]).toBeGreaterThanOrEqual(times[i]);
@@ -148,6 +194,39 @@ describe('settlement.listReceipts', () => {
     expect(report.total_rows).toBe(artistLegs.length + 4);
   });
 
+  it('includes paid ERC-8183 licenses as persisted artist receipts', async () => {
+    const settledAt = new Date(Date.now() - 500_000);
+    await insertLicense({ feeUsdc: '12.50', status: 'paid', when: settledAt });
+    await insertLicense({ feeUsdc: '99', status: 'pending_payment', when: new Date() });
+
+    const report = await settlement.listReceipts(ARTIST_WALLET, { source: 'license' });
+    expect(report.counts.licenses).toBe(1);
+    expect(report.totals.licenses).toBeCloseTo(12.5, 6);
+    expect(report.totals.all).toBeCloseTo(12.55, 6);
+    expect(report.total_rows).toBe(1);
+    expect(report.rows[0]).toMatchObject({
+      source: 'license',
+      amount_usdc: '12.50',
+      tx_hash: MOCK_HASH,
+      status: 'paid',
+      submission_id: submissionId,
+      title: 'Receipts Test',
+      detail: 'sync_ad',
+      counterparty: TEST_PLATFORM_WALLET.toLowerCase(),
+      mock: true,
+    });
+    expect(report.rows[0].occurred_at?.getTime()).toBe(settledAt.getTime());
+
+    const earnings = await settlement.listEarnings(ARTIST_WALLET, {});
+    expect(earnings.total).toBeCloseTo(12.55, 6);
+    expect(earnings.by_role).toContainEqual({ role: 'license', total: 12.5, leg_count: 1 });
+    expect(earnings.recent.some((row) => row.id === report.rows[0].id && row.role === 'license')).toBe(true);
+
+    const licenseOnly = await settlement.listEarnings(ARTIST_WALLET, { role: 'license' });
+    expect(licenseOnly.total).toBeCloseTo(12.5, 6);
+    expect(licenseOnly.recent.every((row) => row.role === 'license')).toBe(true);
+  });
+
   it('converts tip micro amounts to USDC strings', async () => {
     await seedPlaysAndTips();
     const report = await settlement.listReceipts(ARTIST_WALLET, { source: 'tip' });
@@ -160,10 +239,12 @@ describe('settlement.listReceipts', () => {
     await seedPlaysAndTips();
     const tips = await settlement.listReceipts(ARTIST_WALLET, { source: 'tip' });
     expect(tips.rows.every((r) => r.source === 'tip')).toBe(true);
+    expect(tips.rows.every((r) => r.mock === null)).toBe(true);
     expect(tips.total_rows).toBe(2);
 
     const plays = await settlement.listReceipts(ARTIST_WALLET, { source: 'play' });
     expect(plays.rows.every((r) => r.source === 'play')).toBe(true);
+    expect(plays.rows.every((r) => r.mock === null)).toBe(true);
     expect(plays.total_rows).toBe(2);
     expect(plays.rows[0].title).toBe('Receipts Test');
     expect(plays.rows[0].counterparty).toMatch(/^listener_/);

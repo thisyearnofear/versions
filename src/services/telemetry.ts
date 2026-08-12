@@ -38,6 +38,7 @@ export const FUNNEL_STEPS = [
 export const SUPERVISOR_FUNNEL_STEPS = [
   'page_view',
   'brief_search',
+  'catalog_results',
 ] as const;
 
 export type FunnelStep = (typeof FUNNEL_STEPS)[number];

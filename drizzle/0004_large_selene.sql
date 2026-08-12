@@ -1,0 +1,3 @@
+ALTER TABLE "licenses" ADD COLUMN "settlement_lease_id" text;--> statement-breakpoint
+ALTER TABLE "match_feedback" ADD CONSTRAINT "match_feedback_catalog_source_check" CHECK ("match_feedback"."catalog_source" IN ('demo', 'live'));--> statement-breakpoint
+ALTER TABLE "published_versions" ADD CONSTRAINT "published_versions_catalog_source_check" CHECK ("published_versions"."catalog_source" IN ('demo', 'live'));

@@ -128,7 +128,7 @@ export function LicensesSection({
     }
   };
 
-  const pending = licenses.filter((l) => l.status === "pending_payment");
+  const pending = licenses.filter((l) => l.status === "pending_payment" || l.status === "settling");
   const paid = licenses.filter((l) => l.status === "paid");
 
   return (
@@ -176,7 +176,7 @@ export function LicensesSection({
           {pending.length > 0 && (
             <div>
               <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-rust)] mb-2">
-                Pending settlement · {pending.length}
+                Pending / settling · {pending.length}
               </p>
               <ul className="space-y-2">
                 {pending.map((l) => (
@@ -213,6 +213,7 @@ function LicenseRowItem({
   onPay?: () => void;
 }) {
   const isPending = l.status === "pending_payment";
+  const isSettling = l.status === "settling";
 
   return (
     <li>
@@ -225,7 +226,7 @@ function LicenseRowItem({
           <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)] mt-0.5">
             {USAGE_LABELS[l.usage_type]} · ${l.fee_usdc} USDC · {l.territory} · {l.term_months} mo
             <span className={isPending ? " ml-2 text-[var(--color-ink)]" : " ml-2 text-[var(--color-rust)]"}>
-              {isPending ? (l.job_status ?? "OPEN") : "COMPLETED"}
+              {isSettling ? "SETTLING…" : isPending ? (l.job_status ?? "OPEN") : "COMPLETED"}
             </span>
           </p>
           {l.job_id && (
@@ -276,11 +277,15 @@ function LicenseRowItem({
           >
             {paying ? "Settling…" : `Settle · $${l.fee_usdc}`}
           </button>
-        ) : !isPending ? (
+        ) : isSettling ? (
+          <span className="max-w-xs shrink-0 font-mono text-[10px] uppercase leading-relaxed tracking-[0.12em] text-[var(--color-rust)]">
+            Settlement processing · refresh before retrying; persistent rows require manual reconciliation.
+          </span>
+        ) : (
           <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
             On Arc ✓
           </span>
-        ) : null}
+        )}
       </div>
     </li>
   );

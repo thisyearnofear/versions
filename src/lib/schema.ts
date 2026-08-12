@@ -1,4 +1,5 @@
-import { pgTable, text, integer, real, timestamp, index, unique, jsonb, boolean, customType } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { pgTable, text, integer, real, timestamp, index, unique, jsonb, boolean, customType, check } from 'drizzle-orm/pg-core';
 
 // MODULAR: pgvector custom column type. Stores a float array that
 // Postgres treats as a `vector(N)` column when the pgvector extension
@@ -197,9 +198,14 @@ export const publishedVersions = pgTable('published_versions', {
   tempoConsensus: text('tempo_consensus'),
   aggregatedMoodTags: jsonb('aggregated_mood_tags').$type<string[]>(),
   ratingCount: integer('rating_count').notNull(),
+  // Catalog provenance is independent of version_type and rights clearance.
+  // Default live so newly published artist submissions cannot silently inherit
+  // the guided-demo behavior used by deterministic seed data.
+  catalogSource: text('catalog_source').notNull().default('live'), // demo | live
   publishedAt: timestamp('published_at').notNull(),
 }, (table) => [
   index('idx_published_at').on(table.publishedAt),
+  check('published_versions_catalog_source_check', sql`${table.catalogSource} IN ('demo', 'live')`),
 ]);
 
 // ── A&R Playlists ──────────────────────────────────────
@@ -450,6 +456,9 @@ export const matchFeedback = pgTable('match_feedback', {
   briefHash: text('brief_hash').notNull(),
   briefText: text('brief_text').notNull(),
   submissionId: text('submission_id').notNull().references(() => publishedVersions.submissionId),
+  // Snapshot the source at feedback time so later catalog edits cannot mix
+  // guided-demo judgments into the production ranking benchmark.
+  catalogSource: text('catalog_source').notNull().default('live'), // demo | live
   fitScoreShown: real('fit_score_shown').notNull(),
   rankShown: integer('rank_shown'),
   verdict: text('verdict').notNull(), // good_fit | wrong_fit
@@ -459,6 +468,7 @@ export const matchFeedback = pgTable('match_feedback', {
   unique('uq_match_feedback_super_brief_sub').on(table.supervisorWallet, table.briefHash, table.submissionId),
   index('idx_match_feedback_brief_hash').on(table.briefHash),
   index('idx_match_feedback_verdict_created').on(table.verdict, table.createdAt),
+  check('match_feedback_catalog_source_check', sql`${table.catalogSource} IN ('demo', 'live')`),
 ]);
 
 // ── Licenses ────────────────────────────────────────────
@@ -479,9 +489,12 @@ export const licenses = pgTable('licenses', {
   territory: text('territory').notNull().default('worldwide'),
   termMonths: integer('term_months').notNull().default(12),
   feeUsdc: text('fee_usdc').notNull(),
-  status: text('status').notNull().default('pending_payment'), // pending_payment | paid
+  status: text('status').notNull().default('pending_payment'), // pending_payment | settling | paid
   paymentTxHash: text('payment_tx_hash'),
   paymentMock: boolean('payment_mock').notNull().default(false),
+  // Opaque owner token for a fail-closed settlement claim. It prevents a
+  // stale worker from releasing or completing another worker's settlement.
+  settlementLeaseId: text('settlement_lease_id'),
   // MODULAR: ERC-8183 job receipt — license = Agentic Commerce job.
   jobId: text('job_id'),
   jobStatus: text('job_status'), // Open | Funded | Submitted | Completed | …

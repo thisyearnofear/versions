@@ -9,6 +9,7 @@ export const SOURCE_LABELS: Record<ReceiptSource, string> = {
   split: 'Publish split',
   tip: 'Tip',
   play: 'Per-play payout',
+  license: 'License payout',
 };
 
 /**

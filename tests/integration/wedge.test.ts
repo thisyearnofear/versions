@@ -155,8 +155,10 @@ describe('integration: full primitive wedge (match → verdict → license → s
     expect(license!.fee_usdc).toBe('250.00');
     expect(license!.artist_wallet).toBe(WALLET);
 
-    // ── 5. Settle it (as the pay route would, mock tx) ───
-    const paid = await supervisor.markLicensePaid(license!.id, WALLET, {
+    // ── 5. Claim + settle it (as the pay route would, mock tx) ──
+    const claim = await supervisor.beginLicenseSettlement(license!.id, WALLET);
+    expect(claim).not.toBeNull();
+    const paid = await supervisor.markLicensePaid(license!.id, WALLET, claim!.leaseId, {
       txHash: '0x' + 'b'.repeat(64),
       mock: true,
     });

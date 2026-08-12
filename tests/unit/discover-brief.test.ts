@@ -137,6 +137,11 @@ describe('discover/brief: happy path', () => {
       total: expect.any(Number),
       limit: expect.any(Number),
       offset: expect.any(Number),
+      catalog: {
+        mode: 'live_catalog',
+        demo_result_count: 0,
+        live_result_count: 1,
+      },
       rows: expect.any(Array),
     });
     expect(body.data.rows.length).toBe(1);
@@ -149,9 +154,14 @@ describe('discover/brief: happy path', () => {
       rating_count: 3,
       fit_score: expect.any(Number),
       why_fits: expect.any(Array),
+      catalog: {
+        source: 'live',
+        label: 'Live catalog',
+        description: expect.any(String),
+      },
       license_availability: {
         status: 'requestable',
-        reason: 'Published takes can enter the current platform license-request workflow.',
+        reason: 'Published live-catalog takes can enter the current platform license-request workflow.',
         clearance: {
           status: 'unverified',
           reason: 'No auditable rights-clearance record exists for this take.',

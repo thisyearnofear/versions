@@ -182,9 +182,14 @@ describe('feed: searchByBrief', () => {
     expect(r.rows[0].title).toBe('Highway Chase');
     expect(r.rows[0].fit_score).toBeGreaterThanOrEqual(3);
     expect(r.rows[0].why_fits.length).toBeGreaterThan(0);
+    expect(r.rows[0].catalog).toEqual({
+      source: 'live',
+      label: 'Live catalog',
+      description: 'Catalog data supplied for the live workflow. Rights clearance remains independently unverified unless evidenced.',
+    });
     expect(r.rows[0].license_availability).toEqual({
       status: 'requestable',
-      reason: 'Published takes can enter the current platform license-request workflow.',
+      reason: 'Published live-catalog takes can enter the current platform license-request workflow.',
       clearance: {
         status: 'unverified',
         reason: 'No auditable rights-clearance record exists for this take.',
@@ -202,6 +207,32 @@ describe('feed: searchByBrief', () => {
       ],
     });
     expect(r.rows[0].brief.scene_tags).toContain('car chase');
+  });
+
+  it('returns guided-demo provenance and a non-binding license preview', async () => {
+    await seedBriefRow('demo-brief-1', 'Demo Highway Chase', {
+      sceneTags: ['car chase'],
+      instruments: [],
+      emotionalArcs: [],
+      syncComparables: [],
+      audienceSummary: '',
+    });
+    const db = _getTestDb();
+    await db.update(publishedVersions).set({ catalogSource: 'demo' }).where(eq(publishedVersions.submissionId, 'demo-brief-1'));
+
+    const feed = createFeedService();
+    const liveOnly = await feed.searchByBrief({ brief: 'car chase', catalogSource: 'live' });
+    expect(liveOnly).toMatchObject({
+      total: 0,
+      catalog: { mode: null, demo_result_count: 0, live_result_count: 0 },
+      rows: [],
+    });
+
+    const r = await feed.searchByBrief({ brief: 'car chase' });
+    expect(r.catalog).toEqual({ mode: 'guided_demo', demo_result_count: 1, live_result_count: 0 });
+    expect(r.rows[0].catalog.source).toBe('demo');
+    expect(r.rows[0].license_availability.status).toBe('demo_preview');
+    expect(r.rows[0].license_quote.status).toBe('sample');
   });
 
   it('returns total=0 rows=[] when the brief is pure stop words', async () => {

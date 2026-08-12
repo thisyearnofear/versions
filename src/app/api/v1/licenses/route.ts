@@ -36,6 +36,18 @@ export async function POST(req: NextRequest) {
   }
 
   const svc = services();
+  const version = await svc.feed.getVersion(parsed.data.submissionId);
+  if (!version) {
+    return errorResponse(requestId, 404, 'VERSION_NOT_FOUND', 'No published take with that id.');
+  }
+  if (version.version.catalogSource === 'demo') {
+    return errorResponse(
+      requestId,
+      409,
+      'DEMO_CATALOG_ONLY',
+      'Guided-demo takes support a non-binding preview only and cannot create a license job or settlement.',
+    );
+  }
   const license = await svc.supervisor.createLicense({
     supervisorWallet: identity.wallet,
     submissionId: parsed.data.submissionId,

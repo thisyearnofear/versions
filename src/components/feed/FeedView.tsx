@@ -352,7 +352,7 @@ function FeedRowItem({ row, animationDelay = 0 }: { row: FeedRow; animationDelay
         <div className="min-w-0 flex-1">
           <div className="font-serif text-lg font-medium truncate">{row.title}</div>
           <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] truncate">
-            {row.artist_name} · {row.version_type}
+            {row.artist_name} · {row.version_type} · {row.catalog_source === 'demo' ? 'guided demo' : 'live catalog'}
           </div>
         </div>
         {/* Score chip */}
@@ -389,6 +389,9 @@ function FeedRowItem({ row, animationDelay = 0 }: { row: FeedRow; animationDelay
             <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 pb-6">
               <div className="min-w-0">
                 <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)] mb-3">
+                  {row.catalog_source === 'demo' && (
+                    <span className="text-[var(--color-rust)]">Guided demo · sample catalog data · </span>
+                  )}
                   solo {(row.avg_solo_intensity ?? 0).toFixed(1)} · vocal{" "}
                   {(row.avg_vocal_quality ?? 0).toFixed(1)} · {row.energy_consensus ?? "-"} ·{" "}
                   {row.tempo_consensus ?? "-"} · {valence ?? "-"} · {row.rating_count} ratings{" "}

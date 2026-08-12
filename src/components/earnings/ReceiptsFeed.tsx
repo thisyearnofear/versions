@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { useSettlementEvents } from "@/lib/use-settlement-events";
 
 const PAGE_SIZE = 20;
-const SOURCES: ReceiptSource[] = ["split", "tip", "play"];
+const SOURCES: ReceiptSource[] = ["split", "tip", "play", "license"];
 
 export function ReceiptsFeed({ wallet }: { wallet: string }) {
   const [data, setData] = useState<ReceiptsResponse | null>(null);
@@ -69,15 +69,12 @@ export function ReceiptsFeed({ wallet }: { wallet: string }) {
     }, 500);
   }, [fetchPage, source]);
 
-  // Canonical settlement stream: artist receipt sources represented by
-  // this feed (tips, splits, plays) re-fetch page 0 without opening
-  // another EventSource. License receipts render in LicensesSection,
-  // whose supervisor-scoped list has the ERC-8183 context this feed lacks.
+  // Canonical settlement stream: every persisted artist receipt source,
+  // including ERC-8183 license payouts, re-fetches page 0 without opening
+  // another EventSource. The ledger remains server-authoritative, so a
+  // live event only schedules a reconciliation fetch.
   useSettlementEvents((event) => {
-    if (
-      event.source !== "license" &&
-      receiptMatchesWallet(event as unknown as Record<string, unknown>, wallet)
-    ) {
+    if (receiptMatchesWallet(event as unknown as Record<string, unknown>, wallet)) {
       queueRefresh();
     }
   });
@@ -154,12 +151,13 @@ export function ReceiptsFeed({ wallet }: { wallet: string }) {
       </div>
 
       {data && (
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           {(
             [
               ["Splits", data.totals.splits, data.counts.splits],
               ["Tips", data.totals.tips, data.counts.tips],
               ["Plays", data.totals.plays, data.counts.plays],
+              ["Licenses", data.totals.licenses, data.counts.licenses],
             ] as const
           ).map(([label, total, count]) => (
             <div key={label} className="border border-[var(--color-hair-strong)] p-4">
@@ -183,8 +181,8 @@ export function ReceiptsFeed({ wallet }: { wallet: string }) {
         </p>
       ) : rows.length === 0 ? (
         <p className="border border-[var(--color-hair)] p-6 font-serif italic text-sm text-[var(--color-ink-2)]">
-          No receipts yet — publish a version or share your tip link, and every
-          payment lands here with its on-chain hash.
+          No receipts yet — publish a version, complete a license, or share
+          your tip link, and every payment lands here with its on-chain hash.
         </p>
       ) : (
         <ul>
@@ -202,7 +200,9 @@ export function ReceiptsFeed({ wallet }: { wallet: string }) {
                     <span
                       className={cn(
                         "font-mono text-[10px] uppercase tracking-[0.14em]",
-                        r.source === "tip" ? "text-[var(--color-rust)]" : "text-[var(--color-ink-3)]",
+                        r.source === "tip" || r.source === "license"
+                          ? "text-[var(--color-rust)]"
+                          : "text-[var(--color-ink-3)]",
                       )}
                     >
                       {SOURCE_LABELS[r.source]}
@@ -222,7 +222,10 @@ export function ReceiptsFeed({ wallet }: { wallet: string }) {
                   </div>
                 </div>
                 <div className="font-mono text-[10px] uppercase tracking-[0.12em] mt-1 flex flex-wrap gap-x-3">
-                  {r.tx_hash && (
+                  {r.mock === true && (
+                    <span className="text-[var(--color-ink-3)]">demo · no funds moved</span>
+                  )}
+                  {r.mock === false && r.tx_hash && (
                     <a
                       href={txUrl(r.tx_hash)}
                       target="_blank"
@@ -231,6 +234,9 @@ export function ReceiptsFeed({ wallet }: { wallet: string }) {
                     >
                       tx {shortHash(r.tx_hash)} ↗
                     </a>
+                  )}
+                  {r.mock === null && (
+                    <span className="text-[var(--color-ink-3)]">execution mode not recorded</span>
                   )}
                   {r.source === "tip" && r.status === "verified" && (
                     <span className="text-[var(--color-ink-3)]">settling…</span>

@@ -22,6 +22,20 @@
       "when": 1786383277092,
       "tag": "0002_absent_abomination",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786549561143,
+      "tag": "0003_clumsy_susan_delgado",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786550283291,
+      "tag": "0004_large_selene",
+      "breakpoints": true
     }
   ]
 }

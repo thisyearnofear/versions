@@ -613,7 +613,7 @@ async function main() {
     if (t.status === 'published') {
       await db
         .update(pvTable)
-        .set({ audioPath: realPath })
+        .set({ audioPath: realPath, catalogSource: 'demo' })
         .where(eq(pvTable.submissionId, t.id));
       // MODULAR: repoint null covers to generated art so existing
       // seeded rows on a re-seed get covers without a wipe (matches
@@ -798,6 +798,7 @@ async function main() {
       tempoConsensus,
       aggregatedMoodTags: assertMoodTagsShape(uniqueTags, "aggregated_mood_tags"),
       ratingCount: 3,
+      catalogSource: 'demo',
       publishedAt: new Date(Date.now() - 86400000 * TRACKS.indexOf(t)),
     });
 

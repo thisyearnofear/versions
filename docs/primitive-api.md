@@ -28,7 +28,8 @@ wallet session. Settlement on live Arc broadcasts real USDC transfers.
 
 **Error codes.** `INVALID_BRIEF` (400) · `INVALID_BODY` (400) ·
 `INVALID_VERDICT`/`INVALID_LICENSE` (400) · `UNAUTHORIZED` (401) ·
-`VERSION_NOT_FOUND` (404) · `NOT_FOUND` (404) · `RATE_LIMITED` (429) ·
+`VERSION_NOT_FOUND` (404) · `DEMO_CATALOG_ONLY`/`SETTLEMENT_IN_PROGRESS`/
+`SETTLEMENT_CLAIM_LOST` (409) · `NOT_FOUND` (404) · `RATE_LIMITED` (429) ·
 `INTERNAL` (500).
 
 **Rate limits.** Brief matching is limited per-IP to 60 requests per 60
@@ -36,7 +37,11 @@ seconds by default.
 
 **Idempotency.** Verdicts and licenses upsert on `(operator, brief_hash,
 submission_id)`; resending an outcome-defining call does not duplicate it.
-Settlement is idempotent once a license is paid.
+Settlement is idempotent once a license is paid. Before external work starts, a
+pending license is atomically claimed by one lease owner; a `settling` claim is
+never automatically reclaimed because a prior executor may have broadcast a
+job or payout. Persistent `settling` rows require receipt reconciliation before
+an operator can finalize or release them.
 
 ## Endpoints
 
@@ -48,10 +53,12 @@ Ranked alternate takes for a plain-English brief.
 - Optional filters: `sceneTags`, `instruments`, `energy`, `tempo`
 - Response `data`: `{ rows: BriefSearchRow[], total, limit, offset }`
 
-Each v1 row contains `fit_score`, `why_fits`, track metadata, a structured
-placement brief, `license_availability`, and `license_quote`. `why_fits` is
-evidence from the available catalog-ranking signals; it is not an individual
-agent verdict or clearance claim.
+Each v1 row contains `fit_score`, `why_fits`, track metadata, `catalog`
+provenance, a structured placement brief, `license_availability`, and
+`license_quote`. The response also has a `catalog` summary with its mode and
+live/demo result counts. `why_fits` is evidence from the available
+catalog-ranking signals; it is not an individual agent verdict or clearance
+claim.
 
 ```json
 { "success": true, "data": {
@@ -61,6 +68,11 @@ agent verdict or clearance claim.
     "artist_name": "M. Rivera",
     "fit_score": 0.87,
     "why_fits": ["scene: car chase", "instrument: synth"],
+    "catalog": {
+      "source": "live",
+      "label": "Live catalog",
+      "description": "Catalog data supplied for the live workflow. Rights clearance remains independently unverified unless evidenced."
+    },
     "license_availability": {
       "status": "requestable",
       "reason": "Published takes can enter the current platform license-request workflow.",
@@ -87,15 +99,19 @@ agent verdict or clearance claim.
       "audience_summary": "…"
     }
   }],
+  "catalog": { "mode": "live_catalog", "demo_result_count": 0, "live_result_count": 42 },
   "total": 42,
   "limit": 20,
   "offset": 0
 }}
 ```
 
-`license_availability.status: "requestable"` means only that the matched
-published take can enter the existing authenticated `POST /licenses` workflow.
-`clearance.status: "unverified"` is deliberate: v1 has no persisted
+`catalog.source: "demo"` is guided-demo data. Its availability is
+`"demo_preview"` and its quote is a `"sample"`; `POST /licenses` returns
+`DEMO_CATALOG_ONLY` (409) and never opens a job, payment, or settlement.
+`catalog.source: "live"` may be `"requestable"`, which means only that the
+matched published take can enter the existing authenticated `POST /licenses`
+workflow. `clearance.status: "unverified"` is deliberate: v1 has no persisted
 rights-holder, authority, restriction, chain-of-title, revocation, or
 clearance-proof record. `license_quote.status: "indicative"` is the
 server-derived global platform schedule (currently worldwide for 12 months),

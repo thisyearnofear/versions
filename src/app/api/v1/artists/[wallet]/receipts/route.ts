@@ -11,7 +11,7 @@ import type { ReceiptSource } from '@/services/settlement';
 
 export const dynamic = 'force-dynamic';
 
-const VALID_SOURCES: ReceiptSource[] = ['split', 'tip', 'play'];
+const VALID_SOURCES: ReceiptSource[] = ['split', 'tip', 'play', 'license'];
 
 export function OPTIONS(req: NextRequest) {
   return corsPreflight(requestIdFor(req));

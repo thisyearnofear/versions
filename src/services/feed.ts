@@ -40,7 +40,7 @@ import {
   LICENSE_USAGE_TYPES,
   licenseFeeUsdc,
 } from '../lib/pricing';
-import type { Energy, Tempo, BriefSearchRow } from '../lib/types';
+import type { CatalogMode, CatalogSource, Energy, Tempo, BriefSearchRow } from '../lib/types';
 
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 100;
@@ -137,6 +137,7 @@ export interface BriefSearchArgs {
   instruments?: string[];
   energy?: Energy;
   tempo?: Tempo;
+  catalogSource?: CatalogSource;
   limit?: number;
   offset?: number;
 }
@@ -145,6 +146,11 @@ export interface BriefSearchResult {
   total: number;
   limit: number;
   offset: number;
+  catalog: {
+    mode: CatalogMode | null;
+    demo_result_count: number;
+    live_result_count: number;
+  };
   rows: BriefSearchRow[];
 }
 
@@ -249,15 +255,41 @@ function daysSince(date: Date | null | undefined): number {
   return Math.floor(ms / (1000 * 60 * 60 * 24));
 }
 
-// MODULAR: every ranked row is necessarily a published take, which the
-// existing POST /licenses workflow accepts. That makes it requestable, but
-// published_versions holds no rights-holder, authority, restriction, or
-// clearance proof fields. Surface both truths explicitly instead of deriving
-// an unsupported "cleared" state from publication.
-function buildLicenseAvailability(): BriefSearchRow['license_availability'] {
+// MODULAR: licensing and catalog source are related operational states, but
+// distinct facts. A demo take can be useful for guided evaluation without
+// being able to create a license, job, or settlement.
+function catalogSourceFor(version: typeof pvTable.$inferSelect): CatalogSource {
+  return version.catalogSource === 'live' ? 'live' : 'demo';
+}
+
+function buildCatalogProvenance(source: CatalogSource): BriefSearchRow['catalog'] {
+  return source === 'demo'
+    ? {
+        source,
+        label: 'Guided demo',
+        description: 'Sample catalog data for evaluating the brief-to-match workflow. It cannot create a license or settlement.',
+      }
+    : {
+        source,
+        label: 'Live catalog',
+        description: 'Catalog data supplied for the live workflow. Rights clearance remains independently unverified unless evidenced.',
+      };
+}
+
+function buildLicenseAvailability(source: CatalogSource): BriefSearchRow['license_availability'] {
+  if (source === 'demo') {
+    return {
+      status: 'demo_preview',
+      reason: 'Guided-demo takes support a non-binding license-flow preview only; no license job or settlement can be created.',
+      clearance: {
+        status: 'unverified',
+        reason: 'Demo catalog data does not include auditable rights-clearance evidence.',
+      },
+    };
+  }
   return {
     status: 'requestable',
-    reason: 'Published takes can enter the current platform license-request workflow.',
+    reason: 'Published live-catalog takes can enter the current platform license-request workflow.',
     clearance: {
       status: 'unverified',
       reason: 'No auditable rights-clearance record exists for this take.',
@@ -265,13 +297,9 @@ function buildLicenseAvailability(): BriefSearchRow['license_availability'] {
   };
 }
 
-// MODULAR: serialize the same server-side schedule that createLicense() uses,
-// so clients do not need to maintain a parallel price table. The quote is
-// explicitly indicative because no per-track rights or negotiated exceptions
-// are persisted yet.
-function buildLicenseQuote(): BriefSearchRow['license_quote'] {
+function buildLicenseQuote(source: CatalogSource): BriefSearchRow['license_quote'] {
   return {
-    status: 'indicative',
+    status: source === 'demo' ? 'sample' : 'indicative',
     territory: DEFAULT_LICENSE_TERRITORY,
     term_months: DEFAULT_LICENSE_TERM_MONTHS,
     usage_options: LICENSE_USAGE_TYPES.map((usage_type) => ({
@@ -340,6 +368,7 @@ function briefCacheKey(args: BriefSearchArgs): string {
     (args.instruments ?? []).join(','),
     args.energy ?? '',
     args.tempo ?? '',
+    args.catalogSource ?? '',
   ];
   return `brief:${parts.join('|')}`;
 }
@@ -388,6 +417,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
         );
         if (!ok) continue;
       }
+      if (args.catalogSource && catalogSourceFor(c.version) !== args.catalogSource) continue;
       if (args.energy && c.version.energyConsensus !== args.energy) continue;
       if (args.tempo && c.version.tempoConsensus !== args.tempo) continue;
       const popularity = 0.1 * (c.version.ratingCount ?? 0);
@@ -445,6 +475,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
         energyConsensus: row.energy_consensus as string | null,
         tempoConsensus: row.tempo_consensus as string | null,
         ratingCount: row.rating_count as number,
+        catalogSource: row.catalog_source as string,
         aggregatedMoodTags: row.aggregated_mood_tags as string[] | null,
         publishedAt: row.published_at as Date,
       } as typeof pvTable.$inferSelect;
@@ -477,6 +508,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
         const ok = args.instruments.some((f) => brief.instruments.some((s) => s.toLowerCase() === f));
         if (!ok) continue;
       }
+      if (args.catalogSource && catalogSourceFor(version) !== args.catalogSource) continue;
       if (args.energy && version.energyConsensus !== args.energy) continue;
       if (args.tempo && version.tempoConsensus !== args.tempo) continue;
 
@@ -523,34 +555,57 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
     safeOffset: number,
   ): BriefSearchResult {
     const total = scored.length;
+    const demoResultCount = scored.filter((s) => catalogSourceFor(s.version) === 'demo').length;
+    const liveResultCount = total - demoResultCount;
+    const mode: CatalogMode | null = total === 0
+      ? null
+      : demoResultCount === 0
+        ? 'live_catalog'
+        : liveResultCount === 0
+          ? 'guided_demo'
+          : 'mixed';
     const sliced = scored.slice(safeOffset, safeOffset + safeLimit);
-    const rows: BriefSearchRow[] = sliced.map((s) => ({
-      submission_id: s.version.submissionId,
-      title: s.version.title,
-      artist_name: s.version.artistName,
-      version_type: s.version.versionType,
-      audio_path: s.version.audioPath,
-      cover_svg: s.version.coverSvg,
-      avg_solo_intensity: s.version.avgSoloIntensity,
-      avg_vocal_quality: s.version.avgVocalQuality,
-      energy_consensus: s.version.energyConsensus,
-      tempo_consensus: s.version.tempoConsensus,
-      rating_count: s.version.ratingCount,
-      aggregated_mood_tags: s.version.aggregatedMoodTags,
-      published_at: s.version.publishedAt?.toISOString?.() ?? null,
-      fit_score: Math.round(s.score * 100) / 100,
-      why_fits: s.why_fits,
-      license_availability: buildLicenseAvailability(),
-      license_quote: buildLicenseQuote(),
-      brief: {
-        scene_tags: s.brief.sceneTags,
-        instruments: s.brief.instruments,
-        emotional_arcs: s.brief.emotionalArcs,
-        sync_comparables: s.brief.syncComparables,
-        audience_summary: s.brief.audienceSummary,
+    const rows: BriefSearchRow[] = sliced.map((s) => {
+      const source = catalogSourceFor(s.version);
+      return {
+        submission_id: s.version.submissionId,
+        title: s.version.title,
+        artist_name: s.version.artistName,
+        version_type: s.version.versionType,
+        audio_path: s.version.audioPath,
+        cover_svg: s.version.coverSvg,
+        avg_solo_intensity: s.version.avgSoloIntensity,
+        avg_vocal_quality: s.version.avgVocalQuality,
+        energy_consensus: s.version.energyConsensus,
+        tempo_consensus: s.version.tempoConsensus,
+        rating_count: s.version.ratingCount,
+        aggregated_mood_tags: s.version.aggregatedMoodTags,
+        published_at: s.version.publishedAt?.toISOString?.() ?? null,
+        catalog: buildCatalogProvenance(source),
+        fit_score: Math.round(s.score * 100) / 100,
+        why_fits: s.why_fits,
+        license_availability: buildLicenseAvailability(source),
+        license_quote: buildLicenseQuote(source),
+        brief: {
+          scene_tags: s.brief.sceneTags,
+          instruments: s.brief.instruments,
+          emotional_arcs: s.brief.emotionalArcs,
+          sync_comparables: s.brief.syncComparables,
+          audience_summary: s.brief.audienceSummary,
+        },
+      };
+    });
+    return {
+      total,
+      limit: safeLimit,
+      offset: safeOffset,
+      catalog: {
+        mode,
+        demo_result_count: demoResultCount,
+        live_result_count: liveResultCount,
       },
-    }));
-    return { total, limit: safeLimit, offset: safeOffset, rows };
+      rows,
+    };
   }
 
   return {
@@ -606,7 +661,13 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
       return cached(key, FEED_CACHE_TTL_MS, async () => {
         const tokens = tokenize(args.brief);
         if (tokens.length === 0) {
-          return { total: 0, limit: safeLimit, offset: safeOffset, rows: [] };
+          return {
+            total: 0,
+            limit: safeLimit,
+            offset: safeOffset,
+            catalog: { mode: null, demo_result_count: 0, live_result_count: 0 },
+            rows: [],
+          };
         }
 
         // ── Phase 4: try semantic search via CLAP embeddings + pgvector ──
@@ -623,12 +684,15 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
             // in one round-trip. The `<=>` operator is cosine distance;
             // `1 - distance` is cosine similarity. Filter similarity > 0
             // so zero-overlap rows don't pollute the candidate set.
+            const catalogSourceClause = args.catalogSource
+              ? sql`AND pv.catalog_source = ${args.catalogSource}`
+              : sql``;
             const semanticCandidates = await db.execute(sql`
               SELECT
                 pv.submission_id, pv.title, pv.artist_name, pv.version_type,
                 pv.audio_path, pv.cover_svg, pv.avg_solo_intensity,
                 pv.avg_vocal_quality, pv.energy_consensus, pv.tempo_consensus,
-                pv.rating_count, pv.aggregated_mood_tags, pv.published_at,
+                pv.rating_count, pv.catalog_source, pv.aggregated_mood_tags, pv.published_at,
                 pb.scene_tags, pb.instruments, pb.emotional_arcs,
                 pb.sync_comparables, pb.audience_summary,
                 1 - (ve.embedding <=> ${embStr}::vector) AS similarity
@@ -636,6 +700,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
               JOIN version_embeddings ve ON ve.submission_id = pv.submission_id
               LEFT JOIN placement_briefs pb ON pb.submission_id = pv.submission_id
               WHERE 1 - (ve.embedding <=> ${embStr}::vector) > 0
+              ${catalogSourceClause}
               ORDER BY ve.embedding <=> ${embStr}::vector
               LIMIT 500
             `);

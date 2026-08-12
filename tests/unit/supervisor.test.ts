@@ -1,6 +1,6 @@
 // MODULAR: supervisor dashboard service tests.
 
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 
 const { getTestDb: _getTestDb, initTestDb: _initTestDb, resetTestDb: _resetTestDb } = await import('../helpers/db');
 const { vi: _vi } = await import('vitest');
@@ -26,7 +26,7 @@ function makeService() {
   return createSupervisorDashboardService();
 }
 
-async function seedPublishedVersion(subId: string) {
+async function seedPublishedVersion(subId: string, catalogSource: 'demo' | 'live' = 'live') {
   const db = _getTestDb();
   await db.insert(submissions).values({
     id: subId,
@@ -50,6 +50,7 @@ async function seedPublishedVersion(subId: string) {
     versionType: 'demo',
     audioPath: 'audio/' + subId,
     ratingCount: 3,
+    catalogSource,
     publishedAt: new Date(),
   }).onConflictDoNothing();
 }
@@ -192,6 +193,32 @@ describe('supervisor service', () => {
     expect(after.mrr).toBe(0);
   });
 
+  it('keeps demo feedback out of the live benchmark and blocks demo licensing', async () => {
+    const service = makeService();
+    await seedPublishedVersion('sub-demo-1', 'demo');
+
+    const feedback = await service.recordMatchFeedback({
+      supervisorWallet: WALLET,
+      briefHash: matchBriefHash('car chase'),
+      briefText: 'car chase',
+      submissionId: 'sub-demo-1',
+      fitScoreShown: 0.9,
+      rankShown: 1,
+      verdict: 'good_fit',
+    });
+    expect(feedback.catalog_source).toBe('demo');
+    expect((await service.benchmarkMatchFeedback()).judgmentCount).toBe(0);
+
+    const license = await service.createLicense({
+      supervisorWallet: WALLET,
+      submissionId: 'sub-demo-1',
+      briefHash: matchBriefHash('car chase'),
+      briefText: 'car chase',
+      usageType: 'sync_ad',
+    });
+    expect(license).toBeNull();
+  });
+
   it('creates and settles a license for a matched take', async () => {
     const service = makeService();
     await seedPublishedVersion('sub-lic-1');
@@ -210,8 +237,20 @@ describe('supervisor service', () => {
     expect(license!.title).toBe('Seed sub-lic-1');
     expect(license!.artist_wallet).toBe(WALLET.toLowerCase());
 
-    // Mark paid with a (mocked) on-chain hash + ERC-8183 job receipt.
-    const paid = await service.markLicensePaid(license!.id, WALLET, {
+    // Claim before external settlement. A second claimant, a stale lease, and
+    // an unowned release must not reopen or complete the same license.
+    const claim = await service.beginLicenseSettlement(license!.id, WALLET);
+    expect(claim).not.toBeNull();
+    expect(await service.beginLicenseSettlement(license!.id, WALLET)).toBeNull();
+    expect(await service.markLicensePaid(license!.id, WALLET, 'wrong-lease', {
+      txHash: '0x' + 'b'.repeat(64),
+      mock: true,
+    })).toBeNull();
+    await service.releaseLicenseSettlement(license!.id, WALLET, 'wrong-lease');
+    expect((await service.getLicense(license!.id, WALLET))!.status).toBe('settling');
+
+    // Only the owning lease may record the mocked on-chain + ERC-8183 receipt.
+    const paid = await service.markLicensePaid(license!.id, WALLET, claim!.leaseId, {
       txHash: '0x' + 'b'.repeat(64),
       mock: true,
       jobId: '42',

@@ -41,6 +41,7 @@ export const ROLE_LABELS: Record<string, string> = {
   curator: "Curator fees",
   platform: "Platform share",
   musicbrainz: "Attribution",
+  license: "License payout",
 };
 
 // ── Component ──────────────────────────────────────────
@@ -174,7 +175,7 @@ export function EarningsHistoryTable({
               </thead>
               <tbody>
                 {earnings.recent.map((e) => (
-                  <tr key={`${e.submission_id}-${e.role}-${e.settled_at}`} className="border-b border-[var(--color-hair)]">
+                  <tr key={e.id} className="border-b border-[var(--color-hair)]">
                     <td className="py-3 pr-4 text-[var(--color-ink-2)] whitespace-nowrap">
                       {e.settled_at ? new Date(e.settled_at).toLocaleDateString() : "pending"}
                     </td>

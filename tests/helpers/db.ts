@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS published_versions (
   tempo_consensus TEXT,
   aggregated_mood_tags JSONB,
   rating_count INTEGER NOT NULL,
+  catalog_source TEXT NOT NULL DEFAULT 'live' CHECK (catalog_source IN ('demo', 'live')),
   published_at TIMESTAMP NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_published_at ON published_versions(published_at);
@@ -327,6 +328,7 @@ CREATE TABLE IF NOT EXISTS match_feedback (
   brief_hash TEXT NOT NULL,
   brief_text TEXT NOT NULL,
   submission_id TEXT NOT NULL REFERENCES published_versions(submission_id),
+  catalog_source TEXT NOT NULL DEFAULT 'live' CHECK (catalog_source IN ('demo', 'live')),
   fit_score_shown REAL NOT NULL,
   rank_shown INTEGER,
   verdict TEXT NOT NULL,
@@ -350,6 +352,7 @@ CREATE TABLE IF NOT EXISTS licenses (
   status TEXT NOT NULL DEFAULT 'pending_payment',
   payment_tx_hash TEXT,
   payment_mock BOOLEAN NOT NULL DEFAULT FALSE,
+  settlement_lease_id TEXT,
   job_id TEXT,
   job_status TEXT,
   deliverable_hash TEXT,

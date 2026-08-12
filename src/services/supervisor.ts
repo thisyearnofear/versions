@@ -15,6 +15,7 @@ import {
   licenses as licensesTable,
   publishedVersions as pvTable,
 } from '../lib/schema';
+import type { CatalogSource } from '../lib/types';
 import { computeMatchBenchmark, type MatchBenchmarkReport, type MatchFeedbackVerdict } from '../lib/match-benchmark';
 import {
   DEFAULT_LICENSE_TERM_MONTHS,
@@ -110,6 +111,7 @@ export interface MatchFeedbackRow {
   brief_hash: string;
   brief_text: string;
   submission_id: string;
+  catalog_source: CatalogSource;
   fit_score_shown: number;
   rank_shown: number | null;
   verdict: MatchFeedbackVerdict;
@@ -135,7 +137,7 @@ export interface LicenseRow {
   territory: string;
   term_months: number;
   fee_usdc: string;
-  status: 'pending_payment' | 'paid';
+  status: 'pending_payment' | 'settling' | 'paid';
   payment_tx_hash: string | null;
   payment_mock: boolean;
   job_id: string | null;
@@ -149,6 +151,11 @@ export interface LicenseRow {
   title?: string | null;
   artist_name?: string | null;
   artist_wallet?: string | null;
+}
+
+export interface LicenseSettlementClaim {
+  license: LicenseRow;
+  leaseId: string;
 }
 
 export interface SupervisorDashboardService {
@@ -179,9 +186,12 @@ export interface SupervisorDashboardService {
       jobCreateTxHash: string | null;
     },
   ) => Promise<LicenseRow | null>;
+  beginLicenseSettlement: (id: string, wallet: string) => Promise<LicenseSettlementClaim | null>;
+  releaseLicenseSettlement: (id: string, wallet: string, leaseId: string) => Promise<void>;
   markLicensePaid: (
     id: string,
     wallet: string,
+    leaseId: string,
     payment: {
       txHash: string;
       mock: boolean;
@@ -262,6 +272,7 @@ function rowToMatchFeedback(row: typeof matchFeedbackTable.$inferSelect): MatchF
     brief_hash: row.briefHash,
     brief_text: row.briefText,
     submission_id: row.submissionId,
+    catalog_source: row.catalogSource === 'live' ? 'live' : 'demo',
     fit_score_shown: row.fitScoreShown,
     rank_shown: row.rankShown,
     verdict: row.verdict as MatchFeedbackVerdict,
@@ -284,7 +295,7 @@ function rowToLicense(
     territory: row.territory,
     term_months: row.termMonths,
     fee_usdc: row.feeUsdc,
-    status: row.status as 'pending_payment' | 'paid',
+    status: row.status as 'pending_payment' | 'settling' | 'paid',
     payment_tx_hash: row.paymentTxHash,
     payment_mock: row.paymentMock,
     job_id: row.jobId ?? null,
@@ -514,6 +525,8 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
 
     async recordMatchFeedback(input) {
       await ensureProfile(input.supervisorWallet);
+      const version = await getVersionRow(input.submissionId);
+      const catalogSource: CatalogSource = version?.catalogSource === 'live' ? 'live' : 'demo';
       const now = new Date();
       const [row] = await db
         .insert(matchFeedbackTable)
@@ -523,6 +536,7 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
           briefHash: input.briefHash,
           briefText: input.briefText,
           submissionId: input.submissionId,
+          catalogSource,
           fitScoreShown: input.fitScoreShown,
           rankShown: input.rankShown ?? null,
           verdict: input.verdict,
@@ -532,6 +546,7 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
         .onConflictDoUpdate({
           target: [matchFeedbackTable.supervisorWallet, matchFeedbackTable.briefHash, matchFeedbackTable.submissionId],
           set: {
+            catalogSource,
             fitScoreShown: input.fitScoreShown,
             rankShown: input.rankShown ?? null,
             verdict: input.verdict,
@@ -554,7 +569,11 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
     },
 
     async benchmarkMatchFeedback() {
-      const rows = await db.select().from(matchFeedbackTable).orderBy(asc(matchFeedbackTable.createdAt));
+      const rows = await db
+        .select()
+        .from(matchFeedbackTable)
+        .where(eq(matchFeedbackTable.catalogSource, 'live'))
+        .orderBy(asc(matchFeedbackTable.createdAt));
       return computeMatchBenchmark(
         rows.map((r) => ({
           briefHash: r.briefHash,
@@ -569,7 +588,7 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
     async createLicense(input) {
       await ensureProfile(input.supervisorWallet);
       const version = await getVersionRow(input.submissionId);
-      if (!version) return null; // not a published take
+      if (!version || version.catalogSource !== 'live') return null; // only explicit live takes can create binding licenses
       const fee = licenseFeeUsdc(input.usageType);
       const now = new Date();
       const [row] = await db
@@ -620,12 +639,49 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
       return rowToLicense(row, version ?? undefined);
     },
 
-    async markLicensePaid(id, wallet, payment) {
+    async beginLicenseSettlement(id, wallet) {
+      const now = new Date();
+      const leaseId = randomUUID();
+      // A settlement may already have reached an external executor even when
+      // the request failed before writing its receipt. Never auto-reclaim a
+      // `settling` license: fail closed and require explicit reconciliation.
+      const [row] = await db
+        .update(licensesTable)
+        .set({ status: 'settling', settlementLeaseId: leaseId, updatedAt: now })
+        .where(
+          and(
+            eq(licensesTable.id, id),
+            eq(licensesTable.supervisorWallet, wallet.toLowerCase()),
+            eq(licensesTable.status, 'pending_payment'),
+          ),
+        )
+        .returning();
+      if (!row) return null;
+      const version = await getVersionRow(row.submissionId);
+      return { license: rowToLicense(row, version ?? undefined), leaseId };
+    },
+
+    async releaseLicenseSettlement(id, wallet, leaseId) {
+      await db
+        .update(licensesTable)
+        .set({ status: 'pending_payment', settlementLeaseId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(licensesTable.id, id),
+            eq(licensesTable.supervisorWallet, wallet.toLowerCase()),
+            eq(licensesTable.status, 'settling'),
+            eq(licensesTable.settlementLeaseId, leaseId),
+          ),
+        );
+    },
+
+    async markLicensePaid(id, wallet, leaseId, payment) {
       const now = new Date();
       const [row] = await db
         .update(licensesTable)
         .set({
           status: 'paid',
+          settlementLeaseId: null,
           paymentTxHash: payment.txHash,
           paymentMock: payment.mock,
           jobId: payment.jobId ?? undefined,
@@ -636,7 +692,14 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
           settledAt: now,
           updatedAt: now,
         })
-        .where(and(eq(licensesTable.id, id), eq(licensesTable.supervisorWallet, wallet.toLowerCase())))
+        .where(
+          and(
+            eq(licensesTable.id, id),
+            eq(licensesTable.supervisorWallet, wallet.toLowerCase()),
+            eq(licensesTable.status, 'settling'),
+            eq(licensesTable.settlementLeaseId, leaseId),
+          ),
+        )
         .returning();
       if (!row) return null;
       const version = await getVersionRow(row.submissionId);

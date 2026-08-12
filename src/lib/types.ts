@@ -9,6 +9,16 @@ export type SettlementStatus = 'pending' | 'settled' | 'failed';
 export type AgentName = 'production' | 'performance' | 'market';
 export type RecipientRole = 'curator' | 'platform' | 'musicbrainz';
 
+// Catalog provenance describes where a take came from. It is intentionally
+// separate from version type, ranking quality, and rights clearance.
+export type CatalogSource = 'demo' | 'live';
+export type CatalogMode = 'guided_demo' | 'live_catalog' | 'mixed';
+export interface CatalogProvenance {
+  source: CatalogSource;
+  label: 'Guided demo' | 'Live catalog';
+  description: string;
+}
+
 // MODULAR: the `mood_tags` envelope shape. The DB-side jsonb column
 // stores `string[]`, but Drizzle's round-trip hands back either a
 // real JS array OR a JSON-stringified envelope depending on
@@ -68,9 +78,9 @@ export interface SettlementLeg {
 // similarity is the primary signal, structured tags provide the
 // `why_fits` citations). See src/services/feed.ts.
 export interface BriefSearchLicenseAvailability {
-  // A published take can enter the current authenticated license workflow.
-  // This is workflow availability, not a representation of rights clearance.
-  status: 'requestable';
+  // Demo tracks are intentionally preview-only; live tracks can enter the
+  // authenticated workflow. Neither state represents rights clearance.
+  status: 'demo_preview' | 'requestable';
   reason: string;
   clearance: {
     status: 'unverified';
@@ -79,9 +89,9 @@ export interface BriefSearchLicenseAvailability {
 }
 
 export interface BriefSearchLicenseQuote {
-  // The current server-side platform schedule. It is not a negotiated or
-  // cleared license and may be superseded by a future rights-aware quote.
-  status: 'indicative';
+  // Demo schedule values are illustrative samples. Live values remain
+  // indicative until rights-aware final quoting exists.
+  status: 'sample' | 'indicative';
   territory: 'worldwide';
   term_months: 12;
   usage_options: Array<{
@@ -104,6 +114,7 @@ export interface BriefSearchRow {
   rating_count: number;
   aggregated_mood_tags: MoodTagsEnvelope;
   published_at: string | null | undefined;
+  catalog: CatalogProvenance;
   fit_score: number;
   why_fits: string[];
   license_availability: BriefSearchLicenseAvailability;
@@ -122,4 +133,9 @@ export interface BriefSearchResponse {
   total: number;
   limit: number;
   offset: number;
+  catalog: {
+    mode: CatalogMode | null;
+    demo_result_count: number;
+    live_result_count: number;
+  };
 }

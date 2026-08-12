@@ -532,7 +532,7 @@ function OverviewTab({
           <ul className="flex flex-col">
             {earnings.recent.slice(0, 8).map((e) => (
               <li
-                key={`${e.submission_id}-${e.role}-${e.settled_at}`}
+                key={e.id}
                 className="py-3 border-t border-[var(--color-hair)] last:border-b"
               >
                 <div className="flex items-baseline justify-between gap-3">

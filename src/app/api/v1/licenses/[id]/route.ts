@@ -36,13 +36,27 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
   const svc = services();
 
-  const before = await svc.supervisor.getLicense(id, ida.identity!.wallet);
-  if (!before) return errorResponse(requestId, 404, 'NOT_FOUND', 'License not found.');
-  if (before.status === 'paid') {
-    return successResponse(200, { license: before }, requestId);
+  const existing = await svc.supervisor.getLicense(id, ida.identity!.wallet);
+  if (!existing) return errorResponse(requestId, 404, 'NOT_FOUND', 'License not found.');
+  if (existing.status === 'paid') {
+    return successResponse(200, { license: existing }, requestId);
   }
 
-  const client = svc.config.platformWallet ?? ida.identity!.wallet;
+  // Claim the pending row before touching ERC-8183 or USDC. The conditional
+  // update makes concurrent clicks idempotent: only one request can move a
+  // license from pending_payment to settling.
+  const claim = await svc.supervisor.beginLicenseSettlement(id, ida.identity!.wallet);
+  if (!claim) {
+    const current = await svc.supervisor.getLicense(id, ida.identity!.wallet);
+    if (current?.status === 'paid') {
+      return successResponse(200, { license: current }, requestId);
+    }
+    return errorResponse(requestId, 409, 'SETTLEMENT_IN_PROGRESS', 'This license is already being settled.');
+  }
+  const before = claim.license;
+
+  try {
+    const client = svc.config.platformWallet ?? ida.identity!.wallet;
   const provider = svc.config.agentWallets[2] ?? client;
   const deliverableHash =
     (before.deliverable_hash as `0x${string}` | null) ??
@@ -94,7 +108,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const to = before.artist_wallet ?? `0x${'0'.repeat(40)}`;
   const tx = await svc.arc.sendTransfer({ from: '', to, amountUsdc: before.fee_usdc });
 
-  const license = await svc.supervisor.markLicensePaid(id, ida.identity!.wallet, {
+  const license = await svc.supervisor.markLicensePaid(id, ida.identity!.wallet, claim.leaseId, {
     txHash: tx.hash,
     mock: tx.mock || settledJob.mock,
     jobId: settledJob.jobId,
@@ -103,6 +117,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     jobCreateTxHash: settledJob.createTxHash ?? before.job_create_tx_hash,
     jobCompleteTxHash: settledJob.completeTxHash,
   });
+  if (!license) {
+    return errorResponse(
+      requestId,
+      409,
+      'SETTLEMENT_CLAIM_LOST',
+      'Settlement completed externally but its lease is no longer active. Reconciliation is required.',
+    );
+  }
 
   const settlementTimestamp = new Date().toISOString();
   // Canonical receipt stream: the sync license and artist payout settled.
@@ -122,19 +144,25 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     timestamp: settlementTimestamp,
   });
 
-  return successResponse(
-    200,
-    {
-      license,
-      settled: {
-        txHash: tx.hash,
-        mock: tx.mock || settledJob.mock,
-        jobId: settledJob.jobId,
-        jobStatus: settledJob.status,
-        completeTxHash: settledJob.completeTxHash,
-        deliverableHash: settledJob.deliverableHash,
+    return successResponse(
+      200,
+      {
+        license,
+        settled: {
+          txHash: tx.hash,
+          mock: tx.mock || settledJob.mock,
+          jobId: settledJob.jobId,
+          jobStatus: settledJob.status,
+          completeTxHash: settledJob.completeTxHash,
+          deliverableHash: settledJob.deliverableHash,
+        },
       },
-    },
-    requestId,
-  );
+      requestId,
+    );
+  } catch (err) {
+    // The external executor may already have accepted work. Leave the
+    // owner-bound claim in `settling` for explicit reconciliation rather than
+    // reopening a license that could be paid twice.
+    throw err;
+  }
 }

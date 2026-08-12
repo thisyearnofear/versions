@@ -7,6 +7,7 @@
 | [arc.md](./arc.md) | USDC, x402, ERC-8183/8004, App Kit |
 | [primitive-api.md](./primitive-api.md) | Brief → license HTTP contract |
 | [search.md](./search.md) | Discover, embeddings, pgvector |
+| [guided-demo-and-billing.md](./guided-demo-and-billing.md) | Catalog provenance, guided demo, subscription and relayer seams |
 | [beachhead.md](./beachhead.md) | Ground-truth labels + benchmark |
 | [deploy.md](./deploy.md) | Git-only production deploy |
 

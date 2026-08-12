@@ -29,8 +29,8 @@ export default async function FeedPage() {
             <FadeIn>
               <PageIntro
                 eyebrow="Published catalog"
-                title="The tracks are cleared."
-                intro="Browse AI-reviewed versions and move from a strong match to a license-ready take."
+                title="Explore the catalog."
+                intro="Browse AI-reviewed versions. Guided-demo tracks are clearly labeled and do not represent cleared or license-ready offers."
               >
                 <JourneyRail variant="supervisor" active="Match" />
               </PageIntro>

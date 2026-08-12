@@ -18,6 +18,7 @@ import {
   x402Proofs as proofsTable,
   arPlayEvents as playsTable,
   publishedVersions as pvTable,
+  licenses as licensesTable,
 } from '../lib/schema';
 import { emit } from '../lib/event-bus';
 import type { SettlementStatus, RecipientRole } from '../lib/types';
@@ -141,8 +142,10 @@ export interface SettleLegResult {
   error?: string;
 }
 
+export type EarningsRole = RecipientRole | 'license';
+
 export interface EarningsByRole {
-  role: RecipientRole;
+  role: EarningsRole;
   total: number;
   leg_count: number;
 }
@@ -150,7 +153,7 @@ export interface EarningsByRole {
 export interface RecentEarning {
   id: string;
   submission_id: string;
-  role: RecipientRole;
+  role: EarningsRole;
   amount: string;
   settled_at: Date | null;
   submission_title: string | null;
@@ -166,12 +169,13 @@ export interface EarningsReport {
 }
 
 // ── Receipts (unified per-artist money streams) ─────────
-// Merges the three ways agents pay an artist: publish-fee splits
-// (settlement_legs), x402 tips (x402_proofs), and per-play payouts
-// (ar_play_events). listEarnings stays legs-only — the curator
-// dashboard depends on its exact shape.
+// Merges the four ways agents pay an artist: publish-fee splits
+// (settlement_legs), x402 tips (x402_proofs), per-play payouts
+// (ar_play_events), and paid sync licenses (licenses joined to the
+// artist's published version). listEarnings keeps its role-based shape
+// while adding paid license earnings as a `license` role.
 
-export type ReceiptSource = 'split' | 'tip' | 'play';
+export type ReceiptSource = 'split' | 'tip' | 'play' | 'license';
 
 export interface ReceiptRow {
   id: string;
@@ -184,12 +188,15 @@ export interface ReceiptRow {
   submission_id: string | null;
   title: string | null;
   detail: string | null;
+  // Null means this legacy receipt stream did not persist execution mode.
+  // Do not present an unproven mock/live claim to the artist.
+  mock: boolean | null;
 }
 
 export interface ReceiptsReport {
   wallet: string;
-  totals: { all: number; splits: number; tips: number; plays: number };
-  counts: { splits: number; tips: number; plays: number };
+  totals: { all: number; splits: number; tips: number; plays: number; licenses: number };
+  counts: { splits: number; tips: number; plays: number; licenses: number };
   rows: ReceiptRow[];
   total_rows: number;
 }
@@ -435,11 +442,29 @@ export function createSettlementService({
     },
 
     async listEarnings(wallet: string, { limit = 50, offset = 0, role, dateFrom, dateTo } = {}): Promise<EarningsReport> {
-      const conditions = [eq(legsTable.recipientWallet, wallet), eq(legsTable.status, 'settled')];
-      if (role) conditions.push(eq(legsTable.recipientRole, role));
-      if (dateFrom) conditions.push(gte(legsTable.settledAt, new Date(dateFrom)));
-      if (dateTo) conditions.push(lte(legsTable.settledAt, new Date(dateTo + 'T23:59:59.999Z')));
+      const walletKey = wallet.toLowerCase();
+      const conditions = [eq(legsTable.recipientWallet, walletKey), eq(legsTable.status, 'settled')];
+      const licenseConditions = [eq(licensesTable.status, 'paid'), eq(pvTable.artistWallet, walletKey)];
+      if (role) {
+        if (role === 'license') {
+          conditions.push(sql`FALSE`);
+        } else {
+          conditions.push(eq(legsTable.recipientRole, role));
+          licenseConditions.push(sql`FALSE`);
+        }
+      }
+      if (dateFrom) {
+        const from = new Date(dateFrom);
+        conditions.push(gte(legsTable.settledAt, from));
+        licenseConditions.push(gte(licensesTable.settledAt, from));
+      }
+      if (dateTo) {
+        const to = new Date(dateTo + 'T23:59:59.999Z');
+        conditions.push(lte(legsTable.settledAt, to));
+        licenseConditions.push(lte(licensesTable.settledAt, to));
+      }
       const whereClause = and(...conditions);
+      const licenseWhereClause = and(...licenseConditions);
 
       const byRoleRows = await db
         .select({
@@ -452,71 +477,129 @@ export function createSettlementService({
         .groupBy(legsTable.recipientRole)
         .orderBy(sql`SUM(CAST(${legsTable.amountUsdc} AS NUMERIC)) DESC`);
 
-      const [totalRow] = await db
-        .select({
-          total: sql<string>`COALESCE(SUM(CAST(${legsTable.amountUsdc} AS NUMERIC)), 0)`,
-        })
-        .from(legsTable)
-        .where(whereClause);
+      const [[totalRow], [licenseTotalRow], [countRow], [licenseCountRow]] = await Promise.all([
+        db
+          .select({
+            total: sql<string>`COALESCE(SUM(CAST(${legsTable.amountUsdc} AS NUMERIC)), 0)`,
+          })
+          .from(legsTable)
+          .where(whereClause),
+        db
+          .select({
+            total: sql<string>`COALESCE(SUM(CAST(${licensesTable.feeUsdc} AS NUMERIC)), 0)`,
+          })
+          .from(licensesTable)
+          .innerJoin(pvTable, eq(pvTable.submissionId, licensesTable.submissionId))
+          .where(licenseWhereClause),
+        db
+          .select({ n: sql<number>`COUNT(*)::int` })
+          .from(legsTable)
+          .where(whereClause),
+        db
+          .select({ n: sql<number>`COUNT(*)::int` })
+          .from(licensesTable)
+          .innerJoin(pvTable, eq(pvTable.submissionId, licensesTable.submissionId))
+          .where(licenseWhereClause),
+      ]);
 
-      // Count total recent entries for pagination (uses the same where clause)
-      const [countRow] = await db
-        .select({
-          n: sql<number>`COUNT(*)::int`,
-        })
-        .from(legsTable)
-        .leftJoin(submissionsTable, eq(submissionsTable.id, legsTable.submissionId))
-        .where(whereClause);
+      const fetchCap = offset + limit;
+      const [recentLegRows, recentLicenseRows] = await Promise.all([
+        db
+          .select({
+            id: legsTable.id,
+            submission_id: legsTable.submissionId,
+            role: legsTable.recipientRole,
+            amount: legsTable.amountUsdc,
+            settled_at: legsTable.settledAt,
+            submission_title: submissionsTable.title,
+            artist_name: submissionsTable.artistName,
+          })
+          .from(legsTable)
+          .leftJoin(submissionsTable, eq(submissionsTable.id, legsTable.submissionId))
+          .where(whereClause)
+          .orderBy(desc(legsTable.settledAt), desc(legsTable.id))
+          .limit(fetchCap),
+        db
+          .select({
+            id: licensesTable.id,
+            submission_id: licensesTable.submissionId,
+            amount: licensesTable.feeUsdc,
+            settled_at: licensesTable.settledAt,
+            submission_title: pvTable.title,
+            artist_name: pvTable.artistName,
+          })
+          .from(licensesTable)
+          .innerJoin(pvTable, eq(pvTable.submissionId, licensesTable.submissionId))
+          .where(licenseWhereClause)
+          .orderBy(desc(licensesTable.settledAt), desc(licensesTable.id))
+          .limit(fetchCap),
+      ]);
 
-      const recentRows = await db
-        .select({
-          id: legsTable.id,
-          submission_id: legsTable.submissionId,
-          role: legsTable.recipientRole,
-          amount: legsTable.amountUsdc,
-          settled_at: legsTable.settledAt,
-          submission_title: submissionsTable.title,
-          artist_name: submissionsTable.artistName,
-        })
-        .from(legsTable)
-        .leftJoin(submissionsTable, eq(submissionsTable.id, legsTable.submissionId))
-        .where(whereClause)
-        .orderBy(desc(legsTable.settledAt))
-        .limit(limit)
-        .offset(offset);
-
-      return {
-        wallet,
-        total: Number(totalRow?.total ?? 0),
-        by_role: byRoleRows.map((r) => ({
-          role: r.role as RecipientRole,
-          total: Number(r.total ?? 0),
-          leg_count: Number(r.leg_count ?? 0),
-        })),
-        recent: recentRows.map((r) => ({
+      const recentRows: RecentEarning[] = [
+        ...recentLegRows.map((r) => ({
           id: r.id,
           submission_id: r.submission_id,
-          role: r.role as RecipientRole,
+          role: r.role as EarningsRole,
           amount: r.amount,
           settled_at: r.settled_at,
           submission_title: r.submission_title,
           artist_name: r.artist_name,
         })),
-        recent_total: Number(countRow?.n ?? 0),
+        ...recentLicenseRows.map((r) => ({
+          id: r.id,
+          submission_id: r.submission_id,
+          role: 'license' as const,
+          amount: r.amount,
+          settled_at: r.settled_at,
+          submission_title: r.submission_title,
+          artist_name: r.artist_name,
+        })),
+      ]
+        .sort((a, b) => {
+          const timeDiff = (b.settled_at?.getTime() ?? 0) - (a.settled_at?.getTime() ?? 0);
+          if (timeDiff !== 0) return timeDiff;
+          return `${a.role}:${a.id}`.localeCompare(`${b.role}:${b.id}`);
+        })
+        .slice(offset, offset + limit);
+
+      const byRole = byRoleRows.map((r) => ({
+        role: r.role as EarningsRole,
+        total: Number(r.total ?? 0),
+        leg_count: Number(r.leg_count ?? 0),
+      }));
+      if (Number(licenseCountRow?.n ?? 0) > 0) {
+        byRole.push({
+          role: 'license',
+          total: Number(licenseTotalRow?.total ?? 0),
+          leg_count: Number(licenseCountRow?.n ?? 0),
+        });
+      }
+
+      return {
+        wallet,
+        total: Number(totalRow?.total ?? 0) + Number(licenseTotalRow?.total ?? 0),
+        by_role: byRole,
+        recent: recentRows,
+        recent_total: Number(countRow?.n ?? 0) + Number(licenseCountRow?.n ?? 0),
       };
     },
 
     async listReceipts(wallet: string, { limit = 20, offset = 0, source } = {}): Promise<ReceiptsReport> {
       const fetchCap = offset + limit;
+      const walletKey = wallet.toLowerCase();
 
-      const legsWhere = and(eq(legsTable.recipientWallet, wallet), eq(legsTable.status, 'settled'));
+      const legsWhere = and(eq(legsTable.recipientWallet, walletKey), eq(legsTable.status, 'settled'));
       const tipsWhere = and(
-        eq(proofsTable.artistWallet, wallet),
+        eq(proofsTable.artistWallet, walletKey),
         inArray(proofsTable.status, ['verified', 'settled']),
       );
-      const playsWhere = and(eq(playsTable.artistWallet, wallet), eq(playsTable.status, 'settled'));
+      const playsWhere = and(eq(playsTable.artistWallet, walletKey), eq(playsTable.status, 'settled'));
+      const licensesWhere = and(
+        eq(licensesTable.status, 'paid'),
+        eq(pvTable.artistWallet, walletKey),
+      );
 
-      const [splitAgg, tipAgg, playAgg] = await Promise.all([
+      const [splitAgg, tipAgg, playAgg, licenseAgg] = await Promise.all([
         db
           .select({
             total: sql<string>`COALESCE(SUM(CAST(${legsTable.amountUsdc} AS NUMERIC)), 0)`,
@@ -538,19 +621,29 @@ export function createSettlementService({
           })
           .from(playsTable)
           .where(playsWhere),
+        db
+          .select({
+            total: sql<string>`COALESCE(SUM(CAST(${licensesTable.feeUsdc} AS NUMERIC)), 0)`,
+            n: sql<number>`COUNT(*)::int`,
+          })
+          .from(licensesTable)
+          .innerJoin(pvTable, eq(pvTable.submissionId, licensesTable.submissionId))
+          .where(licensesWhere),
       ]);
 
       const totals = {
         splits: Number(splitAgg[0]?.total ?? 0),
         tips: Number(tipAgg[0]?.total ?? 0),
         plays: Number(playAgg[0]?.total ?? 0),
+        licenses: Number(licenseAgg[0]?.total ?? 0),
         all: 0,
       };
-      totals.all = totals.splits + totals.tips + totals.plays;
+      totals.all = totals.splits + totals.tips + totals.plays + totals.licenses;
       const counts = {
         splits: Number(splitAgg[0]?.n ?? 0),
         tips: Number(tipAgg[0]?.n ?? 0),
         plays: Number(playAgg[0]?.n ?? 0),
+        licenses: Number(licenseAgg[0]?.n ?? 0),
       };
 
       // PERFORMANT: each stream over-fetches offset+limit rows (demo
@@ -588,6 +681,7 @@ export function createSettlementService({
                 submission_id: r.submission_id,
                 title: r.title,
                 detail: r.role,
+                mock: null,
               })),
             ),
         );
@@ -622,6 +716,7 @@ export function createSettlementService({
                 submission_id: null,
                 title: null,
                 detail: r.message,
+                mock: null,
               })),
             ),
         );
@@ -658,6 +753,45 @@ export function createSettlementService({
                 submission_id: r.submission_id,
                 title: r.title,
                 detail: r.play_type,
+                mock: null,
+              })),
+            ),
+        );
+      }
+
+      if (!source || source === 'license') {
+        rowFetches.push(
+          db
+            .select({
+              id: licensesTable.id,
+              amount: licensesTable.feeUsdc,
+              tx_hash: licensesTable.paymentTxHash,
+              status: licensesTable.status,
+              occurred_at: licensesTable.settledAt,
+              submission_id: licensesTable.submissionId,
+              title: pvTable.title,
+              supervisor: licensesTable.supervisorWallet,
+              usage_type: licensesTable.usageType,
+              payment_mock: licensesTable.paymentMock,
+            })
+            .from(licensesTable)
+            .innerJoin(pvTable, eq(pvTable.submissionId, licensesTable.submissionId))
+            .where(licensesWhere)
+            .orderBy(desc(licensesTable.settledAt))
+            .limit(fetchCap)
+            .then((rows) =>
+              rows.map((r) => ({
+                id: r.id,
+                source: 'license' as const,
+                amount_usdc: r.amount,
+                tx_hash: r.tx_hash,
+                status: r.status,
+                occurred_at: r.occurred_at,
+                counterparty: r.supervisor,
+                submission_id: r.submission_id,
+                title: r.title,
+                detail: r.usage_type,
+                mock: r.payment_mock,
               })),
             ),
         );
@@ -665,15 +799,21 @@ export function createSettlementService({
 
       const merged = (await Promise.all(rowFetches))
         .flat()
-        .sort((a, b) => (b.occurred_at?.getTime() ?? 0) - (a.occurred_at?.getTime() ?? 0));
+        .sort((a, b) => {
+          const timeDiff = (b.occurred_at?.getTime() ?? 0) - (a.occurred_at?.getTime() ?? 0);
+          if (timeDiff !== 0) return timeDiff;
+          return `${a.source}:${a.id}`.localeCompare(`${b.source}:${b.id}`);
+        });
 
       const total_rows = source
         ? source === 'split'
           ? counts.splits
           : source === 'tip'
             ? counts.tips
-            : counts.plays
-        : counts.splits + counts.tips + counts.plays;
+            : source === 'play'
+              ? counts.plays
+              : counts.licenses
+        : counts.splits + counts.tips + counts.plays + counts.licenses;
 
       return {
         wallet,

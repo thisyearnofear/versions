@@ -89,6 +89,26 @@ export async function POST(req: NextRequest) {
     }
 
     const svc = services();
+    const limit = parsePositiveIntParam(String(body.limit ?? 20), 20, 50);
+    const offset = parsePositiveIntParam(String(body.offset ?? 0), 0);
+    // Paid scoring is reserved for catalog records that can enter the live
+    // workflow. Do this before issuing a challenge or storing a proof, so a
+    // demo-only request cannot consume a wallet signature or a fee.
+    const result = await svc.feed.searchByBrief({
+      brief,
+      limit,
+      offset,
+      catalogSource: 'live',
+    });
+    if (result.total === 0) {
+      return errorResponse(
+        rid,
+        409,
+        'LIVE_CATALOG_REQUIRED',
+        'Scored evaluation is available when this brief has a live-catalog match. Guided-demo matching remains free.',
+      );
+    }
+
     // Pay the Market agent — the agent that synthesizes placement fit.
     const payTo =
       (svc.config.agentWallets[2] as `0x${string}` | undefined) ||
@@ -231,10 +251,6 @@ export async function POST(req: NextRequest) {
       mock: settled.mock,
       timestamp: new Date().toISOString(),
     });
-
-    const limit = parsePositiveIntParam(String(body.limit ?? 20), 20, 50);
-    const offset = parsePositiveIntParam(String(body.offset ?? 0), 0);
-    const result = await svc.feed.searchByBrief({ brief, limit, offset });
 
     log.info("x402 agent score settled", {
       rid,

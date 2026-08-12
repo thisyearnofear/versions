@@ -66,8 +66,17 @@ function MatchSearch() {
     setLoading(true);
     setSubmitAttempted(true);
     setSearchTimeMs(null);
-    track("brief_search", { len: trimmed.length, paid: !!opts?.paid });
     const t0 = performance.now();
+    const trackCatalogSearch = (res: BriefSearchResponse, paid: boolean) => {
+      const mode = res.catalog.mode ?? 'empty';
+      track('brief_search', { len: trimmed.length, paid, catalog_mode: mode });
+      track('catalog_results', {
+        catalog_mode: mode,
+        demo_result_count: res.catalog.demo_result_count,
+        live_result_count: res.catalog.live_result_count,
+        total: res.total,
+      });
+    };
     try {
       const usePaid = !!opts?.paid && isAuthenticated && isConnected && preferPaid;
       if (usePaid) {
@@ -81,6 +90,7 @@ function MatchSearch() {
           setSearchTimeMs(Math.round(performance.now() - t0));
           setResults(res);
           setPayment(res.payment);
+          trackCatalogSearch(res, true);
           if (res.rows.length === 0) {
             showToast("No matches — try a broader brief.", "info");
           } else {
@@ -106,6 +116,7 @@ function MatchSearch() {
       setSearchTimeMs(Math.round(performance.now() - t0));
       setResults(res);
       setPayment(null);
+      trackCatalogSearch(res, false);
       if (res.rows.length === 0) {
         showToast("No matches — try a broader brief.", "info");
       }
@@ -224,6 +235,7 @@ function MatchSearch() {
 
       {hasResults && (
         <div>
+          <CatalogDisclosure catalog={results.catalog} />
           <DecisionSummary row={results.rows[0]} total={results.total} />
           <AgentTrace searchTimeMs={searchTimeMs} trackCount={results.rows.length} payment={payment} />
 
@@ -283,6 +295,18 @@ function MatchSearch() {
   );
 }
 
+function CatalogDisclosure({ catalog }: { catalog: BriefSearchResponse['catalog'] }) {
+  if (catalog.mode !== 'guided_demo') return null;
+  return (
+    <aside className="mb-4 border border-[var(--color-rust)] bg-[var(--color-paper-2)] px-4 py-3" aria-label="Guided demo catalog">
+      <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-rust)]">Guided demo catalog</p>
+      <p className="mt-1 font-serif text-sm leading-snug text-[var(--color-ink-2)]">
+        These sample takes let you test brief matching, listening, and feedback. License terms are illustrative only: no license job, payment, or settlement will be created.
+      </p>
+    </aside>
+  );
+}
+
 function DecisionSummary({ row, total }: { row: BriefSearchRow; total: number }) {
   const evidence = row.why_fits.slice(0, 2).join(" · ");
   return (
@@ -334,17 +358,26 @@ function MatchRow({
   const reason = row.why_fits[0] ?? null;
   const quoteOptions = row.license_quote.usage_options.filter(({ usage_type }) => usage_type !== "other");
   const selectedQuote = row.license_quote.usage_options.find(({ usage_type }) => usage_type === usageType);
+  const isDemo = row.catalog.source === 'demo';
 
   const returnTo = typeof window !== "undefined"
     ? `${window.location.pathname}${window.location.search}`
     : "/discover";
 
   const onShortlist = async () => {
+    if (isDemo) {
+      onShortlisted(row.submission_id);
+      setJustShortlisted(true);
+      track('match_shortlist', { catalog_source: 'demo', persisted: false });
+      showToast('Saved in this guided-demo session — live catalog shortlists persist to your dashboard.', 'success', 3000);
+      return;
+    }
     if (!requireAuth(returnTo)) return;
     try {
       await apiClient.addInterest({ submissionId: row.submission_id });
       onShortlisted(row.submission_id);
       setJustShortlisted(true);
+      track('match_shortlist', { catalog_source: 'live', persisted: true });
       showToast("Added to shortlist — view on dashboard", "success", 2500);
     } catch (err) {
       showToast(`Failed: ${(err as Error).message}`, "error");
@@ -364,8 +397,13 @@ function MatchRow({
         verdict,
       });
       setFeedback(verdict);
+      track('match_feedback', { catalog_source: row.catalog.source, verdict });
       showToast(
-        verdict === "good_fit" ? "Good fit recorded — this strengthens the match benchmark." : "Wrong direction recorded — this improves future ranking.",
+        isDemo
+          ? 'Guided-demo feedback saved for product evaluation.'
+          : verdict === "good_fit"
+            ? "Good fit recorded — this strengthens the match benchmark."
+            : "Wrong direction recorded — this improves future ranking.",
         "success",
         3000,
       );
@@ -377,6 +415,12 @@ function MatchRow({
   };
 
   const onRequestLicense = async () => {
+    if (isDemo) {
+      setShowLicensePanel(false);
+      track('demo_license_preview', { catalog_source: 'demo', usage_type: usageType });
+      showToast('Preview complete — this demo take cannot open a license job or settlement.', 'info', 3000);
+      return;
+    }
     if (!requireAuth(returnTo)) return;
     if (!selectedQuote) {
       showToast("No quote is available for that usage type.", "error");
@@ -403,6 +447,10 @@ function MatchRow({
   };
 
   const onLicenseClick = () => {
+    if (isDemo) {
+      setShowLicensePanel((p) => !p);
+      return;
+    }
     if (!requireAuth(returnTo)) return;
     setShowLicensePanel((p) => !p);
   };
@@ -440,6 +488,10 @@ function MatchRow({
             <div className="flex items-baseline gap-2">
               <span className="font-serif text-[15px] font-semibold truncate">{row.title}</span>
               <span className="font-serif text-[13px] text-[var(--color-ink-2)] truncate">{row.artist_name}</span>
+              <span className={cn(
+                'font-mono text-[8px] uppercase tracking-[0.1em] px-1 py-0.5 rounded-sm',
+                isDemo ? 'bg-[var(--color-rust)] text-[var(--color-paper)]' : 'bg-[var(--color-paper-2)] text-[var(--color-ink-3)]',
+              )}>{row.catalog.label}</span>
             </div>
             {reason && (
               <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-ink-3)] truncate mt-0.5">
@@ -538,17 +590,19 @@ function MatchRow({
                 </div>
                 {feedback && (
                   <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-rust)]">
-                    Feedback saved to the match benchmark.
+                    {isDemo
+                      ? 'Feedback saved for guided-demo evaluation.'
+                      : 'Feedback saved to the match benchmark.'}
                   </p>
                 )}
               </div>
 
               <div className="mt-3 border-t border-[var(--color-hair)] pt-3">
                 <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
-                  Requestable · {row.license_availability.reason}
+                  {isDemo ? 'Guided demo preview' : 'Requestable'} · {row.license_availability.reason}
                 </p>
                 <p className="mt-1 font-mono text-[9px] text-[var(--color-ink-3)]">
-                  Indicative platform quote · {row.license_quote.territory} · {row.license_quote.term_months} months
+                  {isDemo ? 'Sample schedule' : 'Indicative platform quote'} · {row.license_quote.territory} · {row.license_quote.term_months} months
                 </p>
                 <p className="mt-1 font-mono text-[9px] text-[var(--color-ink-3)]">
                   Clearance unverified · {row.license_availability.clearance.reason}
@@ -562,7 +616,7 @@ function MatchRow({
                       "inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-sm transition-colors",
                       isShortlisted
                         ? "bg-[var(--color-rust)] text-[var(--color-paper)] opacity-90"
-                        : isAuthenticated
+                        : isDemo || isAuthenticated
                           ? "bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-rust)]"
                           : "border border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
                     )}
@@ -572,6 +626,8 @@ function MatchRow({
                         <SuccessCheck active />
                         Shortlisted
                       </>
+                    ) : isDemo ? (
+                      "Save demo"
                     ) : isAuthenticated ? (
                       "Shortlist"
                     ) : (
@@ -586,12 +642,12 @@ function MatchRow({
                       "font-mono text-[10px] uppercase tracking-[0.12em] border px-3 py-1.5 rounded-sm transition-colors disabled:opacity-60",
                       showLicensePanel
                         ? "border-[var(--color-rust)] text-[var(--color-rust)]"
-                        : isAuthenticated
+                        : isDemo || isAuthenticated
                           ? "border-[var(--color-ink)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]"
                           : "border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
                     )}
                   >
-                    {licenseRequest ? "License job open" : isAuthenticated ? "Review license terms" : "Sign in to license"}
+                    {licenseRequest ? "License job open" : isDemo ? "Preview license flow" : isAuthenticated ? "Review license terms" : "Sign in to license"}
                   </button>
                   {isAuthenticated && (
                     <Link
@@ -617,7 +673,7 @@ function MatchRow({
               )}
 
               <AnimatePresence>
-                {showLicensePanel && isAuthenticated && (
+                {showLicensePanel && (isDemo || isAuthenticated) && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
@@ -626,7 +682,7 @@ function MatchRow({
                   >
                     <div className="mt-3 pt-3 border-t border-[var(--color-hair)]">
                       <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] mb-2">
-                        Usage type · indicative platform quote on Arc USDC
+                        Usage type · {isDemo ? 'sample guided-demo schedule' : 'indicative platform quote on Arc USDC'}
                       </p>
                       <div className="flex flex-wrap gap-1.5 mb-3">
                         {quoteOptions.map((option) => (
@@ -646,7 +702,9 @@ function MatchRow({
                         ))}
                       </div>
                       <p className="font-mono text-[9px] text-[var(--color-ink-3)] mb-3">
-                        {row.license_quote.territory} · {row.license_quote.term_months} months · opens a license job after your approval. Rights clearance remains unverified.
+                        {row.license_quote.territory} · {row.license_quote.term_months} months · {isDemo
+                          ? 'illustrative only; previewing will not create a job, payment, or settlement.'
+                          : 'opens a license job after your approval. Rights clearance remains unverified.'}
                       </p>
                       <button
                         type="button"
@@ -665,7 +723,9 @@ function MatchRow({
                             Creating…
                           </>
                         ) : (
-                          `Open license job · $${selectedQuote?.fee_usdc ?? "—"} USDC`
+                          isDemo
+                            ? `Preview only · sample $${selectedQuote?.fee_usdc ?? "—"} USDC`
+                            : `Open license job · $${selectedQuote?.fee_usdc ?? "—"} USDC`
                         )}
                       </button>
                     </div>

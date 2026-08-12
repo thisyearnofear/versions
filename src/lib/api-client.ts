@@ -6,7 +6,6 @@
 import { getGuestId } from "./guest-id";
 import type {
   AgentName,
-  AgentReview,
   BriefSearchResponse,
   MoodTagsEnvelope,
   PlacementBrief,
@@ -192,6 +191,7 @@ export interface FeedRow {
   rating_count: number;
   aggregated_mood_tags?: MoodTagsEnvelope;
   published_at?: string | null;
+  catalog_source: 'demo' | 'live';
 }
 
 export interface FeedResponse {
@@ -218,6 +218,7 @@ export function normalizeFeedRow(raw: Record<string, unknown>): FeedRow {
     rating_count: pick(raw.rating_count, raw.ratingCount),
     aggregated_mood_tags: pick(raw.aggregated_mood_tags, raw.aggregatedMoodTags),
     published_at: pick(raw.published_at, raw.publishedAt),
+    catalog_source: pick(raw.catalog_source, raw.catalogSource),
   };
 }
 
@@ -251,19 +252,20 @@ export interface Playlist {
 
 export interface EarningsResponse {
   total: number;
-  by_role: Array<{ role: RecipientRole; total: number; leg_count: number }>;
+  by_role: Array<{ role: RecipientRole | 'license'; total: number; leg_count: number }>;
   recent: Array<{
+    id: string;
     submission_id: string;
     submission_title?: string | null;
     artist_name?: string | null;
-    role: RecipientRole;
+    role: RecipientRole | 'license';
     amount: string;
     settled_at?: string | null;
   }>;
   recent_total?: number;
 }
 
-export type ReceiptSource = 'split' | 'tip' | 'play';
+export type ReceiptSource = 'split' | 'tip' | 'play' | 'license';
 
 export interface ReceiptRowResponse {
   id: string;
@@ -276,12 +278,14 @@ export interface ReceiptRowResponse {
   submission_id: string | null;
   title: string | null;
   detail: string | null;
+  // Null means the persisted receipt does not record whether execution was mock or live.
+  mock: boolean | null;
 }
 
 export interface ReceiptsResponse {
   wallet: string;
-  totals: { all: number; splits: number; tips: number; plays: number };
-  counts: { splits: number; tips: number; plays: number };
+  totals: { all: number; splits: number; tips: number; plays: number; licenses: number };
+  counts: { splits: number; tips: number; plays: number; licenses: number };
   rows: ReceiptRowResponse[];
   total_rows: number;
 }
@@ -515,6 +519,7 @@ export interface MatchFeedbackRow {
   brief_hash: string;
   brief_text: string;
   submission_id: string;
+  catalog_source: 'demo' | 'live';
   fit_score_shown: number;
   rank_shown: number | null;
   verdict: "good_fit" | "wrong_fit";
@@ -534,7 +539,7 @@ export interface LicenseRow {
   territory: string;
   term_months: number;
   fee_usdc: string;
-  status: "pending_payment" | "paid";
+  status: "pending_payment" | "settling" | "paid";
   payment_tx_hash: string | null;
   payment_mock: boolean;
   job_id: string | null;
