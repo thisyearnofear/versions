@@ -153,6 +153,13 @@ export async function POST(req: NextRequest) {
       return errorResponse(rid, 400, 'SUBMISSION_REJECTED', result.error);
     }
 
+    // Open (or refresh) the artist's Release Case immediately after the
+    // submission record exists. Best-effort and idempotent: a release case
+    // failure must never block the submission that already succeeded.
+    void svc.releaseCases
+      .ensureForSubmission({ artistWallet, submissionId: result.submission.id })
+      .catch((err) => log.warn('release case open failed (best-effort)', { request_id: rid, err: (err as Error).message }));
+
     // MODULAR: dedup short-circuit cleanup. A retried upload
     // pinned/uploaded the same audio twice; the canonical
     // artifact already exists from the prior submission, so

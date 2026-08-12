@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ArtistDashboard } from "@/components/artist/ArtistDashboard";
+import { ReleaseCasesPanel } from "@/components/artist/ReleaseCasesPanel";
 import { ToastProvider } from "@/components/ui/Toast";
 
 // MODULAR: Artist dashboard page. Server component that renders
@@ -20,6 +21,7 @@ export default async function ArtistPage({
       <div className="flex flex-col flex-1">
         <SiteHeader />
         <main className="flex-1 px-6 md:px-12 py-12 max-w-5xl">
+          <ReleaseCasesPanel wallet={wallet} />
           <Suspense
             fallback={
               <div className="py-16 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">

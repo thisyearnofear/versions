@@ -556,6 +556,46 @@ export const caseEvents = pgTable(
   (table) => [index('idx_case_events_case').on(table.caseId, table.createdAt)],
 );
 
+// ── Release Cases ───────────────────────────────────────
+// An ARTIST's root job. Owned by the artist wallet (NOT a supervisor) and
+// hard-linked to the real submission_id — the submission record is the
+// authoritative source of truth, so a release case's visual state is always
+// re-derived from the linked submission and can never drift from payment /
+// curation reality. `agent_plan` is a snapshot the render path refreshes.
+
+export interface ReleaseCaseStep {
+  key: string;
+  label: string;
+  done: boolean;
+  current?: boolean;
+}
+
+export const releaseCases = pgTable(
+  'release_cases',
+  {
+    id: text('id').primaryKey(),
+    artistWallet: text('artist_wallet')
+      .notNull()
+      .references(() => users.walletAddress),
+    submissionId: text('submission_id')
+      .notNull()
+      .references(() => submissions.id),
+    title: text('title').notNull(),
+    artistName: text('artist_name').notNull(),
+    versionType: text('version_type'),
+    coverSvg: text('cover_svg'),
+    submissionStatus: text('submission_status').notNull().default('pending_payment'),
+    agentPlan: jsonb('agent_plan').$type<ReleaseCaseStep[]>().notNull().default([]),
+    lastActivity: timestamp('last_activity').defaultNow().notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_release_cases_artist').on(table.artistWallet, table.lastActivity),
+    unique('uq_release_case_submission').on(table.submissionId),
+  ],
+);
+
 export const licenses = pgTable('licenses', {
   id: text('id').primaryKey(),
   supervisorWallet: text('supervisor_wallet').notNull().references(() => supervisorProfiles.wallet),

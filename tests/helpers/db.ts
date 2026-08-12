@@ -391,6 +391,23 @@ CREATE TABLE IF NOT EXISTS case_events (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_case_events_case ON case_events(case_id, created_at);
+
+CREATE TABLE IF NOT EXISTS release_cases (
+  id TEXT PRIMARY KEY,
+  artist_wallet TEXT NOT NULL REFERENCES users(wallet_address),
+  submission_id TEXT NOT NULL REFERENCES submissions(id),
+  title TEXT NOT NULL,
+  artist_name TEXT NOT NULL,
+  version_type TEXT,
+  cover_svg TEXT,
+  submission_status TEXT NOT NULL DEFAULT 'pending_payment',
+  agent_plan JSONB NOT NULL DEFAULT '[]',
+  last_activity TIMESTAMP NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_release_case_submission ON release_cases(submission_id);
+CREATE INDEX IF NOT EXISTS idx_release_cases_artist ON release_cases(artist_wallet, last_activity);
 `;
 
 export async function initTestDb(): Promise<ReturnType<typeof drizzle<typeof schema>>> {
@@ -422,6 +439,7 @@ export async function resetTestDb(): Promise<void> {
   const tables = [
     'case_events',
     'placement_cases',
+    'release_cases',
     'licensing_interests',
     'licenses',
     'match_feedback',

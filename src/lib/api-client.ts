@@ -561,6 +561,29 @@ export interface CaseEventRow {
   created_at: string;
 }
 
+export interface ReleaseCaseStep {
+  key: string;
+  label: string;
+  done: boolean;
+  current?: boolean;
+}
+
+/** An artist's active release — a durable view of the linked submission. */
+export interface ReleaseCaseRow {
+  id: string;
+  artist_wallet: string;
+  submission_id: string;
+  title: string;
+  artist_name: string;
+  version_type: string | null;
+  cover_svg: string | null;
+  submission_status: string;
+  agent_plan: ReleaseCaseStep[];
+  last_activity: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface MatchFeedbackRow {
   id: string;
   supervisor_wallet: string;
@@ -702,6 +725,9 @@ export const apiClient = {
   },
   getArtistVersions(wallet: string, limit = 20): Promise<ArtistVersionsResponse> {
     return api.get<ArtistVersionsResponse>(`/api/v1/artists/${encodeURIComponent(wallet)}/versions?limit=${limit}`);
+  },
+  getArtistReleaseCases(wallet: string, limit = 50): Promise<{ rows: ReleaseCaseRow[] }> {
+    return api.get<{ rows: ReleaseCaseRow[] }>(`/api/v1/artists/${encodeURIComponent(wallet)}/release-cases?limit=${limit}`);
   },
   // MODULAR: TipButton hover-card payload. Returns 3 most-recent
       // published + 5 most-recent x402 nanopayment tips + footer
