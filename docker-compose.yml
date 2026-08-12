@@ -1,19 +1,14 @@
-# VERSIONS — Coolify/Traefik deployment for your vultr box.
+# VERSIONS — production compose on nuncio-vultr.
 #
-# Matches the exact pattern already running on nuncio-vultr (see persidian-web):
-#   - container joins the shared `coolify` Traefik network (no exposed host port)
-#   - Traefik routes https://<domain> -> app on internal port 3000
-#   - TLS terminated by Traefik via the letsencrypt resolver
+# Deploy path (see scripts/DEPLOY.md): git push → ./scripts/deploy-remote.sh
+# Never scp application source. Runtime secrets come from .env (gitignored).
 #
-# Two ways to use this:
-#   A) Coolify UI (recommended, matches how your other projects are managed):
-#        New Resource -> Dockerfile -> point at the repo -> set env vars ->
-#        Coolify generates its own Traefik labels + domain.
-#   B) Manual compose on the box (see scripts/DEPLOY.md):
-#        git pull on the server, then ./scripts/deploy.sh
-#        Never scp application source — git pull only.
-#   (If you use B, uncomment the env_file and Traefik labels below and set
-#    the DOMAIN + a unique router/network name in the labels.)
+# Networking matches other boxes on this host:
+#   - container joins the shared `coolify` Traefik network (no published host port)
+#   - Traefik routes https://versions.persidian.com → app :3000
+#   - TLS via the letsencrypt resolver
+#
+# Coolify UI is optional; this file is what `deploy.sh` actually runs.
 
 services:
   app:

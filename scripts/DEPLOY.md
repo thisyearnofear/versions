@@ -1,58 +1,73 @@
 # Production deploy — VERSIONS
 
-**Single path:** git push → `git pull --ff-only` on the server → `docker compose up -d --build`.
+Live: [versions.persidian.com](https://versions.persidian.com)  
+Host: `nuncio-vultr` · checkout: `/home/linuxuser/versions`
 
-Do **not** scp/rsync application source into the server checkout. That causes drift from `origin/master` and makes rollbacks unreliable.
+**Single path:** commit → `git push origin master` → `./scripts/deploy-remote.sh`
 
-## From your laptop
+That script checks local `master` matches `origin/master`, SSHs to the
+box, and runs `scripts/deploy.sh` (ff-only pull → docker rebuild →
+live + ready health gates).
+
+**Never copy application source onto the server** (`scp`, `rsync`,
+editor-over-SSH). That drifted the checkout from `origin/master` and
+broke rollbacks. Secrets stay in gitignored `.env` files only.
+
+## From your laptop (default)
 
 ```bash
-# 1. Commit + push to origin/master
 git push origin master
-
-# 2. Deploy (runs preflight + remote pull + rebuild + health checks)
-chmod +x scripts/deploy-remote.sh scripts/deploy.sh
 ./scripts/deploy-remote.sh
 ```
 
-Default SSH host: `nuncio-vultr`. Override:
+SSH host defaults to `nuncio-vultr`. Override:
 
 ```bash
 ./scripts/deploy-remote.sh my-vps-host
 VERSIONS_REMOTE_DIR=/home/linuxuser/versions ./scripts/deploy-remote.sh
+DEPLOY_BRANCH=master ./scripts/deploy-remote.sh
 ```
 
-## On the server directly
+## On the server (same script, no laptop)
 
 ```bash
 cd /home/linuxuser/versions
 ./scripts/deploy.sh
 ```
 
-## What the deploy script checks
+## What `deploy.sh` checks
 
 | Step | Purpose |
 |------|---------|
 | `.env` exists | Runtime secrets present (never in git) |
-| Clean working tree | Fails if server has uncommitted edits (unless `DEPLOY_ALLOW_DIRTY=1`) |
+| Clean working tree | Fails if the server has uncommitted edits |
 | `git fetch` + `pull --ff-only` | No merge commits; refuses diverged history |
-| `docker compose up -d --build` | Rebuild image from pulled commit |
+| `docker compose up -d --build` | Image built from the pulled commit |
 | `/api/health/live` | Process up (poll up to 90s) |
-| `/api/health/ready` | Providers OK; warns if Arc degraded |
+| `/api/health/ready` | Providers OK; warns if Arc is degraded |
 
-## Secrets hygiene
+Emergency only: `DEPLOY_ALLOW_DIRTY=1 ./scripts/deploy.sh` — do not
+make this the habit. Reset drift with `git fetch && git reset --hard
+origin/master && git clean -fd` instead.
 
-- **Server only:** `/home/linuxuser/versions/.env` (gitignored, loaded by `docker compose`)
-- **Local only:** `.env.local` / `.env` (gitignored)
-- **Never:** commit keys, docker build-args for secrets, or scp `.env` into git-tracked paths
+## Secrets
 
-Rotate keys in OpenRouter / wallet providers in `.env` on the server, then:
+| Where | File | Used by |
+|-------|------|---------|
+| Laptop | `.env.local` (and optionally `.env`) | `next dev` |
+| Server | `/home/linuxuser/versions/.env` | `docker compose` `env_file` |
+
+Never commit keys, pass them as Docker build-args, or copy `.env` into
+git-tracked paths. `OPENROUTER_API_KEY` and wallet keys live only in
+those files.
+
+**Env-only change (no code):** edit the server `.env`, then:
 
 ```bash
-docker compose up -d --force-recreate app
+ssh nuncio-vultr 'cd /home/linuxuser/versions && docker compose up -d --force-recreate app'
 ```
 
-No rebuild required for env-only changes.
+No image rebuild. Confirm with `/api/health/ready`.
 
 ## Post-deploy smoke
 
@@ -61,9 +76,17 @@ curl -sf https://versions.persidian.com/api/health/ready | jq .data.providers
 curl -sf https://versions.persidian.com/api/v1/embeddings/backfill
 ```
 
+Expect `status: ready`, `llm.provider: openrouter`, `embedding.mock:
+false` when inference is configured. After a catalog change, backfill:
+
+```bash
+curl -sf -X POST https://versions.persidian.com/api/v1/embeddings/backfill
+```
+
 ## Monitoring
 
-`scripts/monitor-versions.sh` — cron-friendly; restarts container after 3 failed `/api/health/live` checks. Install on the server:
+`scripts/monitor-versions.sh` — cron-friendly; restarts the container
+after 3 failed `/api/health/live` checks.
 
 ```bash
 * * * * * bash $HOME/versions/scripts/monitor-versions.sh
@@ -71,12 +94,18 @@ curl -sf https://versions.persidian.com/api/v1/embeddings/backfill
 
 ## Rollback
 
+Prefer an auditable revert on master, then the normal deploy:
+
 ```bash
-cd /home/linuxuser/versions
-git log -3 --oneline
-git checkout <previous-sha>
-./scripts/deploy.sh   # DEPLOY_ALLOW_DIRTY=1 if you had to reset dirty scp state
-git checkout master   # return to branch tip when ready
+git revert <sha>
+git push origin master
+./scripts/deploy-remote.sh
 ```
 
-Prefer `git revert` on master + `./scripts/deploy-remote.sh` for auditable rollbacks.
+Pin the server to a previous commit only as a hotfix:
+
+```bash
+ssh nuncio-vultr 'cd /home/linuxuser/versions && git fetch origin && git checkout <sha> && ./scripts/deploy.sh'
+# return to tip when the revert is on master:
+ssh nuncio-vultr 'cd /home/linuxuser/versions && git checkout master && ./scripts/deploy.sh'
+```

@@ -132,3 +132,33 @@ The ESLint config enforces this (`no-restricted-syntax` on
 `ImportExpression` in `src/app/api/**`). The `postbuild` script
 (`scripts/audit-nft-traces.sh`) also hard-fails if `.git`, `.env`, or
 `data/uploads` appear in any `.nft.json` trace.
+
+## Production deploy (hard rule)
+
+Live site: `https://versions.persidian.com` on `nuncio-vultr`
+(`/home/linuxuser/versions`). **Git is the only way source reaches the
+server.**
+
+**Do:**
+
+```bash
+git push origin master
+./scripts/deploy-remote.sh
+```
+
+**Do not:**
+
+- `scp` / `rsync` application source onto the server
+- `docker compose` / `git pull` by hand unless `deploy.sh` is broken
+- commit `.env` or bake secrets into the image
+- leave the server working tree dirty
+
+`deploy-remote.sh` refuses to run unless local `master` matches
+`origin/master`. `deploy.sh` on the server refuses a dirty tree, pulls
+`--ff-only`, rebuilds, then gates on `/api/health/live` and
+`/api/health/ready`.
+
+Env-only changes (no code): edit `/home/linuxuser/versions/.env` on the
+server, then `docker compose up -d --force-recreate app`.
+
+Full runbook: `scripts/DEPLOY.md`.

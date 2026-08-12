@@ -797,16 +797,23 @@ curl http://localhost:3000/api/v1/embeddings/backfill
 
 ## Production deploy
 
-Git-only deploy to the Vultr box (`versions.persidian.com`). **Do not scp
-source** into the server checkout — always `git pull --ff-only` + docker rebuild.
+Live: [versions.persidian.com](https://versions.persidian.com) on
+`nuncio-vultr`. **Git is the only way source reaches the server** — do
+not `scp` / `rsync` application files into the checkout.
 
 ```bash
 git push origin master
 ./scripts/deploy-remote.sh          # default: ssh nuncio-vultr
 ```
 
-Full runbook: [`scripts/DEPLOY.md`](scripts/DEPLOY.md) (preflight checks, secrets
-hygiene, rollback, monitoring).
+That is the whole loop: laptop preflight (local `master` ==
+`origin/master`) → remote `git pull --ff-only` → docker rebuild →
+`/api/health/live` + `/api/health/ready`. Env-only changes: edit the
+server `.env` and recreate the container (no rebuild).
+
+Full runbook: [`scripts/DEPLOY.md`](scripts/DEPLOY.md) (preflight,
+secrets, rollback, monitoring). Agents: see **Production deploy** in
+[`AGENTS.md`](AGENTS.md).
 
 ## Deploy runbook — Legacy placement_briefs purge
 
