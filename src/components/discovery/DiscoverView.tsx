@@ -123,7 +123,13 @@ function MatchSearch() {
       void apiClient.logSearch({ briefText: trimmed, resultsCount: res.total }).catch(() => {});
       // Open (or resume) the supervisor's persistent placement case so the
       // Workspace shows this brief + the one decision it is waiting on.
-      void apiClient.openCase({ briefText: trimmed, rankedCount: res.total }).catch(() => {});
+      void apiClient
+        .openCase({
+          briefText: trimmed,
+          rankedCount: res.total,
+          candidateTitles: res.rows.slice(0, 3).map((r) => r.title ?? "").filter(Boolean),
+        })
+        .catch(() => {});
     } catch (err) {
       showToast(`Search failed: ${(err as Error).message}`, "error");
       setResults(null);

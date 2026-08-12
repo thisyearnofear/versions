@@ -791,7 +791,7 @@ export const apiClient = {
     return api.patch<{ row: LicensingInterest }>("/api/v1/supervisor/interests", body);
   },
   /** Open (or resume) a persistent placement case for a brief. */
-  openCase(body: { briefText: string; rankedCount?: number; pendingDecision?: string | null }): Promise<{ row: PlacementCaseRow }> {
+  openCase(body: { briefText: string; rankedCount?: number; pendingDecision?: string | null; candidateTitles?: string[] }): Promise<{ row: PlacementCaseRow }> {
     return api.post<{ row: PlacementCaseRow }>("/api/v1/cases", body);
   },
   getCases(opts?: { limit?: number }): Promise<{ rows: PlacementCaseRow[]; open: number }> {

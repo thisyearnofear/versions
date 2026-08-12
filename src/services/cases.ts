@@ -64,6 +64,8 @@ export interface OpenCaseInput {
   briefText: string;
   rankedCount?: number;
   pendingDecision?: string | null;
+  /** Top candidate take titles from the search the supervisor just ran. */
+  candidateTitles?: string[];
 }
 
 export interface AddShortlistInput {
@@ -103,6 +105,40 @@ const DEFAULT_PLAN: PlaceCaseStep[] = [
   { key: "rights", label: "Rights review begins once you shortlist", done: false },
   { key: "settle", label: "Settlement after approval", done: false },
 ];
+
+// Derive a scoped human decision + an evidence-backed recommendation from
+// the brief. Honest by design: it refers to REAL ranked candidates and a
+// real ranked_count; it never fabricates qualitative claims ("Track A has
+// the most dialogue space") or legal authority. In mock mode this is the
+// deterministic engine; a live LLM can refine the same fields later.
+function deriveCasePlan(
+  brief: string,
+  rankedCount: number,
+  candidateTitles: string[],
+): { pendingDecision: string | null; recommendationText: string } {
+  const lower = brief.toLowerCase();
+  const scopes: string[] = [];
+  if (/no vocal|without vocal|no singing|instrumental/.test(lower)) scopes.push("an instrumental-leaning direction");
+  if (/vocals|\bvocal\b|voice|singer/.test(lower)) scopes.push("a vocal-leaning direction");
+  const tempo = lower.match(/(\d{2,3})\s*(?:bpm)/);
+  if (tempo) scopes.push(`a ${tempo[1]} bpm arrangement`);
+  const moods = ["dark", "tense", "dreamy", "gentle", "uplifting", "melancholic", "euphoric", "restrained", "energetic", "warm"].filter((m) =>
+    lower.includes(m),
+  );
+  if (moods.length) scopes.push(`the ${moods.join(" / ")} feel`);
+  const scope = scopes.length ? scopes.join(", ") : "the leading creative direction";
+
+  const leads = candidateTitles.slice(0, 3).filter(Boolean);
+  const recommendationText =
+    rankedCount > 0
+      ? `Ranked ${rankedCount} eligible takes. Leading contenders: ${leads.length ? leads.join(", ") : "—"}. Shortlist to begin rights review.`
+      : "Interpreted the brief and opened the case. Match ranking returns as the catalog is scored.";
+
+  return {
+    pendingDecision: `Choose ${scope} — I’ll shortlist it and prepare the rights-review request`,
+    recommendationText,
+  };
+}
 
 export function createCasesService(): CasesService {
   // ensureUser + ensureProfile so a guest pseudo-wallet (or a fresh
@@ -187,6 +223,19 @@ export function createCasesService(): CasesService {
         : { shortlistSubmissionIds: [] as string[] };
       if (input.rankedCount != null) evidence.rankedCount = input.rankedCount;
 
+      // Derive a scoped human decision + evidence-backed recommendation. On an
+      // open (existing) case we only fill the recommendation if it is still
+      // empty, so the supervisor's chosen direction is never overwritten.
+      const derived = deriveCasePlan(brief, evidence.rankedCount ?? 0, input.candidateTitles ?? []);
+      if (!existing?.evidence || !(existing.evidence as PlaceCaseEvidence).recommendationText) {
+        evidence.recommendationText = derived.recommendationText;
+      }
+      const pendingDecision = existing?.pendingDecision ?? input.pendingDecision ?? derived.pendingDecision;
+      const plan: PlaceCaseStep[] = (existing?.agentPlan as PlaceCaseStep[] | undefined) ?? DEFAULT_PLAN;
+      const refinedPlan = plan.map((s) =>
+        s.key === "recommend" && evidence.recommendationText ? { ...s, done: true, current: false } : s,
+      );
+
       let id = existing?.id;
       if (!id) {
         id = randomUUID();
@@ -197,8 +246,8 @@ export function createCasesService(): CasesService {
           briefText: brief,
           status: "open",
           objective: null,
-          pendingDecision: input.pendingDecision ?? null,
-          agentPlan: DEFAULT_PLAN,
+          pendingDecision,
+          agentPlan: refinedPlan,
           evidence,
           lastActivity: now,
           createdAt: now,
@@ -214,11 +263,18 @@ export function createCasesService(): CasesService {
             detail: { rankedCount: evidence.rankedCount ?? 0 },
             createdAt: now,
           },
+          {
+            id: randomUUID(),
+            caseId: id,
+            kind: "case_recommended",
+            detail: { recommendation: evidence.recommendationText ?? "" },
+            createdAt: now,
+          },
         ]);
       } else {
         await db
           .update(casesTable)
-          .set({ agentPlan: existing.agentPlan ?? DEFAULT_PLAN, evidence, lastActivity: now, updatedAt: now })
+          .set({ agentPlan: refinedPlan, evidence, pendingDecision, lastActivity: now, updatedAt: now })
           .where(eq(casesTable.id, id));
       }
 

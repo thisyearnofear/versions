@@ -112,6 +112,11 @@ export function PlacementCasesPanel() {
                       <p className="mt-1 font-serif text-[15px] font-medium leading-snug text-[var(--color-ink)]">
                         {c.brief_text}
                       </p>
+                      {c.evidence?.recommendationText && (
+                        <p className="mt-1.5 font-serif text-[13px] leading-snug text-[var(--color-ink-2)]">
+                          {c.evidence.recommendationText}
+                        </p>
+                      )}
                     </div>
                     <Link
                       href={`/discover?brief=${encodeURIComponent(c.brief_text)}`}

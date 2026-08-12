@@ -20,6 +20,7 @@ const OpenCaseSchema = z.object({
   briefText: z.string().min(3).max(500),
   rankedCount: z.number().int().nonnegative().optional(),
   pendingDecision: z.string().nullable().optional(),
+  candidateTitles: z.array(z.string()).max(5).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
       briefText: parsed.data.briefText,
       rankedCount: parsed.data.rankedCount,
       pendingDecision: parsed.data.pendingDecision,
+      candidateTitles: parsed.data.candidateTitles,
     });
     return successResponse(200, { row }, requestId);
   } catch (err) {
