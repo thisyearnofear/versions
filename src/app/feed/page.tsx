@@ -1,6 +1,5 @@
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
-import { JourneyRail } from "@/components/ui/JourneyRail";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { FeedView } from "@/components/feed/FeedView";
 import { FadeIn } from "@/components/ui/FadeIn";
@@ -23,17 +22,15 @@ export default async function FeedPage() {
   return (
     <ToastProvider>
       <div className="flex flex-col flex-1">
-        <SiteHeader active="feed" />
+        <SiteHeader active="library" />
         <main className="flex-1">
           <Container className="py-10">
             <FadeIn>
               <PageIntro
-                eyebrow="Published catalog"
-                title="Explore the catalog."
-                intro="Browse AI-reviewed versions. Guided-demo tracks are clearly labeled and do not represent cleared or license-ready offers."
-              >
-                <JourneyRail variant="supervisor" active="Match" />
-              </PageIntro>
+                eyebrow="Library"
+                title="Tracks, briefs, and prior work."
+                intro="Browse the reviewed catalog. Guided-demo tracks are clearly labeled and do not represent cleared or license-ready offers."
+              />
             </FadeIn>
             <FadeIn delay={0.15}>
               <FeedView initialRows={initialRows} />

@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
-import { JourneyRail } from "@/components/ui/JourneyRail";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { DiscoverView } from "@/components/discovery/DiscoverView";
 import { FadeIn } from "@/components/ui/FadeIn";
@@ -12,17 +11,15 @@ export default function DiscoverPage() {
   return (
     <ToastProvider>
       <div className="flex flex-col flex-1">
-        <SiteHeader active="discover" />
+        <SiteHeader active="brief" />
         <main className="flex-1">
           <Container className="py-10">
             <FadeIn>
               <PageIntro
-                eyebrow="Supervisor search"
-                title="Find the track."
-                intro="Turn a scene brief into ranked, explainable, license-ready alternate takes."
-              >
-                <JourneyRail variant="supervisor" active="Match" />
-              </PageIntro>
+                eyebrow="New brief"
+                title="Start a placement case."
+                intro="Tell VERSIONS what the picture needs. It ranks the alternate takes by fit and prepares the rights path — then brings you the decision."
+              />
             </FadeIn>
             <FadeIn delay={0.1}>
               <Suspense fallback={<DashboardFallback />}>

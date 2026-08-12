@@ -13,7 +13,6 @@ import { Tour } from "@/components/ui/Tour";
 import { ApiError, apiClient, type AgentReviewRecord } from "@/lib/api-client";
 import { track } from "@/lib/analytics";
 import { useSubmitPayment, type PaymentPhase, type SendPaymentResult } from "@/components/submit/use-submit-payment";
-import { JourneyRail, type JourneyStage } from "@/components/ui/JourneyRail";
 
 const PAYMENT_RETRIES = 3;
 const FEE_AMOUNT_USDC = "0.50";
@@ -375,7 +374,7 @@ export function SubmitForm() {
       ? "Verifying payment…"
       : state.phase === "verified"
       ? "Submitted"
-      : "Submit for 0.50 USDC";
+      : "Approve · 0.50 USDC";
 
   const statusMessage =
     state.phase === "submitting"
@@ -392,20 +391,30 @@ export function SubmitForm() {
       ? `Submission abandoned after ${state.attempts} failed attempts.`
       : "";
 
-  const journeyStage: JourneyStage =
-    state.phase === "verified"
-      ? "Review"
-      : state.phase === "pending" || state.phase === "verifying"
-        ? "Pay"
-        : "Submit";
-
   return (
     <>
-      <div className="mb-6">
-        <JourneyRail variant="artist" active={journeyStage} />
-      </div>
       <form id="submitForm" onSubmit={onSubmit} className="space-y-6" noValidate>
+        <div className="border border-[var(--color-hair-strong)] bg-[var(--color-paper-2)] px-5 py-4 font-serif text-sm leading-snug text-[var(--color-ink-2)]">
+          Hand an alternate take to your{" "}
+          <strong className="font-medium text-[var(--color-ink)]">Release Agent</strong>. Upload the
+          audio — the agent prepares the release record, flags what&apos;s missing, and only routes
+          it to curation once you approve.
+        </div>
+        <div>
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] block mb-2">
+            Audio file
+          </span>
+          <Dropzone
+            onFile={(f, meta) => {
+              setFile(f);
+              setCoverSvg(meta.coverSvg);
+            }}
+          />
+        </div>
         <div className="grid md:grid-cols-2 gap-6">
+          <p className="md:col-span-2 font-serif text-sm leading-snug text-[var(--color-ink-2)]">
+            Tell the agent what changed from the master so the release record is accurate.
+          </p>
           <label className="block md:col-span-2">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] block mb-2">
               Title
@@ -495,26 +504,15 @@ export function SubmitForm() {
               className="w-full bg-transparent border-b-2 border-[var(--color-hair-strong)] focus:border-[var(--color-rust)] focus:outline-none py-3 font-serif text-lg resize-none"
             />
           </label>
-          <div className="block md:col-span-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] block mb-2">
-              Audio file
-            </span>
-            <Dropzone
-              onFile={(f, meta) => {
-                setFile(f);
-                setCoverSvg(meta.coverSvg);
-              }}
-            />
-          </div>
         </div>
 
         <div className="pt-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-col gap-1">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
-              Total cost: <strong className="text-[var(--color-ink)]">0.50 USDC</strong> · settled on Arc
+              Submission fee: <strong className="text-[var(--color-ink)]">0.50 USDC</strong> · settled on Arc
             </p>
             <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-              No additional gas or hidden fees
+              Approving sends the release to curation. No gas or hidden fees.
             </p>
           </div>
           <button

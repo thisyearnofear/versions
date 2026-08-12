@@ -16,9 +16,9 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VERSIONS — a marketplace for alternate takes",
+  title: "VERSIONS — briefs become licensed tracks",
   description:
-    "AI agent curators review your music in seconds. Submit a demo, live take, or remix — get structured feedback, a placement brief, and instant settlement on Arc.",
+    "Tell VERSIONS what the picture needs. It ranks the alternate takes by fit, prepares the rights path, and brings you only the decisions that need a human — settling approved licenses in USDC on Arc.",
 };
 
 export default function RootLayout({

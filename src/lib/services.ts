@@ -29,6 +29,7 @@ import { createRateLimiter, type RateLimiter } from './rate-limit';
 import { createIpfsFromEnv, type PinataClient } from './ipfs';
 import { createListenerService, type ListenerService } from '../services/listeners';
 import { createSupervisorDashboardService, type SupervisorDashboardService } from '../services/supervisor';
+import { createCasesService, type CasesService } from '../services/cases';
 import { log } from './logger';
 
 // MODULAR: deterministic agent wallets when env is missing. With
@@ -52,6 +53,7 @@ export interface ServiceRegistry {
   sweeper: Sweeper;
   listeners: ListenerService;
   supervisor: SupervisorDashboardService;
+  cases: CasesService;
   audioLimiter: RateLimiter;
   generalLimiter: RateLimiter;
   ipfs: PinataClient;
@@ -169,6 +171,7 @@ function build(): ServiceRegistry {
   const ar = createArService({ arc, arWallet, llm });
   const listeners = createListenerService();
   const supervisor = createSupervisorDashboardService();
+  const cases = createCasesService();
   const sweeper = createSweeper({ settlement, tips });
   const ipfs = createIpfsFromEnv();
 
@@ -197,6 +200,7 @@ function build(): ServiceRegistry {
     ar,
     listeners,
     supervisor,
+    cases,
     sweeper,
     audioLimiter,
     generalLimiter,

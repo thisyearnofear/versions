@@ -479,6 +479,77 @@ export const matchFeedback = pgTable('match_feedback', {
 // via src/lib/pricing.ts. settlement happens in the pay route via the
 // Arc adapter (platform-brokered in this first non-scaling cut).
 
+// ── Placement Cases ─────────────────────────────────────
+// MODULAR: the persistent work object at the heart of the
+// supervisor experience. A case IS the brief + the agent's plan +
+// the evidence + the ONE human decision it is waiting on. It
+// survives sessions so the supervisor can leave, return tomorrow,
+// and read "your night-drive placement case is waiting on one
+// decision". Additive — it anchors onto (does not replace) the
+// existing saved_briefs / licensing_interests / licenses rails.
+//
+// `status` lifecycle: open → awaiting_decision → rights_review →
+// settlement_ready → settled (or archived). `pending_decision` is
+// the natural-language description of the single gate the agent is
+// waiting to clear. `agent_plan` is the ordered, named progress the
+// agent owns; the human owns `pending_decision`.
+
+export interface PlaceCaseStep {
+  key: string;
+  label: string;
+  done: boolean;
+  current?: boolean;
+}
+
+export interface PlaceCaseEvidence {
+  rankedCount?: number;
+  shortlistSubmissionIds?: string[];
+  recommendationText?: string;
+}
+
+export const placementCases = pgTable(
+  'placement_cases',
+  {
+    id: text('id').primaryKey(),
+    supervisorWallet: text('supervisor_wallet')
+      .notNull()
+      .references(() => supervisorProfiles.wallet),
+    kind: text('kind').notNull().default('placement'), // placement | release | rights | settlement
+    briefText: text('brief_text').notNull(),
+    status: text('status').notNull().default('open'), // open | awaiting_decision | rights_review | settlement_ready | settled | archived
+    objective: text('objective'),
+    pendingDecision: text('pending_decision'),
+    agentPlan: jsonb('agent_plan').$type<PlaceCaseStep[]>().notNull().default([]),
+    evidence: jsonb('evidence').$type<PlaceCaseEvidence>().notNull().default({}),
+    lastActivity: timestamp('last_activity').defaultNow().notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_placement_cases_supervisor').on(table.supervisorWallet, table.lastActivity),
+  ],
+);
+
+// ── Case events ──────────────────────────────────────────
+// Durable, per-case activity trail — the audit record of what the
+// agent did for MY brief (not a public stream). "Interpreted the
+// brief", "Ranked 42 takes", "Needs your judgment", "Rights review
+// begins", "Settled".
+
+export const caseEvents = pgTable(
+  'case_events',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => placementCases.id),
+    kind: text('kind').notNull(),
+    detail: jsonb('detail').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [index('idx_case_events_case').on(table.caseId, table.createdAt)],
+);
+
 export const licenses = pgTable('licenses', {
   id: text('id').primaryKey(),
   supervisorWallet: text('supervisor_wallet').notNull().references(() => supervisorProfiles.wallet),

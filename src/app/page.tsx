@@ -10,10 +10,8 @@ import { track } from "@/lib/analytics";
 import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { LiveActivityStrip } from "@/components/home/LiveActivityStrip";
-import { LiveDemoButton } from "@/components/home/LiveDemoButton";
 import { WaveformGallery } from "@/components/home/WaveformGallery";
 import { EconomyTicker } from "@/components/economy/EconomyTicker";
-import { LiveStats } from "@/components/economy/LiveStats";
 
 export default function Home() {
   return (
@@ -24,38 +22,65 @@ export default function Home() {
           <Hero />
         </div>
 
-        <section className="border-b border-[var(--color-hair-strong)] bg-[var(--color-paper-2)] px-6 py-14 md:py-20" aria-labelledby="engine-room-title">
-          <div className="mx-auto grid max-w-5xl gap-12 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-            <div className="text-center lg:text-left">
+        <section className="border-b border-[var(--color-hair-strong)] bg-[var(--color-paper-2)] px-6 py-14 md:py-20" aria-labelledby="placement-case-title">
+          <div className="mx-auto grid max-w-5xl gap-12 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+            <div>
               <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-rust)]">
-                The engine room
+                A placement case · open, owned by an agent
               </p>
-              <h2 id="engine-room-title" className="font-serif text-3xl font-black tracking-tight md:text-5xl">
-                One click. Five state changes.
+              <h2 id="placement-case-title" className="font-serif text-3xl font-black tracking-tight md:text-4xl">
+                Owned by an agent. Held open for one human decision.
               </h2>
-              <p className="mx-auto mt-3 max-w-xl font-serif text-base leading-snug text-[var(--color-ink-2)] lg:mx-0">
-                Create a demo submission, let three agents reach consensus, publish it, and settle the tip — live, in front of you.
-              </p>
-              <div className="mt-8">
-                <LiveDemoButton />
-                <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-                  Mock settlement by default · Arc-ready when configured
-                </p>
+              <div className="mt-6 border border-[var(--color-hair-strong)] bg-[var(--color-paper)] p-5 font-mono text-xs">
+                <div className="mb-3 border-b border-[var(--color-hair)] pb-3 text-[var(--color-ink-2)]">
+                  Night drive · restrained electronic · 30 sec · no vocals
+                </div>
+                <ul className="flex flex-col gap-2 text-[var(--color-ink-2)]">
+                  <li className="flex gap-2">
+                    <span className="text-[var(--color-rust)]" aria-hidden="true">✓</span> Interpreted the brief
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-[var(--color-rust)]" aria-hidden="true">✓</span> Ranked 42 eligible takes
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-[var(--color-rust)]" aria-hidden="true">✓</span> Prepared 3 evidence-backed recommendations
+                  </li>
+                  <li className="flex gap-2 font-medium text-[var(--color-ink)]" aria-hidden="true">
+                    <span>!</span> Needs your judgment — choose a creative direction
+                  </li>
+                  <li className="flex gap-2 text-[var(--color-ink-3)]">
+                    <span aria-hidden="true">○</span> Rights review begins once you shortlist
+                  </li>
+                </ul>
               </div>
-              <div className="mt-8 border-t border-[var(--color-hair-strong)] pt-6">
-                <LiveStats />
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link
+                  href="/discover"
+                  className="bg-[var(--color-ink)] font-mono text-[10px] uppercase tracking-[0.16em] px-5 py-3 text-[var(--color-paper)] hover:bg-[var(--color-rust)] transition-colors"
+                >
+                  Start a brief →
+                </Link>
+                <Link
+                  href="/supervisor"
+                  className="border border-[var(--color-ink)] font-mono text-[10px] uppercase tracking-[0.16em] px-5 py-3 text-[var(--color-ink)] hover:bg-[var(--color-ink)] hover:text-[var(--color-paper)] transition-colors"
+                >
+                  Open your workspace
+                </Link>
               </div>
             </div>
             <div className="border-t border-[var(--color-hair-strong)] pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+              <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+                Live · system proof
+              </p>
               <EconomyTicker limit={6} />
             </div>
           </div>
         </section>
 
-        <section aria-label="The VERSIONS catalog">
+        <section aria-label="Recent work published by the agents">
           <div className="px-6 pt-12 pb-4 text-center">
             <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]">
-              The catalog · click the waveform to play
+              Recent work — click a waveform to listen
             </p>
           </div>
           <WaveformGallery />
@@ -78,10 +103,10 @@ function Hero() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        Describe the scene.
+        Tell VERSIONS
         <br />
         <span className="italic font-normal text-[var(--color-rust)]">
-          Find the track.
+          what the picture needs.
         </span>
       </motion.h1>
       <motion.p
@@ -90,7 +115,8 @@ function Hero() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
       >
-        AI agents rank alternate takes to your brief in seconds.
+        It ranks the alternate takes by fit, prepares the rights path, and
+        brings you only the decisions that need a human.
       </motion.p>
       <motion.div
         initial={{ opacity: 0, y: 8 }}
@@ -135,7 +161,7 @@ function BriefSearchBar() {
           disabled={brief.trim().length < 3}
           className="whitespace-nowrap bg-[var(--color-ink)] px-6 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-paper)] hover:bg-[var(--color-rust)] transition-colors disabled:opacity-40"
         >
-          Find track
+          Start a placement brief
         </button>
       </form>
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -154,7 +180,7 @@ function BriefSearchBar() {
         ))}
       </div>
       <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-        Ranked results in ~4 seconds · free · no sign-up
+        An agent opens your case · ranked in seconds · free to search · no sign-up
       </p>
     </div>
   );

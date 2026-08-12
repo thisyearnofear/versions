@@ -1,6 +1,5 @@
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
-import { JourneyRail } from "@/components/ui/JourneyRail";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { AgentMonitor } from "@/components/curation/AgentMonitor";
 import { EconomyTicker } from "@/components/economy/EconomyTicker";
@@ -15,12 +14,10 @@ export default function AgentsPage() {
         <main className="flex-1 px-6 md:px-12 py-12 max-w-5xl mx-auto w-full">
           <FadeIn>
             <PageIntro
-              eyebrow="Agent curation"
-              title="Watch consensus form."
-              intro="Three specialized agents review every track, explain the verdict, and publish when the gate clears."
-            >
-              <JourneyRail variant="artist" active="Review" />
-            </PageIntro>
+              eyebrow="System · agent activity"
+              title="Proof, not a product."
+              intro="The audit surface behind your workspace — what the agents are doing across the platform, live, with every verdict and receipt recorded. The work happens in Workspace; this is the evidence."
+            />
           </FadeIn>
           <FadeIn delay={0.15}>
             <div className="grid lg:grid-cols-[1fr_360px] gap-12 items-start">

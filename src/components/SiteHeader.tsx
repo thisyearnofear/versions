@@ -4,13 +4,18 @@ import Link from "next/link";
 import { WagmiConnectButton } from "@/components/wallet/WagmiConnectButton";
 import { track } from "@/lib/analytics";
 
-export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" | "discover" | "supervisor" }) {
-  const tabs = [
-    { id: "discover", label: "Discover", href: "/discover" },
-    { id: "agents", label: "Agents", href: "/agents" },
-    { id: "feed", label: "Catalog", href: "/feed" },
-    { id: "supervisor", label: "Dashboard", href: "/supervisor" },
-    { id: "submit", label: "Submit", href: "/submit" },
+// Primary navigation is organised around jobs, not product modules. A user
+// should never ask "which tool do I use?" — only "what am I trying to get
+// done?". Public proof surfaces (agent activity, arc, github) are demoted
+// out of the primary rail.
+export type HeaderRoute = "workspace" | "brief" | "library" | "artists" | "agents";
+
+export function SiteHeader({ active }: { active?: HeaderRoute }) {
+  const jobs = [
+    { id: "workspace", label: "Workspace", href: "/supervisor", title: "Active briefs, shortlists, and decisions awaiting you" },
+    { id: "brief", label: "New Brief", href: "/discover", title: "Start a placement case" },
+    { id: "library", label: "Library", href: "/feed", title: "Tracks, briefs, and prior work" },
+    { id: "artists", label: "For Artists", href: "/submit", title: "Hand an alternate take to your Release Agent" },
   ] as const;
 
   return (
@@ -20,14 +25,15 @@ export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" |
           VERSIONS
         </Link>
         <div className="flex min-w-0 items-center gap-2">
-          <nav role="tablist" className="min-w-0 flex-1 overflow-x-auto">
-            {tabs.map((t) => (
+          <nav aria-label="Primary" className="min-w-0 flex-1 overflow-x-auto">
+            {jobs.map((t) => (
               <Link
                 key={t.id}
                 href={t.href}
-                role="tab"
+                title={t.title}
                 onClick={() => track("nav_click", { to: t.href, source: "site_header" })}
-                className={`font-mono text-[11px] uppercase tracking-[0.18em] px-4 py-2 border-b-2 transition-colors whitespace-nowrap ${
+                aria-current={active === t.id ? "page" : undefined}
+                className={`font-mono text-[11px] uppercase tracking-[0.18em] px-3 py-2 border-b-2 transition-colors whitespace-nowrap ${
                   active === t.id
                     ? "border-[var(--color-rust)] text-[var(--color-rust)]"
                     : "border-transparent text-[var(--color-ink-2)] hover:text-[var(--color-ink)]"
@@ -37,6 +43,19 @@ export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" |
               </Link>
             ))}
           </nav>
+          <Link
+            href="/agents"
+            title="System proof — live agent activity across the platform"
+            aria-current={active === "agents" ? "page" : undefined}
+            onClick={() => track("nav_click", { to: "/agents", source: "site_header_system" })}
+            className={`hidden sm:inline font-mono text-[9px] uppercase tracking-[0.16em] px-3 py-2 transition-colors whitespace-nowrap ${
+              active === "agents"
+                ? "text-[var(--color-rust)]"
+                : "text-[var(--color-ink-3)] hover:text-[var(--color-rust)]"
+            }`}
+          >
+            System · agent activity
+          </Link>
           <WagmiConnectButton variant="quiet" />
         </div>
       </div>

@@ -10,6 +10,7 @@ import { Card, Eyebrow, Section } from "@/components/ui/primitives";
 import { SyncBudgetPanel } from "@/components/supervisor/SyncBudgetPanel";
 import { AgentStackPanel } from "@/components/supervisor/AgentStackPanel";
 import { LicensesSection } from "@/components/supervisor/LicensesSection";
+import { PlacementCasesPanel } from "@/components/supervisor/PlacementCasesPanel";
 import { MatchBenchmarkPanel } from "@/components/supervisor/MatchBenchmarkPanel";
 import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
 import { LICENSE_FEES, type LicenseUsageType } from "@/lib/pricing";
@@ -163,6 +164,8 @@ export function SupervisorDashboard() {
           </button>
         </Card>
       )}
+
+      <PlacementCasesPanel />
 
       <section className="order-0 mb-4 border-l-2 border-[var(--color-rust)] bg-[var(--color-paper-2)] px-4 py-3">
         <Eyebrow className="mb-1 text-[var(--color-rust)]">Supervisor workspace</Eyebrow>

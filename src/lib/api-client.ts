@@ -513,6 +513,46 @@ export interface LicensingInterest {
   updated_at: string;
 }
 
+export interface PlaceCaseStep {
+  key: string;
+  label: string;
+  done: boolean;
+  current?: boolean;
+}
+
+export interface PlaceCaseEvidence {
+  rankedCount?: number;
+  shortlistSubmissionIds?: string[];
+  recommendationText?: string;
+}
+
+/** Persistent supervisor work object: the brief + the agent plan + the evidence + the one human decision it is waiting on. */
+export interface PlacementCaseRow {
+  id: string;
+  supervisor_wallet: string;
+  kind: string;
+  brief_text: string;
+  status: string;
+  objective: string | null;
+  pending_decision: string | null;
+  agent_plan: PlaceCaseStep[];
+  evidence: PlaceCaseEvidence;
+  ranked_count: number;
+  shortlist_count: number;
+  last_activity: string;
+  created_at: string;
+  updated_at: string;
+  latest_event?: { kind: string; created_at: string } | null;
+}
+
+export interface CaseEventRow {
+  id: string;
+  case_id: string;
+  kind: string;
+  detail: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface MatchFeedbackRow {
   id: string;
   supervisor_wallet: string;
@@ -749,6 +789,27 @@ export const apiClient = {
   },
   updateInterest(body: { id: string; status?: string; notes?: string }): Promise<{ row: LicensingInterest }> {
     return api.patch<{ row: LicensingInterest }>("/api/v1/supervisor/interests", body);
+  },
+  /** Open (or resume) a persistent placement case for a brief. */
+  openCase(body: { briefText: string; rankedCount?: number; pendingDecision?: string | null }): Promise<{ row: PlacementCaseRow }> {
+    return api.post<{ row: PlacementCaseRow }>("/api/v1/cases", body);
+  },
+  getCases(opts?: { limit?: number }): Promise<{ rows: PlacementCaseRow[]; open: number }> {
+    const params = new URLSearchParams();
+    if (opts?.limit !== undefined) params.set("limit", String(opts.limit));
+    const qs = params.toString();
+    return api.get<{ rows: PlacementCaseRow[]; open: number }>(`/api/v1/cases${qs ? `?${qs}` : ""}`);
+  },
+  getCase(id: string): Promise<{ case: PlacementCaseRow; events: CaseEventRow[] }> {
+    return api.get<{ case: PlacementCaseRow; events: CaseEventRow[] }>(`/api/v1/cases/${encodeURIComponent(id)}`);
+  },
+  /** Attach a shortlisted take to the supervisor's current open case. */
+  addCaseShortlist(body: { submissionId: string }): Promise<{ row: PlacementCaseRow }> {
+    return api.post<{ row: PlacementCaseRow }>("/api/v1/cases/shortlist", body);
+  },
+  /** Record the human decision that clears a case's pending gate. */
+  recordCaseDecision(id: string, body: { status?: string; clearPending?: boolean; note?: string | null }): Promise<{ row: PlacementCaseRow }> {
+    return api.patch<{ row: PlacementCaseRow }>(`/api/v1/cases/${encodeURIComponent(id)}`, body);
   },
   /** Record supervisor ground-truth on a shown (brief → take) match. */
   recordMatchFeedback(body: {

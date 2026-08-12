@@ -121,6 +121,9 @@ function MatchSearch() {
         showToast("No matches — try a broader brief.", "info");
       }
       void apiClient.logSearch({ briefText: trimmed, resultsCount: res.total }).catch(() => {});
+      // Open (or resume) the supervisor's persistent placement case so the
+      // Workspace shows this brief + the one decision it is waiting on.
+      void apiClient.openCase({ briefText: trimmed, rankedCount: res.total }).catch(() => {});
     } catch (err) {
       showToast(`Search failed: ${(err as Error).message}`, "error");
       setResults(null);
@@ -403,6 +406,8 @@ function MatchRow({
     if (!requireAuth(returnTo)) return;
     try {
       await apiClient.addInterest({ submissionId: row.submission_id });
+      // Attach this take to the supervisor's open placement case + activity trail.
+      void apiClient.addCaseShortlist({ submissionId: row.submission_id }).catch(() => {});
       onShortlisted(row.submission_id);
       setJustShortlisted(true);
       track('match_shortlist', { catalog_source: 'live', persisted: true });

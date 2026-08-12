@@ -7,17 +7,17 @@
 import { motion } from "framer-motion";
 
 const STEPS = [
-  { num: "01", title: "Describe", body: "Paste a brief in plain English — the scene, the mood, the tempo you need." },
-  { num: "02", title: "Match", body: "Three AI agents rank every alternate take by fit. No humans in the loop." },
-  { num: "03", title: "Shortlist", body: "Save briefs and mark tracks interested. Run the licensing funnel from one dashboard." },
-  { num: "04", title: "Pay on play", body: "Licensed tracks settle in USDC on Arc the moment they play." },
+  { num: "01", title: "Hand it over", body: "Paste a brief or upload an alternate take. An agent owns the case from here." },
+  { num: "02", title: "The agent does the legwork", body: "It interprets, ranks the long tail by fit, and prepares the evidence — no forms, no waiting in a queue." },
+  { num: "03", title: "You own the irreversible", body: "Choose a creative direction, approve the scope, confirm the settlement. Your judgment is the gate." },
+  { num: "04", title: "Settled on Arc", body: "Approved licenses settle in USDC on Arc, attributed per take, with a verified receipt recorded." },
 ];
 
 export function HowItWorks() {
   return (
     <section className="border-t border-[var(--color-hair-strong)] px-6 py-10">
       <div className="text-center font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-ink-3)] mb-8">
-        How it works
+        The agent owns the work. You own the decisions.
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-8 max-w-4xl mx-auto md:divide-x md:divide-[var(--color-hair)]">
         {STEPS.map((s, i) => (

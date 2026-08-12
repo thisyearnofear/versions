@@ -10,14 +10,14 @@ export default function SubmitPage() {
   return (
     <ToastProvider>
       <div className="flex flex-col flex-1">
-        <SiteHeader active="submit" />
+        <SiteHeader active="artists" />
         <main className="flex-1">
           <Container className="py-10">
             <FadeIn>
               <PageIntro
-                eyebrow="Artist submission"
-                title="Put a version into the machine."
-                intro="Submit an alternate take, verify the fee, and hand the track to the agents."
+                eyebrow="For Artists"
+                title="Hand an alternate take to your Release Agent."
+                intro="Upload the audio — the agent prepares the release record, flags what's missing, and routes it to curation when you approve."
               />
             </FadeIn>
             <FadeIn delay={0.15}>
