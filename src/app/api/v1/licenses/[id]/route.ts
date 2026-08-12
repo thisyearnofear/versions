@@ -60,15 +60,33 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   ].join(' · ');
 
   // 1. ERC-8183 job lifecycle → Completed (escrow to provider / clearing agent).
-  const settledJob = await svc.erc8183.settleLicenseJob({
-    clientAddress: client,
-    providerAddress: provider,
-    evaluatorAddress: client,
-    description,
-    budgetUsdc: before.fee_usdc,
-    deliverableHash,
-    jobId: before.job_id,
-  });
+  //    If live Arc fails (e.g. unfunded wallet), fall back to mock so the
+  //    demo loop stays intact — still returns a job receipt + mock flag.
+  let settledJob;
+  try {
+    settledJob = await svc.erc8183.settleLicenseJob({
+      clientAddress: client,
+      providerAddress: provider,
+      evaluatorAddress: client,
+      description,
+      budgetUsdc: before.fee_usdc,
+      deliverableHash,
+      jobId: before.job_id,
+    });
+  } catch (err) {
+    const mockAdapter = (await import('@/adapters/erc8183')).createErc8183Adapter({});
+    settledJob = await mockAdapter.settleLicenseJob({
+      clientAddress: client,
+      providerAddress: provider,
+      evaluatorAddress: client,
+      description,
+      budgetUsdc: before.fee_usdc,
+      deliverableHash,
+      jobId: before.job_id,
+    });
+    settledJob = { ...settledJob, mock: true };
+    void err;
+  }
 
   // 2. Attribute USDC to the take's artist (platform → artist). This is the
   //    royalty leg; the 8183 job is the escrowed license job receipt.

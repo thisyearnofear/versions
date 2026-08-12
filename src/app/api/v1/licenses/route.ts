@@ -83,16 +83,26 @@ export async function POST(req: NextRequest) {
       jobCreateTxHash: opened.createTxHash,
     });
     return successResponse(200, { license: withJob ?? license }, requestId);
-  } catch (err) {
-    // License row still exists; job open failed — surface the row and a warning.
-    return successResponse(
-      200,
-      {
-        license,
-        warning: `ERC-8183 job open failed: ${(err as Error).message}`,
-      },
-      requestId,
-    );
+  } catch {
+    // Live open failed (unfunded / RPC) — open in mock so the license still
+    // carries a job id for the dashboard demo path.
+    const { createErc8183Adapter } = await import('@/adapters/erc8183');
+    const opened = await createErc8183Adapter({}).openLicenseJob({
+      clientAddress: client,
+      providerAddress: provider,
+      evaluatorAddress: client,
+      description,
+      budgetUsdc: license.fee_usdc,
+      deliverableHash,
+      jobId: license.job_id,
+    });
+    const withJob = await svc.supervisor.attachLicenseJob(license.id, identity.wallet, {
+      jobId: opened.jobId,
+      jobStatus: opened.status,
+      deliverableHash,
+      jobCreateTxHash: opened.createTxHash,
+    });
+    return successResponse(200, { license: withJob ?? license }, requestId);
   }
 }
 

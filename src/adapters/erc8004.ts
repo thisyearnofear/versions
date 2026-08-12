@@ -44,13 +44,15 @@ function mockAgentId(wallet: string, label: string): string {
 export function createErc8004Adapter({
   agentWallets,
   registryAddress = process.env.ARC_ERC8004_REGISTRY || ERC8004_IDENTITY_REGISTRY_DEFAULT,
-  rpcUrl,
 }: {
   agentWallets: { label: AgentLabel; wallet: string }[];
   registryAddress?: string;
+  /** Reserved for live registerAgent calls; currently identities are deterministic. */
   rpcUrl?: string;
 }): Erc8004Adapter {
-  const useMock = !rpcUrl;
+  // Identities are deterministic hashes until we run a live ERC-8004
+  // registerAgent tx. Keep mock:true so health/ready stays honest.
+  const useMock = true;
 
   return {
     mock: useMock,
@@ -70,8 +72,8 @@ export function createErc8004Adapter({
           agentId: mockAgentId(checksum, label),
           registry: registryAddress,
           mock: useMock,
-          // Mock identities are "registered" for demo continuity; live
-          // registration is a separate ops step (Circle console / script).
+          // Deterministic IDs are demo-stable; live on-chain registration
+          // is a follow-up ops step (Circle console / script).
           registered: true,
         };
       });
