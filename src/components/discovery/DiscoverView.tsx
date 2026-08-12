@@ -18,7 +18,7 @@ import { matchBriefHash } from "@/lib/match-benchmark";
 import { track } from "@/lib/analytics";
 import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
 import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
-import { LICENSE_FEES, LICENSE_USAGE_TYPES, type LicenseUsageType } from "@/lib/pricing";
+import type { LicenseUsageType } from "@/lib/pricing";
 import { searchByBriefPaid, SCORE_FEE_USDC, type ScorePaymentReceipt } from "@/lib/x402-score-client";
 import { AgentTrace } from "@/components/discovery/AgentTrace";
 import { AgentThinkingPulse, FitScorePop, SuccessCheck } from "@/components/discovery/motion";
@@ -332,6 +332,8 @@ function MatchRow({
   const [feedback, setFeedback] = useState<"good_fit" | "wrong_fit" | null>(null);
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const reason = row.why_fits[0] ?? null;
+  const quoteOptions = row.license_quote.usage_options.filter(({ usage_type }) => usage_type !== "other");
+  const selectedQuote = row.license_quote.usage_options.find(({ usage_type }) => usage_type === usageType);
 
   const returnTo = typeof window !== "undefined"
     ? `${window.location.pathname}${window.location.search}`
@@ -376,6 +378,10 @@ function MatchRow({
 
   const onRequestLicense = async () => {
     if (!requireAuth(returnTo)) return;
+    if (!selectedQuote) {
+      showToast("No quote is available for that usage type.", "error");
+      return;
+    }
     setLicensing(true);
     try {
       await apiClient.addInterest({ submissionId: row.submission_id }).catch(() => {});
@@ -384,7 +390,7 @@ function MatchRow({
         submissionId: row.submission_id,
         briefHash: matchBriefHash(brief),
         briefText: brief,
-        usageType,
+        usageType: selectedQuote.usage_type,
       });
       setLicenseRequest(license);
       setShowLicensePanel(false);
@@ -539,7 +545,13 @@ function MatchRow({
 
               <div className="mt-3 border-t border-[var(--color-hair)] pt-3">
                 <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
-                  Available to request · Worldwide · 12 months · choose usage to quote
+                  Requestable · {row.license_availability.reason}
+                </p>
+                <p className="mt-1 font-mono text-[9px] text-[var(--color-ink-3)]">
+                  Indicative platform quote · {row.license_quote.territory} · {row.license_quote.term_months} months
+                </p>
+                <p className="mt-1 font-mono text-[9px] text-[var(--color-ink-3)]">
+                  Clearance unverified · {row.license_availability.clearance.reason}
                 </p>
                 <div className="flex flex-wrap gap-2 mt-2">
                   <button
@@ -614,32 +626,32 @@ function MatchRow({
                   >
                     <div className="mt-3 pt-3 border-t border-[var(--color-hair)]">
                       <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] mb-2">
-                        Usage type · fee on Arc USDC
+                        Usage type · indicative platform quote on Arc USDC
                       </p>
                       <div className="flex flex-wrap gap-1.5 mb-3">
-                        {LICENSE_USAGE_TYPES.filter((t) => t !== "other").map((t) => (
+                        {quoteOptions.map((option) => (
                           <button
-                            key={t}
+                            key={option.usage_type}
                             type="button"
-                            onClick={() => setUsageType(t)}
+                            onClick={() => setUsageType(option.usage_type)}
                             className={cn(
                               "font-mono text-[9px] uppercase tracking-wide px-2.5 py-1 rounded-sm border transition-colors",
-                              usageType === t
+                              usageType === option.usage_type
                                 ? "bg-[var(--color-ink)] text-[var(--color-paper)] border-[var(--color-ink)]"
                                 : "border-[var(--color-hair-strong)] text-[var(--color-ink-2)] hover:border-[var(--color-rust)]",
                             )}
                           >
-                            {USAGE_LABELS[t]} · ${LICENSE_FEES[t]}
+                            {USAGE_LABELS[option.usage_type]} · ${option.fee_usdc}
                           </button>
                         ))}
                       </div>
                       <p className="font-mono text-[9px] text-[var(--color-ink-3)] mb-3">
-                        Worldwide · 12 months · opens a license job; settlement follows your approval.
+                        {row.license_quote.territory} · {row.license_quote.term_months} months · opens a license job after your approval. Rights clearance remains unverified.
                       </p>
                       <button
                         type="button"
                         onClick={() => void onRequestLicense()}
-                        disabled={licensing}
+                        disabled={licensing || !selectedQuote}
                         className="inline-flex items-center gap-2 bg-[var(--color-rust)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 rounded-sm hover:opacity-90 transition-opacity disabled:opacity-50"
                       >
                         {licensing ? (
@@ -653,7 +665,7 @@ function MatchRow({
                             Creating…
                           </>
                         ) : (
-                          `Open license job · $${LICENSE_FEES[usageType]} USDC`
+                          `Open license job · $${selectedQuote?.fee_usdc ?? "—"} USDC`
                         )}
                       </button>
                     </div>

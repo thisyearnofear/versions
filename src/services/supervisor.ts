@@ -16,7 +16,12 @@ import {
   publishedVersions as pvTable,
 } from '../lib/schema';
 import { computeMatchBenchmark, type MatchBenchmarkReport, type MatchFeedbackVerdict } from '../lib/match-benchmark';
-import { licenseFeeUsdc, type LicenseUsageType } from '../lib/pricing';
+import {
+  DEFAULT_LICENSE_TERM_MONTHS,
+  DEFAULT_LICENSE_TERRITORY,
+  licenseFeeUsdc,
+  type LicenseUsageType,
+} from '../lib/pricing';
 
 export type SupervisorRole = 'supervisor' | 'sync_house' | 'aandr';
 
@@ -315,8 +320,6 @@ async function ensureUser(wallet: string) {
 }
 
 export function createSupervisorDashboardService(): SupervisorDashboardService {
-  let service: SupervisorDashboardService;
-
   async function ensureProfile(wallet: string) {
     await ensureUser(wallet);
     const existing = await service.getProfile(wallet);
@@ -324,7 +327,7 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
     return service.upsertProfile({ wallet });
   }
 
-  service = {
+  const service: SupervisorDashboardService = {
     async upsertProfile(input) {
       await ensureUser(input.wallet);
       const now = new Date();
@@ -578,8 +581,8 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
           briefHash: input.briefHash,
           briefText: input.briefText,
           usageType: input.usageType,
-          territory: 'worldwide',
-          termMonths: 12,
+          territory: DEFAULT_LICENSE_TERRITORY,
+          termMonths: DEFAULT_LICENSE_TERM_MONTHS,
           feeUsdc: fee,
           status: 'pending_payment',
           paymentMock: false,

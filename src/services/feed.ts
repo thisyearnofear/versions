@@ -34,6 +34,12 @@ import {
 import { cached } from '../lib/cache';
 import { createEmbeddingAdapter, type EmbeddingAdapter } from '../adapters/embedding';
 import { log } from '../lib/logger';
+import {
+  DEFAULT_LICENSE_TERM_MONTHS,
+  DEFAULT_LICENSE_TERRITORY,
+  LICENSE_USAGE_TYPES,
+  licenseFeeUsdc,
+} from '../lib/pricing';
 import type { Energy, Tempo, BriefSearchRow } from '../lib/types';
 
 export const DEFAULT_LIMIT = 20;
@@ -241,6 +247,38 @@ function daysSince(date: Date | null | undefined): number {
   if (!date) return 0;
   const ms = Date.now() - date.getTime();
   return Math.floor(ms / (1000 * 60 * 60 * 24));
+}
+
+// MODULAR: every ranked row is necessarily a published take, which the
+// existing POST /licenses workflow accepts. That makes it requestable, but
+// published_versions holds no rights-holder, authority, restriction, or
+// clearance proof fields. Surface both truths explicitly instead of deriving
+// an unsupported "cleared" state from publication.
+function buildLicenseAvailability(): BriefSearchRow['license_availability'] {
+  return {
+    status: 'requestable',
+    reason: 'Published takes can enter the current platform license-request workflow.',
+    clearance: {
+      status: 'unverified',
+      reason: 'No auditable rights-clearance record exists for this take.',
+    },
+  };
+}
+
+// MODULAR: serialize the same server-side schedule that createLicense() uses,
+// so clients do not need to maintain a parallel price table. The quote is
+// explicitly indicative because no per-track rights or negotiated exceptions
+// are persisted yet.
+function buildLicenseQuote(): BriefSearchRow['license_quote'] {
+  return {
+    status: 'indicative',
+    territory: DEFAULT_LICENSE_TERRITORY,
+    term_months: DEFAULT_LICENSE_TERM_MONTHS,
+    usage_options: LICENSE_USAGE_TYPES.map((usage_type) => ({
+      usage_type,
+      fee_usdc: licenseFeeUsdc(usage_type),
+    })),
+  };
 }
 
 // ── Semantic search pure functions (Phase 4) ───────────
@@ -502,6 +540,8 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
       published_at: s.version.publishedAt?.toISOString?.() ?? null,
       fit_score: Math.round(s.score * 100) / 100,
       why_fits: s.why_fits,
+      license_availability: buildLicenseAvailability(),
+      license_quote: buildLicenseQuote(),
       brief: {
         scene_tags: s.brief.sceneTags,
         instruments: s.brief.instruments,

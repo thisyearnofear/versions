@@ -1,3 +1,5 @@
+import type { LicenseUsageType } from './pricing';
+
 export type VersionType = 'demo' | 'live' | 'acoustic' | 'remix' | 'remaster' | 'studio' | 'other';
 export type Energy = 'lower' | 'same' | 'higher';
 export type Tempo = 'dragging' | 'locked' | 'rushing';
@@ -65,6 +67,29 @@ export interface SettlementLeg {
 // semantic audio similarity via pgvector (hybrid scorer: semantic
 // similarity is the primary signal, structured tags provide the
 // `why_fits` citations). See src/services/feed.ts.
+export interface BriefSearchLicenseAvailability {
+  // A published take can enter the current authenticated license workflow.
+  // This is workflow availability, not a representation of rights clearance.
+  status: 'requestable';
+  reason: string;
+  clearance: {
+    status: 'unverified';
+    reason: string;
+  };
+}
+
+export interface BriefSearchLicenseQuote {
+  // The current server-side platform schedule. It is not a negotiated or
+  // cleared license and may be superseded by a future rights-aware quote.
+  status: 'indicative';
+  territory: 'worldwide';
+  term_months: 12;
+  usage_options: Array<{
+    usage_type: LicenseUsageType;
+    fee_usdc: string;
+  }>;
+}
+
 export interface BriefSearchRow {
   submission_id: string;
   title: string;
@@ -81,6 +106,8 @@ export interface BriefSearchRow {
   published_at: string | null | undefined;
   fit_score: number;
   why_fits: string[];
+  license_availability: BriefSearchLicenseAvailability;
+  license_quote: BriefSearchLicenseQuote;
   brief: {
     scene_tags: string[];
     instruments: string[];

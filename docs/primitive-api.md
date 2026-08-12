@@ -1,9 +1,11 @@
 # VERSIONS Primitive API — v1
 
-The **primitive** is what we sell: *a brief → a pre-cleared, attributed,
-micro-settled license.* This document is the versioned contract external
-catalogs, labels, and DSPs (who are structurally disincentivized to build it
-themselves) can consume. Typed shapes live in
+The **primitive’s target outcome** is *a brief → a cleared, attributed,
+micro-settled license.* This document specifies the versioned contract that
+external catalogs, labels, and DSPs (who are structurally disincentivized to
+build it themselves) can consume. The current v1 match response truthfully
+exposes a take’s workflow requestability and the platform’s indicative quote;
+it does **not** assert rights clearance. Typed shapes live in
 [`src/lib/primitive-contract.ts`](../src/lib/primitive-contract.ts); the
 reference implementation is the app's own routes under `/api/v1`.
 
@@ -46,10 +48,10 @@ Ranked alternate takes for a plain-English brief.
 - Optional filters: `sceneTags`, `instruments`, `energy`, `tempo`
 - Response `data`: `{ rows: BriefSearchRow[], total, limit, offset }`
 
-Each v1 row contains `fit_score`, `why_fits`, track metadata, and the
-structured placement brief. `why_fits` is evidence from the available
-catalog-ranking signals; it is not an individual agent verdict or clearance
-claim.
+Each v1 row contains `fit_score`, `why_fits`, track metadata, a structured
+placement brief, `license_availability`, and `license_quote`. `why_fits` is
+evidence from the available catalog-ranking signals; it is not an individual
+agent verdict or clearance claim.
 
 ```json
 { "success": true, "data": {
@@ -59,6 +61,25 @@ claim.
     "artist_name": "M. Rivera",
     "fit_score": 0.87,
     "why_fits": ["scene: car chase", "instrument: synth"],
+    "license_availability": {
+      "status": "requestable",
+      "reason": "Published takes can enter the current platform license-request workflow.",
+      "clearance": {
+        "status": "unverified",
+        "reason": "No auditable rights-clearance record exists for this take."
+      }
+    },
+    "license_quote": {
+      "status": "indicative",
+      "territory": "worldwide",
+      "term_months": 12,
+      "usage_options": [
+        { "usage_type": "sync_ad", "fee_usdc": "150.00" },
+        { "usage_type": "sync_tv_film", "fee_usdc": "250.00" },
+        { "usage_type": "sync_digital", "fee_usdc": "75.00" },
+        { "usage_type": "other", "fee_usdc": "100.00" }
+      ]
+    },
     "brief": {
       "scene_tags": ["car chase"],
       "instruments": ["synth"],
@@ -71,6 +92,14 @@ claim.
   "offset": 0
 }}
 ```
+
+`license_availability.status: "requestable"` means only that the matched
+published take can enter the existing authenticated `POST /licenses` workflow.
+`clearance.status: "unverified"` is deliberate: v1 has no persisted
+rights-holder, authority, restriction, chain-of-title, revocation, or
+clearance-proof record. `license_quote.status: "indicative"` is the
+server-derived global platform schedule (currently worldwide for 12 months),
+not a negotiated, cleared, or final license offer.
 
 ### 2. `POST /discover/brief/feedback` — record ground truth
 
@@ -88,9 +117,11 @@ and future scorer tuning.
   `{ license: LicenseRow }`, with `status: "pending_payment"` and an
   ERC-8183 license job when available.
 
-A v1 search result may say **available to request**. It must not say
-**pre-cleared** or **license-ready** until it includes auditable, result-level
-clearance and quote evidence.
+Opening a job requires the supervisor’s approval and does not convert an
+unverified result into a clearance claim. A v1 search result may say
+**requestable** and **indicative quote available**; it must not say
+**pre-cleared** or **license-ready** without auditable, result-level clearance
+and final-quote evidence.
 
 ### 4. `POST /licenses/:id` — settle on Arc
 
@@ -111,9 +142,11 @@ nDCG, and score discrimination.
 
 ## Contract evolution: decision evidence
 
-The v1 contract intentionally does not promise a simulated agent trace.
-Before a future version exposes named agent verdicts or clearance state, a
-ranked row needs auditable fields such as:
+The v1 contract intentionally does not promise a simulated agent trace or
+rights clearance. The new requestability and indicative-quote fields make the
+current workflow inspectable, but they are not substitutes for verification.
+Before a future version exposes named agent verdicts or a `clearance.status`
+other than `unverified`, a ranked row needs auditable fields such as:
 
 ```ts
 {
@@ -125,8 +158,20 @@ ranked row needs auditable fields such as:
     evidence: string[];
     objection?: string;
   }>,
-  clearance: { status: "cleared" | "needs_review"; scope: string; proof: string },
-  license_quote: { usage_type: string; territory: string; term_months: number; fee_usdc: string }
+  clearance: {
+    status: "cleared" | "needs_review";
+    scope: string;
+    restrictions: string[];
+    proof: string;
+  },
+  license_quote: {
+    status: "final";
+    usage_type: string;
+    territory: string;
+    term_months: number;
+    fee_usdc: string;
+    source: string;
+  }
 }
 ```
 
@@ -138,8 +183,9 @@ and staged UX are documented in [search.md](./search.md).
 
 ## Why a catalog would adopt this
 
-They are disincentivized to build autonomous long-tail clearance and
+Catalogs are disincentivized to build autonomous long-tail clearance and
 micro-settlement because it cannibalizes their curation premium and human sync
-model. The outcome—pre-cleared, attributed, micro-settled licenses plus a
-compounding ground-truth dataset—is theirs to consume without the internal
-cost or conflict. See [`STRATEGY.md`](../STRATEGY.md).
+model. VERSIONS can provide the workflow and a compounding ground-truth
+dataset now, while building toward auditable cleared, attributed,
+micro-settled licenses rather than merely claiming that outcome. See
+[`STRATEGY.md`](../STRATEGY.md).

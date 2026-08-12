@@ -149,6 +149,22 @@ describe('discover/brief: happy path', () => {
       rating_count: 3,
       fit_score: expect.any(Number),
       why_fits: expect.any(Array),
+      license_availability: {
+        status: 'requestable',
+        reason: 'Published takes can enter the current platform license-request workflow.',
+        clearance: {
+          status: 'unverified',
+          reason: 'No auditable rights-clearance record exists for this take.',
+        },
+      },
+      license_quote: {
+        status: 'indicative',
+        territory: 'worldwide',
+        term_months: 12,
+        usage_options: expect.arrayContaining([
+          expect.objectContaining({ usage_type: 'sync_tv_film', fee_usdc: '250.00' }),
+        ]),
+      },
       brief: {
         scene_tags: expect.arrayContaining(['car chase']),
         instruments: expect.arrayContaining(['guitar_led']),

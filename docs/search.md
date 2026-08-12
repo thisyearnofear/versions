@@ -22,9 +22,14 @@ states:
 - **Human gate:** supervisors listen and confirm the opening, vocal space, and
   edit point against picture. VERSIONS does not manufacture a false
   creative-risk verdict when the scorer has not produced one.
-- **License terms:** an authenticated supervisor can review the available
-  usage, territory, term, and server-derived price, then open a pending
-  license job.
+- **Requestability and quote:** every returned published take is
+  `license_availability.status: "requestable"` because it can enter the
+  current authenticated license-job workflow. `license_quote` is the
+  server-derived, `indicative` global schedule for its available usage types,
+  worldwide territory, and 12-month term—not a client-maintained price table.
+- **Clearance disclosure:** every current result explicitly reports
+  `clearance.status: "unverified"`. Publication, a wallet, a MusicBrainz ID,
+  a placement brief, and curator-review counts are not rights clearance.
 - **Ground truth:** a visible good-fit / wrong-direction judgment records the
   shown brief, rank, and score. That feedback feeds the match benchmark and
   later scorer tuning.
@@ -32,7 +37,7 @@ states:
 `rating_count` is a count of curator reviews. It is never presented as a
 three-agent consensus.
 
-## Honest ranking evidence
+## Honest ranking and licensing evidence
 
 **Always on:** structured-tag matching over scene, instruments, emotional
 arcs, and audience summary.
@@ -51,26 +56,28 @@ curl -X POST http://localhost:3000/api/v1/embeddings/backfill
 If pgvector, embeddings, or the embedding provider are unavailable, search
 fails open to structured-tag ranking.
 
-The current result contract does **not** contain individual Production,
-Performance, and Market-agent runs, nor result-level clearance evidence.
-The UI therefore calls its disclosure **ranking evidence**, not an agent
-trace, and uses “available to request” rather than “pre-cleared” or
-“license-ready.” See the next section for the contract required to make
-those stronger claims.
+The current result contract includes a real workflow state and quote schedule:
+`requestable` means the take is published and accepted by the existing
+`POST /licenses` workflow; `indicative` means the platform generated the
+schedule from its server-side pricing source. It still has no rights-holder,
+opt-in authority, chain-of-title, scope restriction, revocation, or
+clearance-proof record. The UI therefore calls its disclosure **ranking
+evidence**, labels rights as **unverified**, and never says “pre-cleared” or
+“license-ready.”
 
 ## Required contract for the full agentic workspace
 
-Before named-agent or clearance states can appear, a future version of the
-match contract must return auditable result-level fields:
+Before named-agent or verified-clearance states can appear, a future version
+of the match contract must return auditable result-level fields:
 
 - `ranking_run`: run ID, scorer/model version, elapsed time, and the ranking
   mechanisms actually used;
 - `agent_verdicts`: only for agents that actually ran — per-agent score,
   confidence, evidence, and an objection or trade-off where available;
-- `clearance`: rights status, scope, restrictions, and a stable proof or
-  reference;
-- `license_quote`: applicable usage, territory, term, price, and the next
-  executable action; and
+- a verified `clearance`: rights status, scope, restrictions, and a stable
+  proof or reference that can replace today’s `unverified` state;
+- a `license_quote` with a quote source, per-track override or negotiated
+  terms, and a final/expired state when applicable; and
 - `alternate_take_relationship`: how a selected take differs from related
   masters or alternate performances.
 
@@ -81,10 +88,12 @@ curator-review count.
 
 ## Product progression
 
-1. **Now:** a recommendation, evidence, human gate, feedback capture, and
-   in-context license terms.
-2. **Next:** actual per-result agent decision records and clearance/quote
-   evidence; show ranking movement when a supervisor refines the brief.
+1. **Now:** a recommendation, evidence, human gate, feedback capture,
+   requestability, an indicative server-derived quote, and an explicit
+   unverified-clearance disclosure.
+2. **Next:** actual per-result agent decision records, rights attestations,
+   verification, and quote evidence; show ranking movement when a supervisor
+   refines the brief.
 3. **Then:** supervisor-configured approval thresholds, budget, and rights
    policies so the system can prepare the correct license job autonomously
    while the human retains the consequential approval.

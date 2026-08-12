@@ -182,6 +182,25 @@ describe('feed: searchByBrief', () => {
     expect(r.rows[0].title).toBe('Highway Chase');
     expect(r.rows[0].fit_score).toBeGreaterThanOrEqual(3);
     expect(r.rows[0].why_fits.length).toBeGreaterThan(0);
+    expect(r.rows[0].license_availability).toEqual({
+      status: 'requestable',
+      reason: 'Published takes can enter the current platform license-request workflow.',
+      clearance: {
+        status: 'unverified',
+        reason: 'No auditable rights-clearance record exists for this take.',
+      },
+    });
+    expect(r.rows[0].license_quote).toEqual({
+      status: 'indicative',
+      territory: 'worldwide',
+      term_months: 12,
+      usage_options: [
+        { usage_type: 'sync_ad', fee_usdc: '150.00' },
+        { usage_type: 'sync_tv_film', fee_usdc: '250.00' },
+        { usage_type: 'sync_digital', fee_usdc: '75.00' },
+        { usage_type: 'other', fee_usdc: '100.00' },
+      ],
+    });
     expect(r.rows[0].brief.scene_tags).toContain('car chase');
   });
 

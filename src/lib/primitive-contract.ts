@@ -1,9 +1,10 @@
-// MODULAR: Versioned, published contract for the VERSIONS primitive —
-// "a brief → a pre-cleared, attributed, micro-settled license." This is the
-// wedge we sell to catalogs / labels / DSPs who are disincentivized to build
-// it. The endpoint ROUTES implement this contract; the shapes below are the
-// single source of truth that SDK consumers (and this repo's own demo client)
-// depend on. Bump PRIMITIVE_VERSION for any breaking change to the surface.
+// MODULAR: Versioned, published contract for the VERSIONS primitive. Its
+// target outcome is a brief → cleared, attributed, micro-settled license.
+// Today, match rows truthfully expose workflow requestability and an
+// indicative platform quote; they do not assert rights clearance. The endpoint
+// ROUTES implement this contract; the shapes below are the single source of
+// truth that SDK consumers (and this repo's own demo client) depend on. Bump
+// PRIMITIVE_VERSION for any breaking change to the surface.
 
 import type { BriefSearchResponse } from './types';
 import type { LicenseRow, MatchFeedbackRow, LicenseUsageType } from './api-client';
