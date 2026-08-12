@@ -164,8 +164,33 @@ export function SupervisorDashboard() {
         </Card>
       )}
 
+      <section className="order-0 mb-4 border-l-2 border-[var(--color-rust)] bg-[var(--color-paper-2)] px-4 py-3">
+        <Eyebrow className="mb-1 text-[var(--color-rust)]">Supervisor workspace</Eyebrow>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="font-serif text-xl font-semibold">Your next decisions</h2>
+            <p className="mt-1 font-serif text-sm text-[var(--color-ink-2)]">
+              Review shortlisted takes, progress active license requests, or start a new brief.
+            </p>
+          </div>
+          <Link
+            href="/discover"
+            className="shrink-0 bg-[var(--color-ink)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-paper)] transition-colors hover:bg-[var(--color-rust)]"
+          >
+            Find tracks →
+          </Link>
+        </div>
+      </section>
+
       {isAuthenticated && (
-        <ProfileSection profile={profile} onUpdate={refreshProfileAndInterests} />
+        <details className="order-5 border-t border-[var(--color-hair)] py-4">
+          <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
+            Account &amp; workspace settings
+          </summary>
+          <div className="pt-3">
+            <ProfileSection profile={profile} onUpdate={refreshProfileAndInterests} />
+          </div>
+        </details>
       )}
 
       <ShortlistSection
@@ -176,7 +201,7 @@ export function SupervisorDashboard() {
         requireAuth={requireAuth}
       />
 
-      <Section eyebrow="Activity" title="Recent searches" divider={false} className="py-8">
+      <Section eyebrow="Continue" title="Resume a brief" divider={false} className="order-3 py-8">
         <CompactSearchInput
           value={recentSearchesSearch}
           onChange={(s) => {
@@ -219,7 +244,7 @@ export function SupervisorDashboard() {
         )}
       </Section>
 
-      <Section eyebrow="Library" title="Saved briefs" className="py-8">
+      <Section eyebrow="Library" title="Saved briefs" className="order-4 py-8">
         <CompactSearchInput
           value={savedBriefsSearch}
           onChange={(s) => {
@@ -249,14 +274,20 @@ export function SupervisorDashboard() {
         )}
       </Section>
 
-      <div id="licenses">
+      <div id="licenses" className="order-1">
         <LicensesSection isAuthenticated={isAuthenticated} requireAuth={requireAuth} />
       </div>
 
-      <SyncBudgetPanel />
-      <AgentStackPanel />
-
-      <MatchBenchmarkPanel compact />
+      <details className="order-6 border-t border-[var(--color-hair)] py-4">
+        <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
+          Budget, system &amp; match-quality details
+        </summary>
+        <div className="pt-3">
+          <SyncBudgetPanel />
+          <AgentStackPanel />
+          <MatchBenchmarkPanel compact />
+        </div>
+      </details>
 
       {(loading || listsLoading) && (
         <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] py-4">
@@ -517,7 +548,7 @@ function ShortlistSection({
       title="Shortlist"
       intro={isAuthenticated ? "Tracks you are considering for sync. Request a license, then settle below." : undefined}
       divider={false}
-      className="py-8"
+      className="order-2 py-8"
     >
       {!isAuthenticated ? (
         <EmptyState text="Sign in to save tracks from Discover." href="/discover" linkLabel="Search catalog →" />

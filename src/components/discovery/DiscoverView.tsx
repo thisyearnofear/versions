@@ -202,15 +202,20 @@ function MatchSearch() {
           </button>
         </div>
         {isAuthenticated && isConnected && (
-          <label className="mt-2 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] cursor-pointer">
-            <input
-              type="checkbox"
-              checked={preferPaid}
-              onChange={(e) => setPreferPaid(e.target.checked)}
-              className="accent-[var(--color-rust)]"
-            />
-            Request scored evaluation · ${SCORE_FEE_USDC} USDC via x402
-          </label>
+          <details className="mt-2">
+            <summary className="cursor-pointer font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
+              Search settings
+            </summary>
+            <label className="mt-2 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={preferPaid}
+                onChange={(e) => setPreferPaid(e.target.checked)}
+                className="accent-[var(--color-rust)]"
+              />
+              Use enhanced scoring · ${SCORE_FEE_USDC} USDC
+            </label>
+          </details>
         )}
         {!hasResults && (
           <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -235,11 +240,25 @@ function MatchSearch() {
 
       {hasResults && (
         <div>
+          <ol
+            aria-label="Licensing workflow"
+            className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 border-y border-[var(--color-hair)] py-2 font-mono text-[9px] uppercase tracking-[0.12em]"
+          >
+            <li className="text-[var(--color-ink-3)]">1. Brief</li>
+            <li aria-hidden className="text-[var(--color-hair-strong)]">/</li>
+            <li aria-current="step" className="text-[var(--color-rust)]">2. Review takes</li>
+            <li aria-hidden className="text-[var(--color-hair-strong)]">/</li>
+            <li className="text-[var(--color-ink-3)]">3. Rights review</li>
+            <li aria-hidden className="text-[var(--color-hair-strong)]">/</li>
+            <li className="text-[var(--color-ink-3)]">4. License</li>
+          </ol>
           <CatalogDisclosure catalog={results.catalog} />
           <DecisionSummary row={results.rows[0]} total={results.total} />
-          <AgentTrace searchTimeMs={searchTimeMs} trackCount={results.rows.length} payment={payment} />
+          <p className="mb-4 font-serif text-sm leading-snug text-[var(--color-ink-2)]">
+            Start with a preview. Open a take when you want to compare the fit or review its rights status.
+          </p>
 
-          <div className="flex flex-wrap items-center gap-2 mb-5">
+          <div className="flex flex-wrap items-center gap-2 mb-5" aria-label="Refine this brief">
             {refinements.map((a) => (
               <span
                 key={a}
@@ -283,6 +302,15 @@ function MatchSearch() {
               </motion.div>
             ))}
           </div>
+
+          <details className="mt-5 border-t border-[var(--color-hair)] pt-3">
+            <summary className="cursor-pointer font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
+              Evaluation details
+            </summary>
+            <div className="pt-3">
+              <AgentTrace searchTimeMs={searchTimeMs} trackCount={results.rows.length} payment={payment} />
+            </div>
+          </details>
         </div>
       )}
 
@@ -507,12 +535,22 @@ function MatchRow({
           </span>
 
           <span className={cn(
-            "w-6 h-6 grid place-items-center rounded-full transition-all duration-200 shrink-0",
+            "hidden shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.1em] sm:inline-flex",
+            row.licensing_evidence.status === "sample_only"
+              ? "bg-[var(--color-paper-2)] text-[var(--color-ink-3)]"
+              : "bg-[var(--color-rust)] text-[var(--color-paper)]",
+          )}>
+            {isDemo ? "Preview" : row.licensing_evidence.status === "sample_only" ? "Sample only" : "Requestable"}
+          </span>
+
+          <span className={cn(
+            "shrink-0 rounded-sm px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] transition-all duration-200",
             expanded
               ? "bg-[var(--color-ink)] text-[var(--color-paper)]"
               : "bg-[var(--color-paper-2)] text-[var(--color-ink-3)] group-hover:bg-[var(--color-rust)] group-hover:text-[var(--color-paper)]",
           )}>
-            <span className="text-[10px]">{expanded ? "−" : "▶"}</span>
+            <span className="sm:hidden">{expanded ? "Close" : "Review"}</span>
+            <span className="hidden sm:inline">{expanded ? "Close" : "Review fit"}</span>
           </span>
         </div>
       </button>
@@ -533,10 +571,12 @@ function MatchRow({
                 by={row.artist_name}
               />
 
-              <div className="mt-3">
-                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">Match evidence</p>
+              <div className="mt-3 border-t border-[var(--color-hair)] pt-2">
+                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
+                  Why this fits
+                </p>
                 {row.why_fits.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  <div className="flex flex-wrap gap-1.5 mt-2">
                     {row.why_fits.map((evidence, index) => (
                       <span key={`${evidence}-${index}`} className="bg-[var(--color-paper-2)] px-2 py-0.5 font-mono text-[9px] text-[var(--color-ink-2)] rounded-sm">
                         {evidence}
@@ -544,7 +584,7 @@ function MatchRow({
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-1 font-serif text-[13px] text-[var(--color-ink-2)]">No citation was returned for this match.</p>
+                  <p className="mt-2 font-serif text-[13px] text-[var(--color-ink-2)]">No citation was returned for this match.</p>
                 )}
               </div>
 
@@ -555,8 +595,11 @@ function MatchRow({
                 </p>
               </div>
 
-              <div className="mt-3" role="group" aria-label={`Match feedback for ${row.title}`}>
-                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">Would you put this under the brief?</p>
+              <details className="mt-3" role="group" aria-label={`Match feedback for ${row.title}`}>
+                <summary className="cursor-pointer font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
+                  Help tune future matches
+                </summary>
+                <p className="mt-2 font-serif text-[13px] text-[var(--color-ink-2)]">Would you put this under the brief?</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <button
                     type="button"
@@ -591,79 +634,84 @@ function MatchRow({
                 {feedback && (
                   <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-rust)]">
                     {isDemo
-                      ? 'Feedback saved for guided-demo evaluation.'
-                      : 'Feedback saved to the match benchmark.'}
+                      ? "Feedback saved for guided-demo evaluation."
+                      : "Feedback saved to the match benchmark."}
                   </p>
                 )}
-              </div>
+              </details>
 
-              <div className="mt-3 border-t border-[var(--color-hair)] pt-3">
-                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
-                  {isDemo ? 'Guided demo preview' : 'Requestable'} · {row.license_availability.reason}
-                </p>
-                <p className="mt-1 font-mono text-[9px] text-[var(--color-ink-3)]">
-                  {isDemo ? 'Sample schedule' : 'Indicative platform quote'} · {row.license_quote.territory} · {row.license_quote.term_months} months
-                </p>
-                <p className="mt-1 font-mono text-[9px] text-[var(--color-ink-3)]">
-                  {row.licensing_evidence.status === 'sample_only' ? 'Sample only' : 'Rights review required'} · {row.licensing_evidence.summary}
-                </p>
-                <ul className="mt-1.5 space-y-0.5 font-mono text-[8px] leading-snug text-[var(--color-ink-3)]" aria-label="Outstanding licensing evidence">
-                  {row.licensing_evidence.outstanding.map((item) => (
-                    <li key={item.requirement}>• {item.description}</li>
-                  ))}
-                </ul>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => void onShortlist()}
-                    disabled={isShortlisted}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-sm transition-colors",
-                      isShortlisted
-                        ? "bg-[var(--color-rust)] text-[var(--color-paper)] opacity-90"
-                        : isDemo || isAuthenticated
-                          ? "bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-rust)]"
-                          : "border border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
-                    )}
-                  >
-                    {isShortlisted ? (
-                      <>
-                        <SuccessCheck active />
-                        Shortlisted
-                      </>
-                    ) : isDemo ? (
-                      "Save demo"
-                    ) : isAuthenticated ? (
-                      "Shortlist"
-                    ) : (
-                      "Sign in to shortlist"
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onLicenseClick}
-                    disabled={!!licenseRequest}
-                    className={cn(
-                      "font-mono text-[10px] uppercase tracking-[0.12em] border px-3 py-1.5 rounded-sm transition-colors disabled:opacity-60",
-                      showLicensePanel
-                        ? "border-[var(--color-rust)] text-[var(--color-rust)]"
-                        : isDemo || isAuthenticated
-                          ? "border-[var(--color-ink)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]"
-                          : "border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
-                    )}
-                  >
-                    {licenseRequest ? "License job open" : isDemo ? "Preview license flow" : isAuthenticated ? "Review license terms" : "Sign in to license"}
-                  </button>
-                  {isAuthenticated && (
-                    <Link
-                      href="/supervisor"
-                      className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] px-1 py-1.5 transition-colors"
+              <details open className="mt-3 border-t border-[var(--color-hair)] pt-3">
+                <summary className="cursor-pointer font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
+                  Rights &amp; licensing · {row.licensing_evidence.status === "sample_only" ? "sample only" : "review required"}
+                </summary>
+                <div className="pt-2">
+                  <p className="font-serif text-[13px] leading-snug text-[var(--color-ink-2)]">
+                    {isDemo ? "Illustrative schedule only." : "Indicative terms are available; rights review remains required before a license is confirmed."}
+                  </p>
+                  <p className="mt-1 font-mono text-[9px] text-[var(--color-ink-3)]">
+                    {isDemo ? "Sample schedule" : "Indicative platform quote"} · {row.license_quote.territory} · {row.license_quote.term_months} months
+                  </p>
+                  <p className="mt-1 font-mono text-[9px] text-[var(--color-ink-3)]">
+                    {row.licensing_evidence.summary}
+                  </p>
+                  <ul className="mt-1.5 space-y-0.5 font-mono text-[8px] leading-snug text-[var(--color-ink-3)]" aria-label="Outstanding licensing evidence">
+                    {row.licensing_evidence.outstanding.map((item) => (
+                      <li key={item.requirement}>• {item.description}</li>
+                    ))}
+                  </ul>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => void onShortlist()}
+                      disabled={isShortlisted}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-sm transition-colors",
+                        isShortlisted
+                          ? "bg-[var(--color-rust)] text-[var(--color-paper)] opacity-90"
+                          : isDemo || isAuthenticated
+                            ? "bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-rust)]"
+                            : "border border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
+                      )}
                     >
-                      Dashboard →
-                    </Link>
-                  )}
+                      {isShortlisted ? (
+                        <>
+                          <SuccessCheck active />
+                          Shortlisted
+                        </>
+                      ) : isDemo ? (
+                        "Save demo"
+                      ) : isAuthenticated ? (
+                        "Shortlist"
+                      ) : (
+                        "Sign in to shortlist"
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onLicenseClick}
+                      disabled={!!licenseRequest}
+                      className={cn(
+                        "font-mono text-[10px] uppercase tracking-[0.12em] border px-3 py-1.5 rounded-sm transition-colors disabled:opacity-60",
+                        showLicensePanel
+                          ? "border-[var(--color-rust)] text-[var(--color-rust)]"
+                          : isDemo || isAuthenticated
+                            ? "border-[var(--color-ink)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]"
+                            : "border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
+                      )}
+                    >
+                      {licenseRequest ? "License job open" : isDemo ? "Preview license flow" : isAuthenticated ? "Review terms" : "Sign in to review terms"}
+                    </button>
+                    {isAuthenticated && (
+                      <Link
+                        href="/supervisor"
+                        className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] px-1 py-1.5 transition-colors"
+                      >
+                        Workspace →
+                      </Link>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </details>
 
               {licenseRequest && (
                 <div className="mt-3 border border-[var(--color-rust)] bg-[var(--color-paper-2)] px-3 py-2.5">

@@ -133,11 +133,11 @@ export function LicensesSection({
 
   return (
     <Section
-      eyebrow="Settlement · ERC-8183"
-      title="Licenses"
+      eyebrow="Active work"
+      title="License requests"
       intro={
         isAuthenticated
-          ? "Each license is an Agentic Commerce job: escrow → deliverable → complete on Arc."
+          ? "Review requests that need settlement. Usage details are recorded with each request; confirm rights requirements from the originating track before you settle."
           : undefined
       }
       className="py-8"
