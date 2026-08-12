@@ -9,7 +9,7 @@
 | [search.md](./search.md) | Discover, embeddings, pgvector |
 | [guided-demo-and-billing.md](./guided-demo-and-billing.md) | Catalog provenance, guided demo, subscription and relayer seams |
 | [beachhead.md](./beachhead.md) | Ground-truth labels + benchmark |
-| [deploy.md](./deploy.md) | Git-only production deploy |
+| [deploy.md](./deploy.md) | Git-only production deploy and guarded schema operations |
 
 Agent conventions (mood tags, feed shape, NFT traces): [../AGENTS.md](../AGENTS.md).
 
