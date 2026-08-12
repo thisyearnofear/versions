@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAccount, useChainId, useSignTypedData } from "wagmi";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -17,6 +18,8 @@ import { track } from "@/lib/analytics";
 import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
 import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
 import { LICENSE_FEES, LICENSE_USAGE_TYPES, type LicenseUsageType } from "@/lib/pricing";
+import { searchByBriefPaid, SCORE_FEE_USDC, type ScorePaymentReceipt } from "@/lib/x402-score-client";
+import { shortHash, txUrl } from "@/lib/explorer";
 
 const BRIEF_REFINEMENTS = [
   { id: "no-vocals", label: "no vocals", instruction: "no vocals, instrumental" },
@@ -40,7 +43,15 @@ export function DiscoverView() {
 
 // ── Agent Trace (animated sequential reveal) ─────────────
 
-function AgentTrace({ searchTimeMs, trackCount }: { searchTimeMs: number | null; trackCount: number }) {
+function AgentTrace({
+  searchTimeMs,
+  trackCount,
+  payment,
+}: {
+  searchTimeMs: number | null;
+  trackCount: number;
+  payment?: ScorePaymentReceipt | null;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [agentIds, setAgentIds] = useState<Record<string, string>>({});
 
@@ -93,6 +104,7 @@ function AgentTrace({ searchTimeMs, trackCount }: { searchTimeMs: number | null;
         </div>
         <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
           {trackCount} tracks · {totalSec}s · Arc
+          {payment ? ` · x402 $${payment.amountUsdc}` : ""}
         </span>
         <span className="font-mono text-[9px] text-[var(--color-ink-3)] group-hover:text-[var(--color-rust)] transition-colors">
           {expanded ? "−" : "+"}
@@ -124,6 +136,23 @@ function AgentTrace({ searchTimeMs, trackCount }: { searchTimeMs: number | null;
                   <span className="text-[var(--color-rust)]">✓</span>
                 </motion.div>
               ))}
+              {payment && (
+                <div className="flex flex-wrap items-center gap-2 font-mono text-[9px] uppercase tracking-[0.1em] pt-1 text-[var(--color-ink-3)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-rust)]" />
+                  x402 score fee ${payment.amountUsdc}
+                  {payment.txHash && (
+                    <a
+                      href={txUrl(payment.txHash)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-[var(--color-rust)]"
+                    >
+                      {shortHash(payment.txHash)} ↗
+                    </a>
+                  )}
+                  {payment.mock ? " · mock" : ""}
+                </div>
+              )}
               <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.1em] pt-1 text-[var(--color-ink-3)]">
                 <span className="w-1.5 h-1.5 rounded-full border border-[var(--color-rust)]" />
                 License = ERC-8183 job · USDC escrow · finality {"<"}1s
@@ -141,6 +170,9 @@ function AgentTrace({ searchTimeMs, trackCount }: { searchTimeMs: number | null;
 function MatchSearch() {
   const { showToast } = useToast();
   const { isAuthenticated, requireAuth } = useSupervisorAuth();
+  const { isConnected } = useAccount();
+  const chainId = useChainId();
+  const { signTypedDataAsync } = useSignTypedData();
   const searchParams = useSearchParams();
   const [brief, setBrief] = useState("");
   const [loading, setLoading] = useState(false);
@@ -149,24 +181,61 @@ function MatchSearch() {
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [refinements, setRefinements] = useState<string[]>([]);
   const [shortlistedIds, setShortlistedIds] = useState<Set<string>>(new Set());
+  const [payment, setPayment] = useState<ScorePaymentReceipt | null>(null);
+  const [preferPaid, setPreferPaid] = useState(true);
 
   useEffect(() => {
     const fromUrl = searchParams.get("brief");
     if (fromUrl) setBrief(fromUrl);
   }, [searchParams]);
 
-  const runSearch = useCallback(async (text: string) => {
+  const runSearch = useCallback(async (text: string, opts?: { paid?: boolean }) => {
     const trimmed = text.trim();
     if (trimmed.length < 3 || trimmed.length > 500) return;
     setLoading(true);
     setSubmitAttempted(true);
     setSearchTimeMs(null);
-    track("brief_search", { len: trimmed.length });
+    track("brief_search", { len: trimmed.length, paid: !!opts?.paid });
     const t0 = performance.now();
     try {
+      const usePaid = !!opts?.paid && isAuthenticated && isConnected && preferPaid;
+      if (usePaid) {
+        try {
+          const res = await searchByBriefPaid({
+            brief: trimmed,
+            limit: 20,
+            chainId: chainId || 5042002,
+            signTypedDataAsync: signTypedDataAsync as never,
+          });
+          setSearchTimeMs(Math.round(performance.now() - t0));
+          setResults(res);
+          setPayment(res.payment);
+          if (res.rows.length === 0) {
+            showToast("No matches — try a broader brief.", "info");
+          } else {
+            showToast(
+              `Agents scored · $${SCORE_FEE_USDC} USDC${res.payment.mock ? " (mock)" : ""}`,
+              "success",
+              2500,
+            );
+          }
+          void apiClient.logSearch({ briefText: trimmed, resultsCount: res.total }).catch(() => {});
+          return;
+        } catch (err) {
+          const msg = (err as Error).message || "";
+          // User rejected signature or wallet issue — fall back to free search.
+          if (/reject|denied|cancel/i.test(msg)) {
+            showToast("Signature skipped — running free search", "info", 2500);
+          } else {
+            showToast(`Paid score unavailable — free search. ${msg}`, "info", 3000);
+          }
+        }
+      }
+
       const res = await apiClient.searchByBrief({ brief: trimmed, limit: 20 });
       setSearchTimeMs(Math.round(performance.now() - t0));
       setResults(res);
+      setPayment(null);
       if (res.rows.length === 0) {
         showToast("No matches — try a broader brief.", "info");
       }
@@ -174,14 +243,16 @@ function MatchSearch() {
     } catch (err) {
       showToast(`Search failed: ${(err as Error).message}`, "error");
       setResults(null);
+      setPayment(null);
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, isAuthenticated, isConnected, preferPaid, chainId, signTypedDataAsync]);
 
   useEffect(() => {
+    // URL / auto-run stays free (guest-friendly). Paid scoring is opt-in via Match.
     if (brief.trim().length >= 3 && !submitAttempted && !results) {
-      void runSearch(brief);
+      void runSearch(brief, { paid: false });
     }
   }, [brief, runSearch, submitAttempted, results]);
 
@@ -204,7 +275,7 @@ function MatchSearch() {
     (instruction: string) => {
       const next = [...refinements, instruction];
       setRefinements(next);
-      void runSearch([brief.trim(), ...next].filter(Boolean).join(" · "));
+      void runSearch([brief.trim(), ...next].filter(Boolean).join(" · "), { paid: false });
     },
     [brief, refinements, runSearch],
   );
@@ -212,12 +283,13 @@ function MatchSearch() {
     (instruction: string) => {
       const next = refinements.filter((r) => r !== instruction);
       setRefinements(next);
-      void runSearch([brief.trim(), ...next].filter(Boolean).join(" · "));
+      void runSearch([brief.trim(), ...next].filter(Boolean).join(" · "), { paid: false });
     },
     [brief, refinements, runSearch],
   );
 
   const hasResults = results && results.rows.length > 0 && !loading;
+  const canPayAgents = isAuthenticated && isConnected && preferPaid;
 
   return (
     <section>
@@ -235,13 +307,32 @@ function MatchSearch() {
           />
           <button
             type="button"
-            onClick={() => void runSearch(brief)}
+            onClick={() => {
+              if (canPayAgents) {
+                void runSearch(brief, { paid: true });
+              } else if (isAuthenticated && !isConnected) {
+                requireAuth();
+              } else {
+                void runSearch(brief, { paid: false });
+              }
+            }}
             disabled={loading || brief.trim().length < 3}
             className="self-end bg-[var(--color-ink)] px-5 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-paper)] hover:bg-[var(--color-rust)] transition-colors disabled:opacity-40"
           >
-            {loading ? "..." : "Match"}
+            {loading ? "..." : canPayAgents ? `Match · $${SCORE_FEE_USDC}` : "Match"}
           </button>
         </div>
+        {isAuthenticated && isConnected && (
+          <label className="mt-2 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] cursor-pointer">
+            <input
+              type="checkbox"
+              checked={preferPaid}
+              onChange={(e) => setPreferPaid(e.target.checked)}
+              className="accent-[var(--color-rust)]"
+            />
+            Pay Market agent ${SCORE_FEE_USDC} USDC via x402 for scored match
+          </label>
+        )}
         {/* Example chips — only when no results yet */}
         {!hasResults && (
           <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -252,7 +343,7 @@ function MatchSearch() {
               <button
                 key={e.id}
                 type="button"
-                onClick={() => { setBrief(e.brief); void runSearch(e.brief); }}
+                onClick={() => { setBrief(e.brief); void runSearch(e.brief, { paid: false }); }}
                 className="border border-[var(--color-hair-strong)] px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide text-[var(--color-ink-2)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
               >
                 {e.label}
@@ -271,7 +362,7 @@ function MatchSearch() {
               className="inline-block w-2.5 h-2.5 bg-[var(--color-rust)] rounded-full"
             />
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-ink-2)]">
-              3 agents scoring...
+              {canPayAgents ? "x402 · 3 agents scoring..." : "3 agents scoring..."}
             </span>
           </div>
         </div>
@@ -279,7 +370,7 @@ function MatchSearch() {
 
       {hasResults && (
         <div>
-          <AgentTrace searchTimeMs={searchTimeMs} trackCount={results.rows.length} />
+          <AgentTrace searchTimeMs={searchTimeMs} trackCount={results.rows.length} payment={payment} />
 
           {/* Refinement chips — appear after results */}
           <div className="flex flex-wrap items-center gap-2 mb-5">

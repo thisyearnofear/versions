@@ -67,6 +67,9 @@ ground-truth data incumbents can't. See **Strategy & positioning** below.
 - **x402 nanopayments**: listeners tip artists as little as 1 lepton
   ($0.000001) using the x402 protocol with EIP-712 signatures, batched
   into on-chain USDC transfers with inline settlement confirmation.
+  Signed-in supervisors can also pay **$0.05 USDC via x402** to run
+  3-agent brief scoring (`POST /api/x402/score`) — AI work as a
+  micropayment, not only tips. Guests keep free search.
 
 ### Quick start for judges (zero dependencies)
 
