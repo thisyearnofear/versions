@@ -127,8 +127,8 @@ restore_drill() {
   # Compare the recovery target to the live source without outputting either
   # database URL or application data. These checks make a stale partial archive
   # fail the drill instead of reporting a misleading pass.
-  source_schema="$(psql "$DATABASE_URL" -XAtc "SELECT COALESCE(string_agg(table_name || '.' || column_name || ':' || data_type || ':' || is_nullable, E'\\n' ORDER BY table_name, ordinal_position), '') FROM information_schema.columns WHERE table_schema = 'public';")"
-  source_constraints="$(psql "$DATABASE_URL" -XAtc "SELECT COALESCE(string_agg(conrelid::regclass::text || ':' || contype::text || ':' || pg_get_constraintdef(oid), E'\\n' ORDER BY conrelid::regclass::text, conname), '') FROM pg_constraint WHERE connamespace = 'public'::regnamespace;")"
+  source_schema="$(psql "$DATABASE_URL" -XAtc "SELECT COALESCE(string_agg(table_name || '.' || column_name || ':' || data_type || ':' || is_nullable, E'\\n' ORDER BY table_name COLLATE \"C\", ordinal_position), '') FROM information_schema.columns WHERE table_schema = 'public';")"
+  source_constraints="$(psql "$DATABASE_URL" -XAtc "SELECT COALESCE(string_agg(conrelid::regclass::text || ':' || contype::text || ':' || pg_get_constraintdef(oid), E'\\n' ORDER BY conrelid::regclass::text COLLATE \"C\", conname COLLATE \"C\"), '') FROM pg_constraint WHERE connamespace = 'public'::regnamespace;")"
   source_counts="$(psql "$DATABASE_URL" -XAtc "SELECT (SELECT count(*) FROM licenses)::text || '|' || (SELECT count(*) FROM published_versions)::text || '|' || (SELECT count(*) FROM match_feedback)::text;")"
 
   cleanup() {
@@ -164,9 +164,9 @@ restore_drill() {
     psql -U restore -d versions_restore -XAtc "SELECT extversion FROM pg_extension WHERE extname = 'vector'")"
   [ -n "$extension" ] || fail "restore completed but pgvector is missing from the isolated database"
   restored_schema="$(docker exec -e PGPASSWORD="$password" "$container_id" \
-    psql -U restore -d versions_restore -XAtc "SELECT COALESCE(string_agg(table_name || '.' || column_name || ':' || data_type || ':' || is_nullable, E'\\n' ORDER BY table_name, ordinal_position), '') FROM information_schema.columns WHERE table_schema = 'public';")"
+    psql -U restore -d versions_restore -XAtc "SELECT COALESCE(string_agg(table_name || '.' || column_name || ':' || data_type || ':' || is_nullable, E'\\n' ORDER BY table_name COLLATE \"C\", ordinal_position), '') FROM information_schema.columns WHERE table_schema = 'public';")"
   restored_constraints="$(docker exec -e PGPASSWORD="$password" "$container_id" \
-    psql -U restore -d versions_restore -XAtc "SELECT COALESCE(string_agg(conrelid::regclass::text || ':' || contype::text || ':' || pg_get_constraintdef(oid), E'\\n' ORDER BY conrelid::regclass::text, conname), '') FROM pg_constraint WHERE connamespace = 'public'::regnamespace;")"
+    psql -U restore -d versions_restore -XAtc "SELECT COALESCE(string_agg(conrelid::regclass::text || ':' || contype::text || ':' || pg_get_constraintdef(oid), E'\\n' ORDER BY conrelid::regclass::text COLLATE \"C\", conname COLLATE \"C\"), '') FROM pg_constraint WHERE connamespace = 'public'::regnamespace;")"
   restored_counts="$(docker exec -e PGPASSWORD="$password" "$container_id" \
     psql -U restore -d versions_restore -XAtc "SELECT (SELECT count(*) FROM licenses)::text || '|' || (SELECT count(*) FROM published_versions)::text || '|' || (SELECT count(*) FROM match_feedback)::text;")"
 
