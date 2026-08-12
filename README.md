@@ -795,6 +795,19 @@ curl http://localhost:3000/api/v1/embeddings/backfill
   the in-memory limiter runs per-instance. Set both env vars to switch to
   globally-coherent rate limiting across serverless instances.
 
+## Production deploy
+
+Git-only deploy to the Vultr box (`versions.persidian.com`). **Do not scp
+source** into the server checkout — always `git pull --ff-only` + docker rebuild.
+
+```bash
+git push origin master
+./scripts/deploy-remote.sh          # default: ssh nuncio-vultr
+```
+
+Full runbook: [`scripts/DEPLOY.md`](scripts/DEPLOY.md) (preflight checks, secrets
+hygiene, rollback, monitoring).
+
 ## Deploy runbook — Legacy placement_briefs purge
 
 Commit `6f48d190` repurposed the four NOT NULL JSONB columns on

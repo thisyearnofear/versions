@@ -9,9 +9,9 @@
 #   A) Coolify UI (recommended, matches how your other projects are managed):
 #        New Resource -> Dockerfile -> point at the repo -> set env vars ->
 #        Coolify generates its own Traefik labels + domain.
-#   B) Manual compose on the box:
-#        scp docker-compose.yml + .env to nuncio-vultr, then
-#        docker compose up -d --build
+#   B) Manual compose on the box (see scripts/DEPLOY.md):
+#        git pull on the server, then ./scripts/deploy.sh
+#        Never scp application source — git pull only.
 #   (If you use B, uncomment the env_file and Traefik labels below and set
 #    the DOMAIN + a unique router/network name in the labels.)
 
