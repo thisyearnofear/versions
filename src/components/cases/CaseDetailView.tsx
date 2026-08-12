@@ -113,6 +113,12 @@ export function CaseDetailView({ id }: { id: string }) {
             <span className="text-[var(--color-ink-3)]">
               {c.ranked_count} ranked · {c.shortlist_count} shortlisted
             </span>
+            {c.license_id && (
+              <>
+                <span className="text-[var(--color-ink-3)]">·</span>
+                <span className="text-[var(--color-rust)]">license linked</span>
+              </>
+            )}
           </div>
           <h2 className="mt-1 font-serif text-2xl font-black leading-tight text-[var(--color-ink)]">
             {c.brief_text}

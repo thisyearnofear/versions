@@ -8,6 +8,7 @@ import { services, successResponse, errorResponse, requestIdFor, parsePositiveIn
 import { resolveAuthenticatedSupervisorIdentity } from '@/lib/supervisor-identity';
 import { LicenseCreateSchema } from '@/lib/validation';
 import { licenseDeliverableHash } from '@/adapters/erc8183';
+import { log } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,18 @@ export async function POST(req: NextRequest) {
   if (!license) {
     return errorResponse(requestId, 404, 'VERSION_NOT_FOUND', 'No published take with that id.');
   }
+
+  // MODULAR: attach the real license to the supervisor's matching placement
+  // case and enter rights_review — best-effort so it never blocks licensing.
+  // rights_review here means "a request + evidence packet is prepared"; it
+  // does NOT claim clearance (kept honest per the strategy).
+  void svc.cases
+    .linkLicenseForOutcome(identity.wallet, {
+      briefText: license.brief_text,
+      submissionId: license.submission_id,
+      licenseId: license.id,
+    })
+    .catch((err) => log.warn('case-license link failed (best-effort)', { request_id: requestId, err: (err as Error).message }));
 
   // MODULAR: open an ERC-8183 job for this license (Open state).
   // Settlement (fund → submit → complete) happens on POST /:id/pay.

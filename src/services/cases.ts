@@ -11,7 +11,7 @@
 // resume a case.
 
 import { randomUUID } from "crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../lib/db";
 import {
   placementCases as casesTable,
@@ -115,6 +115,13 @@ export interface CasesService {
     wallet: string,
     id: string,
   ): Promise<{ case: PlacementCaseRow; events: CaseEventRow[] } | null>;
+  /** Link a real license to the matching case and enter rights_review. */
+  linkLicenseForOutcome(
+    wallet: string,
+    input: { briefText: string; submissionId: string; licenseId: string },
+  ): Promise<PlacementCaseRow | null>;
+  /** Find the case that owns a license (for settlement transitions). */
+  getCaseByLicense(wallet: string, licenseId: string): Promise<PlacementCaseRow | null>;
 }
 
 // The named steps an agent owns on a fresh placement brief. Order and
@@ -517,6 +524,66 @@ async executeCommand(wallet, caseId, command) {
         .where(eq(caseEventsTable.caseId, id))
         .orderBy(desc(caseEventsTable.createdAt));
       return { case: rowToCase(row), events: events.map(rowToEvent) };
+    },
+
+    async linkLicenseForOutcome(wallet, { briefText, submissionId, licenseId }) {
+      const w = wallet.toLowerCase();
+      const candidates = await db
+        .select()
+        .from(casesTable)
+        .where(
+          and(
+            eq(casesTable.supervisorWallet, w),
+            sql`${casesTable.status} <> 'archived'`,
+            isNull(casesTable.licenseId),
+          ),
+        )
+        .orderBy(desc(casesTable.lastActivity))
+        .limit(20);
+      // Prefer the exact-brief match; fall back to a case that shortlisted this take.
+      const byBrief = candidates.find((c) => c.briefText === briefText);
+      const byShortlist = candidates.find((c) =>
+        ((c.evidence as PlaceCaseEvidence).shortlistSubmissionIds ?? []).includes(submissionId),
+      );
+      const target = byBrief ?? byShortlist;
+      if (!target) return null;
+      if (!["open", "awaiting_decision", "rights_review"].includes(target.status)) return null;
+
+      const plan = (target.agentPlan as PlaceCaseStep[]).map((s) =>
+        s.key === "decision"
+          ? { ...s, done: true, current: false }
+          : s.key === "rights"
+            ? { ...s, current: true }
+            : s,
+      );
+      const now = new Date();
+      const [row] = await db
+        .update(casesTable)
+        .set({ licenseId, status: "rights_review", objective: "rights review", agentPlan: plan, lastActivity: now, updatedAt: now })
+        .where(eq(casesTable.id, target.id))
+        .returning();
+      await db.insert(caseEventsTable).values({
+        id: randomUUID(),
+        caseId: target.id,
+        kind: "rights_review",
+        detail: { licenseId, prepared: true, cleared: false, note: "license request prepared; rights are NOT cleared" },
+        createdAt: now,
+      });
+      return rowToCase(row!);
+    },
+
+    async getCaseByLicense(wallet, licenseId) {
+      const [row] = await db
+        .select()
+        .from(casesTable)
+        .where(
+          and(
+            eq(casesTable.licenseId, licenseId),
+            eq(casesTable.supervisorWallet, wallet.toLowerCase()),
+          ),
+        )
+        .limit(1);
+      return row ? rowToCase(row) : null;
     },
   };
 }

@@ -214,4 +214,49 @@ it('shortlist rejects a foreign wallet (ownership enforced)', async () => {
     if (res.ok) return;
     expect(res.code).toBe('NOT_FOUND');
   });
+
+  it('linkLicenseForOutcome links a real license to the shortlist case, then settlement progresses', async () => {
+    const cases = createCasesService();
+    const c = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 42 });
+    const sub = 'sub-link';
+    await seedPublishedTake(sub);
+    await cases.addShortlist({ supervisorWallet: WALLET, caseId: c.id, submissionId: sub, fitScore: 0.8, rank: 1 });
+
+    await _getTestDb().insert(licenses).values({
+      id: 'lic-link',
+      supervisorWallet: WALLET,
+      submissionId: sub,
+      briefHash: 'h',
+      briefText: BRIEF_A,
+      usageType: 'sync_tv_film',
+      feeUsdc: '250',
+      status: 'pending_payment',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).onConflictDoNothing();
+
+    const linked = await cases.linkLicenseForOutcome(WALLET, { briefText: BRIEF_A, submissionId: sub, licenseId: 'lic-link' });
+    expect(linked).not.toBeNull();
+    if (!linked) return;
+    expect(linked.license_id).toBe('lic-link');
+    expect(linked.status).toBe('rights_review');
+
+    const byLicense = await cases.getCaseByLicense(WALLET, 'lic-link');
+    expect(byLicense?.id).toBe(c.id);
+
+    // Approval -> ready -> (pay succeeds) -> settled.
+    const ready = await cases.executeCommand(WALLET, c.id, { type: 'mark_settlement_ready' });
+    expect(ready.ok).toBe(true);
+    if (!ready.ok) return;
+    expect(ready.row.status).toBe('settlement_pending');
+
+    // A failed/retried payment (license still pending) cannot settle the case.
+    const notYetPaid = await cases.executeCommand(WALLET, c.id, { type: 'record_settlement' });
+    expect(notYetPaid.ok).toBe(false);
+
+    await _getTestDb().update(licenses).set({ status: 'paid' }).where(eq(licenses.id, 'lic-link'));
+    const settled = await cases.executeCommand(WALLET, c.id, { type: 'record_settlement' });
+    expect(settled.ok).toBe(true);
+    if (settled.ok) expect(settled.row.status).toBe('settled');
+  });
 });

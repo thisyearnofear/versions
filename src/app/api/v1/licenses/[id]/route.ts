@@ -45,6 +45,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   // Claim the pending row before touching ERC-8183 or USDC. The conditional
   // update makes concurrent clicks idempotent: only one request can move a
   // license from pending_payment to settling.
+  // MODULAR: find the placement case this license is attached to (if any) so
+  // settlement can advance it idempotently from the real pay path.
+  const linkedCase = await svc.cases.getCaseByLicense(ida.identity!.wallet, id);
+
   const claim = await svc.supervisor.beginLicenseSettlement(id, ida.identity!.wallet);
   if (!claim) {
     const current = await svc.supervisor.getLicense(id, ida.identity!.wallet);
@@ -54,6 +58,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return errorResponse(requestId, 409, 'SETTLEMENT_IN_PROGRESS', 'This license is already being settled.');
   }
   const before = claim.license;
+
+  // The user is approving — the real license workflow is ready, so the linked
+  // case may prepare for settlement. Best-effort and idempotent (only allowed
+  // from rights_review / settlement_pending).
+  if (linkedCase) {
+    void svc.cases
+      .executeCommand(ida.identity!.wallet, linkedCase.id, { type: 'mark_settlement_ready' })
+      .catch(() => {});
+  }
 
   try {
     const client = svc.config.platformWallet ?? ida.identity!.wallet;
@@ -124,6 +137,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       'SETTLEMENT_CLAIM_LOST',
       'Settlement completed externally but its lease is no longer active. Reconciliation is required.',
     );
+  }
+
+  // The license is PAID. Only from this successful path may the linked case
+  // record settlement — a failed or retried payment can never do this.
+  if (linkedCase) {
+    void svc.cases
+      .executeCommand(ida.identity!.wallet, linkedCase.id, { type: 'record_settlement' })
+      .catch(() => {});
   }
 
   const settlementTimestamp = new Date().toISOString();
