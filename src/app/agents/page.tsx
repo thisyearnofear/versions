@@ -1,4 +1,7 @@
 import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
+import { JourneyRail } from "@/components/ui/JourneyRail";
+import { PageIntro } from "@/components/ui/PageIntro";
 import { AgentMonitor } from "@/components/curation/AgentMonitor";
 import { EconomyTicker } from "@/components/economy/EconomyTicker";
 import { FadeIn } from "@/components/ui/FadeIn";
@@ -11,16 +14,15 @@ export default function AgentsPage() {
         <SiteHeader active="agents" />
         <main className="flex-1 px-6 md:px-12 py-12 max-w-5xl mx-auto w-full">
           <FadeIn>
-            <h2 className="font-serif text-3xl md:text-4xl font-black tracking-tight text-center mb-2">
-              Agents.
-            </h2>
+            <PageIntro
+              eyebrow="Agent curation"
+              title="Watch consensus form."
+              intro="Three specialized agents review every track, explain the verdict, and publish when the gate clears."
+            >
+              <JourneyRail variant="artist" active="Review" />
+            </PageIntro>
           </FadeIn>
-          <FadeIn delay={0.1}>
-            <p className="font-serif text-base text-[var(--color-ink-3)] text-center mb-10">
-              Three AI agents review every track. No human in the loop.
-            </p>
-          </FadeIn>
-          <FadeIn delay={0.2}>
+          <FadeIn delay={0.15}>
             <div className="grid lg:grid-cols-[1fr_360px] gap-12 items-start">
               <AgentMonitor />
               <aside className="lg:sticky lg:top-8">
@@ -30,6 +32,7 @@ export default function AgentsPage() {
           </FadeIn>
         </main>
       </div>
+      <SiteFooter />
     </ToastProvider>
   );
 }

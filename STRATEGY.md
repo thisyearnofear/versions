@@ -38,6 +38,21 @@ We sell the **outcome** — pre-cleared, attributed, micro-settled licenses —
 not a raw similarity API. That outcome is what incumbents can't reproduce
 cheaply.
 
+### Product expression: the supervisor decision workspace
+
+The supervisor surface must present a **decision and an executable next
+step**, not a catalog list with a score. For every recommendation, make the
+matching evidence, the human approval gate, and the relevant license terms
+legible in the workflow. The wallet and settlement rail remain proof and
+execution infrastructure — never the front door to getting a useful match.
+
+Trust is part of the product. We show named agent verdicts, clearance claims,
+and settlement status only when the corresponding result-level evidence
+exists and is auditable. Until then, describe the actual mechanism (for
+example, catalog matching evidence) rather than simulating a multi-agent
+trace. Supervisor good/wrong-fit feedback is a first-class interaction: it
+creates the brief-to-outcome ground truth that compounds into the moat.
+
 ## 3. Why incumbents are disincentivized (innovator's dilemma)
 
 Christensen: incumbents overweight sustaining tech and under-invest in

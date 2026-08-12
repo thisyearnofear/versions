@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 import { ListenerDashboard } from "@/components/listener/ListenerDashboard";
 import { ToastProvider } from "@/components/ui/Toast";
 
@@ -29,6 +30,7 @@ export default async function ListenerPage({
           </Suspense>
         </main>
       </div>
+      <SiteFooter />
     </ToastProvider>
   );
 }

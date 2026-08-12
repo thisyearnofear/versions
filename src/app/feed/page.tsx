@@ -1,4 +1,7 @@
 import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
+import { JourneyRail } from "@/components/ui/JourneyRail";
+import { PageIntro } from "@/components/ui/PageIntro";
 import { FeedView } from "@/components/feed/FeedView";
 import { FadeIn } from "@/components/ui/FadeIn";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -24,21 +27,21 @@ export default async function FeedPage() {
         <main className="flex-1">
           <Container className="py-10">
             <FadeIn>
-              <h2 className="mb-2 text-center font-serif text-3xl font-black tracking-tight md:text-4xl">
-                The feed.
-              </h2>
+              <PageIntro
+                eyebrow="Published catalog"
+                title="The tracks are cleared."
+                intro="Browse AI-reviewed versions and move from a strong match to a license-ready take."
+              >
+                <JourneyRail variant="supervisor" active="Match" />
+              </PageIntro>
             </FadeIn>
-            <FadeIn delay={0.1}>
-              <p className="mb-10 text-center font-serif text-base text-[var(--color-ink-2)]">
-                AI-reviewed tracks, cleared for sync.
-              </p>
-            </FadeIn>
-            <FadeIn delay={0.2}>
+            <FadeIn delay={0.15}>
               <FeedView initialRows={initialRows} />
             </FadeIn>
           </Container>
         </main>
       </div>
+      <SiteFooter />
     </ToastProvider>
   );
 }

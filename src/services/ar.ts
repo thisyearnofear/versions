@@ -581,9 +581,24 @@ export function createArService({
         .set({ listenerTxHash: listenerTx, artistTxHash: artistTx, status: 'settled' })
         .where(eq(playEventsTable.id, playId));
 
-      // Economy ticker: pay-per-play settled (listener → A&R → artist).
+      const settlementTimestamp = new Date().toISOString();
+      // Canonical receipt stream: the artist payout settled.
+      emit('settlement-event', {
+        type: 'settled',
+        source: 'play',
+        settlementId: playId,
+        versionId,
+        toWallet: version.artistWallet,
+        artistWallet: version.artistWallet,
+        amountUsdc: ARTIST_PAYOUT_USDC,
+        txHash: artistTx,
+        mock: artistMock,
+        timestamp: settlementTimestamp,
+      });
+      // Backward-compatible economy activity for existing clients.
       emit('economy-event', {
         kind: 'play',
+        settlementId: playId,
         versionId,
         playType,
         toWallet: version.artistWallet,
@@ -591,7 +606,7 @@ export function createArService({
         listenerTxHash: listenerTx,
         artistTxHash: artistTx,
         mock: artistMock,
-        timestamp: new Date().toISOString(),
+        timestamp: settlementTimestamp,
       });
 
       return {

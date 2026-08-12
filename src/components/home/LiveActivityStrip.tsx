@@ -6,9 +6,8 @@
 // that the platform is alive. Falls back gracefully to a "quiet"
 // state with zero activity messaging.
 //
-// No wallet connection required. Polls once on mount; the SSE
-// connection in AgentMonitor / FeedView handles live updates on
-// those pages. The home page just needs a snapshot, not a stream.
+// No wallet connection required. Loads on mount and refreshes from
+// the shared SSE stream so a demo submission visibly lands here.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -31,7 +30,11 @@ export function LiveActivityStrip() {
 
   useEffect(() => {
     let cancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let requestVersion = 0;
+
     async function load() {
+      const version = ++requestVersion;
       // MODULAR: allSettled so a queue failure doesn't nuke the
       // published column (and vice versa). Each result is mapped
       // independently.
@@ -39,7 +42,7 @@ export function LiveActivityStrip() {
         apiClient.getQueue(4),
         apiClient.getFeed({ limit: 4 }),
       ]);
-      if (cancelled) return;
+      if (cancelled || version !== requestVersion) return;
       const queue =
         queueResult.status === "fulfilled" && Array.isArray(queueResult.value)
           ? queueResult.value
@@ -54,9 +57,36 @@ export function LiveActivityStrip() {
         error: bothFailed,
       });
     }
+
     void load();
+    const es = new EventSource("/api/events");
+    const refresh = () => {
+      if (refreshTimer) return;
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        void load();
+      }, 250);
+    };
+    // Queue updates cover submit and manual curation transitions.
+    // Autonomous review publishes through the consensus stream instead.
+    // Coalesce the burst from one demo so the homepage stays calm.
+    es.addEventListener("queue-update", refresh);
+    es.addEventListener("agent-stream", (message) => {
+      try {
+        const event = JSON.parse((message as MessageEvent).data) as {
+          type?: string;
+          published?: boolean;
+        };
+        if (event.type === "consensus" && event.published) refresh();
+      } catch {
+        /* malformed event — ignore */
+      }
+    });
+
     return () => {
       cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      es.close();
     };
   }, []);
 

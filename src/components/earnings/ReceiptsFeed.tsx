@@ -16,6 +16,7 @@ import {
 import { SOURCE_LABELS, formatReceiptAmount, receiptMatchesWallet } from "@/lib/receipts";
 import { shortAddress, shortHash, txUrl } from "@/lib/explorer";
 import { cn } from "@/lib/utils";
+import { useSettlementEvents } from "@/lib/use-settlement-events";
 
 const PAGE_SIZE = 20;
 const SOURCES: ReceiptSource[] = ["split", "tip", "play"];
@@ -51,6 +52,7 @@ export function ReceiptsFeed({ wallet }: { wallet: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetchPage(0, source, false).finally(() => {
       if (!cancelled) setLoading(false);
@@ -60,8 +62,27 @@ export function ReceiptsFeed({ wallet }: { wallet: string }) {
     };
   }, [fetchPage, source]);
 
-  // Live refresh: any bus event that pays this wallet re-fetches page 0
-  // (debounced — tip batches fire several events in a burst).
+  const queueRefresh = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      void fetchPage(0, source, false);
+    }, 500);
+  }, [fetchPage, source]);
+
+  // Canonical settlement stream: artist receipt sources represented by
+  // this feed (tips, splits, plays) re-fetch page 0 without opening
+  // another EventSource. License receipts render in LicensesSection,
+  // whose supervisor-scoped list has the ERC-8183 context this feed lacks.
+  useSettlementEvents((event) => {
+    if (
+      event.source !== "license" &&
+      receiptMatchesWallet(event as unknown as Record<string, unknown>, wallet)
+    ) {
+      queueRefresh();
+    }
+  });
+
+  // Compatibility refresh for older event producers and verified tips.
   useEffect(() => {
     let es: EventSource | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
@@ -74,10 +95,7 @@ export function ReceiptsFeed({ wallet }: { wallet: string }) {
       } catch {
         return;
       }
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        void fetchPage(0, source, false);
-      }, 500);
+      queueRefresh();
     };
 
     const connect = () => {
@@ -98,7 +116,7 @@ export function ReceiptsFeed({ wallet }: { wallet: string }) {
       if (retry) clearTimeout(retry);
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [wallet, fetchPage, source]);
+  }, [wallet, fetchPage, source, queueRefresh]);
 
   const totalRows = data?.total_rows ?? 0;
   const hasMore = rows.length < totalRows;

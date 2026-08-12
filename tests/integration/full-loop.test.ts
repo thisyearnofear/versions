@@ -9,6 +9,15 @@
 
 const { initTestDb: _initTestDb, getTestDb: _getTestDb, resetTestDb: _resetTestDb } = await import('../helpers/db');
 const { vi } = await import('vitest');
+
+// This suite exercises deterministic mock-first service behavior. Do not let
+// developer-machine provider credentials alter the registry constructed below.
+vi.stubEnv('OPENROUTER_API_KEY', '');
+vi.stubEnv('LLM_API_KEY', '');
+vi.stubEnv('LLM_API_URL', '');
+vi.stubEnv('EMBEDDING_API_URL', '');
+vi.stubEnv('EMBEDDING_API_KEY', '');
+
 vi.mock('@/lib/db', () => ({
   get db() { return _getTestDb(); },
 }));

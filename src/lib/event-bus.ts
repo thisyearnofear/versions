@@ -11,6 +11,7 @@ export type EventName =
   | 'playlist-update'
   | 'tip-received'
   | 'economy-event'
+  | 'settlement-event'
   | 'agent-stream';
 
 export interface FeedUpdateEvent {
@@ -66,7 +67,8 @@ export interface TipReceivedEvent {
 // identity, USDC amounts, and ArcScan links. All fields JSON-safe; only
 // `kind` and `timestamp` are required.
 export interface EconomyEvent {
-  kind: 'review' | 'tip' | 'tip_batch_settled' | 'leg_settled' | 'play';
+  kind: 'review' | 'tip' | 'tip_batch_settled' | 'leg_settled' | 'license_settled' | 'play';
+  settlementId?: string;
   timestamp: string;
   // context
   submissionId?: string;
@@ -91,6 +93,58 @@ export interface EconomyEvent {
   listenerTxHash?: string | null;
   settledCount?: number;
   mock?: boolean;
+}
+
+// MODULAR: canonical money-settlement event. This is deliberately
+// separate from `economy-event`: reviews and verified-payment activity
+// can be noisy, while this stream is the one source of truth for a
+// receipt-worthy state change. Client dashboards subscribe once and
+// receive the same shape for licenses, tips, payout splits, and plays.
+export interface SettlementEvent {
+  type: 'settled';
+  source: 'license' | 'tip' | 'split' | 'play';
+  settlementId: string;
+  timestamp: string;
+  amountUsdc: string;
+  txHash: string | null;
+  mock: boolean;
+  toWallet?: string;
+  artistWallet?: string;
+  tipperWallet?: string;
+  submissionId?: string;
+  versionId?: string;
+  title?: string | null;
+  artistName?: string | null;
+  recipientRole?: string;
+  jobId?: string | null;
+  settledCount?: number;
+}
+
+/** Normalize the shared settlement stream into the ticker/stats shape. */
+export function settlementToEconomyEvent(event: SettlementEvent): EconomyEvent {
+  return {
+    kind:
+      event.source === 'license'
+        ? 'license_settled'
+        : event.source === 'tip'
+          ? 'tip_batch_settled'
+          : event.source === 'split'
+            ? 'leg_settled'
+            : 'play',
+    settlementId: event.settlementId,
+    timestamp: event.timestamp,
+    amountUsdc: event.amountUsdc,
+    txHash: event.txHash,
+    mock: event.mock,
+    toWallet: event.toWallet ?? event.artistWallet,
+    fromWallet: event.tipperWallet,
+    submissionId: event.submissionId,
+    versionId: event.versionId,
+    title: event.title,
+    artistName: event.artistName,
+    recipientRole: event.recipientRole,
+    settledCount: event.settledCount,
+  };
 }
 
 // MODULAR: per-agent review lifecycle events for the streaming reasoning
@@ -148,6 +202,7 @@ export type BusEvent =
   | PlaylistUpdateEvent
   | TipReceivedEvent
   | EconomyEvent
+  | SettlementEvent
   | AgentStreamEvent;
 
 type Handler = (data: BusEvent) => void;

@@ -1,4 +1,6 @@
 import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
+import { PageIntro } from "@/components/ui/PageIntro";
 import { SubmitForm } from "@/components/submit/SubmitForm";
 import { FadeIn } from "@/components/ui/FadeIn";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -12,21 +14,19 @@ export default function SubmitPage() {
         <main className="flex-1">
           <Container className="py-10">
             <FadeIn>
-              <h2 className="mb-2 text-center font-serif text-3xl font-black tracking-tight md:text-4xl">
-                Submit.
-              </h2>
+              <PageIntro
+                eyebrow="Artist submission"
+                title="Put a version into the machine."
+                intro="Submit an alternate take, verify the fee, and hand the track to the agents."
+              />
             </FadeIn>
-            <FadeIn delay={0.1}>
-              <p className="mb-10 text-center font-serif text-base text-[var(--color-ink-2)]">
-                Drop your version. Get rated by AI.
-              </p>
-            </FadeIn>
-            <FadeIn delay={0.2}>
+            <FadeIn delay={0.15}>
               <SubmitForm />
             </FadeIn>
           </Container>
         </main>
       </div>
+      <SiteFooter />
     </ToastProvider>
   );
 }

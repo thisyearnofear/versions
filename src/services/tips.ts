@@ -68,15 +68,30 @@ export function createTipSettlementService({
         .update(x402Proofs)
         .set({ status: 'settled', txHash: r.hash, settledAt: new Date() })
         .where(inArray(x402Proofs.id, rows.map((row) => row.id)));
-      // Economy ticker: one on-chain transfer for the whole batch.
+      const settlementTimestamp = new Date().toISOString();
+      // Canonical receipt stream: one transfer settled the whole batch.
+      emit('settlement-event', {
+        type: 'settled',
+        source: 'tip',
+        settlementId: r.hash,
+        toWallet: artistWallet,
+        artistWallet,
+        amountUsdc,
+        txHash: r.hash,
+        settledCount: rows.length,
+        mock: !!r.mock,
+        timestamp: settlementTimestamp,
+      });
+      // Backward-compatible economy activity for existing clients.
       emit('economy-event', {
         kind: 'tip_batch_settled',
+        settlementId: r.hash,
         toWallet: artistWallet,
         amountUsdc,
         txHash: r.hash,
         settledCount: rows.length,
         mock: !!r.mock,
-        timestamp: new Date().toISOString(),
+        timestamp: settlementTimestamp,
       });
       return {
         status: 'settled',

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAccount, useChainId, useSignTypedData } from "wagmi";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
@@ -11,6 +11,7 @@ import {
   apiClient,
   type BriefSearchResponse,
   type BriefSearchRow,
+  type LicenseRow,
 } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { matchBriefHash } from "@/lib/match-benchmark";
@@ -49,7 +50,7 @@ function MatchSearch() {
   const chainId = useChainId();
   const { signTypedDataAsync } = useSignTypedData();
   const searchParams = useSearchParams();
-  const [brief, setBrief] = useState("");
+  const [brief, setBrief] = useState(() => searchParams.get("brief") ?? "");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<BriefSearchResponse | null>(null);
   const [searchTimeMs, setSearchTimeMs] = useState<number | null>(null);
@@ -58,11 +59,6 @@ function MatchSearch() {
   const [shortlistedIds, setShortlistedIds] = useState<Set<string>>(new Set());
   const [payment, setPayment] = useState<ScorePaymentReceipt | null>(null);
   const [preferPaid, setPreferPaid] = useState(true);
-
-  useEffect(() => {
-    const fromUrl = searchParams.get("brief");
-    if (fromUrl) setBrief(fromUrl);
-  }, [searchParams]);
 
   const runSearch = useCallback(async (text: string, opts?: { paid?: boolean }) => {
     const trimmed = text.trim();
@@ -89,7 +85,7 @@ function MatchSearch() {
             showToast("No matches — try a broader brief.", "info");
           } else {
             showToast(
-              `Agents scored · $${SCORE_FEE_USDC} USDC${res.payment.mock ? " (mock)" : ""}`,
+              `Scored evaluation complete · $${SCORE_FEE_USDC} USDC${res.payment.mock ? " (mock)" : ""}`,
               "success",
               2500,
             );
@@ -124,16 +120,15 @@ function MatchSearch() {
   }, [showToast, isAuthenticated, isConnected, preferPaid, chainId, signTypedDataAsync]);
 
   useEffect(() => {
-    if (brief.trim().length >= 3 && !submitAttempted && !results) {
+    if (brief.trim().length < 3 || submitAttempted || results) return;
+    const timer = window.setTimeout(() => {
       void runSearch(brief, { paid: false });
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [brief, runSearch, submitAttempted, results]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      setShortlistedIds(new Set());
-      return;
-    }
+    if (!isAuthenticated) return;
     void apiClient
       .getInterests({ limit: 100 })
       .then((res) => setShortlistedIds(new Set(res.rows.map((r) => r.submission_id))))
@@ -163,6 +158,7 @@ function MatchSearch() {
 
   const hasResults = results && results.rows.length > 0 && !loading;
   const canPayAgents = isAuthenticated && isConnected && preferPaid;
+  const effectiveBrief = [brief.trim(), ...refinements].filter(Boolean).join(" · ");
 
   return (
     <section>
@@ -202,7 +198,7 @@ function MatchSearch() {
               onChange={(e) => setPreferPaid(e.target.checked)}
               className="accent-[var(--color-rust)]"
             />
-            Pay Market agent ${SCORE_FEE_USDC} USDC via x402 for scored match
+            Request scored evaluation · ${SCORE_FEE_USDC} USDC via x402
           </label>
         )}
         {!hasResults && (
@@ -228,6 +224,7 @@ function MatchSearch() {
 
       {hasResults && (
         <div>
+          <DecisionSummary row={results.rows[0]} total={results.total} />
           <AgentTrace searchTimeMs={searchTimeMs} trackCount={results.rows.length} payment={payment} />
 
           <div className="flex flex-wrap items-center gap-2 mb-5">
@@ -264,9 +261,9 @@ function MatchSearch() {
                 <MatchRow
                   row={r}
                   rank={i + 1}
-                  brief={brief}
+                  brief={effectiveBrief || brief}
                   scoreDelay={Math.min(i * 0.06, 0.4) + 0.12}
-                  isShortlisted={shortlistedIds.has(r.submission_id)}
+                  isShortlisted={isAuthenticated && shortlistedIds.has(r.submission_id)}
                   onShortlisted={markShortlisted}
                   isAuthenticated={isAuthenticated}
                   requireAuth={requireAuth}
@@ -282,6 +279,26 @@ function MatchSearch() {
           No matches. Try a broader brief.
         </p>
       )}
+    </section>
+  );
+}
+
+function DecisionSummary({ row, total }: { row: BriefSearchRow; total: number }) {
+  const evidence = row.why_fits.slice(0, 2).join(" · ");
+  return (
+    <section className="mb-4 border-l-2 border-[var(--color-rust)] bg-[var(--color-paper-2)] px-4 py-3" aria-label="Top recommendation">
+      <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-rust)]">Top recommendation</p>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <h2 className="font-serif text-lg font-semibold">{row.title}</h2>
+        <span className="font-serif text-sm text-[var(--color-ink-2)]">{row.artist_name}</span>
+        <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">match score {row.fit_score}</span>
+      </div>
+      <p className="mt-1 font-serif text-sm leading-snug text-[var(--color-ink-2)]">
+        {evidence ? `Best available match on the returned catalog evidence: ${evidence}.` : "Best available match from the returned catalog evidence."}
+      </p>
+      <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">
+        Human gate · listen for opening, dialogue space, and edit point · {total} matches considered
+      </p>
     </section>
   );
 }
@@ -306,12 +323,14 @@ function MatchRow({
   requireAuth: (returnTo?: string) => boolean;
 }) {
   const { showToast } = useToast();
-  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const [showLicensePanel, setShowLicensePanel] = useState(false);
   const [usageType, setUsageType] = useState<LicenseUsageType>("sync_tv_film");
   const [licensing, setLicensing] = useState(false);
+  const [licenseRequest, setLicenseRequest] = useState<LicenseRow | null>(null);
   const [justShortlisted, setJustShortlisted] = useState(false);
+  const [feedback, setFeedback] = useState<"good_fit" | "wrong_fit" | null>(null);
+  const [sendingFeedback, setSendingFeedback] = useState(false);
   const reason = row.why_fits[0] ?? null;
 
   const returnTo = typeof window !== "undefined"
@@ -330,21 +349,46 @@ function MatchRow({
     }
   };
 
+  const onFeedback = async (verdict: "good_fit" | "wrong_fit") => {
+    if (sendingFeedback || feedback === verdict) return;
+    setSendingFeedback(true);
+    try {
+      await apiClient.recordMatchFeedback({
+        briefHash: matchBriefHash(brief),
+        briefText: brief,
+        submissionId: row.submission_id,
+        fitScoreShown: row.fit_score,
+        rankShown: rank,
+        verdict,
+      });
+      setFeedback(verdict);
+      showToast(
+        verdict === "good_fit" ? "Good fit recorded — this strengthens the match benchmark." : "Wrong direction recorded — this improves future ranking.",
+        "success",
+        3000,
+      );
+    } catch (err) {
+      showToast(`Could not save feedback: ${(err as Error).message}`, "error");
+    } finally {
+      setSendingFeedback(false);
+    }
+  };
+
   const onRequestLicense = async () => {
     if (!requireAuth(returnTo)) return;
     setLicensing(true);
     try {
       await apiClient.addInterest({ submissionId: row.submission_id }).catch(() => {});
       onShortlisted(row.submission_id);
-      await apiClient.createLicense({
+      const { license } = await apiClient.createLicense({
         submissionId: row.submission_id,
         briefHash: matchBriefHash(brief),
         briefText: brief,
         usageType,
       });
-      showToast("License ready — settle on dashboard", "success", 3000);
+      setLicenseRequest(license);
       setShowLicensePanel(false);
-      router.push("/supervisor#licenses");
+      showToast("License job opened — continue to settlement when ready.", "success", 3000);
     } catch (err) {
       showToast(`License failed: ${(err as Error).message}`, "error");
     } finally {
@@ -356,6 +400,8 @@ function MatchRow({
     if (!requireAuth(returnTo)) return;
     setShowLicensePanel((p) => !p);
   };
+
+  const reviewCountLabel = `${row.rating_count} curator review${row.rating_count === 1 ? "" : "s"}`;
 
   return (
     <article
@@ -391,15 +437,15 @@ function MatchRow({
             </div>
             {reason && (
               <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-ink-3)] truncate mt-0.5">
-                {reason}
+                Evidence · {reason}
               </p>
             )}
           </div>
 
           <FitScorePop score={row.fit_score} delay={scoreDelay} />
 
-          <span className="font-mono text-[8px] tabular-nums text-[var(--color-ink-3)] shrink-0 bg-[var(--color-paper-2)] px-1.5 py-0.5 rounded-sm">
-            {row.rating_count}/3
+          <span className="font-mono text-[8px] text-[var(--color-ink-3)] shrink-0 bg-[var(--color-paper-2)] px-1.5 py-0.5 rounded-sm">
+            {row.rating_count} review{row.rating_count === 1 ? "" : "s"}
           </span>
 
           <span className={cn(
@@ -428,63 +474,135 @@ function MatchRow({
                 title={row.title}
                 by={row.artist_name}
               />
-              {row.why_fits.length > 1 && (
-                <div className="flex flex-wrap gap-1.5 mt-3">
-                  {row.why_fits.slice(1).map((w, j) => (
-                    <span key={j} className="bg-[var(--color-paper-2)] px-2 py-0.5 font-mono text-[9px] text-[var(--color-ink-2)] rounded-sm">
-                      {w}
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="flex flex-wrap gap-2 mt-3">
-                <button
-                  type="button"
-                  onClick={() => void onShortlist()}
-                  disabled={isShortlisted}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-sm transition-colors",
-                    isShortlisted
-                      ? "bg-[var(--color-rust)] text-[var(--color-paper)] opacity-90"
-                      : isAuthenticated
-                        ? "bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-rust)]"
-                        : "border border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
-                  )}
-                >
-                  {isShortlisted ? (
-                    <>
-                      <SuccessCheck active />
-                      Shortlisted
-                    </>
-                  ) : isAuthenticated ? (
-                    "Shortlist"
-                  ) : (
-                    "Sign in to shortlist"
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={onLicenseClick}
-                  className={cn(
-                    "font-mono text-[10px] uppercase tracking-[0.12em] border px-3 py-1.5 rounded-sm transition-colors",
-                    showLicensePanel
-                      ? "border-[var(--color-rust)] text-[var(--color-rust)]"
-                      : isAuthenticated
-                        ? "border-[var(--color-ink)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]"
-                        : "border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
-                  )}
-                >
-                  {isAuthenticated ? "License" : "Sign in to license"}
-                </button>
-                {isAuthenticated && (
-                  <Link
-                    href="/supervisor"
-                    className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] px-1 py-1.5 transition-colors"
-                  >
-                    Dashboard →
-                  </Link>
+
+              <div className="mt-3">
+                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">Match evidence</p>
+                {row.why_fits.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {row.why_fits.map((evidence, index) => (
+                      <span key={`${evidence}-${index}`} className="bg-[var(--color-paper-2)] px-2 py-0.5 font-mono text-[9px] text-[var(--color-ink-2)] rounded-sm">
+                        {evidence}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1 font-serif text-[13px] text-[var(--color-ink-2)]">No citation was returned for this match.</p>
                 )}
               </div>
+
+              <div className="mt-3 border-l-2 border-[var(--color-hair-strong)] pl-2.5">
+                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">Human gate</p>
+                <p className="mt-0.5 font-serif text-[13px] leading-snug text-[var(--color-ink-2)]">
+                  Confirm the opening, dialogue space, and edit point against picture before licensing.
+                </p>
+              </div>
+
+              <div className="mt-3" role="group" aria-label={`Match feedback for ${row.title}`}>
+                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">Would you put this under the brief?</p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void onFeedback("good_fit")}
+                    disabled={sendingFeedback}
+                    aria-pressed={feedback === "good_fit"}
+                    className={cn(
+                      "border px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide transition-colors disabled:opacity-50",
+                      feedback === "good_fit"
+                        ? "border-[var(--color-rust)] bg-[var(--color-rust)] text-[var(--color-paper)]"
+                        : "border-[var(--color-hair-strong)] text-[var(--color-ink-2)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
+                    )}
+                  >
+                    Good fit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onFeedback("wrong_fit")}
+                    disabled={sendingFeedback}
+                    aria-pressed={feedback === "wrong_fit"}
+                    className={cn(
+                      "border px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide transition-colors disabled:opacity-50",
+                      feedback === "wrong_fit"
+                        ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-paper)]"
+                        : "border-[var(--color-hair-strong)] text-[var(--color-ink-2)] hover:border-[var(--color-ink)]",
+                    )}
+                  >
+                    Wrong direction
+                  </button>
+                  <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-ink-3)]">{reviewCountLabel}</span>
+                </div>
+                {feedback && (
+                  <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-rust)]">
+                    Feedback saved to the match benchmark.
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-3 border-t border-[var(--color-hair)] pt-3">
+                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
+                  Available to request · Worldwide · 12 months · choose usage to quote
+                </p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => void onShortlist()}
+                    disabled={isShortlisted}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-sm transition-colors",
+                      isShortlisted
+                        ? "bg-[var(--color-rust)] text-[var(--color-paper)] opacity-90"
+                        : isAuthenticated
+                          ? "bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-rust)]"
+                          : "border border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
+                    )}
+                  >
+                    {isShortlisted ? (
+                      <>
+                        <SuccessCheck active />
+                        Shortlisted
+                      </>
+                    ) : isAuthenticated ? (
+                      "Shortlist"
+                    ) : (
+                      "Sign in to shortlist"
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onLicenseClick}
+                    disabled={!!licenseRequest}
+                    className={cn(
+                      "font-mono text-[10px] uppercase tracking-[0.12em] border px-3 py-1.5 rounded-sm transition-colors disabled:opacity-60",
+                      showLicensePanel
+                        ? "border-[var(--color-rust)] text-[var(--color-rust)]"
+                        : isAuthenticated
+                          ? "border-[var(--color-ink)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]"
+                          : "border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
+                    )}
+                  >
+                    {licenseRequest ? "License job open" : isAuthenticated ? "Review license terms" : "Sign in to license"}
+                  </button>
+                  {isAuthenticated && (
+                    <Link
+                      href="/supervisor"
+                      className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] px-1 py-1.5 transition-colors"
+                    >
+                      Dashboard →
+                    </Link>
+                  )}
+                </div>
+              </div>
+
+              {licenseRequest && (
+                <div className="mt-3 border border-[var(--color-rust)] bg-[var(--color-paper-2)] px-3 py-2.5">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-rust)]">License job opened</p>
+                  <p className="mt-1 font-serif text-[13px] leading-snug text-[var(--color-ink-2)]">
+                    {USAGE_LABELS[licenseRequest.usage_type]} · ${licenseRequest.fee_usdc} USDC · {licenseRequest.territory} · {licenseRequest.term_months} months.
+                  </p>
+                  <Link href="/supervisor#licenses" className="mt-1.5 inline-block font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-rust)] hover:text-[var(--color-ink)]">
+                    Continue to settlement →
+                  </Link>
+                </div>
+              )}
 
               <AnimatePresence>
                 {showLicensePanel && isAuthenticated && (
@@ -516,7 +634,7 @@ function MatchRow({
                         ))}
                       </div>
                       <p className="font-mono text-[9px] text-[var(--color-ink-3)] mb-3">
-                        Worldwide · 12 months · settle on dashboard after request
+                        Worldwide · 12 months · opens a license job; settlement follows your approval.
                       </p>
                       <button
                         type="button"
@@ -535,7 +653,7 @@ function MatchRow({
                             Creating…
                           </>
                         ) : (
-                          `Request license · $${LICENSE_FEES[usageType]} USDC`
+                          `Open license job · $${LICENSE_FEES[usageType]} USDC`
                         )}
                       </button>
                     </div>

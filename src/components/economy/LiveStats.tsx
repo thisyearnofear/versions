@@ -7,11 +7,12 @@
 // variable reward schedule (unpredictable increments) with progression
 // design (numbers only go up).
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { animate, motion } from "framer-motion";
-import type { EconomyEvent } from "@/lib/event-bus";
+import { settlementToEconomyEvent, type EconomyEvent } from "@/lib/event-bus";
 import { fmtUsdc } from "@/lib/format";
 import { SettlementSplitBar, type SplitLeg } from "@/components/economy/SettlementSplitBar";
+import { useSettlementEvents } from "@/lib/use-settlement-events";
 
 interface Stats {
   tracksPublished: number;
@@ -34,6 +35,58 @@ const INITIAL: Stats = {
 export function LiveStats() {
   const [stats, setStats] = useState<Stats>(INITIAL);
   const [loaded, setLoaded] = useState(false);
+  const initializedRef = useRef(false);
+  const seenSettlementKeysRef = useRef<Set<string>>(new Set());
+  const pendingSettlementsRef = useRef<EconomyEvent[]>([]);
+
+  const applySettlementToState = useCallback((event: EconomyEvent) => {
+    setStats((prev) => {
+      const next = { ...prev };
+      if (event.amountUsdc) next.usdcSettled += Number(event.amountUsdc);
+      if (event.kind === "leg_settled" && event.recipientRole && event.amountUsdc) {
+        const amount = Number(event.amountUsdc);
+        const split = prev.settlementSplit.map((s) => ({ ...s }));
+        const idx = split.findIndex((s) => s.role === event.recipientRole);
+        if (idx >= 0) {
+          split[idx].totalUsdc = String(Number(split[idx].totalUsdc) + amount);
+          split[idx].legCount += 1;
+        } else {
+          split.push({ role: event.recipientRole, totalUsdc: String(amount), legCount: 1 });
+        }
+        next.settlementSplit = split;
+      }
+      return next;
+    });
+  }, []);
+
+  const flushPendingSettlements = useCallback(() => {
+    initializedRef.current = true;
+    const pending = pendingSettlementsRef.current;
+    pendingSettlementsRef.current = [];
+    pending.forEach(applySettlementToState);
+  }, [applySettlementToState]);
+
+  const applySettlement = useCallback((event: EconomyEvent) => {
+    const key = event.settlementId ?? `${event.kind}|${event.txHash ?? ""}|${event.timestamp}`;
+    if (seenSettlementKeysRef.current.has(key)) return;
+    seenSettlementKeysRef.current.add(key);
+    if (seenSettlementKeysRef.current.size > 200) {
+      const oldest = seenSettlementKeysRef.current.values().next().value;
+      if (oldest) seenSettlementKeysRef.current.delete(oldest);
+    }
+    if (!initializedRef.current) {
+      pendingSettlementsRef.current.push(event);
+      return;
+    }
+    applySettlementToState(event);
+  }, [applySettlementToState]);
+
+  // Canonical receipt stream: every dashboard sees the same settlement
+  // transition, while the key guard prevents the compatibility
+  // economy-event from incrementing the counters a second time.
+  useSettlementEvents((event) => {
+    applySettlement(settlementToEconomyEvent(event));
+  });
 
   // Initial fetch.
   useEffect(() => {
@@ -41,7 +94,12 @@ export function LiveStats() {
     fetch("/api/economy/stats")
       .then((r) => (r.ok ? r.json() : null))
       .then((body) => {
-        if (cancelled || !body?.data) return;
+        if (cancelled) return;
+        if (!body?.data) {
+          setLoaded(true);
+          flushPendingSettlements();
+          return;
+        }
         const d = body.data;
         const split = Array.isArray(d.settlementSplit)
           ? (d.settlementSplit as SplitLeg[])
@@ -61,12 +119,16 @@ export function LiveStats() {
           },
         });
         setLoaded(true);
+        flushPendingSettlements();
       })
-      .catch(() => setLoaded(true));
+      .catch(() => {
+        setLoaded(true);
+        flushPendingSettlements();
+      });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [flushPendingSettlements]);
 
   // SSE: increment counters as economy events arrive.
   useEffect(() => {
@@ -74,47 +136,19 @@ export function LiveStats() {
     es.addEventListener("economy-event", (msg) => {
       try {
         const e = JSON.parse((msg as MessageEvent).data) as EconomyEvent;
-        setStats((prev) => {
-          const next = { ...prev };
-          switch (e.kind) {
-            case "review":
-              next.agentReviews += 1;
-              break;
-            case "tip_batch_settled":
-              if (e.amountUsdc) next.usdcSettled += Number(e.amountUsdc);
-              break;
-            case "leg_settled":
-              if (e.amountUsdc) {
-                const amt = Number(e.amountUsdc);
-                next.usdcSettled += amt;
-                const role = e.recipientRole;
-                if (role) {
-                  const split = prev.settlementSplit.map((s) => ({ ...s }));
-                  const idx = split.findIndex((s) => s.role === role);
-                  if (idx >= 0) {
-                    split[idx].totalUsdc = String(
-                      Number(split[idx].totalUsdc) + amt,
-                    );
-                    split[idx].legCount += 1;
-                  } else {
-                    split.push({ role, totalUsdc: String(amt), legCount: 1 });
-                  }
-                  next.settlementSplit = split;
-                }
-              }
-              break;
-            case "play":
-              if (e.amountUsdc) next.usdcSettled += Number(e.amountUsdc);
-              break;
-          }
-          return next;
-        });
+        if (e.kind === "review") {
+          setStats((prev) => ({ ...prev, agentReviews: prev.agentReviews + 1 }));
+        } else {
+          // Compatibility path for existing economy-event producers;
+          // canonical settlement-event uses the same settlementId.
+          applySettlement(e);
+        }
       } catch {
         /* malformed — ignore */
       }
     });
     return () => es.close();
-  }, []);
+  }, [applySettlement]);
 
   const latency = stats.medianReviewLatencySeconds;
   const speedCaption =
@@ -137,7 +171,7 @@ export function LiveStats() {
 
   return (
     <div className="py-2">
-      <div className="flex justify-center gap-5 sm:gap-10 md:gap-16">
+      <div className="flex min-w-0 items-stretch justify-center gap-3 sm:gap-10 md:gap-16">
         <StatItem label="Tracks" value={stats.tracksPublished} loaded={loaded} />
         <Divider />
         <StatItem
@@ -207,7 +241,7 @@ function StatItem({
   const formatted = format === "usdc" ? fmtUsdc(display.toFixed(2)) : Math.round(display).toString();
 
   return (
-    <div className="text-center">
+    <div className="min-w-0 text-center">
       <motion.div
         key={formatted}
         initial={{ scale: 1.08, color: "var(--color-rust)" }}
@@ -217,7 +251,7 @@ function StatItem({
       >
         {formatted}
       </motion.div>
-      <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] mt-1">
+      <div className="break-words font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] mt-1">
         {label}
       </div>
     </div>

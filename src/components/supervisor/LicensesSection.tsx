@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { apiClient, type LicenseRow } from "@/lib/api-client";
+import type { SettlementEvent } from "@/lib/event-bus";
 import { useToast } from "@/components/ui/Toast";
 import { Section } from "@/components/ui/primitives";
+import { SettlementFanfare } from "@/components/economy/SettlementFanfare";
+import { useSettlementEvents } from "@/lib/use-settlement-events";
 import { jobUrl, shortHash, txUrl } from "@/lib/explorer";
 
 const USAGE_LABELS: Record<LicenseRow["usage_type"], string> = {
@@ -25,9 +28,38 @@ export function LicensesSection({
   const [licenses, setLicenses] = useState<LicenseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [lastSettlement, setLastSettlement] = useState<{
+    amountUsdc: string;
+    mock: boolean;
+    txHash: string | null;
+    title: string | null;
+    recipientLabel: string | null;
+    jobId: string | null;
+  } | null>(null);
+  const licensesRef = useRef<LicenseRow[]>([]);
+  const licensesLoadedRef = useRef(false);
+  const pendingLicenseEventsRef = useRef<SettlementEvent[]>([]);
+
+  const showLicenseSettlement = (event: SettlementEvent) => {
+    if (event.source !== "license") return false;
+    const license = licensesRef.current.find((row) => row.id === event.settlementId);
+    if (!license) return false;
+    const artistName = event.artistName ?? license.artist_name ?? null;
+    setLastSettlement({
+      amountUsdc: event.amountUsdc,
+      mock: event.mock,
+      txHash: event.txHash,
+      title: event.title ?? license.title ?? null,
+      recipientLabel: artistName ? `→ ${artistName}` : null,
+      jobId: event.jobId ?? license.job_id ?? null,
+    });
+    return true;
+  };
 
   const refresh = useCallback(async () => {
     if (!isAuthenticated) {
+      licensesLoadedRef.current = true;
+      licensesRef.current = [];
       setLicenses([]);
       setLoading(false);
       return;
@@ -35,7 +67,13 @@ export function LicensesSection({
     setLoading(true);
     try {
       const res = await apiClient.getLicenses({ limit: 50 });
-      setLicenses(Array.isArray(res.rows) ? res.rows : []);
+      const nextLicenses = Array.isArray(res.rows) ? res.rows : [];
+      licensesRef.current = nextLicenses;
+      licensesLoadedRef.current = true;
+      setLicenses(nextLicenses);
+      const pendingEvents = pendingLicenseEventsRef.current;
+      pendingLicenseEventsRef.current = [];
+      pendingEvents.forEach(showLicenseSettlement);
     } catch (err) {
       showToast(`Licenses load failed: ${(err as Error).message}`, "error");
     } finally {
@@ -44,14 +82,37 @@ export function LicensesSection({
   }, [showToast, isAuthenticated]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [refresh]);
+
+  // A settlement from another tab or dashboard becomes the same receipt
+  // fanfare as a local click, but only when this supervisor already knows
+  // the license id (prevents unrelated users' licenses appearing here).
+  useSettlementEvents((event) => {
+    if (event.source !== "license") return;
+    if (!licensesLoadedRef.current) {
+      pendingLicenseEventsRef.current.push(event);
+      return;
+    }
+    if (showLicenseSettlement(event)) void refresh();
+  });
 
   const onPay = async (id: string) => {
     if (!requireAuth("/supervisor#licenses")) return;
     setPayingId(id);
     try {
       const res = await apiClient.payLicense(id);
+      if (res.settled) {
+        setLastSettlement({
+          amountUsdc: res.license.fee_usdc,
+          mock: res.settled.mock,
+          txHash: res.settled.txHash,
+          title: res.license.title ?? null,
+          recipientLabel: res.license.artist_name ? `→ ${res.license.artist_name}` : null,
+          jobId: res.settled.jobId ?? res.license.job_id ?? null,
+        });
+      }
       const jobNote = res.settled?.jobId ? ` · ERC-8183 job #${res.settled.jobId}` : "";
       showToast(
         res.settled?.mock
@@ -100,6 +161,18 @@ export function LicensesSection({
         </p>
       ) : (
         <div className="space-y-6">
+          {lastSettlement && (
+            <SettlementFanfare
+              kind="license"
+              amountUsdc={lastSettlement.amountUsdc}
+              mock={lastSettlement.mock}
+              txHash={lastSettlement.txHash}
+              title={lastSettlement.title}
+              recipientLabel={lastSettlement.recipientLabel}
+              jobId={lastSettlement.jobId}
+              onDismiss={() => setLastSettlement(null)}
+            />
+          )}
           {pending.length > 0 && (
             <div>
               <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-rust)] mb-2">

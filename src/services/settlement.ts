@@ -320,16 +320,31 @@ export function createSettlementService({
               status: 'settled',
             })
             .where(eq(legsTable.id, legId));
-          // Economy ticker: one payout leg landed on-chain.
-          emit('economy-event', {
-            kind: 'leg_settled',
+          const settlementTimestamp = new Date().toISOString();
+          // Canonical receipt stream: one payout leg landed on-chain.
+          emit('settlement-event', {
+            type: 'settled',
+            source: 'split',
+            settlementId: leg.id,
             submissionId: leg.submissionId,
             recipientRole: leg.recipientRole,
             toWallet: leg.recipientWallet,
             amountUsdc: leg.amountUsdc,
             txHash: r.hash,
             mock: !!r.mock,
-            timestamp: new Date().toISOString(),
+            timestamp: settlementTimestamp,
+          });
+          // Backward-compatible economy activity for existing clients.
+          emit('economy-event', {
+            kind: 'leg_settled',
+            settlementId: leg.id,
+            submissionId: leg.submissionId,
+            recipientRole: leg.recipientRole,
+            toWallet: leg.recipientWallet,
+            amountUsdc: leg.amountUsdc,
+            txHash: r.hash,
+            mock: !!r.mock,
+            timestamp: settlementTimestamp,
           });
           results.push({ leg_id: legId, status: 'settled', tx_hash: r.hash, mock: !!r.mock });
         } catch (err) {

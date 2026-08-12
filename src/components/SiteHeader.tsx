@@ -7,6 +7,8 @@ import { track } from "@/lib/analytics";
 export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" | "discover" | "supervisor" }) {
   const tabs = [
     { id: "discover", label: "Discover", href: "/discover" },
+    { id: "agents", label: "Agents", href: "/agents" },
+    { id: "feed", label: "Catalog", href: "/feed" },
     { id: "supervisor", label: "Dashboard", href: "/supervisor" },
     { id: "submit", label: "Submit", href: "/submit" },
   ] as const;
@@ -17,8 +19,8 @@ export function SiteHeader({ active }: { active?: "submit" | "agents" | "feed" |
         <Link href="/" className="font-serif text-2xl font-black tracking-tight">
           VERSIONS
         </Link>
-        <div className="flex items-center gap-2">
-          <nav role="tablist" className="flex overflow-x-auto">
+        <div className="flex min-w-0 items-center gap-2">
+          <nav role="tablist" className="min-w-0 flex-1 overflow-x-auto">
             {tabs.map((t) => (
               <Link
                 key={t.id}

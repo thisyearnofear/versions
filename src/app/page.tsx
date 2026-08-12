@@ -5,17 +5,66 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 import { track } from "@/lib/analytics";
 import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
+import { HowItWorks } from "@/components/home/HowItWorks";
+import { LiveActivityStrip } from "@/components/home/LiveActivityStrip";
+import { LiveDemoButton } from "@/components/home/LiveDemoButton";
+import { WaveformGallery } from "@/components/home/WaveformGallery";
+import { EconomyTicker } from "@/components/economy/EconomyTicker";
+import { LiveStats } from "@/components/economy/LiveStats";
 
 export default function Home() {
   return (
     <div className="flex flex-col flex-1 min-h-[100dvh]">
       <SiteHeader />
-      <main className="flex-1 grid place-items-center px-6">
-        <Hero />
+      <main className="flex-1">
+        <div className="px-6">
+          <Hero />
+        </div>
+
+        <section className="border-b border-[var(--color-hair-strong)] bg-[var(--color-paper-2)] px-6 py-14 md:py-20" aria-labelledby="engine-room-title">
+          <div className="mx-auto grid max-w-5xl gap-12 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+            <div className="text-center lg:text-left">
+              <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-rust)]">
+                The engine room
+              </p>
+              <h2 id="engine-room-title" className="font-serif text-3xl font-black tracking-tight md:text-5xl">
+                One click. Five state changes.
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl font-serif text-base leading-snug text-[var(--color-ink-2)] lg:mx-0">
+                Create a demo submission, let three agents reach consensus, publish it, and settle the tip — live, in front of you.
+              </p>
+              <div className="mt-8">
+                <LiveDemoButton />
+                <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+                  Mock settlement by default · Arc-ready when configured
+                </p>
+              </div>
+              <div className="mt-8 border-t border-[var(--color-hair-strong)] pt-6">
+                <LiveStats />
+              </div>
+            </div>
+            <div className="border-t border-[var(--color-hair-strong)] pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+              <EconomyTicker limit={6} />
+            </div>
+          </div>
+        </section>
+
+        <section aria-label="The VERSIONS catalog">
+          <div className="px-6 pt-12 pb-4 text-center">
+            <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]">
+              The catalog · click the waveform to play
+            </p>
+          </div>
+          <WaveformGallery />
+        </section>
+
+        <LiveActivityStrip />
+        <HowItWorks />
       </main>
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }
@@ -108,20 +157,5 @@ function BriefSearchBar() {
         Ranked results in ~4 seconds · free · no sign-up
       </p>
     </div>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="border-t border-[var(--color-hair-strong)] px-6 py-6 flex flex-wrap items-center justify-center gap-6">
-      <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]">
-        VERSIONS · 2026
-      </div>
-      <div className="flex gap-6 font-mono text-[10px] uppercase tracking-[0.18em]">
-        <Link href="/agents" className="hover:text-[var(--color-rust)]">How it works</Link>
-        <a href="https://github.com/thisyearnofear/versions" className="hover:text-[var(--color-rust)]" target="_blank" rel="noopener noreferrer">GitHub</a>
-        <a href="https://docs.arc.network" className="hover:text-[var(--color-rust)]" target="_blank" rel="noopener noreferrer">Arc</a>
-      </div>
-    </footer>
   );
 }

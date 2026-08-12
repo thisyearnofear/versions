@@ -11,9 +11,9 @@ import { Dropzone } from "@/components/submit/Dropzone";
 import { useToast } from "@/components/ui/Toast";
 import { Tour } from "@/components/ui/Tour";
 import { ApiError, apiClient, type AgentReviewRecord } from "@/lib/api-client";
-import { copyToClipboard } from "@/lib/utils";
 import { track } from "@/lib/analytics";
 import { useSubmitPayment, type PaymentPhase, type SendPaymentResult } from "@/components/submit/use-submit-payment";
+import { JourneyRail, type JourneyStage } from "@/components/ui/JourneyRail";
 
 const PAYMENT_RETRIES = 3;
 const FEE_AMOUNT_USDC = "0.50";
@@ -392,8 +392,18 @@ export function SubmitForm() {
       ? `Submission abandoned after ${state.attempts} failed attempts.`
       : "";
 
+  const journeyStage: JourneyStage =
+    state.phase === "verified"
+      ? "Review"
+      : state.phase === "pending" || state.phase === "verifying"
+        ? "Pay"
+        : "Submit";
+
   return (
     <>
+      <div className="mb-6">
+        <JourneyRail variant="artist" active={journeyStage} />
+      </div>
       <form id="submitForm" onSubmit={onSubmit} className="space-y-6" noValidate>
         <div className="grid md:grid-cols-2 gap-6">
           <label className="block md:col-span-2">

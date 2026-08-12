@@ -33,6 +33,9 @@
 # pitch materials (kept out of the repo)
 VERSIONS_Pitch_Deck.*
 
+# generated video artifacts
+/videos/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

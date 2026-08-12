@@ -302,8 +302,9 @@ export function LiveDemoButton() {
         )}
       </button>
       <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] mt-3">
-        Submits a real track · 3 AI agents review it · USDC settles · sound on
+        Creates a demo submission · 3 AI agents review it · USDC settles · sound on
       </p>
+
 
       <AnimatePresence>
         {phase !== "idle" && (
@@ -348,7 +349,7 @@ export function LiveDemoButton() {
 
       {phase === "done" && (
         <p className="font-serif italic text-sm text-[var(--color-ink-2)] mt-4">
-          That whole loop — review, publish, payouts, tip — ran with zero humans. Watch it land in the ticker below.
+          That whole loop — review, publish, payouts, tip — ran with zero humans. Watch it land in the live stats and economy feed below.
         </p>
       )}
       {phase === "error" && error && (

@@ -223,6 +223,7 @@ export async function POST(req: NextRequest) {
 
     emit("economy-event", {
       kind: "tip",
+      settlementId: settled.hash ?? submitted.offer.puid,
       fromWallet: payer,
       toWallet: payTo,
       amountUsdc: SCORE_FEE_USDC,

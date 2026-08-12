@@ -286,6 +286,7 @@ export async function POST(req: NextRequest) {
     // tips service).
     emit('economy-event', {
       kind: 'tip',
+      settlementId: result.hash ?? submitted.offer.puid,
       fromWallet: tipperWallet,
       toWallet: body.artistWallet,
       amountUsdc: (Number(submitted.offer.amount) / 1_000_000).toFixed(6),

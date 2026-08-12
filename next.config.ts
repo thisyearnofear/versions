@@ -18,6 +18,8 @@ const nextConfig: NextConfig = {
       "scripts/**",
       "drizzle/**",
       "docs/**",
+      // Client-only wallet sign-in hook must not be bundled with server routes.
+      "src/lib/use-credentials-sign-in.ts",
       "node_modules/@reown/**",
       "node_modules/@walletconnect/**",
       "node_modules/@metamask/**",

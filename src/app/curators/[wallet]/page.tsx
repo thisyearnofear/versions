@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 import { CuratorDashboard } from "@/components/curator/CuratorDashboard";
 import { ToastProvider } from "@/components/ui/Toast";
 
@@ -30,6 +31,7 @@ export default async function CuratorPage({
           </Suspense>
         </main>
       </div>
+      <SiteFooter />
     </ToastProvider>
   );
 }

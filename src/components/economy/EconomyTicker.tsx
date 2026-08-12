@@ -7,25 +7,53 @@
 // exists. Mock events are badged honestly — this is the surface a judge
 // watches, so it never overclaims.
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import type { EconomyEvent } from "@/lib/event-bus";
+import { settlementToEconomyEvent, type EconomyEvent } from "@/lib/event-bus";
 import { agentIdentity } from "@/lib/agent-identity";
 import { shortAddress, shortHash, txUrl } from "@/lib/explorer";
 import { fmtUsdc, relativeTime } from "@/lib/format";
 import { playEconomySound, isSoundEnabled, setSoundEnabled, subscribeSound } from "@/lib/audio-feedback";
+import { useSettlementEvents } from "@/lib/use-settlement-events";
 
 type LiveState = "loading" | "live" | "connecting" | "quiet";
 
 function eventKey(e: EconomyEvent): string {
-  return `${e.kind}|${e.timestamp}|${e.txHash ?? ""}|${e.agentName ?? ""}|${e.submissionId ?? e.versionId ?? ""}`;
+  return e.settlementId
+    ? `settlement|${e.settlementId}`
+    : `${e.kind}|${e.timestamp}|${e.txHash ?? ""}|${e.agentName ?? ""}|${e.submissionId ?? e.versionId ?? ""}`;
 }
 
 export function EconomyTicker({ limit = 12 }: { limit?: number }) {
   const [events, setEvents] = useState<EconomyEvent[]>([]);
   const [live, setLive] = useState<LiveState>("loading");
   const soundOn = useSyncExternalStore(subscribeSound, isSoundEnabled, () => false);
+  const soundKeysRef = useRef<Set<string>>(new Set());
+
+  const maybePlayEventSound = useCallback((event: EconomyEvent) => {
+    const key = eventKey(event);
+    if (soundKeysRef.current.has(key)) return;
+    soundKeysRef.current.add(key);
+    if (soundKeysRef.current.size > 200) {
+      const oldest = soundKeysRef.current.values().next().value;
+      if (oldest) soundKeysRef.current.delete(oldest);
+    }
+    if (soundOn) playEconomySound(event.kind);
+  }, [soundOn]);
+
+  // Canonical receipt stream. It shares the browser's one settlement
+  // connection with dashboards and turns a settled license/tip/split/play
+  // into the same animated ticker row as the historical economy feed.
+  useSettlementEvents((event) => {
+    const normalized = settlementToEconomyEvent(event);
+    maybePlayEventSound(normalized);
+    setEvents((prev) => {
+      const key = eventKey(normalized);
+      if (prev.some((item) => eventKey(item) === key)) return prev;
+      return [normalized, ...prev].slice(0, limit);
+    });
+  });
 
   // Initial replay from the DB so the feed is never empty on load.
   useEffect(() => {
@@ -52,13 +80,12 @@ export function EconomyTicker({ limit = 12 }: { limit?: number }) {
     es.addEventListener("economy-event", (msg) => {
       try {
         const e = JSON.parse((msg as MessageEvent).data) as EconomyEvent;
+        maybePlayEventSound(e);
         setEvents((prev) => {
           const key = eventKey(e);
           if (prev.some((p) => eventKey(p) === key)) return prev;
           return [e, ...prev].slice(0, limit);
         });
-        // Musical feedback: play a chime when sound is enabled.
-        if (soundOn) playEconomySound(e.kind);
       } catch {
         /* malformed event — ignore */
       }
@@ -66,7 +93,7 @@ export function EconomyTicker({ limit = 12 }: { limit?: number }) {
     es.onopen = () => setLive("live");
     es.onerror = () => setLive((s) => (s === "live" ? "connecting" : s));
     return () => es.close();
-  }, [limit, soundOn]);
+  }, [limit, maybePlayEventSound]);
 
   const visible = useMemo(() => events.slice(0, limit), [events, limit]);
 
@@ -177,6 +204,13 @@ function RowHeadline({ event: e }: { event: EconomyEvent }) {
         </div>
       );
     }
+    case "license_settled":
+      return (
+        <div className="font-serif text-base">
+          <span className="font-medium text-[var(--color-rust)]">License settled</span>
+          {e.title && <span className="text-[var(--color-ink-3)]"> → {e.title}</span>}
+        </div>
+      );
     case "tip":
       return (
         <div className="font-serif text-base">

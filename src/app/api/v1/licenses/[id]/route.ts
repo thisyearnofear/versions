@@ -5,6 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { services, successResponse, errorResponse, requestIdFor } from '@/lib/services';
+import { emit } from '@/lib/event-bus';
 import { resolveAuthenticatedSupervisorIdentity } from '@/lib/supervisor-identity';
 import { licenseDeliverableHash } from '@/adapters/erc8183';
 
@@ -101,6 +102,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     deliverableHash: settledJob.deliverableHash,
     jobCreateTxHash: settledJob.createTxHash ?? before.job_create_tx_hash,
     jobCompleteTxHash: settledJob.completeTxHash,
+  });
+
+  const settlementTimestamp = new Date().toISOString();
+  // Canonical receipt stream: the sync license and artist payout settled.
+  emit('settlement-event', {
+    type: 'settled',
+    source: 'license',
+    settlementId: id,
+    toWallet: before.artist_wallet ?? undefined,
+    artistWallet: before.artist_wallet ?? undefined,
+    amountUsdc: before.fee_usdc,
+    txHash: tx.hash,
+    mock: tx.mock || settledJob.mock,
+    submissionId: before.submission_id,
+    title: before.title,
+    artistName: before.artist_name,
+    jobId: settledJob.jobId,
+    timestamp: settlementTimestamp,
   });
 
   return successResponse(

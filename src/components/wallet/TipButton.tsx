@@ -24,10 +24,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useSignTypedData, useAccount } from 'wagmi';
 import { getAddress } from 'viem';
 import { useToast } from '@/components/ui/Toast';
+import { SettlementFanfare } from '@/components/economy/SettlementFanfare';
+import { useSettlementEvents } from '@/lib/use-settlement-events';
 import { RatingCover } from '@/components/cover/RatingCover';
 import { cn } from '@/lib/utils';
 import { parseMoodTags } from '@/lib/format';
-import { shortHash, txUrl } from '@/lib/explorer';
 import { apiClient, type ArtistTipCardResponse } from '@/lib/api-client';
 import {
   X402_OFFER_TYPES,
@@ -123,18 +124,12 @@ export function TipButton({ artistWallet, artistName, variant = 'inline', onSett
   // verified (or batched on-chain), surface the tx hash + ArcScan
   // link right under the tip controls so the tipper gets immediate,
   // verifiable proof their USDC moved — no need to open the economy
-  // ticker. Auto-clears after 8 s so it never accumulates stale rows.
+  // ticker. It remains as a dismissible paper trail.
   const [lastConfirmed, setLastConfirmed] = useState<{
     hash: string;
     amountUsdc: string;
     mock: boolean;
   } | null>(null);
-  useEffect(() => {
-    if (!lastConfirmed) return;
-    const t = setTimeout(() => setLastConfirmed(null), 8000);
-    return () => clearTimeout(t);
-  }, [lastConfirmed]);
-
   // ── Hover-card state + refs ─────────────────────────────────
   // MODULAR: hover-driven fetch with delay + abort + per-wallet
   // cache so re-hovers during a feed scroll are free. Cache is a
@@ -264,6 +259,22 @@ export function TipButton({ artistWallet, artistName, variant = 'inline', onSett
   useEffect(() => {
     onSettledRef.current = onSettled;
   }, [onSettled]);
+
+  // A tip settled in another tab gets the same receipt fanfare as a local
+  // signature. This keeps every artist surface in sync with the canonical
+  // settlement stream and refreshes the recipient evidence card on re-hover.
+  useSettlementEvents((event) => {
+    if (event.source !== "tip") return;
+    const recipient = event.toWallet ?? event.artistWallet;
+    if (!recipient || recipient.toLowerCase() !== artistWallet.toLowerCase()) return;
+    setLastConfirmed({
+      hash: event.txHash ?? "",
+      amountUsdc: event.amountUsdc,
+      mock: event.mock,
+    });
+    cacheRef.current.delete(artistWallet);
+    setCardData(null);
+  });
 
   const sendTip = useCallback(
     async (amountUsdc: string) => {
@@ -505,27 +516,15 @@ export function TipButton({ artistWallet, artistName, variant = 'inline', onSett
           </p>
         )}
         {lastConfirmed && (
-          <div
-            className="mt-3 flex items-center gap-2 border border-[var(--color-ink)]/20 bg-[var(--color-paper)]/60 px-3 py-2"
-            role="status"
-            aria-live="polite"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-rust)] shrink-0" aria-hidden="true" />
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-2)]">
-              {lastConfirmed.mock ? 'Tip recorded (mock)' : 'Settled on Arc'} · $
-              {lastConfirmed.amountUsdc}
-            </span>
-            {!lastConfirmed.mock && (
-              <a
-                href={txUrl(lastConfirmed.hash)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-auto font-mono text-[10px] tracking-[0.1em] text-[var(--color-rust)] underline underline-offset-2 hover:text-[var(--color-rust-dark)]"
-              >
-                {shortHash(lastConfirmed.hash)} ↗
-              </a>
-            )}
-          </div>
+          <SettlementFanfare
+            kind="tip"
+            amountUsdc={lastConfirmed.amountUsdc}
+            mock={lastConfirmed.mock}
+            txHash={lastConfirmed.hash}
+            recipientLabel={artistName ? `→ ${artistName}` : null}
+            onDismiss={() => setLastConfirmed(null)}
+            className="mt-3"
+          />
         )}
       </div>
 

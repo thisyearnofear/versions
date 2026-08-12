@@ -9,6 +9,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 import { useCredentialsSignIn } from "@/lib/use-credentials-sign-in";
 import { useWalletIdentity } from "@/lib/use-wallet-identity";
 import { shortAddress } from "@/lib/wallet-identity";
@@ -147,6 +148,7 @@ export default function SignInPage() {
       >
         <SignInForm />
       </Suspense>
+      <SiteFooter />
     </div>
   );
 }

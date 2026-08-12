@@ -1,19 +1,18 @@
 "use client";
 
-// MODULAR: Post-search agent pipeline reveal. Structured like aicss
-// tool/thinking blocks (status → tool → rationale) but in VERSIONS tokens.
+// MODULAR: Post-search evidence disclosure. It describes the ranking work
+// that actually produced the response; named agent runs belong here only when
+// the result contract returns auditable per-agent output.
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { shortHash, txUrl } from "@/lib/explorer";
 import type { ScorePaymentReceipt } from "@/lib/x402-score-client";
 import { SuccessCheck } from "@/components/discovery/motion";
 
-type TraceStep = {
+type EvidenceStep = {
   label: string;
-  key: string;
   time: string;
   tool: string;
   rationale: string;
@@ -31,24 +30,14 @@ export function AgentTrace({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [revealed, setRevealed] = useState(0);
-  const [agentIds, setAgentIds] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    void apiClient
-      .getAgentIdentities()
-      .then((res) => {
-        const map: Record<string, string> = {};
-        for (const a of res.agents) map[a.label] = a.agentId;
-        setAgentIds(map);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    setRevealed(0);
     if (searchTimeMs === null) return;
-    const timers = [0, 1, 2, 3].map((i) =>
-      window.setTimeout(() => setRevealed(i + 1), 120 + i * 180),
+    const timers = [0, 1, 2, 3].map((value) =>
+      window.setTimeout(
+        () => setRevealed(value),
+        value === 0 ? 0 : 120 + (value - 1) * 180,
+      ),
     );
     return () => timers.forEach(clearTimeout);
   }, [searchTimeMs, trackCount, payment?.txHash]);
@@ -56,29 +45,26 @@ export function AgentTrace({
   if (searchTimeMs === null) return null;
 
   const totalSec = (searchTimeMs / 1000).toFixed(1);
-  const steps: TraceStep[] = [
+  const steps: EvidenceStep[] = [
     {
-      label: "Production",
-      key: "production",
+      label: "Retrieve",
       time: (searchTimeMs * 0.35 / 1000).toFixed(1),
-      tool: "score_production",
-      rationale: "Mix, arrangement, and sonic finish vs brief",
+      tool: "catalog_retrieval",
+      rationale: "Finds published alternate takes and their placement briefs.",
       color: "bg-[var(--color-rust)]",
     },
     {
-      label: "Performance",
-      key: "performance",
-      time: (searchTimeMs * 0.3 / 1000).toFixed(1),
-      tool: "score_performance",
-      rationale: "Feel, dynamics, and take character vs brief",
+      label: "Rank",
+      time: (searchTimeMs * 0.4 / 1000).toFixed(1),
+      tool: "brief_match",
+      rationale: "Orders takes using the catalog-matching signals available for this search.",
       color: "bg-[var(--color-ink)]",
     },
     {
-      label: "Market",
-      key: "market",
-      time: (searchTimeMs * 0.35 / 1000).toFixed(1),
-      tool: "score_market",
-      rationale: "Placement fit and sync readiness vs brief",
+      label: "Cite",
+      time: (searchTimeMs * 0.25 / 1000).toFixed(1),
+      tool: "fit_evidence",
+      rationale: "Returns the placement-brief evidence shown on every match.",
       color: "bg-[var(--color-ink-2)]",
     },
   ];
@@ -97,22 +83,22 @@ export function AgentTrace({
         aria-expanded={expanded}
       >
         <div className="flex items-center gap-1" aria-hidden>
-          {steps.map((a, i) => (
+          {steps.map((step, i) => (
             <motion.span
-              key={a.label}
+              key={step.label}
               initial={{ scale: 0 }}
               animate={{ scale: revealed > i ? 1 : 0 }}
               transition={{ type: "spring", stiffness: 500, damping: 20 }}
-              className={cn("w-2 h-2 rounded-full", a.color)}
+              className={cn("w-2 h-2 rounded-full", step.color)}
             />
           ))}
         </div>
         <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
-          {trackCount} tracks · {totalSec}s · Arc
+          {trackCount} matches · {totalSec}s
           {payment ? ` · x402 $${payment.amountUsdc}` : ""}
         </span>
         <span className="font-mono text-[9px] text-[var(--color-ink-3)] group-hover:text-[var(--color-rust)] transition-colors">
-          {expanded ? "hide trace" : "agent trace"}
+          {expanded ? "hide evidence" : "ranking evidence"}
         </span>
       </button>
 
@@ -125,39 +111,32 @@ export function AgentTrace({
             className="overflow-hidden"
           >
             <div className="mt-3 border border-[var(--color-hair-strong)] bg-[var(--color-paper)]">
-              {steps.map((a, i) => (
+              {steps.map((step, i) => (
                 <motion.div
-                  key={a.label}
+                  key={step.label}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: revealed > i ? 1 : 0.35, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className={cn(
-                    "px-3 py-2.5 border-b border-[var(--color-hair)] last:border-b-0",
-                  )}
+                  className="px-3 py-2.5 border-b border-[var(--color-hair)] last:border-b-0"
                 >
                   <div className="flex items-center gap-2">
-                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", a.color)} />
+                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", step.color)} />
                     <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink)]">
-                      {a.label}
+                      {step.label}
                     </span>
                     <span className="font-mono text-[9px] text-[var(--color-ink-3)]">
-                      {a.time}s
+                      {step.time}s
                     </span>
-                    {agentIds[a.key] && (
-                      <span className="font-mono text-[9px] text-[var(--color-ink-3)] truncate">
-                        ERC-8004 #{agentIds[a.key]}
-                      </span>
-                    )}
                     <span className="ml-auto text-[var(--color-rust)]">
                       <SuccessCheck active={revealed > i} />
                     </span>
                   </div>
                   <div className="mt-1.5 pl-3.5 space-y-0.5">
                     <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">
-                      tool · <span className="text-[var(--color-ink-2)]">{a.tool}</span>
+                      mechanism · <span className="text-[var(--color-ink-2)]">{step.tool}</span>
                     </p>
                     <p className="font-serif text-[13px] text-[var(--color-ink-2)] leading-snug">
-                      {a.rationale}
+                      {step.rationale}
                     </p>
                   </div>
                 </motion.div>
@@ -166,7 +145,7 @@ export function AgentTrace({
               {payment && (
                 <div className="px-3 py-2.5 border-t border-[var(--color-hair)] bg-[var(--color-paper-2)]/40">
                   <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">
-                    tool · <span className="text-[var(--color-ink-2)]">x402_score_fee</span>
+                    receipt · <span className="text-[var(--color-ink-2)]">x402 scored evaluation</span>
                     {" · "}${payment.amountUsdc}
                     {payment.mock ? " · mock" : ""}
                     {payment.txHash && (
@@ -185,13 +164,6 @@ export function AgentTrace({
                   </p>
                 </div>
               )}
-
-              <div className="px-3 py-2.5 border-t border-[var(--color-hair)]">
-                <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">
-                  next · <span className="text-[var(--color-ink-2)]">erc8183_license_job</span>
-                  {" · "}USDC escrow · finality {"<"}1s
-                </p>
-              </div>
             </div>
           </motion.div>
         )}

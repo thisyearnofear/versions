@@ -38,6 +38,12 @@ export async function GET(req: Request): Promise<Response> {
         controller.enqueue(new TextEncoder().encode(payload));
       });
 
+      // Canonical receipt stream: licenses, tips, split legs, and plays.
+      const unsubSettlement = subscribe('settlement-event', (data) => {
+        const payload = `event: settlement-event\ndata: ${JSON.stringify(data)}\n\n`;
+        controller.enqueue(new TextEncoder().encode(payload));
+      });
+
       // Per-agent review lifecycle: started / verdict / failed / consensus.
       const unsubAgentStream = subscribe('agent-stream', (data) => {
         const payload = `event: agent-stream\ndata: ${JSON.stringify(data)}\n\n`;
@@ -59,6 +65,7 @@ export async function GET(req: Request): Promise<Response> {
         unsubQueueUpdate();
         unsubPlaylistUpdate();
         unsubEconomy();
+        unsubSettlement();
         unsubAgentStream();
         clearInterval(heartbeat);
       });

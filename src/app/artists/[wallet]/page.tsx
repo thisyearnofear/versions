@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 import { ArtistDashboard } from "@/components/artist/ArtistDashboard";
 import { ToastProvider } from "@/components/ui/Toast";
 
@@ -30,6 +31,7 @@ export default async function ArtistPage({
           </Suspense>
         </main>
       </div>
+      <SiteFooter />
     </ToastProvider>
   );
 }
