@@ -109,6 +109,8 @@ restore_drill() {
   [ "$#" -eq 1 ] || fail "restore-drill requires one absolute backup path"
   command -v docker >/dev/null 2>&1 || fail "docker is required for an isolated restore drill"
   command -v openssl >/dev/null 2>&1 || fail "openssl is required to generate an isolated database password"
+  load_database_url
+  require_psql
 
   local backup="$1" backup_dir backup_file major image name password container_id ready extension
   local source_schema source_constraints source_counts restored_schema restored_constraints restored_counts
