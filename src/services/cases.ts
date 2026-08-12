@@ -18,6 +18,7 @@ import {
   caseEvents as caseEventsTable,
   users as usersTable,
   supervisorProfiles as profilesTable,
+  licenses as licensesTable,
 } from "../lib/schema";
 
 export interface PlaceCaseStep {
@@ -49,6 +50,7 @@ export interface PlacementCaseRow {
   status: string;
   objective: string | null;
   pending_decision: string | null;
+  license_id: string | null;
   agent_plan: PlaceCaseStep[];
   evidence: PlaceCaseEvidence;
   ranked_count: number;
@@ -78,24 +80,35 @@ export interface OpenCaseInput {
 
 export interface AddShortlistInput {
   supervisorWallet: string;
+  /** The explicit case this take belongs to — never "most recently active". */
+  caseId: string;
   submissionId: string;
   /** Real match score shown to the supervisor (for shortlist evidence). */
   fitScore?: number;
   rank?: number | null;
 }
 
-export interface DecisionInput {
-  supervisorWallet: string;
-  caseId: string;
-  status?: string;
-  clearPending?: boolean;
-  note?: string | null;
-}
+// ── Server-owned transition commands ────────────────────
+// The UI may ASK for a decision; the service decides whether that
+// transition is legal. Cases never accept a free-form status string.
+export type CaseCommand =
+  | { type: "record_creative_decision"; note?: string }
+  | { type: "start_rights_review"; licenseId?: string }
+  | { type: "mark_settlement_ready" }
+  | { type: "record_settlement" };
+
+export type CaseCommandResult =
+  | { ok: true; row: PlacementCaseRow }
+  | {
+      ok: false;
+      code: "NOT_FOUND" | "NOT_OWNED" | "ILLEGAL_TRANSITION" | "INVALID_ARGUMENT";
+      message: string;
+    };
 
 export interface CasesService {
   openCase(input: OpenCaseInput): Promise<PlacementCaseRow>;
   addShortlist(input: AddShortlistInput): Promise<PlacementCaseRow | null>;
-  recordDecision(input: DecisionInput): Promise<PlacementCaseRow | null>;
+  executeCommand(wallet: string, caseId: string, command: CaseCommand): Promise<CaseCommandResult>;
   listCases(wallet: string, opts?: { limit?: number }): Promise<PlacementCaseRow[]>;
   countOpen(wallet: string): Promise<number>;
   getCase(
@@ -169,6 +182,7 @@ export function createCasesService(): CasesService {
         createdAt: new Date(),
         updatedAt: new Date(),
       })
+      .onConflictDoNothing({ target: profilesTable.wallet });
   }
 
   function rowToCase(
@@ -184,6 +198,7 @@ export function createCasesService(): CasesService {
       status: row.status,
       objective: row.objective,
       pending_decision: row.pendingDecision,
+      license_id: row.licenseId ?? null,
       agent_plan: row.agentPlan ?? [],
       evidence,
       ranked_count: evidence.rankedCount ?? 0,
@@ -296,27 +311,26 @@ export function createCasesService(): CasesService {
     async addShortlist(input) {
       const wallet = input.supervisorWallet.toLowerCase();
       await ensureProfile(wallet);
-      // Attach to the supervisor's most recent open case. Discover does
-      // not always know which brief produced a row; the latest active
-      // case is the correct prospect target for this non-scaling cut.
-      const [latest] = await db
+      // Attach to the EXACT case the supervisor acted on. Ownership is
+      // checked by scoping on (id, wallet) — never "most recently active".
+      const [target] = await db
         .select()
         .from(casesTable)
-        .where(and(eq(casesTable.supervisorWallet, wallet), eq(casesTable.status, "open")))
-        .orderBy(desc(casesTable.lastActivity))
+        .where(and(eq(casesTable.id, input.caseId), eq(casesTable.supervisorWallet, wallet)))
         .limit(1);
-      if (!latest) return null;
+      if (!target) return null;
 
       const evidence = {
-        ...(latest.evidence as PlaceCaseEvidence),
-        shortlistSubmissionIds: [...((latest.evidence as PlaceCaseEvidence).shortlistSubmissionIds ?? [])],
+        ...(target.evidence as PlaceCaseEvidence),
+        shortlistSubmissionIds: [...((target.evidence as PlaceCaseEvidence).shortlistSubmissionIds ?? [])],
       };
-      if (!evidence.shortlistSubmissionIds.includes(input.submissionId)) {
+      const isNew = !evidence.shortlistSubmissionIds.includes(input.submissionId);
+      if (isNew) {
         evidence.shortlistSubmissionIds.push(input.submissionId);
       }
       // Record the REAL per-take match evidence that justified keeping it
       // (fit score + rank as shown) — the case trail stays truthful.
-      const shortlisted = [...((latest.evidence as PlaceCaseEvidence).shortlisted ?? [])];
+      const shortlisted = [...((target.evidence as PlaceCaseEvidence).shortlisted ?? [])];
       const existingEntry = shortlisted.find((e) => e.submissionId === input.submissionId);
       if (existingEntry) {
         existingEntry.fitScore = input.fitScore ?? existingEntry.fitScore;
@@ -329,66 +343,133 @@ export function createCasesService(): CasesService {
       const [row] = await db
         .update(casesTable)
         .set({ evidence, lastActivity: now, updatedAt: now })
-        .where(eq(casesTable.id, latest.id))
+        .where(eq(casesTable.id, target.id))
         .returning();
-      await db.insert(caseEventsTable).values({
-        id: randomUUID(),
-        caseId: latest.id,
-        kind: "shortlisted",
-        detail: { submissionId: input.submissionId },
-        createdAt: now,
-      });
+      if (isNew) {
+        await db.insert(caseEventsTable).values({
+          id: randomUUID(),
+          caseId: target.id,
+          kind: "shortlisted",
+          detail: { submissionId: input.submissionId, fitScore: input.fitScore ?? null, rank: input.rank ?? null },
+          createdAt: now,
+        });
+      }
       return rowToCase(row!);
     },
-async recordDecision(input) {
-      const wallet = input.supervisorWallet.toLowerCase();
+async executeCommand(wallet, caseId, command) {
+      const w = wallet.toLowerCase();
       const [existing] = await db
         .select()
         .from(casesTable)
-        .where(and(eq(casesTable.id, input.caseId), eq(casesTable.supervisorWallet, wallet)))
+        .where(and(eq(casesTable.id, caseId), eq(casesTable.supervisorWallet, w)))
         .limit(1);
-      if (!existing) return null;
-
-      const now = new Date();
-      const status = input.status ?? (input.clearPending ? "rights_review" : existing.status);
-      const plan = (existing.agentPlan as PlaceCaseStep[]).map((s) =>
-        s.key === "decision" ? { ...s, done: true, current: false } : s,
-      );
-
-      const updates: Partial<typeof casesTable.$inferInsert> = {
-        status,
-        agentPlan: plan,
-        lastActivity: now,
-        updatedAt: now,
-      };
-      if (input.clearPending) updates.pendingDecision = null;
-      if (status === "rights_review") updates.objective = "rights review";
-
-      const [row] = await db
-        .update(casesTable)
-        .set(updates)
-        .where(eq(casesTable.id, existing.id))
-        .returning();
-
-      if (input.clearPending && existing.pendingDecision) {
-        await db.insert(caseEventsTable).values({
-          id: randomUUID(),
-          caseId: existing.id,
-          kind: "decision",
-          detail: { status, note: input.note ?? null, cleared: existing.pendingDecision },
-          createdAt: now,
-        });
-        if (status === "rights_review") {
-          await db.insert(caseEventsTable).values({
-            id: randomUUID(),
-            caseId: existing.id,
-            kind: "rights_requested",
-            detail: {},
-            createdAt: now,
-          });
-        }
+      if (!existing) {
+        return { ok: false, code: "NOT_FOUND" as const, message: "Case not found." };
       }
-      return rowToCase(row!);
+      const now = new Date();
+      // Transition the owned agent plan: the human decision step completes and
+      // the next owned step becomes current.
+      const advancePlan = (currentKey: string) =>
+        (existing.agentPlan as PlaceCaseStep[]).map((s) =>
+          s.key === "decision"
+            ? { ...s, done: true, current: false }
+            : s.key === "rights" || s.key === "settle"
+              ? { ...s, current: s.key === currentKey }
+              : s,
+        );
+      const insertEvent = (kind: string, detail: Record<string, unknown>) =>
+        db.insert(caseEventsTable).values({ id: randomUUID(), caseId: existing.id, kind, detail, createdAt: now });
+
+      if (command.type === "record_creative_decision") {
+        if (!["open", "awaiting_decision"].includes(existing.status)) {
+          return { ok: false, code: "ILLEGAL_TRANSITION" as const, message: `Cannot record a creative decision from status '${existing.status}'` };
+        }
+        if (!existing.pendingDecision) {
+          return { ok: false, code: "INVALID_ARGUMENT" as const, message: "No decision is pending on this case." };
+        }
+        const [row] = await db
+          .update(casesTable)
+          .set({
+            status: "rights_review",
+            pendingDecision: null,
+            objective: "rights review",
+            agentPlan: advancePlan("rights"),
+            lastActivity: now,
+            updatedAt: now,
+          })
+          .where(eq(casesTable.id, existing.id))
+          .returning();
+        await insertEvent("decision", { cleared: existing.pendingDecision, note: command.note ?? null });
+        await insertEvent("rights_prepared", { prepared: true, cleared: false, note: "request + evidence packet prepared; rights are NOT cleared" });
+        return { ok: true as const, row: rowToCase(row!) };
+      }
+
+      if (command.type === "start_rights_review") {
+        if (!["open", "awaiting_decision", "rights_review"].includes(existing.status)) {
+          return { ok: false, code: "ILLEGAL_TRANSITION" as const, message: `Cannot start rights review from status '${existing.status}'` };
+        }
+        let licenseId = existing.licenseId;
+        if (command.licenseId) {
+          const [lic] = await db
+            .select()
+            .from(licensesTable)
+            .where(and(eq(licensesTable.id, command.licenseId), eq(licensesTable.supervisorWallet, w)))
+            .limit(1);
+          if (!lic) return { ok: false, code: "INVALID_ARGUMENT" as const, message: "License not found or not owned by this wallet." };
+          licenseId = command.licenseId;
+        }
+        const [row] = await db
+          .update(casesTable)
+          .set({
+            status: "rights_review",
+            licenseId: licenseId ?? undefined,
+            agentPlan: advancePlan("rights"),
+            lastActivity: now,
+            updatedAt: now,
+          })
+          .where(eq(casesTable.id, existing.id))
+          .returning();
+        await insertEvent("rights_review", { prepared: true, cleared: false, licenseId: licenseId ?? null });
+        return { ok: true as const, row: rowToCase(row!) };
+      }
+
+      if (command.type === "mark_settlement_ready") {
+        if (!["rights_review", "settlement_pending"].includes(existing.status)) {
+          return { ok: false, code: "ILLEGAL_TRANSITION" as const, message: `Cannot prepare settlement from status '${existing.status}'` };
+        }
+        if (!existing.licenseId) {
+          return { ok: false, code: "INVALID_ARGUMENT" as const, message: "No license linked to this case; settlement cannot be prepared." };
+        }
+        const [row] = await db
+          .update(casesTable)
+          .set({ status: "settlement_pending", agentPlan: advancePlan("settle"), lastActivity: now, updatedAt: now })
+          .where(eq(casesTable.id, existing.id))
+          .returning();
+        await insertEvent("settlement_ready", { licenseId: existing.licenseId, awaitingApproval: true });
+        return { ok: true as const, row: rowToCase(row!) };
+      }
+
+      if (command.type === "record_settlement") {
+        if (existing.status !== "settlement_pending") {
+          return { ok: false, code: "ILLEGAL_TRANSITION" as const, message: "Only a settlement-pending case can be settled." };
+        }
+        if (!existing.licenseId) {
+          return { ok: false, code: "INVALID_ARGUMENT" as const, message: "No license linked to this case." };
+        }
+        const [lic] = await db.select().from(licensesTable).where(eq(licensesTable.id, existing.licenseId)).limit(1);
+        if (!lic || lic.status !== "paid") {
+          return { ok: false, code: "INVALID_ARGUMENT" as const, message: "The linked license has not been paid; settlement cannot be recorded." };
+        }
+        const [row] = await db
+          .update(casesTable)
+          .set({ status: "settled", objective: "settlement recorded", agentPlan: advancePlan("settle"), lastActivity: now, updatedAt: now })
+          .where(eq(casesTable.id, existing.id))
+          .returning();
+        await insertEvent("settled", { licenseId: existing.licenseId, paid: true });
+        return { ok: true as const, row: rowToCase(row!) };
+      }
+
+      return { ok: false, code: "INVALID_ARGUMENT" as const, message: "Unknown command." };
     },
 
     async listCases(wallet, { limit = 20 } = {}) {

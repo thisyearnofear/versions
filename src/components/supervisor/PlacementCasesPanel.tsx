@@ -66,9 +66,8 @@ export function PlacementCasesPanel() {
     setDecidingId(c.id);
     try {
       await apiClient.recordCaseDecision(c.id, {
-        clearPending: true,
-        status: "rights_review",
-        note: "Creative direction chosen — advancing to rights review",
+        type: "record_creative_decision" as const,
+        note: "Creative direction chosen",
       });
       showToast("Decision recorded — case advanced to rights review", "success");
       await load();

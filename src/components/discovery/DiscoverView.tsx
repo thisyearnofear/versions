@@ -59,6 +59,11 @@ function MatchSearch() {
   const [shortlistedIds, setShortlistedIds] = useState<Set<string>>(new Set());
   const [payment, setPayment] = useState<ScorePaymentReceipt | null>(null);
   const [preferPaid, setPreferPaid] = useState(true);
+  // The case this search opened/resumed. Used to attach shortlists to the
+  // EXPLICIT case (never "most recently active") and to surface a recoverable
+  // sync failure instead of silently swallowing it.
+  const [currentCaseId, setCurrentCaseId] = useState<string | null>(null);
+  const [caseSyncFailed, setCaseSyncFailed] = useState(false);
 
   const runSearch = useCallback(async (text: string, opts?: { paid?: boolean }) => {
     const trimmed = text.trim();
@@ -67,6 +72,25 @@ function MatchSearch() {
     setSubmitAttempted(true);
     setSearchTimeMs(null);
     const t0 = performance.now();
+    // Open/resume the persistent placement case for this brief (works for both
+    // free and paid searches). Remembers the case id so shortlists attach to
+    // the right case, and surfaces a recoverable failure state.
+    const syncCase = (res: BriefSearchResponse) => {
+      void apiClient
+        .openCase({
+          briefText: trimmed,
+          rankedCount: res.total,
+          candidateTitles: res.rows.slice(0, 3).map((r) => r.title ?? "").filter(Boolean),
+        })
+        .then((r) => {
+          setCurrentCaseId(r.row.id);
+          setCaseSyncFailed(false);
+        })
+        .catch(() => {
+          setCurrentCaseId(null);
+          setCaseSyncFailed(true);
+        });
+    };
     const trackCatalogSearch = (res: BriefSearchResponse, paid: boolean) => {
       const mode = res.catalog.mode ?? 'empty';
       track('brief_search', { len: trimmed.length, paid, catalog_mode: mode });
@@ -101,6 +125,7 @@ function MatchSearch() {
             );
           }
           void apiClient.logSearch({ briefText: trimmed, resultsCount: res.total }).catch(() => {});
+          syncCase(res);
           return;
         } catch (err) {
           const msg = (err as Error).message || "";
@@ -121,15 +146,7 @@ function MatchSearch() {
         showToast("No matches — try a broader brief.", "info");
       }
       void apiClient.logSearch({ briefText: trimmed, resultsCount: res.total }).catch(() => {});
-      // Open (or resume) the supervisor's persistent placement case so the
-      // Workspace shows this brief + the one decision it is waiting on.
-      void apiClient
-        .openCase({
-          briefText: trimmed,
-          rankedCount: res.total,
-          candidateTitles: res.rows.slice(0, 3).map((r) => r.title ?? "").filter(Boolean),
-        })
-        .catch(() => {});
+      syncCase(res);
     } catch (err) {
       showToast(`Search failed: ${(err as Error).message}`, "error");
       setResults(null);
@@ -303,6 +320,7 @@ function MatchSearch() {
                   rank={i + 1}
                   brief={effectiveBrief || brief}
                   scoreDelay={Math.min(i * 0.06, 0.4) + 0.12}
+                  caseId={currentCaseId}
                   isShortlisted={isAuthenticated && shortlistedIds.has(r.submission_id)}
                   onShortlisted={markShortlisted}
                   isAuthenticated={isAuthenticated}
@@ -311,6 +329,12 @@ function MatchSearch() {
               </motion.div>
             ))}
           </div>
+
+          {caseSyncFailed && (
+            <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-rust)]">
+              Workspace sync failed — this search couldn&apos;t be saved to your cases. Refresh or retry to open it in the Workspace.
+            </p>
+          )}
 
           <details className="mt-5 border-t border-[var(--color-hair)] pt-3">
             <summary className="cursor-pointer font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
@@ -369,6 +393,7 @@ function MatchRow({
   rank,
   brief,
   scoreDelay,
+  caseId,
   isShortlisted,
   onShortlisted,
   isAuthenticated,
@@ -378,6 +403,7 @@ function MatchRow({
   rank: number;
   brief: string;
   scoreDelay: number;
+  caseId?: string | null;
   isShortlisted: boolean;
   onShortlisted: (submissionId: string) => void;
   isAuthenticated: boolean;
@@ -412,10 +438,13 @@ function MatchRow({
     if (!requireAuth(returnTo)) return;
     try {
       await apiClient.addInterest({ submissionId: row.submission_id });
-      // Attach this take to the supervisor's open placement case + activity trail.
-      void apiClient
-        .addCaseShortlist({ submissionId: row.submission_id, fitScore: row.fit_score, rank })
-        .catch(() => {});
+      // Attach to the EXPLICIT case this search opened (never "latest open"),
+      // so a take can't land on the wrong brief when multiple are open.
+      if (caseId) {
+        void apiClient
+          .addCaseShortlist({ caseId, submissionId: row.submission_id, fitScore: row.fit_score, rank })
+          .catch(() => {});
+      }
       onShortlisted(row.submission_id);
       setJustShortlisted(true);
       track('match_shortlist', { catalog_source: 'live', persisted: true });

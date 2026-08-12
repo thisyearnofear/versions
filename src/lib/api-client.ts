@@ -542,6 +542,7 @@ export interface PlacementCaseRow {
   status: string;
   objective: string | null;
   pending_decision: string | null;
+  license_id: string | null;
   agent_plan: PlaceCaseStep[];
   evidence: PlaceCaseEvidence;
   ranked_count: number;
@@ -810,13 +811,20 @@ export const apiClient = {
   getCase(id: string): Promise<{ case: PlacementCaseRow; events: CaseEventRow[] }> {
     return api.get<{ case: PlacementCaseRow; events: CaseEventRow[] }>(`/api/v1/cases/${encodeURIComponent(id)}`);
   },
-  /** Attach a shortlisted take to the supervisor's current open case. */
-  addCaseShortlist(body: { submissionId: string; fitScore?: number; rank?: number | null }): Promise<{ row: PlacementCaseRow }> {
+  /** Attach a shortlisted take to an explicit case (ownership-checked). */
+  addCaseShortlist(body: { caseId: string; submissionId: string; fitScore?: number; rank?: number | null }): Promise<{ row: PlacementCaseRow }> {
     return api.post<{ row: PlacementCaseRow }>("/api/v1/cases/shortlist", body);
   },
-  /** Record the human decision that clears a case's pending gate. */
-  recordCaseDecision(id: string, body: { status?: string; clearPending?: boolean; note?: string | null }): Promise<{ row: PlacementCaseRow }> {
-    return api.patch<{ row: PlacementCaseRow }>(`/api/v1/cases/${encodeURIComponent(id)}`, body);
+  /** Server-owned transition. The service decides whether the command is legal. */
+  recordCaseDecision(
+    id: string,
+    command:
+      | { type: "record_creative_decision"; note?: string | null }
+      | { type: "start_rights_review"; licenseId?: string | null }
+      | { type: "mark_settlement_ready" }
+      | { type: "record_settlement" },
+  ): Promise<{ row: PlacementCaseRow }> {
+    return api.patch<{ row: PlacementCaseRow }>(`/api/v1/cases/${encodeURIComponent(id)}`, command);
   },
   /** Record supervisor ground-truth on a shown (brief → take) match. */
   recordMatchFeedback(body: {

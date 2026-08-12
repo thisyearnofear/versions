@@ -10,6 +10,7 @@ import { resolveSupervisorIdentity } from "@/lib/supervisor-identity";
 export const dynamic = "force-dynamic";
 
 const AddShortlistSchema = z.object({
+  caseId: z.string().min(1),
   submissionId: z.string().min(1),
   fitScore: z.number().optional(),
   rank: z.number().int().nonnegative().nullable().optional(),
@@ -29,15 +30,19 @@ export async function POST(req: NextRequest) {
   }
   const parsed = AddShortlistSchema.safeParse(body);
   if (!parsed.success) {
-    return errorResponse(requestId, 400, "INVALID_SHORTLIST", "submissionId is required.");
+    return errorResponse(requestId, 400, "INVALID_SHORTLIST", "caseId and submissionId are required.");
   }
   try {
     const row = await services().cases.addShortlist({
       supervisorWallet: identity.wallet,
+      caseId: parsed.data.caseId,
       submissionId: parsed.data.submissionId,
       fitScore: parsed.data.fitScore,
       rank: parsed.data.rank,
     });
+    if (!row) {
+      return errorResponse(requestId, 404, "NOT_FOUND", "Case not found or not owned by this wallet.");
+    }
     return successResponse(200, { row }, requestId);
   } catch (err) {
     return errorResponse(requestId, 500, "INTERNAL", (err as Error).message);

@@ -516,6 +516,12 @@ export const placementCases = pgTable(
       .references(() => supervisorProfiles.wallet),
     kind: text('kind').notNull().default('placement'), // placement | release | rights | settlement
     briefText: text('brief_text').notNull(),
+    // Authoritative link to the business resource driving this case. A
+    // placement case links a license once licensing starts; a release case
+    // will link a submission. State transitions are validated against these
+    // real resources — never against free-form status strings.
+    licenseId: text('license_id').references(() => licenses.id),
+    submissionId: text('submission_id').references(() => submissions.id),
     status: text('status').notNull().default('open'), // open | awaiting_decision | rights_review | settlement_ready | settled | archived
     objective: text('objective'),
     pendingDecision: text('pending_decision'),

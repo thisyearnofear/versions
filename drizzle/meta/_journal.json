@@ -36,6 +36,13 @@
       "when": 1786550283291,
       "tag": "0004_large_selene",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786568918267,
+      "tag": "0005_curly_tenebrous",
+      "breakpoints": true
     }
   ]
 }

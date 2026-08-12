@@ -62,8 +62,7 @@ export function CaseDetailView({ id }: { id: string }) {
     setDeciding(true);
     try {
       await apiClient.recordCaseDecision(id, {
-        clearPending: true,
-        status: "rights_review",
+        type: "record_creative_decision" as const,
         note: note.trim() || "Creative direction chosen",
       });
       showToast("Decision recorded — case advanced to rights review", "success");

@@ -9,11 +9,12 @@ import { resolveSupervisorIdentity } from "@/lib/supervisor-identity";
 
 export const dynamic = "force-dynamic";
 
-const DecisionSchema = z.object({
-  status: z.string().optional(),
-  clearPending: z.boolean().optional(),
-  note: z.string().nullable().optional(),
-});
+const CommandSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("record_creative_decision"), note: z.string().nullable().optional() }),
+  z.object({ type: z.literal("start_rights_review"), licenseId: z.string().nullable().optional() }),
+  z.object({ type: z.literal("mark_settlement_ready") }),
+  z.object({ type: z.literal("record_settlement") }),
+]);
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const requestId = requestIdFor(req);
@@ -42,19 +43,20 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   } catch {
     return errorResponse(requestId, 400, "INVALID_BODY", "Request body must be valid JSON.");
   }
-  const parsed = DecisionSchema.safeParse(body);
+  const parsed = CommandSchema.safeParse(body);
   if (!parsed.success) {
-    return errorResponse(requestId, 400, "INVALID_DECISION", "Invalid decision payload.");
+    return errorResponse(requestId, 400, "INVALID_COMMAND", "Invalid case command.");
   }
-  const row = await services().cases.recordDecision({
-    supervisorWallet: identity.wallet,
-    caseId: id,
-    status: parsed.data.status,
-    clearPending: parsed.data.clearPending,
-    note: parsed.data.note,
-  });
-  if (!row) {
-    return errorResponse(requestId, 404, "NOT_FOUND", "Case not found.");
+  // Server-owned transitions: the service decides whether the command is legal
+  // from the current state. The client cannot set arbitrary status strings.
+  const result = await services().cases.executeCommand(
+    identity.wallet,
+    id,
+    parsed.data as never,
+  );
+  if (!result.ok) {
+    const status = result.code === "NOT_FOUND" ? 404 : result.code === "NOT_OWNED" ? 403 : 409;
+    return errorResponse(requestId, status, result.code, result.message);
   }
-  return successResponse(200, { row }, requestId);
+  return successResponse(200, { row: result.row }, requestId);
 }

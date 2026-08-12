@@ -364,6 +364,33 @@ CREATE TABLE IF NOT EXISTS licenses (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_license_super_sub_brief ON licenses(supervisor_wallet, submission_id, brief_hash);
 CREATE INDEX IF NOT EXISTS idx_licenses_supervisor ON licenses(supervisor_wallet, created_at);
+
+CREATE TABLE IF NOT EXISTS placement_cases (
+  id TEXT PRIMARY KEY,
+  supervisor_wallet TEXT NOT NULL REFERENCES supervisor_profiles(wallet),
+  kind TEXT NOT NULL DEFAULT 'placement',
+  brief_text TEXT NOT NULL,
+  license_id TEXT REFERENCES licenses(id),
+  submission_id TEXT REFERENCES submissions(id),
+  status TEXT NOT NULL DEFAULT 'open',
+  objective TEXT,
+  pending_decision TEXT,
+  agent_plan JSONB NOT NULL DEFAULT '[]',
+  evidence JSONB NOT NULL DEFAULT '{}',
+  last_activity TIMESTAMP NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_placement_cases_supervisor ON placement_cases(supervisor_wallet, last_activity);
+
+CREATE TABLE IF NOT EXISTS case_events (
+  id TEXT PRIMARY KEY,
+  case_id TEXT NOT NULL REFERENCES placement_cases(id),
+  kind TEXT NOT NULL,
+  detail JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_case_events_case ON case_events(case_id, created_at);
 `;
 
 export async function initTestDb(): Promise<ReturnType<typeof drizzle<typeof schema>>> {
@@ -393,6 +420,8 @@ export async function resetTestDb(): Promise<void> {
   if (!_pg) return;
   // Drop all rows from every test table. Cheaper than recreating the instance.
   const tables = [
+    'case_events',
+    'placement_cases',
     'licensing_interests',
     'licenses',
     'match_feedback',
