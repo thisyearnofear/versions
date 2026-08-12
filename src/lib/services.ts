@@ -16,6 +16,7 @@ import { createErc8004Adapter, type Erc8004Adapter, type AgentLabel } from '../a
 import { createTipSettlementService, type TipSettlementService } from '../services/tips';
 import { createLlmAdapter } from '../adapters/llm';
 import { createEmbeddingAdapter } from '../adapters/embedding';
+import { resolveEmbeddingConfig, resolveLlmConfig } from '../lib/openrouter';
 import { createSubmissionsService, type SubmissionsService } from '../services/submissions';
 import { createSettlementService, type SettlementService } from '../services/settlement';
 import { createCurationService, type CurationService } from '../services/curation';
@@ -59,6 +60,8 @@ export interface ServiceRegistry {
     arWallet: string;
     agentWallets: string[];
     llmModel: string;
+    llmProvider: string;
+    embeddingProvider: string;
     arcMock: boolean;
     erc8183Mock: boolean;
     erc8004Mock: boolean;
@@ -76,9 +79,8 @@ function build(): ServiceRegistry {
   const platformWallet = process.env.PLATFORM_WALLET || null;
   const arcRpcUrl = process.env.ARC_RPC_URL || '';
   const arcUsdcContract = process.env.ARC_USDC_CONTRACT || '';
-  const llmApiUrl = process.env.LLM_API_URL || '';
-  const llmApiKey = process.env.LLM_API_KEY || '';
-  const llmModel = process.env.LLM_MODEL || 'gpt-4o-mini';
+  const llmCfg = resolveLlmConfig();
+  const embedCfg = resolveEmbeddingConfig();
 
   // MODULAR: seed-derived agent signers. AGENT_KEY_SEED gives each
   // agent a testnet wallet the arc adapter can sign with; explicit
@@ -148,10 +150,21 @@ function build(): ServiceRegistry {
   });
   const settlement = createSettlementService({ arc: arc as ArcAdapter, platformWallet: platformWallet ?? undefined });
   const curation = createCurationService({ settlement });
-  const embeddingAdapter = createEmbeddingAdapter();
+  const embeddingAdapter = createEmbeddingAdapter({
+    provider: embedCfg.provider,
+    apiUrl: embedCfg.apiUrl || undefined,
+    apiKey: embedCfg.apiKey || undefined,
+    model: embedCfg.model,
+    audioCapable: embedCfg.audioCapable,
+  });
   const feed = createFeedService({ embedding: embeddingAdapter });
   const embeddings = createEmbeddingService(embeddingAdapter);
-  const llm = createLlmAdapter({ apiUrl: llmApiUrl || undefined, apiKey: llmApiKey || undefined, model: llmModel });
+  const llm = createLlmAdapter({
+    provider: llmCfg.provider,
+    apiUrl: llmCfg.apiUrl || undefined,
+    apiKey: llmCfg.apiKey || undefined,
+    model: llmCfg.model,
+  });
   const agents = createAgentService({ llm, settlement, agentWallets });
   const ar = createArService({ arc, arWallet, llm });
   const listeners = createListenerService();
@@ -192,11 +205,13 @@ function build(): ServiceRegistry {
       platformWallet,
       arWallet,
       agentWallets,
-      llmModel,
+      llmModel: llmCfg.model,
+      llmProvider: llmCfg.provider,
+      embeddingProvider: embedCfg.provider,
       arcMock: !arcRpcUrl,
       erc8183Mock: erc8183.mock,
       erc8004Mock: erc8004.mock,
-      llmMock: !llmApiKey,
+      llmMock: llm.mock,
       // Tips settle through the arc adapter; the flag name is kept
       // for the health endpoint contract.
       gatewayMock: !arcRpcUrl,

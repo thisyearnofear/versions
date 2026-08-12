@@ -75,8 +75,10 @@ describe('llm: constructor', () => {
       apiUrl: 'https://api.openai.com/v1',
       apiKey: 'sk-test',
       model: 'gpt-4o',
+      provider: 'custom',
     });
     expect(llm.mock).toBe(false);
+    expect(llm.provider).toBe('custom');
     expect(llm.model).toBe('gpt-4o');
     expect(llm.apiUrl).toBe('https://api.openai.com/v1');
   });

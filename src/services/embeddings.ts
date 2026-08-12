@@ -1,20 +1,22 @@
-// MODULAR: Embedding service. Manages CLAP audio embeddings for the
-// supervisor inverse-search semantic layer. Two entry points:
-//   - embedVersion(submissionId): embed a single published version
-//     (called at publish time or during backfill)
-//   - embedAllPublished(): batch-backfill all published versions that
-//     don't yet have an embedding row
+// MODULAR: Embedding service. Manages catalog embeddings for the
+// supervisor inverse-search semantic layer.
 //
-// DRY: the only code path that writes to version_embeddings. The feed
-//      service reads from it; this service is the sole writer.
-// PERFORMANT: backfill processes sequentially to avoid overwhelming
-//             the embedding API rate limit. A future PR can parallelize
-//             with a bounded concurrency queue if the catalog grows.
+// Writers: embedVersion (publish/backfill), embedAllPublished.
+// Reader: feed.searchByBrief via pgvector cosine distance.
+//
+// OpenRouter mode embeds catalog *text* (title + brief fields), not raw
+// audio — set EMBEDDING_API_URL for CLAP audio vectors.
 
 import { db } from '../lib/db';
-import { publishedVersions as pvTable, versionEmbeddings as embTable } from '../lib/schema';
+import {
+  publishedVersions as pvTable,
+  placementBriefs as briefsTable,
+  submissions as submissionsTable,
+  versionEmbeddings as embTable,
+} from '../lib/schema';
 import { eq, isNull, sql } from 'drizzle-orm';
 import { createEmbeddingAdapter, type EmbeddingAdapter } from '../adapters/embedding';
+import { buildCatalogEmbedText } from '../lib/catalog-embed-text';
 import { log } from '../lib/logger';
 
 export interface EmbeddingService {
@@ -26,9 +28,45 @@ export interface EmbeddingService {
 export function createEmbeddingService(adapter?: EmbeddingAdapter): EmbeddingService {
   const emb = adapter || createEmbeddingAdapter();
 
+  async function embedPublishedVersion(submissionId: string, audioPath: string) {
+    if (emb.audioCapable) {
+      return emb.embedAudio(audioPath);
+    }
+
+    const [row] = await db
+      .select({
+        title: pvTable.title,
+        artistName: pvTable.artistName,
+        versionType: pvTable.versionType,
+        genre: submissionsTable.genre,
+        aggregatedMoodTags: pvTable.aggregatedMoodTags,
+      })
+      .from(pvTable)
+      .innerJoin(submissionsTable, eq(submissionsTable.id, pvTable.submissionId))
+      .where(eq(pvTable.submissionId, submissionId))
+      .limit(1);
+
+    if (!row) {
+      throw new Error(`embedVersion: published version not found: ${submissionId}`);
+    }
+
+    const [brief] = await db
+      .select({
+        sceneTags: briefsTable.sceneTags,
+        instruments: briefsTable.instruments,
+        emotionalArcs: briefsTable.emotionalArcs,
+        audienceSummary: briefsTable.audienceSummary,
+      })
+      .from(briefsTable)
+      .where(eq(briefsTable.submissionId, submissionId))
+      .limit(1);
+
+    const text = buildCatalogEmbedText(row, brief ?? null);
+    return emb.embedText(text);
+  }
+
   return {
     async embedVersion(submissionId: string) {
-      // Fetch the published version to get the audio path.
       const [version] = await db
         .select({ submissionId: pvTable.submissionId, audioPath: pvTable.audioPath })
         .from(pvTable)
@@ -39,7 +77,6 @@ export function createEmbeddingService(adapter?: EmbeddingAdapter): EmbeddingSer
         throw new Error(`embedVersion: published version not found: ${submissionId}`);
       }
 
-      // Skip if already embedded (idempotent).
       const [existing] = await db
         .select({ submissionId: embTable.submissionId })
         .from(embTable)
@@ -50,7 +87,7 @@ export function createEmbeddingService(adapter?: EmbeddingAdapter): EmbeddingSer
         return { mock: emb.mock, dimensions: emb.dimensions };
       }
 
-      const result = await emb.embedAudio(version.audioPath);
+      const result = await embedPublishedVersion(submissionId, version.audioPath);
 
       await db.insert(embTable).values({
         submissionId,
@@ -58,12 +95,17 @@ export function createEmbeddingService(adapter?: EmbeddingAdapter): EmbeddingSer
         model: result.model,
       }).onConflictDoNothing();
 
-      log.info('embedded version', { submissionId, mock: result.mock, model: result.model, dimensions: result.embedding.length });
+      log.info('embedded version', {
+        submissionId,
+        mock: result.mock,
+        model: result.model,
+        dimensions: result.embedding.length,
+        textOnly: !emb.audioCapable,
+      });
       return { mock: result.mock, dimensions: result.embedding.length };
     },
 
     async embedAllPublished() {
-      // Find all published versions without an embedding row.
       const missing = await db
         .select({ submissionId: pvTable.submissionId, audioPath: pvTable.audioPath })
         .from(pvTable)
@@ -75,7 +117,7 @@ export function createEmbeddingService(adapter?: EmbeddingAdapter): EmbeddingSer
 
       for (const v of missing) {
         try {
-          const result = await emb.embedAudio(v.audioPath);
+          const result = await embedPublishedVersion(v.submissionId, v.audioPath);
           await db.insert(embTable).values({
             submissionId: v.submissionId,
             embedding: result.embedding,
@@ -91,7 +133,7 @@ export function createEmbeddingService(adapter?: EmbeddingAdapter): EmbeddingSer
         }
       }
 
-      log.info('backfill complete', { embedded, skipped, mock: emb.mock });
+      log.info('backfill complete', { embedded, skipped, mock: emb.mock, textOnly: !emb.audioCapable });
       return { embedded, skipped, mock: emb.mock };
     },
 

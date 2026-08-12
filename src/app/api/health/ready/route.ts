@@ -45,8 +45,15 @@ export async function GET(req: NextRequest): Promise<Response> {
             platformBalance: arcInfo?.platformUsdcBalance ?? null,
             signerConfigured: !!process.env.PLATFORM_WALLET_PRIVATE_KEY,
           },
-          llm: { mock: svc.config.llmMock, model: svc.config.llmModel },
-          embedding: { mock: svc.config.embeddingMock },
+          llm: {
+            mock: svc.config.llmMock,
+            model: svc.config.llmModel,
+            provider: svc.config.llmProvider,
+          },
+          embedding: {
+            mock: svc.config.embeddingMock,
+            provider: svc.config.embeddingProvider,
+          },
           gateway: { mock: svc.config.gatewayMock },
           erc8183: { mock: svc.config.erc8183Mock, contract: svc.erc8183.contractAddress },
           erc8004: { mock: svc.config.erc8004Mock, registry: svc.erc8004.registryAddress },

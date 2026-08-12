@@ -67,10 +67,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <motion.div
               key={t.id}
               role="status"
-              initial={{ y: '110%', scale: 0.95, opacity: 0 }}
-              animate={{ y: 0, scale: 1, opacity: 1 }}
-              exit={{ y: '110%', scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
+              initial={{ y: "110%", scale: 0.95, opacity: 0 }}
+              animate={
+                t.type === "error"
+                  ? { y: 0, scale: 1, opacity: 1, x: [0, -6, 5, -3, 0] }
+                  : { y: 0, scale: 1, opacity: 1, x: 0 }
+              }
+              exit={{ y: "110%", scale: 0.95, opacity: 0 }}
+              transition={
+                t.type === "error"
+                  ? { duration: 0.4, ease: [0.36, 0.07, 0.19, 0.97] }
+                  : { duration: 0.24, ease: [0.23, 1, 0.32, 1] }
+              }
               className={cn(
                 "pointer-events-auto font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-3 mb-1",
                 "bg-[var(--color-ink)] text-[var(--color-paper)] border-l-[3px]",

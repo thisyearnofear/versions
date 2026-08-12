@@ -288,7 +288,8 @@ ARC_USDC_CONTRACT=0x...             # mUSDC contract on Arc (omit for mock)
 PLATFORM_WALLET=0x...               # Fee recipient wallet (omit for mock)
 PLATFORM_WALLET_PRIVATE_KEY=...     # Optional server-side signer for automated settlement (hot wallet — rotate/restrict post-demo)
 # Note: without PLATFORM_WALLET_PRIVATE_KEY, settlement legs still produce deterministic mock hashes even when ARC_RPC_URL is live.
-LLM_API_KEY=...                     # Curator agent LLM (omit for mock mode)
+OPENROUTER_API_KEY=...              # One key → live LLM + text embeddings (free tier; omit for mock mode)
+# Or set LLM_API_KEY / EMBEDDING_API_URL for custom providers (see .env.example)
 PINATA_JWT=...                      # Pinata JWT for IPFS uploads (omit for local-only)
 ```
 
@@ -304,6 +305,14 @@ work. Get a free project ID at [cloud.walletconnect.com](https://cloud.walletcon
 All external adapters are **mock-first**: omitting their env vars
 falls back to deterministic mock mode so the full demo loop runs with
 zero external dependencies. See `.env.example` for the complete list.
+
+**Inference (OpenRouter):** set `OPENROUTER_API_KEY` (from
+[openrouter.ai/keys](https://openrouter.ai/keys)) to enable live LLM
+agent reviews and text embeddings on the free tier — defaults to
+`openai/gpt-oss-20b:free` (chat) and `nvidia/nemotron-3-embed-1b:free`
+(embeddings). Explicit `LLM_API_KEY` or `EMBEDDING_API_URL` overrides
+OpenRouter for that capability. Health reports `llm.provider` /
+`embedding.provider` via `GET /api/health/ready`.
 
 ## Seeded demo catalog
 
@@ -693,36 +702,44 @@ The supervisor inverse-search supports both **structured-tag overlap**
 embeddings are configured). The semantic layer is the primary ranking
 signal; structured tags provide explainable `why_fits` citations.
 
-### Semantic search (CLAP / pgvector)
+### Semantic search (embeddings / pgvector)
 
-When `EMBEDDING_API_URL` is set, the embedding adapter calls a hosted
-CLAP API to embed both the supervisor's brief text and each published
-version's audio into the same 512-dim vector space. The feed service
-queries pgvector for cosine-distance nearest neighbors, then combines
-the semantic similarity with the structured-tag score via a hybrid
-scorer (semantic × 0.7 + structured × 0.3 + popularity/recency
-tiebreakers). When embeddings are absent (mock mode, no pgvector, or
-any DB error), the search gracefully falls back to structured-tag-only
-scoring — no downtime, no broken results.
+When inference is live (`OPENROUTER_API_KEY` or `EMBEDDING_API_URL`),
+the embedding adapter embeds the supervisor's brief text and each
+published version into 512-dim vectors stored in pgvector. With
+**OpenRouter** (default when only `OPENROUTER_API_KEY` is set), catalog
+vectors are built from track metadata + placement brief text — not raw
+audio. Set `EMBEDDING_API_URL` for a hosted **CLAP** service when you
+need audio-native vectors.
+
+The feed service queries pgvector for cosine-distance nearest neighbors,
+then combines semantic similarity with structured-tag scoring via a
+hybrid scorer (semantic × 0.7 + structured × 0.3 + popularity/recency
+tiebreakers). When embeddings are absent (mock mode, no pgvector, or any
+DB error), search gracefully falls back to structured-tag-only scoring.
 
 **Setup:**
 ```bash
 npm run db:pgvector          # enable pgvector extension + create version_embeddings table
 npm run db:push              # push the schema (version_embeddings table)
-# Set EMBEDDING_API_URL + EMBEDDING_API_KEY in .env
+# Set OPENROUTER_API_KEY in .env (or EMBEDDING_API_URL for CLAP)
 # Backfill existing catalog:
-#   curl -X POST http://localhost:3000/api/v1/embeddings/backfill
-# Or call services().embeddings.embedAllPublished() from a script
+curl -X POST http://localhost:3000/api/v1/embeddings/backfill
+# Status check:
+curl http://localhost:3000/api/v1/embeddings/backfill
 ```
 
 **Files:**
-- `src/adapters/embedding.ts` — mock-first CLAP adapter (embedAudio / embedText)
-- `src/services/embeddings.ts` — backfill service (embedVersion / embedAllPublished / hasEmbeddings)
-- `src/services/feed.ts` — hybrid scorer (cosineSimilarity + hybridScore pure functions, semantic search path in searchByBrief)
+- `src/lib/openrouter.ts` — OpenRouter defaults + config resolution
+- `src/adapters/embedding.ts` — mock-first adapter (OpenRouter / CLAP / mock)
+- `src/lib/catalog-embed-text.ts` — text surrogate for OpenRouter catalog embeds
+- `src/services/embeddings.ts` — backfill service (embedVersion / embedAllPublished)
+- `src/services/feed.ts` — hybrid scorer + semantic search path in searchByBrief
 - `src/lib/schema.ts` — `version_embeddings` table with `vector(512)` column
 - `scripts/create-pgvector-extension.sql` — extension + table + ivfflat index
-- `tests/unit/embedding.test.ts` — adapter tests (mock mode: determinism, L2 norm, dimensions)
-- `tests/unit/semantic-score.test.ts` — pure-function tests (cosine similarity, hybrid score weights)
+- `tests/unit/openrouter.test.ts` — config resolution + dimension fitting
+- `tests/unit/embedding.test.ts` — adapter tests (mock mode: determinism, L2 norm)
+- `tests/unit/semantic-score.test.ts` — pure-function tests (cosine similarity, hybrid weights)
 
 ### Up next
 
@@ -747,16 +764,20 @@ npm run db:push              # push the schema (version_embeddings table)
   `FunnelBreakdown` response. The funnel endpoint now reports both the
   artist funnel (page_view → nav_click → form_start → submit_attempt →
   submit_success) and the supervisor funnel (page_view → brief_search).
-- **Auth signin page** — `/auth/signin` page implemented with
-  wallet-signature-based sign-in that bridges RainbowKit's client-side
-  connection with NextAuth's server-side session.
+- **Auth signin page** — `/auth/signin` includes `SiteHeader`, one-tap
+  connect → EIP-191 sign (via `use-credentials-sign-in`), ENS/avatar via
+  `GET /api/v1/identity/[address]` (ensdata + web3.bio), and `callbackUrl`
+  support. Header quiet chip chains connect → sign without a page hop.
+- **Discover motion + agent trace** — score pop-in, thinking pulse during
+  search, structured agent trace panel (`AgentTrace`), shortlist check morph.
+- **OpenRouter inference** — `OPENROUTER_API_KEY` enables free-tier LLM +
+  text embeddings; health reports `provider` per capability.
 - **Embeddings backfill API route** — `POST /api/v1/embeddings/backfill`
-  triggers a full-catalog CLAP embedding backfill; `GET` returns status
-  (has_embeddings + mock flag).
-- **Health/ready endpoint** — now reports `embedding.mock`,
-  `gateway.mock` (arc-derived: on-chain tip settlement mock flag), and
-  `ipfs.configured` alongside the existing `arc.mock`
-  and `llm.mock` flags.
+  triggers a full-catalog embedding backfill; `GET` returns status
+  (`has_embeddings` + `mock` flag).
+- **Health/ready endpoint** — reports `llm.provider`, `embedding.provider`,
+  `embedding.mock`, `gateway.mock` (arc-derived), and `ipfs.configured`
+  alongside `arc.mock` and `llm.mock`.
 - **Dockerfile** — multi-stage Docker build with standalone Next.js output
   for deployment to any container platform.
 - **Integration tests** — `tests/integration/full-loop.test.ts` exercises
@@ -947,8 +968,8 @@ the `vector` extension, and re-run `db:migrate`.
 
 ### 4. Backfill embeddings (optional)
 
-After enabling pgvector and setting `EMBEDDING_API_URL` +
-`EMBEDDING_API_KEY`, backfill the existing catalog:
+After enabling pgvector and setting `OPENROUTER_API_KEY` (or
+`EMBEDDING_API_URL` for CLAP), backfill the existing catalog:
 
 ```bash
 curl -X POST http://localhost:3000/api/v1/embeddings/backfill

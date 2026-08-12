@@ -9,6 +9,7 @@
 
 import { createHash } from 'crypto';
 import { requestJson } from '../lib/http';
+import { openRouterHeaders, type InferenceProvider } from '../lib/openrouter';
 import type { AgentName } from '../lib/types';
 
 const DEFAULT_TIMEOUT = 30000;
@@ -239,6 +240,7 @@ export interface LlmCompleteResult {
 
 export interface LlmAdapter {
   mock: boolean;
+  provider: InferenceProvider;
   model: string;
   apiUrl: string | null;
   complete: (args: LlmCompleteArgs) => Promise<LlmCompleteResult>;
@@ -248,17 +250,20 @@ export function createLlmAdapter({
   apiUrl,
   apiKey,
   model = 'gpt-4o-mini',
+  provider = 'custom',
   requestTimeoutMs = DEFAULT_TIMEOUT,
 }: {
   apiUrl?: string;
   apiKey?: string;
   model?: string;
+  provider?: InferenceProvider;
   requestTimeoutMs?: number;
 }): LlmAdapter {
   const useMock = !apiKey;
 
   return {
     mock: useMock,
+    provider: useMock ? 'mock' : provider,
     model,
     apiUrl: apiUrl || null,
 
@@ -284,6 +289,14 @@ export function createLlmAdapter({
         response_format: { type: 'json_object' },
       };
 
+      const headers: Record<string, string> =
+        provider === 'openrouter'
+          ? openRouterHeaders(apiKey!)
+          : {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            };
+
       try {
         const res = await requestJson<{
           choices?: Array<{ message?: { content?: string } }>;
@@ -292,10 +305,7 @@ export function createLlmAdapter({
           url,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
-            },
+            headers,
             body: JSON.stringify(body),
             timeoutMs: requestTimeoutMs,
           },

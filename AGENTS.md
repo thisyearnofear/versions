@@ -92,7 +92,8 @@ All external adapters fall back to deterministic mock mode when their
 env vars are absent. The full demo loop (submit → pay → review →
 publish → tip) runs with zero external dependencies. Check mock status
 via `GET /api/health/ready` — it reports `arc.mock`, `llm.mock`,
-`embedding.mock`, `gateway.mock`, and `ipfs.configured`.
+`llm.provider`, `embedding.mock`, `embedding.provider`, `gateway.mock`,
+and `ipfs.configured`.
 
 ## Service registry
 

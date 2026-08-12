@@ -12,8 +12,20 @@ describe('embedding: mock mode', () => {
   });
 
   it('is not mock when apiUrl is provided', () => {
-    const emb = createEmbeddingAdapter({ apiUrl: 'https://example.com/embed' });
+    const emb = createEmbeddingAdapter({ apiUrl: 'https://example.com/embed', provider: 'custom' });
     expect(emb.mock).toBe(false);
+    expect(emb.audioCapable).toBe(true);
+  });
+
+  it('openrouter provider is text-only', () => {
+    const emb = createEmbeddingAdapter({
+      provider: 'openrouter',
+      apiUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'or-test',
+      model: 'nvidia/nemotron-3-embed-1b:free',
+    });
+    expect(emb.mock).toBe(false);
+    expect(emb.audioCapable).toBe(false);
   });
 
   it('returns deterministic embeddings for the same audio input', async () => {

@@ -13,6 +13,9 @@ import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef } from "react";
 import { WalletGlossary } from "@/components/wallet/WalletGlossary";
 import { track } from "@/lib/analytics";
+import { useCredentialsSignIn } from "@/lib/use-credentials-sign-in";
+import { useWalletIdentity } from "@/lib/use-wallet-identity";
+import { shortAddress } from "@/lib/wallet-identity";
 
 export interface WagmiConnectButtonProps {
   // "default" | "compact" render RainbowKit's built-in button (address chip).
@@ -32,18 +35,30 @@ export function WagmiConnectButton({ variant = "default", children, showGlossary
   const { address, isConnected } = useAccount();
   const { status: sessionStatus } = useSession();
   const isAuthenticated = sessionStatus === "authenticated";
+  const { identity } = useWalletIdentity(isConnected ? address : null);
+  const { loading: signingIn, signInWithWallet } = useCredentialsSignIn("/discover");
 
   // MODULAR: fire analytics when the wallet connects / disconnects.
   // Only tracks the boolean (connected: true), not the address — no PII.
+  // Quiet variant: on a fresh connect, chain straight into the EIP-191 sign
+  // so "Sign in" → wallet pick → signature is one continuous flow.
   const prevConnected = useRef(false);
   useEffect(() => {
-    if (isConnected && !prevConnected.current) {
+    const wasConnected = prevConnected.current;
+    if (isConnected && !wasConnected) {
       track("wallet_connected", { variant });
-    } else if (!isConnected && prevConnected.current) {
+      if (variant === "quiet" && sessionStatus === "unauthenticated") {
+        const callbackUrl =
+          typeof window !== "undefined"
+            ? window.location.pathname + window.location.search
+            : "/discover";
+        void signInWithWallet({ source: "header_auto", callbackUrl });
+      }
+    } else if (!isConnected && wasConnected) {
       track("wallet_disconnected", { variant });
     }
     prevConnected.current = isConnected;
-  }, [isConnected, variant]);
+  }, [isConnected, variant, sessionStatus, signInWithWallet]);
 
   const links =
     isConnected && address ? (
@@ -81,10 +96,13 @@ export function WagmiConnectButton({ variant = "default", children, showGlossary
     />
   );
 
+  const chipLabel =
+    identity?.displayName ||
+    (address ? shortAddress(address) : "Account");
+
   // MODULAR: supervisor-first variant — a quiet "Sign in" affordance when
   // disconnected (no loud wallet CTA at the front door) and a slim address
-  // chip once connected. The connect/account modal still opens on click, so
-  // the action stays reachable in ≤2 clicks, just not loud.
+  // chip once connected. Connect → sign chains when finishing auth inline.
   const control =
     variant === "quiet" ? (
       <ConnectButton.Custom>
@@ -106,21 +124,54 @@ export function WagmiConnectButton({ variant = "default", children, showGlossary
                   Sign in
                 </button>
               ) : !isAuthenticated ? (
-                <Link
-                  href={`/auth/signin?callbackUrl=${encodeURIComponent(typeof window !== "undefined" ? window.location.pathname + window.location.search : "/discover")}`}
-                  className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] hover:opacity-80 transition-opacity"
-                  title="Wallet connected — sign the message to finish"
+                <button
+                  type="button"
+                  onClick={() =>
+                    void signInWithWallet({
+                      source: "header_finish",
+                      callbackUrl:
+                        typeof window !== "undefined"
+                          ? window.location.pathname + window.location.search
+                          : "/discover",
+                    })
+                  }
+                  disabled={signingIn}
+                  className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] hover:opacity-80 transition-opacity disabled:opacity-50"
+                  title="Approve a signature to finish sign in — no gas"
                 >
-                  Finish sign in
-                </Link>
+                  {identity?.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={identity.avatar}
+                      alt=""
+                      width={16}
+                      height={16}
+                      className="h-4 w-4 rounded-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : null}
+                  {signingIn ? "Approve signature…" : `Sign as ${chipLabel}`}
+                </button>
               ) : (
                 <button
                   type="button"
                   onClick={openAccountModal}
                   className="flex items-center gap-2 border border-[var(--color-hair-strong)] px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-ink)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
                 >
-                  <span aria-hidden="true" className="inline-block h-2 w-2 rounded-full bg-[var(--color-rust)]" />
-                  {account.displayName}
+                  {identity?.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={identity.avatar}
+                      alt=""
+                      width={16}
+                      height={16}
+                      className="h-4 w-4 rounded-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span aria-hidden="true" className="inline-block h-2 w-2 rounded-full bg-[var(--color-rust)]" />
+                  )}
+                  {chipLabel}
                 </button>
               )}
             </div>

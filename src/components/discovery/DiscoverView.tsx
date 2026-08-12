@@ -19,7 +19,8 @@ import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
 import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
 import { LICENSE_FEES, LICENSE_USAGE_TYPES, type LicenseUsageType } from "@/lib/pricing";
 import { searchByBriefPaid, SCORE_FEE_USDC, type ScorePaymentReceipt } from "@/lib/x402-score-client";
-import { shortHash, txUrl } from "@/lib/explorer";
+import { AgentTrace } from "@/components/discovery/AgentTrace";
+import { AgentThinkingPulse, FitScorePop, SuccessCheck } from "@/components/discovery/motion";
 
 const BRIEF_REFINEMENTS = [
   { id: "no-vocals", label: "no vocals", instruction: "no vocals, instrumental" },
@@ -40,132 +41,6 @@ const USAGE_LABELS: Record<LicenseUsageType, string> = {
 export function DiscoverView() {
   return <MatchSearch />;
 }
-
-// ── Agent Trace (animated sequential reveal) ─────────────
-
-function AgentTrace({
-  searchTimeMs,
-  trackCount,
-  payment,
-}: {
-  searchTimeMs: number | null;
-  trackCount: number;
-  payment?: ScorePaymentReceipt | null;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [agentIds, setAgentIds] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    void apiClient
-      .getAgentIdentities()
-      .then((res) => {
-        const map: Record<string, string> = {};
-        for (const a of res.agents) map[a.label] = a.agentId;
-        setAgentIds(map);
-      })
-      .catch(() => {});
-  }, []);
-
-  if (searchTimeMs === null) return null;
-
-  const totalSec = (searchTimeMs / 1000).toFixed(1);
-  const prodTime = (searchTimeMs * 0.35 / 1000).toFixed(1);
-  const perfTime = (searchTimeMs * 0.30 / 1000).toFixed(1);
-  const marketTime = (searchTimeMs * 0.35 / 1000).toFixed(1);
-
-  const agents = [
-    { label: "Production", key: "production", time: prodTime, color: "bg-[var(--color-rust)]" },
-    { label: "Performance", key: "performance", time: perfTime, color: "bg-[var(--color-ink)]" },
-    { label: "Market", key: "market", time: marketTime, color: "bg-[var(--color-ink-2)]" },
-  ];
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: -4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="mb-5"
-    >
-      <button
-        type="button"
-        onClick={() => setExpanded((p) => !p)}
-        className="w-full flex items-center gap-3 text-left group"
-      >
-        <div className="flex items-center gap-1">
-          {agents.map((a, i) => (
-            <motion.span
-              key={a.label}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: i * 0.15, type: "spring", stiffness: 500, damping: 20 }}
-              className={cn("w-2 h-2 rounded-full", a.color)}
-            />
-          ))}
-        </div>
-        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
-          {trackCount} tracks · {totalSec}s · Arc
-          {payment ? ` · x402 $${payment.amountUsdc}` : ""}
-        </span>
-        <span className="font-mono text-[9px] text-[var(--color-ink-3)] group-hover:text-[var(--color-rust)] transition-colors">
-          {expanded ? "−" : "+"}
-        </span>
-      </button>
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="mt-2 pl-1 space-y-1.5">
-              {agents.map((a, i) => (
-                <motion.div
-                  key={a.label}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.1em]"
-                >
-                  <span className={cn("w-1.5 h-1.5 rounded-full", a.color)} />
-                  <span className="text-[var(--color-ink-2)]">{a.label}</span>
-                  <span className="text-[var(--color-ink-3)]">{a.time}s</span>
-                  {agentIds[a.key] && (
-                    <span className="text-[var(--color-ink-3)]">ERC-8004 #{agentIds[a.key]}</span>
-                  )}
-                  <span className="text-[var(--color-rust)]">✓</span>
-                </motion.div>
-              ))}
-              {payment && (
-                <div className="flex flex-wrap items-center gap-2 font-mono text-[9px] uppercase tracking-[0.1em] pt-1 text-[var(--color-ink-3)]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-rust)]" />
-                  x402 score fee ${payment.amountUsdc}
-                  {payment.txHash && (
-                    <a
-                      href={txUrl(payment.txHash)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:text-[var(--color-rust)]"
-                    >
-                      {shortHash(payment.txHash)} ↗
-                    </a>
-                  )}
-                  {payment.mock ? " · mock" : ""}
-                </div>
-              )}
-              <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.1em] pt-1 text-[var(--color-ink-3)]">
-                <span className="w-1.5 h-1.5 rounded-full border border-[var(--color-rust)]" />
-                License = ERC-8183 job · USDC escrow · finality {"<"}1s
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
-
-// ── Match Search ─────────────────────────────────────────
 
 function MatchSearch() {
   const { showToast } = useToast();
@@ -223,7 +98,6 @@ function MatchSearch() {
           return;
         } catch (err) {
           const msg = (err as Error).message || "";
-          // User rejected signature or wallet issue — fall back to free search.
           if (/reject|denied|cancel/i.test(msg)) {
             showToast("Signature skipped — running free search", "info", 2500);
           } else {
@@ -250,7 +124,6 @@ function MatchSearch() {
   }, [showToast, isAuthenticated, isConnected, preferPaid, chainId, signTypedDataAsync]);
 
   useEffect(() => {
-    // URL / auto-run stays free (guest-friendly). Paid scoring is opt-in via Match.
     if (brief.trim().length >= 3 && !submitAttempted && !results) {
       void runSearch(brief, { paid: false });
     }
@@ -293,7 +166,6 @@ function MatchSearch() {
 
   return (
     <section>
-      {/* Search bar — the interface IS the search */}
       <div className="max-w-2xl mb-4">
         <div className="flex items-stretch border border-[var(--color-ink)] bg-[var(--color-paper)] rounded-sm overflow-hidden">
           <textarea
@@ -333,7 +205,6 @@ function MatchSearch() {
             Pay Market agent ${SCORE_FEE_USDC} USDC via x402 for scored match
           </label>
         )}
-        {/* Example chips — only when no results yet */}
         {!hasResults && (
           <div className="flex flex-wrap items-center gap-2 mt-3">
             <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
@@ -353,26 +224,12 @@ function MatchSearch() {
         )}
       </div>
 
-      {loading && (
-        <div className="py-12" role="status" aria-live="polite">
-          <div className="flex items-center gap-3">
-            <motion.span
-              animate={{ scale: [1, 1.3, 1] }}
-              transition={{ repeat: Infinity, duration: 0.8 }}
-              className="inline-block w-2.5 h-2.5 bg-[var(--color-rust)] rounded-full"
-            />
-            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-ink-2)]">
-              {canPayAgents ? "x402 · 3 agents scoring..." : "3 agents scoring..."}
-            </span>
-          </div>
-        </div>
-      )}
+      {loading && <AgentThinkingPulse paid={canPayAgents} />}
 
       {hasResults && (
         <div>
           <AgentTrace searchTimeMs={searchTimeMs} trackCount={results.rows.length} payment={payment} />
 
-          {/* Refinement chips — appear after results */}
           <div className="flex flex-wrap items-center gap-2 mb-5">
             {refinements.map((a) => (
               <span
@@ -396,7 +253,6 @@ function MatchSearch() {
             ))}
           </div>
 
-          {/* Results */}
           <div role="list" aria-label="Match results" className="space-y-2">
             {results.rows.map((r, i) => (
               <motion.div
@@ -409,6 +265,7 @@ function MatchSearch() {
                   row={r}
                   rank={i + 1}
                   brief={brief}
+                  scoreDelay={Math.min(i * 0.06, 0.4) + 0.12}
                   isShortlisted={shortlistedIds.has(r.submission_id)}
                   onShortlisted={markShortlisted}
                   isAuthenticated={isAuthenticated}
@@ -429,21 +286,11 @@ function MatchSearch() {
   );
 }
 
-// ── Result Card ──────────────────────────────────────────
-// Visual: cover art + title/artist + fit score (color-coded) + consensus.
-// Expands for audio + actions.
-
-function fitScoreColor(score: number): string {
-  if (score >= 8) return "text-green-600";
-  if (score >= 5) return "text-amber-600";
-  if (score >= 3) return "text-orange-500";
-  return "text-[var(--color-ink-3)]";
-}
-
 function MatchRow({
   row,
   rank,
   brief,
+  scoreDelay,
   isShortlisted,
   onShortlisted,
   isAuthenticated,
@@ -452,6 +299,7 @@ function MatchRow({
   row: BriefSearchRow;
   rank: number;
   brief: string;
+  scoreDelay: number;
   isShortlisted: boolean;
   onShortlisted: (submissionId: string) => void;
   isAuthenticated: boolean;
@@ -463,6 +311,7 @@ function MatchRow({
   const [showLicensePanel, setShowLicensePanel] = useState(false);
   const [usageType, setUsageType] = useState<LicenseUsageType>("sync_tv_film");
   const [licensing, setLicensing] = useState(false);
+  const [justShortlisted, setJustShortlisted] = useState(false);
   const reason = row.why_fits[0] ?? null;
 
   const returnTo = typeof window !== "undefined"
@@ -474,6 +323,7 @@ function MatchRow({
     try {
       await apiClient.addInterest({ submissionId: row.submission_id });
       onShortlisted(row.submission_id);
+      setJustShortlisted(true);
       showToast("Added to shortlist — view on dashboard", "success", 2500);
     } catch (err) {
       showToast(`Failed: ${(err as Error).message}`, "error");
@@ -513,6 +363,7 @@ function MatchRow({
       className={cn(
         "border border-[var(--color-hair)] rounded-sm transition-all duration-200 hover:border-[var(--color-ink-3)] hover:shadow-sm",
         expanded && "border-[var(--color-ink)] shadow-sm",
+        justShortlisted && "border-[var(--color-rust)]",
       )}
     >
       <button
@@ -522,7 +373,6 @@ function MatchRow({
         className="group w-full p-3 text-left"
       >
         <div className="flex items-center gap-3">
-          {/* Cover art or rank indicator */}
           {row.cover_svg ? (
             <div
               className="w-10 h-10 shrink-0 rounded-sm overflow-hidden bg-[var(--color-paper-2)]"
@@ -534,7 +384,6 @@ function MatchRow({
             </div>
           )}
 
-          {/* Track info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-2">
               <span className="font-serif text-[15px] font-semibold truncate">{row.title}</span>
@@ -547,17 +396,12 @@ function MatchRow({
             )}
           </div>
 
-          {/* Fit score — color coded */}
-          <span className={cn("font-mono text-[13px] font-bold tabular-nums shrink-0", fitScoreColor(row.fit_score))}>
-            {row.fit_score.toFixed(1)}
-          </span>
+          <FitScorePop score={row.fit_score} delay={scoreDelay} />
 
-          {/* Consensus badge */}
           <span className="font-mono text-[8px] tabular-nums text-[var(--color-ink-3)] shrink-0 bg-[var(--color-paper-2)] px-1.5 py-0.5 rounded-sm">
             {row.rating_count}/3
           </span>
 
-          {/* Expand indicator */}
           <span className={cn(
             "w-6 h-6 grid place-items-center rounded-full transition-all duration-200 shrink-0",
             expanded
@@ -599,15 +443,24 @@ function MatchRow({
                   onClick={() => void onShortlist()}
                   disabled={isShortlisted}
                   className={cn(
-                    "font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-sm transition-colors",
+                    "inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-sm transition-colors",
                     isShortlisted
-                      ? "bg-[var(--color-rust)] text-[var(--color-paper)] opacity-80"
+                      ? "bg-[var(--color-rust)] text-[var(--color-paper)] opacity-90"
                       : isAuthenticated
                         ? "bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-rust)]"
                         : "border border-[var(--color-ink-3)] text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]",
                   )}
                 >
-                  {isShortlisted ? "✓ Shortlisted" : isAuthenticated ? "Shortlist" : "Sign in to shortlist"}
+                  {isShortlisted ? (
+                    <>
+                      <SuccessCheck active />
+                      Shortlisted
+                    </>
+                  ) : isAuthenticated ? (
+                    "Shortlist"
+                  ) : (
+                    "Sign in to shortlist"
+                  )}
                 </button>
                 <button
                   type="button"
@@ -669,9 +522,21 @@ function MatchRow({
                         type="button"
                         onClick={() => void onRequestLicense()}
                         disabled={licensing}
-                        className="bg-[var(--color-rust)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 rounded-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                        className="inline-flex items-center gap-2 bg-[var(--color-rust)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 rounded-sm hover:opacity-90 transition-opacity disabled:opacity-50"
                       >
-                        {licensing ? "Creating…" : `Request license · $${LICENSE_FEES[usageType]} USDC`}
+                        {licensing ? (
+                          <>
+                            <motion.span
+                              className="inline-block h-3 w-3 rounded-full border border-[var(--color-paper)] border-t-transparent"
+                              animate={{ rotate: 360 }}
+                              transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
+                              aria-hidden
+                            />
+                            Creating…
+                          </>
+                        ) : (
+                          `Request license · $${LICENSE_FEES[usageType]} USDC`
+                        )}
                       </button>
                     </div>
                   </motion.div>
