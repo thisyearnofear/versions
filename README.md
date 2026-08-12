@@ -64,6 +64,11 @@ ground-truth data incumbents can't. See **Strategy & positioning** below.
   review cards animate in one by one as each agent finishes, and a
   pipeline stepper (Submit → Pay → Review → Publish → Settle) shows the
   exact lifecycle position.
+- **App Kit sync budget**: supervisors fund the Arc treasury via
+  Circle App Kit **Send** (USDC on Arc) or **Unified Balance**
+  (deposit Base Sepolia → spend on Arc) from the Dashboard.
+- **Agent Stack surface**: Dashboard lists agent wallets + ERC-8004
+  identity IDs (payees for x402 score fees and settlement legs).
 - **x402 nanopayments**: listeners tip artists as little as 1 lepton
   ($0.000001) using the x402 protocol with EIP-712 signatures, batched
   into on-chain USDC transfers with inline settlement confirmation.

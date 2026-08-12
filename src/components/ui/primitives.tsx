@@ -44,6 +44,7 @@ export function Section({
   title,
   intro,
   divider = true,
+  id,
 }: {
   children: ReactNode;
   className?: string;
@@ -51,9 +52,10 @@ export function Section({
   title?: string;
   intro?: string;
   divider?: boolean;
+  id?: string;
 }) {
   return (
-    <section className={cn(divider && "border-t border-[var(--color-hair)]", "py-10", className)}>
+    <section id={id} className={cn(divider && "border-t border-[var(--color-hair)]", "py-10", className)}>
       {eyebrow && <Eyebrow className="mb-3">{eyebrow}</Eyebrow>}
       {title && <h2 className="mb-1 font-serif text-2xl font-black tracking-tight md:text-3xl">{title}</h2>}
       {intro && <p className="mb-5 font-serif text-sm leading-snug text-[var(--color-ink-2)]">{intro}</p>}

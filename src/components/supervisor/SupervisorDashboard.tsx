@@ -7,6 +7,8 @@ import { apiClient, type SavedBrief, type BriefSearchRecord, type LicensingInter
 import { useToast } from "@/components/ui/Toast";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import { Card, Eyebrow, Section } from "@/components/ui/primitives";
+import { SyncBudgetPanel } from "@/components/supervisor/SyncBudgetPanel";
+import { AgentStackPanel } from "@/components/supervisor/AgentStackPanel";
 import { LicensesSection } from "@/components/supervisor/LicensesSection";
 import { MatchBenchmarkPanel } from "@/components/supervisor/MatchBenchmarkPanel";
 import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
@@ -250,6 +252,9 @@ export function SupervisorDashboard() {
       <div id="licenses">
         <LicensesSection isAuthenticated={isAuthenticated} requireAuth={requireAuth} />
       </div>
+
+      <SyncBudgetPanel />
+      <AgentStackPanel />
 
       <MatchBenchmarkPanel compact />
 
