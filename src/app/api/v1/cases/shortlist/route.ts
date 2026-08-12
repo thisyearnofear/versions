@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 
 const AddShortlistSchema = z.object({
   submissionId: z.string().min(1),
+  fitScore: z.number().optional(),
+  rank: z.number().int().nonnegative().nullable().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -33,6 +35,8 @@ export async function POST(req: NextRequest) {
     const row = await services().cases.addShortlist({
       supervisorWallet: identity.wallet,
       submissionId: parsed.data.submissionId,
+      fitScore: parsed.data.fitScore,
+      rank: parsed.data.rank,
     });
     return successResponse(200, { row }, requestId);
   } catch (err) {

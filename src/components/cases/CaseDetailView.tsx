@@ -183,6 +183,25 @@ export function CaseDetailView({ id }: { id: string }) {
         </ul>
       </Section>
 
+      {c.evidence?.shortlisted && c.evidence.shortlisted.length > 0 && (
+        <Section eyebrow="Shortlist evidence" title="Why these made the shortlist" divider={false} className="py-0">
+          <ul className="flex flex-col gap-1.5">
+            {c.evidence.shortlisted.map((entry) => (
+              <li key={entry.submissionId} className="flex items-center gap-3 font-mono text-[11px]">
+                <span className="text-[var(--color-rust)]">✓</span>
+                <span className="min-w-0 flex-1 truncate text-[var(--color-ink-2)]">
+                  {entry.submissionId}
+                </span>
+                <span className="shrink-0 text-[var(--color-ink-3)]">
+                  match {entry.fitScore.toFixed(2)}
+                  {entry.rank != null && ` · rank #${entry.rank}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
       <Section eyebrow="Activity trail" title="What the agent did" divider={false} className="py-0">
         {record.events.length === 0 ? (
           <p className="font-serif italic text-[var(--color-ink-3)] text-sm">No events recorded yet.</p>

@@ -523,7 +523,14 @@ export interface PlaceCaseStep {
 export interface PlaceCaseEvidence {
   rankedCount?: number;
   shortlistSubmissionIds?: string[];
+  shortlisted?: CaseShortlistEntry[];
   recommendationText?: string;
+}
+
+export interface CaseShortlistEntry {
+  submissionId: string;
+  fitScore: number;
+  rank?: number | null;
 }
 
 /** Persistent supervisor work object: the brief + the agent plan + the evidence + the one human decision it is waiting on. */
@@ -804,7 +811,7 @@ export const apiClient = {
     return api.get<{ case: PlacementCaseRow; events: CaseEventRow[] }>(`/api/v1/cases/${encodeURIComponent(id)}`);
   },
   /** Attach a shortlisted take to the supervisor's current open case. */
-  addCaseShortlist(body: { submissionId: string }): Promise<{ row: PlacementCaseRow }> {
+  addCaseShortlist(body: { submissionId: string; fitScore?: number; rank?: number | null }): Promise<{ row: PlacementCaseRow }> {
     return api.post<{ row: PlacementCaseRow }>("/api/v1/cases/shortlist", body);
   },
   /** Record the human decision that clears a case's pending gate. */

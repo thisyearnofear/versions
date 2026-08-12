@@ -30,7 +30,15 @@ export interface PlaceCaseStep {
 export interface PlaceCaseEvidence {
   rankedCount?: number;
   shortlistSubmissionIds?: string[];
+  shortlisted?: CaseShortlistEntry[];
   recommendationText?: string;
+}
+
+/** A take the supervisor kept, with the REAL match score + rank shown. */
+export interface CaseShortlistEntry {
+  submissionId: string;
+  fitScore: number;
+  rank?: number | null;
 }
 
 export interface PlacementCaseRow {
@@ -71,6 +79,9 @@ export interface OpenCaseInput {
 export interface AddShortlistInput {
   supervisorWallet: string;
   submissionId: string;
+  /** Real match score shown to the supervisor (for shortlist evidence). */
+  fitScore?: number;
+  rank?: number | null;
 }
 
 export interface DecisionInput {
@@ -303,6 +314,17 @@ export function createCasesService(): CasesService {
       if (!evidence.shortlistSubmissionIds.includes(input.submissionId)) {
         evidence.shortlistSubmissionIds.push(input.submissionId);
       }
+      // Record the REAL per-take match evidence that justified keeping it
+      // (fit score + rank as shown) — the case trail stays truthful.
+      const shortlisted = [...((latest.evidence as PlaceCaseEvidence).shortlisted ?? [])];
+      const existingEntry = shortlisted.find((e) => e.submissionId === input.submissionId);
+      if (existingEntry) {
+        existingEntry.fitScore = input.fitScore ?? existingEntry.fitScore;
+        if (input.rank != null) existingEntry.rank = input.rank;
+      } else {
+        shortlisted.push({ submissionId: input.submissionId, fitScore: input.fitScore ?? 0, rank: input.rank ?? null });
+      }
+      evidence.shortlisted = shortlisted;
       const now = new Date();
       const [row] = await db
         .update(casesTable)

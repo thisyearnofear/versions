@@ -413,7 +413,9 @@ function MatchRow({
     try {
       await apiClient.addInterest({ submissionId: row.submission_id });
       // Attach this take to the supervisor's open placement case + activity trail.
-      void apiClient.addCaseShortlist({ submissionId: row.submission_id }).catch(() => {});
+      void apiClient
+        .addCaseShortlist({ submissionId: row.submission_id, fitScore: row.fit_score, rank })
+        .catch(() => {});
       onShortlisted(row.submission_id);
       setJustShortlisted(true);
       track('match_shortlist', { catalog_source: 'live', persisted: true });
