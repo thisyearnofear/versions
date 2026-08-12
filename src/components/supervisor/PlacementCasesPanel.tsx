@@ -119,10 +119,10 @@ export function PlacementCasesPanel() {
                       )}
                     </div>
                     <Link
-                      href={`/discover?brief=${encodeURIComponent(c.brief_text)}`}
+                      href={`/cases/${c.id}`}
                       className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] border border-[var(--color-ink)] px-3 py-1.5 text-[var(--color-ink)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
                     >
-                      Resume →
+                      Open case →
                     </Link>
                   </div>
 {c.pending_decision && (
