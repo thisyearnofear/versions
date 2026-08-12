@@ -69,6 +69,27 @@ curl -sf https://versions.persidian.com/api/health/ready
 mismatch makes `pg_dump` unusable, so the backup helper uses the official
 `postgres:<server-major>` client image and verifies the dump with `pg_restore`.
 
+## Recovery drill
+
+Archive readability is not a recovery test. After every schema change and at
+least monthly, restore the newest post-change archive into an isolated,
+disposable PostgreSQL + pgvector container:
+
+```bash
+# Use the exact archive printed by db:prod:backup.
+npm run db:prod:restore-drill -- /home/linuxuser/backups/versions/<backup>.dump
+```
+
+The drill never gives the temporary database network access or connects it to
+the application network. It restores with `--exit-on-error`, verifies
+`pgvector`, compares the restored public schema and constraints plus key
+license/catalog row counts against the live source, then removes the temporary
+container. The first successful post-schema drill ran on 2026-08-12 against
+`versions-before-schema-20260812T172055Z.dump` (91,548 bytes), restoring the
+expected 8 release columns, 2 provenance constraints, and the then-current
+3/7/2 license/published-version/feedback row counts. The earlier
+pre-release archive also restored, but is not a current-schema recovery point.
+
 Do not fabricate rows in `__drizzle_migrations`. Establishing a ledger baseline
 requires a separately reviewed, hash-verified migration plan. Until then, keep
 using the guarded status → backup → strict push workflow above.

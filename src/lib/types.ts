@@ -100,6 +100,18 @@ export interface BriefSearchLicenseQuote {
   }>;
 }
 
+// A result-level decision aid, not a simulated clearance record. It makes
+// the specific evidence still required for a final license explicit so a
+// supervisor can distinguish a requestable workflow from a cleared outcome.
+export interface BriefSearchLicensingEvidence {
+  status: 'sample_only' | 'rights_review_required';
+  summary: string;
+  outstanding: Array<{
+    requirement: 'rights_authority' | 'scope_and_restrictions' | 'final_quote';
+    description: string;
+  }>;
+}
+
 export interface BriefSearchRow {
   submission_id: string;
   title: string;
@@ -119,6 +131,7 @@ export interface BriefSearchRow {
   why_fits: string[];
   license_availability: BriefSearchLicenseAvailability;
   license_quote: BriefSearchLicenseQuote;
+  licensing_evidence: BriefSearchLicensingEvidence;
   brief: {
     scene_tags: string[];
     instruments: string[];

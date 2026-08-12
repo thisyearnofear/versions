@@ -15,6 +15,7 @@
     "db:push": "drizzle-kit push",
     "db:prod:status": "bash scripts/db-prod.sh status",
     "db:prod:backup": "bash scripts/db-prod.sh backup",
+    "db:prod:restore-drill": "bash scripts/db-prod.sh restore-drill",
     "db:prod:push": "bash scripts/db-prod.sh push",
     "db:studio": "drizzle-kit studio",
     "db:purge:preview": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/purge-legacy-placement-briefs.preview.sql",

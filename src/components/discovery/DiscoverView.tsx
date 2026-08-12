@@ -605,8 +605,13 @@ function MatchRow({
                   {isDemo ? 'Sample schedule' : 'Indicative platform quote'} · {row.license_quote.territory} · {row.license_quote.term_months} months
                 </p>
                 <p className="mt-1 font-mono text-[9px] text-[var(--color-ink-3)]">
-                  Clearance unverified · {row.license_availability.clearance.reason}
+                  {row.licensing_evidence.status === 'sample_only' ? 'Sample only' : 'Rights review required'} · {row.licensing_evidence.summary}
                 </p>
+                <ul className="mt-1.5 space-y-0.5 font-mono text-[8px] leading-snug text-[var(--color-ink-3)]" aria-label="Outstanding licensing evidence">
+                  {row.licensing_evidence.outstanding.map((item) => (
+                    <li key={item.requirement}>• {item.description}</li>
+                  ))}
+                </ul>
                 <div className="flex flex-wrap gap-2 mt-2">
                   <button
                     type="button"

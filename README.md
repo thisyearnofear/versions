@@ -41,6 +41,7 @@ npm run check:arc    # live Arc probe
 ./scripts/deploy-remote.sh   # prod app deploy (git-only — see docs/deploy.md)
 npm run db:prod:status       # prod DB state (read-only; run on VPS)
 npm run db:prod:backup       # verified production backup (run on VPS)
+npm run db:prod:restore-drill -- /absolute/path/to/backup.dump  # isolated recovery test
 ```
 
 Env: copy `.env.example`. Omit keys → mock. `OPENROUTER_API_KEY` and Arc vars go live. Never commit `.env`.

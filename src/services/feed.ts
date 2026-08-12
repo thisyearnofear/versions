@@ -309,6 +309,37 @@ function buildLicenseQuote(source: CatalogSource): BriefSearchRow['license_quote
   };
 }
 
+// MODULAR: turn the absence of rights records into an explicit supervisor
+// decision aid. This must remain derived from actual catalog state: it never
+// upgrades a take to cleared or a quote to final merely because it ranked well.
+function buildLicensingEvidence(source: CatalogSource): BriefSearchRow['licensing_evidence'] {
+  const outstanding = [
+    {
+      requirement: 'rights_authority' as const,
+      description: 'Confirm the authority to license every required right for this take.',
+    },
+    {
+      requirement: 'scope_and_restrictions' as const,
+      description: 'Record territory, term, media scope, and any restrictions or exclusions.',
+    },
+    {
+      requirement: 'final_quote' as const,
+      description: 'Issue a rights-aware final quote before treating the license as cleared.',
+    },
+  ];
+  return source === 'demo'
+    ? {
+        status: 'sample_only',
+        summary: 'Guided-demo data contains no rights evidence; its schedule is illustrative only.',
+        outstanding,
+      }
+    : {
+        status: 'rights_review_required',
+        summary: 'This live-catalog take is requestable, but rights authority, scope, and final terms still require review.',
+        outstanding,
+      };
+}
+
 // ── Semantic search pure functions (Phase 4) ───────────
 
 // MODULAR: cosine similarity between two L2-normalized vectors.
@@ -586,6 +617,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
         why_fits: s.why_fits,
         license_availability: buildLicenseAvailability(source),
         license_quote: buildLicenseQuote(source),
+        licensing_evidence: buildLicensingEvidence(source),
         brief: {
           scene_tags: s.brief.sceneTags,
           instruments: s.brief.instruments,

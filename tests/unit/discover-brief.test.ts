@@ -175,6 +175,15 @@ describe('discover/brief: happy path', () => {
           expect.objectContaining({ usage_type: 'sync_tv_film', fee_usdc: '250.00' }),
         ]),
       },
+      licensing_evidence: {
+        status: 'rights_review_required',
+        summary: expect.any(String),
+        outstanding: expect.arrayContaining([
+          expect.objectContaining({ requirement: 'rights_authority', description: expect.any(String) }),
+          expect.objectContaining({ requirement: 'scope_and_restrictions', description: expect.any(String) }),
+          expect.objectContaining({ requirement: 'final_quote', description: expect.any(String) }),
+        ]),
+      },
       brief: {
         scene_tags: expect.arrayContaining(['car chase']),
         instruments: expect.arrayContaining(['guitar_led']),

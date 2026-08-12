@@ -54,11 +54,11 @@ Ranked alternate takes for a plain-English brief.
 - Response `data`: `{ rows: BriefSearchRow[], total, limit, offset }`
 
 Each v1 row contains `fit_score`, `why_fits`, track metadata, `catalog`
-provenance, a structured placement brief, `license_availability`, and
-`license_quote`. The response also has a `catalog` summary with its mode and
-live/demo result counts. `why_fits` is evidence from the available
-catalog-ranking signals; it is not an individual agent verdict or clearance
-claim.
+provenance, a structured placement brief, `license_availability`,
+`license_quote`, and `licensing_evidence`. The response also has a `catalog`
+summary with its mode and live/demo result counts. `why_fits` is evidence from
+the available catalog-ranking signals; it is not an individual agent verdict or
+clearance claim.
 
 ```json
 { "success": true, "data": {
@@ -92,6 +92,15 @@ claim.
         { "usage_type": "other", "fee_usdc": "100.00" }
       ]
     },
+    "licensing_evidence": {
+      "status": "rights_review_required",
+      "summary": "This live-catalog take is requestable, but rights authority, scope, and final terms still require review.",
+      "outstanding": [
+        { "requirement": "rights_authority", "description": "Confirm the authority to license every required right for this take." },
+        { "requirement": "scope_and_restrictions", "description": "Record territory, term, media scope, and any restrictions or exclusions." },
+        { "requirement": "final_quote", "description": "Issue a rights-aware final quote before treating the license as cleared." }
+      ]
+    },
     "brief": {
       "scene_tags": ["car chase"],
       "instruments": ["synth"],
@@ -115,7 +124,9 @@ workflow. `clearance.status: "unverified"` is deliberate: v1 has no persisted
 rights-holder, authority, restriction, chain-of-title, revocation, or
 clearance-proof record. `license_quote.status: "indicative"` is the
 server-derived global platform schedule (currently worldwide for 12 months),
-not a negotiated, cleared, or final license offer.
+not a negotiated, cleared, or final license offer. `licensing_evidence` turns
+that absence into an explicit decision checklist; its `outstanding` items are
+requirements, not claims that the evidence has been collected.
 
 ### 2. `POST /discover/brief/feedback` — record ground truth
 
