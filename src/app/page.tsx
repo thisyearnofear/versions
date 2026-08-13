@@ -80,7 +80,7 @@ export default function Home() {
         <section aria-label="Recent work published by the agents">
           <div className="px-6 pt-12 pb-4 text-center">
             <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]">
-              Recent work — click a waveform to listen
+              Recent work — click a cover to listen
             </p>
           </div>
           <WaveformGallery />

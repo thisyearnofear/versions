@@ -2,8 +2,9 @@
 
 // MODULAR: kinetic waveform gallery for the landing page. Published
 // album covers ride along an SVG waveform path — scroll advances
-// them across the wave with tangent rotation. Clicking the wave plays
-// a note (pitch maps to Y position) — the landing page is an instrument.
+// them across the wave with tangent rotation. Clicking a cover plays
+// the actual track audio. Clicking the wave background plays a pitched
+// tone (Y → note) as an easter egg.
 // Falls back to placeholder covers when the catalog is empty.
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -56,6 +57,7 @@ interface CoverItem {
   title: string;
   artist: string;
   coverSvg: string | null;
+  audioPath: string | null;
   energy?: string | null;
   tempo?: string | null;
   avgSolo?: number | null;
@@ -66,11 +68,54 @@ interface CoverItem {
 export function WaveformGallery() {
   const containerRef = useRef<HTMLDivElement>(null);
   const pathRef = useRef<SVGPathElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [covers, setCovers] = useState<CoverItem[]>([]);
   const [points, setPoints] = useState<Array<{ x: number; y: number; angle: number }>>([]);
   const [loaded, setLoaded] = useState(false);
+  const [playingId, setPlayingId] = useState<string | null>(null);
   const [ripples, setRipples] = useState<Array<{ id: number; x: number; y: number }>>([]);
   const coverSize = useCoverSize();
+
+  // Resolve audio_path → playable URL via the uploads API route.
+  function audioUrl(audioPath: string): string {
+    const filename = audioPath.split("/").pop() || audioPath;
+    return `/api/v1/uploads/${encodeURIComponent(filename)}`;
+  }
+
+  // Play or pause a cover's track.
+  const handleCoverClick = useCallback(
+    (cover: CoverItem) => {
+      if (!cover.audioPath) return;
+      // If clicking the same track that's playing, pause it.
+      if (playingId === cover.id && audioRef.current) {
+        audioRef.current.pause();
+        setPlayingId(null);
+        return;
+      }
+      // Stop any current playback.
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      const audio = new Audio(audioUrl(cover.audioPath));
+      audio.volume = 0.8;
+      audio.addEventListener("ended", () => setPlayingId(null));
+      audio.play().catch(() => setPlayingId(null));
+      audioRef.current = audio;
+      setPlayingId(cover.id);
+    },
+    [playingId],
+  );
+
+  // Cleanup on unmount.
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -108,6 +153,7 @@ export function WaveformGallery() {
             title: r.title,
             artist: r.artist_name,
             coverSvg: r.cover_svg ?? null,
+            audioPath: r.audio_path ?? null,
             energy: r.energy_consensus,
             tempo: r.tempo_consensus,
             avgSolo: r.avg_solo_intensity,
@@ -115,7 +161,7 @@ export function WaveformGallery() {
             moodTags: parseMoodTags(r.aggregated_mood_tags),
           }));
         while (items.length < 4) {
-          items.push({ id: `placeholder-${items.length}`, title: "", artist: "", coverSvg: null });
+          items.push({ id: `placeholder-${items.length}`, title: "", artist: "", coverSvg: null, audioPath: null });
         }
         setCovers(items);
       })
@@ -127,6 +173,7 @@ export function WaveformGallery() {
             title: "",
             artist: "",
             coverSvg: null,
+            audioPath: null,
           })),
         );
       })
@@ -228,7 +275,22 @@ export function WaveformGallery() {
                       <span className="font-mono text-[8px] text-[var(--color-ink-3)]">···</span>
                     </div>
                   ) : (
-                    <div className="w-full h-full relative group cursor-pointer rounded overflow-hidden">
+                    <div
+                      className="w-full h-full relative group cursor-pointer rounded overflow-hidden"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCoverClick(cover);
+                      }}
+                      role="button"
+                      aria-label={`${playingId === cover.id ? "Pause" : "Play"} ${cover.title} by ${cover.artist}`}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleCoverClick(cover);
+                        }
+                      }}
+                    >
                       {cover.coverSvg ? (
                         <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: cover.coverSvg }} />
                       ) : (
@@ -249,6 +311,17 @@ export function WaveformGallery() {
                           }}
                         />
                       )}
+                      {/* Playing indicator */}
+                      {playingId === cover.id && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded">
+                          <div className="flex gap-[2px] items-end h-3" aria-hidden="true">
+                            <span className="w-[2px] bg-white animate-pulse" style={{ height: "8px", animationDelay: "0ms" }} />
+                            <span className="w-[2px] bg-white animate-pulse" style={{ height: "12px", animationDelay: "150ms" }} />
+                            <span className="w-[2px] bg-white animate-pulse" style={{ height: "6px", animationDelay: "300ms" }} />
+                            <span className="w-[2px] bg-white animate-pulse" style={{ height: "10px", animationDelay: "75ms" }} />
+                          </div>
+                        </div>
+                      )}
                       <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-2)] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                         {cover.title} · {cover.artist}
                       </div>
@@ -263,7 +336,7 @@ export function WaveformGallery() {
       {/* Section label + play hint */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 text-center pointer-events-none">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]">
-          {loaded ? "From the catalog · click to play" : "Loading…"}
+          {loaded ? (playingId ? "Now playing · click again to pause" : "From the catalog · click a cover to play") : "Loading…"}
         </p>
       </div>
     </section>
