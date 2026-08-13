@@ -11,7 +11,7 @@
 // resume a case.
 
 import { randomUUID } from "crypto";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "../lib/db";
 import {
   placementCases as casesTable,
@@ -89,13 +89,12 @@ export interface AddShortlistInput {
 }
 
 // ── Server-owned transition commands ────────────────────
-// The UI may ASK for a decision; the service decides whether that
-// transition is legal. Cases never accept a free-form status string.
-export type CaseCommand =
-  | { type: "record_creative_decision"; note?: string }
-  | { type: "start_rights_review"; licenseId?: string }
-  | { type: "mark_settlement_ready" }
-  | { type: "record_settlement" };
+// The UI may ASK for a human decision; the service decides whether that is
+// legal. Licensing/settlement status is NEVER set by a command — it is
+// derived from the authoritative license record at read time (see
+// licenseStatusFor / projectedCase). There is deliberately no client path to
+// attach a license to an arbitrary case or to mark a case settled.
+export type CaseCommand = { type: "record_creative_decision"; note?: string };
 
 export type CaseCommandResult =
   | { ok: true; row: PlacementCaseRow }
@@ -115,13 +114,12 @@ export interface CasesService {
     wallet: string,
     id: string,
   ): Promise<{ case: PlacementCaseRow; events: CaseEventRow[] } | null>;
-  /** Link a real license to the matching case and enter rights_review. */
-  linkLicenseForOutcome(
-    wallet: string,
-    input: { briefText: string; submissionId: string; licenseId: string },
-  ): Promise<PlacementCaseRow | null>;
+  /** Link a real license to its matching shortlisted case and enter rights review. */
+  linkLicenseForOutcome(wallet: string, input: { licenseId: string }): Promise<PlacementCaseRow | null>;
   /** Find the case that owns a license (for settlement transitions). */
   getCaseByLicense(wallet: string, licenseId: string): Promise<PlacementCaseRow | null>;
+  /** Persist a paid license's terminal case projection; safe to retry. */
+  reconcileLicenseOutcome(wallet: string, licenseId: string): Promise<PlacementCaseRow | null>;
 }
 
 // The named steps an agent owns on a fresh placement brief. Order and
@@ -229,90 +227,208 @@ export function createCasesService(): CasesService {
     };
   }
 
+  // ── Lifecycle projection ───────────────────────────────
+  // The case's licensing/settlement state is DERIVED from the authoritative
+  // license record at read time — never written by a client command. This is
+  // the single source of truth so a paid license can never be masked by a
+  // stale case row, and a case can never claim "settled" before the license
+  // is actually paid.
+  function projectStatus(storedStatus: string, licenseStatus: string | null): string {
+    if (!licenseStatus) return storedStatus;
+    if (licenseStatus === "paid") return "settled";
+    if (licenseStatus === "settling") return "settlement_pending";
+    return "rights_review"; // license pending_payment => request prepared, not cleared
+  }
+
+  function planForStatus(row: typeof casesTable.$inferSelect, status: string): PlaceCaseStep[] {
+    const hasRecommendation = !!((row.evidence as PlaceCaseEvidence).recommendationText);
+    const decisionDone = status !== "open" && status !== "awaiting_decision";
+    return [
+      { key: "interpret", label: "Interpreted the brief", done: true },
+      { key: "rank", label: "Ranked the eligible takes", done: true },
+      { key: "recommend", label: "Prepared evidence-backed recommendations", done: hasRecommendation },
+      { key: "decision", label: "Needs your judgment", done: decisionDone, current: !decisionDone },
+      { key: "rights", label: "Rights review", done: status === "settlement_pending" || status === "settled", current: status === "rights_review" },
+      { key: "settle", label: "Settlement", done: status === "settled", current: status === "settlement_pending" },
+    ];
+  }
+
+  function projectedCase(
+    row: typeof casesTable.$inferSelect,
+    license: typeof licensesTable.$inferSelect | null,
+    latestEvent?: { kind: string; createdAt: Date },
+  ): PlacementCaseRow {
+    const status = projectStatus(row.status, license?.status ?? null);
+    // A compatible authoritative license means the human decision is made;
+    // this also repairs legacy rows whose link write failed after licensing.
+    const pendingDecision = license ? null : row.pendingDecision;
+    return {
+      ...rowToCase(row),
+      status,
+      pending_decision: pendingDecision,
+      license_id: license?.id ?? row.licenseId ?? null,
+      agent_plan: planForStatus(row, status),
+      latest_event: latestEvent
+        ? { kind: latestEvent.kind, created_at: latestEvent.createdAt }
+        : null,
+    };
+  }
+
+  // Authoritative license state for a case. Uses the stored link when present,
+  // otherwise READ-REPAIRS: finds an owned license whose submission is in this
+  // case's shortlist and whose brief matches — so a failed fire-and-forget link
+  // can never strand a paid license or a stale case.
+  async function licenseStatusFor(
+    wallet: string,
+    row: typeof casesTable.$inferSelect,
+  ): Promise<typeof licensesTable.$inferSelect | null> {
+    if (row.licenseId) {
+      const [lic] = await db
+        .select()
+        .from(licensesTable)
+        .where(and(eq(licensesTable.id, row.licenseId), eq(licensesTable.supervisorWallet, wallet.toLowerCase())))
+        .limit(1);
+      return lic ?? null;
+    }
+    const shortlist = (row.evidence as PlaceCaseEvidence).shortlistSubmissionIds ?? [];
+    if (shortlist.length === 0) return null;
+    const [lic] = await db
+      .select()
+      .from(licensesTable)
+      .where(
+        and(
+          eq(licensesTable.supervisorWallet, wallet.toLowerCase()),
+          eq(licensesTable.briefText, row.briefText),
+          inArray(licensesTable.submissionId, shortlist),
+        ),
+      )
+      .orderBy(desc(licensesTable.createdAt))
+      .limit(1);
+    return lic ?? null;
+  }
+
+  async function reconcileSettledCaseForBrief(wallet: string, briefText: string): Promise<void> {
+    const [row] = await db
+      .select()
+      .from(casesTable)
+      .where(
+        and(
+          eq(casesTable.supervisorWallet, wallet),
+          eq(casesTable.briefText, briefText),
+          sql`${casesTable.status} NOT IN ('settled', 'archived')`,
+        ),
+      )
+      .limit(1);
+    if (!row) return;
+    const license = await licenseStatusFor(wallet, row);
+    if (license?.status !== "paid") return;
+
+    const now = new Date();
+    const [settled] = await db
+      .update(casesTable)
+      .set({
+        licenseId: license.id,
+        status: "settled",
+        pendingDecision: null,
+        objective: "settlement recorded",
+        agentPlan: planForStatus(row, "settled"),
+        lastActivity: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(casesTable.id, row.id),
+          sql`${casesTable.status} <> 'settled'`,
+          or(isNull(casesTable.licenseId), eq(casesTable.licenseId, license.id)),
+        ),
+      )
+      .returning();
+    if (settled) {
+      await db.insert(caseEventsTable).values({
+        id: randomUUID(),
+        caseId: settled.id,
+        kind: "settled",
+        detail: { licenseId: license.id, paid: true },
+        createdAt: now,
+      });
+    }
+  }
+
   return {
     async openCase(input) {
       const wallet = input.supervisorWallet.toLowerCase();
       await ensureProfile(wallet);
       const brief = input.briefText.trim();
       if (brief.length < 1) throw new Error("briefText must not be empty");
+      // If a prior payment succeeded while its case projection was interrupted,
+      // terminalize it before the active-case constraint decides whether this is
+      // a resume or a genuinely renewed brief.
+      await reconcileSettledCaseForBrief(wallet, brief);
       const now = new Date();
 
-      // Reuse an already-open case for the same brief so repeated
-      // searches prospect the SAME case instead of littering the board.
-      const [existing] = await db
+      // Race-safe open: the partial unique index uq_placement_cases_active_brief
+      // guarantees at most ONE non-terminal case per (supervisor, brief), so two
+      // concurrent identical searches cannot create duplicates. We always attempt
+      // the insert with onConflictDoNothing() and then read the single active row.
+      const derived = deriveCasePlan(brief, input.rankedCount ?? 0, input.candidateTitles ?? []);
+      const inserted = await db
+        .insert(casesTable)
+        .values({
+          id: randomUUID(),
+          supervisorWallet: wallet,
+          kind: "placement",
+          briefText: brief,
+          status: "open",
+          objective: null,
+          pendingDecision: input.pendingDecision ?? derived.pendingDecision,
+          agentPlan: DEFAULT_PLAN,
+          evidence: {
+            shortlistSubmissionIds: [],
+            ...(input.rankedCount != null ? { rankedCount: input.rankedCount } : {}),
+            recommendationText: derived.recommendationText,
+          },
+          lastActivity: now,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoNothing()
+        .returning();
+      const isNew = inserted.length > 0;
+
+      const [row] = await db
         .select()
         .from(casesTable)
         .where(
           and(
             eq(casesTable.supervisorWallet, wallet),
             eq(casesTable.briefText, brief),
-            eq(casesTable.status, "open"),
+            sql`${casesTable.status} NOT IN ('settled', 'archived')`,
           ),
         )
         .limit(1);
+      if (!row) throw new Error("case row missing after open");
 
-      const evidence: PlaceCaseEvidence = existing
-        ? { ...(existing.evidence as PlaceCaseEvidence) }
-        : { shortlistSubmissionIds: [] as string[] };
+      // Merge fresh search signal onto the retained case (never overwrite the
+      // supervisor's chosen direction or an existing recommendation).
+      const evidence: PlaceCaseEvidence = { ...(row.evidence as PlaceCaseEvidence) };
       if (input.rankedCount != null) evidence.rankedCount = input.rankedCount;
+      if (!evidence.recommendationText) evidence.recommendationText = derived.recommendationText;
+      const pendingDecision = row.pendingDecision ?? input.pendingDecision ?? derived.pendingDecision;
+      await db
+        .update(casesTable)
+        .set({ evidence, pendingDecision, lastActivity: now, updatedAt: now })
+        .where(eq(casesTable.id, row.id));
 
-      // Derive a scoped human decision + evidence-backed recommendation. On an
-      // open (existing) case we only fill the recommendation if it is still
-      // empty, so the supervisor's chosen direction is never overwritten.
-      const derived = deriveCasePlan(brief, evidence.rankedCount ?? 0, input.candidateTitles ?? []);
-      if (!existing?.evidence || !(existing.evidence as PlaceCaseEvidence).recommendationText) {
-        evidence.recommendationText = derived.recommendationText;
-      }
-      const pendingDecision = existing?.pendingDecision ?? input.pendingDecision ?? derived.pendingDecision;
-      const plan: PlaceCaseStep[] = (existing?.agentPlan as PlaceCaseStep[] | undefined) ?? DEFAULT_PLAN;
-      const refinedPlan = plan.map((s) =>
-        s.key === "recommend" && evidence.recommendationText ? { ...s, done: true, current: false } : s,
-      );
-
-      let id = existing?.id;
-      if (!id) {
-        id = randomUUID();
-        await db.insert(casesTable).values({
-          id,
-          supervisorWallet: wallet,
-          kind: "placement",
-          briefText: brief,
-          status: "open",
-          objective: null,
-          pendingDecision,
-          agentPlan: refinedPlan,
-          evidence,
-          lastActivity: now,
-          createdAt: now,
-          updatedAt: now,
-        });
+      if (isNew) {
         await db.insert(caseEventsTable).values([
-          { id: randomUUID(), caseId: id, kind: "case_opened", detail: { briefText: brief }, createdAt: now },
-          { id: randomUUID(), caseId: id, kind: "brief_interpreted", detail: {}, createdAt: now },
-          {
-            id: randomUUID(),
-            caseId: id,
-            kind: "ranked",
-            detail: { rankedCount: evidence.rankedCount ?? 0 },
-            createdAt: now,
-          },
-          {
-            id: randomUUID(),
-            caseId: id,
-            kind: "case_recommended",
-            detail: { recommendation: evidence.recommendationText ?? "" },
-            createdAt: now,
-          },
+          { id: randomUUID(), caseId: row.id, kind: "case_opened", detail: { briefText: brief }, createdAt: now },
+          { id: randomUUID(), caseId: row.id, kind: "brief_interpreted", detail: {}, createdAt: now },
+          { id: randomUUID(), caseId: row.id, kind: "ranked", detail: { rankedCount: evidence.rankedCount ?? 0 }, createdAt: now },
+          { id: randomUUID(), caseId: row.id, kind: "case_recommended", detail: { recommendation: evidence.recommendationText ?? "" }, createdAt: now },
         ]);
-      } else {
-        await db
-          .update(casesTable)
-          .set({ agentPlan: refinedPlan, evidence, pendingDecision, lastActivity: now, updatedAt: now })
-          .where(eq(casesTable.id, id));
       }
 
-      const [row] = await db.select().from(casesTable).where(eq(casesTable.id, id)).limit(1);
-      return rowToCase(row!);
+      return projectedCase(row, null);
     },
 
     async addShortlist(input) {
@@ -373,110 +489,36 @@ async executeCommand(wallet, caseId, command) {
       if (!existing) {
         return { ok: false, code: "NOT_FOUND" as const, message: "Case not found." };
       }
+      // The ONLY client-legal transition is recording the human creative
+      // decision. Licensing/settlement are derived from the authoritative
+      // license at read time — there is deliberately no command for them.
+      if (command.type !== "record_creative_decision") {
+        return { ok: false, code: "INVALID_ARGUMENT" as const, message: "Unknown command." };
+      }
+      if (!["open", "awaiting_decision"].includes(existing.status)) {
+        return { ok: false, code: "ILLEGAL_TRANSITION" as const, message: `Cannot record a creative decision from status '${existing.status}'` };
+      }
+      if (!existing.pendingDecision) {
+        return { ok: false, code: "INVALID_ARGUMENT" as const, message: "No decision is pending on this case." };
+      }
       const now = new Date();
-      // Transition the owned agent plan: the human decision step completes and
-      // the next owned step becomes current.
-      const advancePlan = (currentKey: string) =>
-        (existing.agentPlan as PlaceCaseStep[]).map((s) =>
-          s.key === "decision"
-            ? { ...s, done: true, current: false }
-            : s.key === "rights" || s.key === "settle"
-              ? { ...s, current: s.key === currentKey }
-              : s,
-        );
-      const insertEvent = (kind: string, detail: Record<string, unknown>) =>
-        db.insert(caseEventsTable).values({ id: randomUUID(), caseId: existing.id, kind, detail, createdAt: now });
-
-      if (command.type === "record_creative_decision") {
-        if (!["open", "awaiting_decision"].includes(existing.status)) {
-          return { ok: false, code: "ILLEGAL_TRANSITION" as const, message: `Cannot record a creative decision from status '${existing.status}'` };
-        }
-        if (!existing.pendingDecision) {
-          return { ok: false, code: "INVALID_ARGUMENT" as const, message: "No decision is pending on this case." };
-        }
-        const [row] = await db
-          .update(casesTable)
-          .set({
-            status: "rights_review",
-            pendingDecision: null,
-            objective: "rights review",
-            agentPlan: advancePlan("rights"),
-            lastActivity: now,
-            updatedAt: now,
-          })
-          .where(eq(casesTable.id, existing.id))
-          .returning();
-        await insertEvent("decision", { cleared: existing.pendingDecision, note: command.note ?? null });
-        await insertEvent("rights_prepared", { prepared: true, cleared: false, note: "request + evidence packet prepared; rights are NOT cleared" });
-        return { ok: true as const, row: rowToCase(row!) };
-      }
-
-      if (command.type === "start_rights_review") {
-        if (!["open", "awaiting_decision", "rights_review"].includes(existing.status)) {
-          return { ok: false, code: "ILLEGAL_TRANSITION" as const, message: `Cannot start rights review from status '${existing.status}'` };
-        }
-        let licenseId = existing.licenseId;
-        if (command.licenseId) {
-          const [lic] = await db
-            .select()
-            .from(licensesTable)
-            .where(and(eq(licensesTable.id, command.licenseId), eq(licensesTable.supervisorWallet, w)))
-            .limit(1);
-          if (!lic) return { ok: false, code: "INVALID_ARGUMENT" as const, message: "License not found or not owned by this wallet." };
-          licenseId = command.licenseId;
-        }
-        const [row] = await db
-          .update(casesTable)
-          .set({
-            status: "rights_review",
-            licenseId: licenseId ?? undefined,
-            agentPlan: advancePlan("rights"),
-            lastActivity: now,
-            updatedAt: now,
-          })
-          .where(eq(casesTable.id, existing.id))
-          .returning();
-        await insertEvent("rights_review", { prepared: true, cleared: false, licenseId: licenseId ?? null });
-        return { ok: true as const, row: rowToCase(row!) };
-      }
-
-      if (command.type === "mark_settlement_ready") {
-        if (!["rights_review", "settlement_pending"].includes(existing.status)) {
-          return { ok: false, code: "ILLEGAL_TRANSITION" as const, message: `Cannot prepare settlement from status '${existing.status}'` };
-        }
-        if (!existing.licenseId) {
-          return { ok: false, code: "INVALID_ARGUMENT" as const, message: "No license linked to this case; settlement cannot be prepared." };
-        }
-        const [row] = await db
-          .update(casesTable)
-          .set({ status: "settlement_pending", agentPlan: advancePlan("settle"), lastActivity: now, updatedAt: now })
-          .where(eq(casesTable.id, existing.id))
-          .returning();
-        await insertEvent("settlement_ready", { licenseId: existing.licenseId, awaitingApproval: true });
-        return { ok: true as const, row: rowToCase(row!) };
-      }
-
-      if (command.type === "record_settlement") {
-        if (existing.status !== "settlement_pending") {
-          return { ok: false, code: "ILLEGAL_TRANSITION" as const, message: "Only a settlement-pending case can be settled." };
-        }
-        if (!existing.licenseId) {
-          return { ok: false, code: "INVALID_ARGUMENT" as const, message: "No license linked to this case." };
-        }
-        const [lic] = await db.select().from(licensesTable).where(eq(licensesTable.id, existing.licenseId)).limit(1);
-        if (!lic || lic.status !== "paid") {
-          return { ok: false, code: "INVALID_ARGUMENT" as const, message: "The linked license has not been paid; settlement cannot be recorded." };
-        }
-        const [row] = await db
-          .update(casesTable)
-          .set({ status: "settled", objective: "settlement recorded", agentPlan: advancePlan("settle"), lastActivity: now, updatedAt: now })
-          .where(eq(casesTable.id, existing.id))
-          .returning();
-        await insertEvent("settled", { licenseId: existing.licenseId, paid: true });
-        return { ok: true as const, row: rowToCase(row!) };
-      }
-
-      return { ok: false, code: "INVALID_ARGUMENT" as const, message: "Unknown command." };
+      const [row] = await db
+        .update(casesTable)
+        .set({
+          status: "rights_review",
+          pendingDecision: null,
+          objective: "rights review",
+          agentPlan: planForStatus(existing, "rights_review"),
+          lastActivity: now,
+          updatedAt: now,
+        })
+        .where(eq(casesTable.id, existing.id))
+        .returning();
+      await db.insert(caseEventsTable).values([
+        { id: randomUUID(), caseId: existing.id, kind: "decision", detail: { cleared: existing.pendingDecision, note: command.note ?? null }, createdAt: now },
+        { id: randomUUID(), caseId: existing.id, kind: "rights_prepared", detail: { prepared: true, cleared: false, note: "request + evidence packet prepared; rights are NOT cleared" }, createdAt: now },
+      ]);
+      return { ok: true as const, row: projectedCase(row!, null) };
     },
 
     async listCases(wallet, { limit = 20 } = {}) {
@@ -487,7 +529,7 @@ async executeCommand(wallet, caseId, command) {
         .where(and(eq(casesTable.supervisorWallet, w), sql`${casesTable.status} <> 'archived'`))
         .orderBy(desc(casesTable.lastActivity))
         .limit(limit);
-      // Attach each case's latest event (bounded N+1; the board caps at 20).
+      // Attach each case's latest event + projected license state (N+1; ≤20).
       const withEvents = await Promise.all(
         rows.map(async (r) => {
           const [ev] = await db
@@ -496,7 +538,8 @@ async executeCommand(wallet, caseId, command) {
             .where(eq(caseEventsTable.caseId, r.id))
             .orderBy(desc(caseEventsTable.createdAt))
             .limit(1);
-          return rowToCase(r, ev ?? undefined);
+          const licStatus = await licenseStatusFor(w, r);
+          return projectedCase(r, licStatus, ev ?? undefined);
         }),
       );
       return withEvents;
@@ -523,53 +566,75 @@ async executeCommand(wallet, caseId, command) {
         .from(caseEventsTable)
         .where(eq(caseEventsTable.caseId, id))
         .orderBy(desc(caseEventsTable.createdAt));
-      return { case: rowToCase(row), events: events.map(rowToEvent) };
+      const licStatus = await licenseStatusFor(wallet.toLowerCase(), row);
+      return { case: projectedCase(row, licStatus), events: events.map(rowToEvent) };
     },
 
-    async linkLicenseForOutcome(wallet, { briefText, submissionId, licenseId }) {
+    async linkLicenseForOutcome(wallet, { licenseId }) {
       const w = wallet.toLowerCase();
-      const candidates = await db
-        .select()
-        .from(casesTable)
-        .where(
-          and(
-            eq(casesTable.supervisorWallet, w),
-            sql`${casesTable.status} <> 'archived'`,
-            isNull(casesTable.licenseId),
-          ),
-        )
-        .orderBy(desc(casesTable.lastActivity))
-        .limit(20);
-      // Prefer the exact-brief match; fall back to a case that shortlisted this take.
-      const byBrief = candidates.find((c) => c.briefText === briefText);
-      const byShortlist = candidates.find((c) =>
-        ((c.evidence as PlaceCaseEvidence).shortlistSubmissionIds ?? []).includes(submissionId),
-      );
-      const target = byBrief ?? byShortlist;
-      if (!target) return null;
-      if (!["open", "awaiting_decision", "rights_review"].includes(target.status)) return null;
 
-      const plan = (target.agentPlan as PlaceCaseStep[]).map((s) =>
-        s.key === "decision"
-          ? { ...s, done: true, current: false }
-          : s.key === "rights"
-            ? { ...s, current: true }
-            : s,
-      );
-      const now = new Date();
-      const [row] = await db
-        .update(casesTable)
-        .set({ licenseId, status: "rights_review", objective: "rights review", agentPlan: plan, lastActivity: now, updatedAt: now })
-        .where(eq(casesTable.id, target.id))
-        .returning();
-      await db.insert(caseEventsTable).values({
-        id: randomUUID(),
-        caseId: target.id,
-        kind: "rights_review",
-        detail: { licenseId, prepared: true, cleared: false, note: "license request prepared; rights are NOT cleared" },
-        createdAt: now,
+      // This is a server-only association. Read the license inside the
+      // transaction and derive the candidate from its persisted fields—not
+      // route input—so an owned license cannot be attached to an unrelated
+      // case by supplying a different brief or submission id.
+      return db.transaction(async (tx) => {
+        const [lic] = await tx
+          .select()
+          .from(licensesTable)
+          .where(and(eq(licensesTable.id, licenseId), eq(licensesTable.supervisorWallet, w)))
+          .limit(1);
+        if (!lic) return null;
+
+        const candidates = await tx
+          .select()
+          .from(casesTable)
+          .where(
+            and(
+              eq(casesTable.supervisorWallet, w),
+              eq(casesTable.briefText, lic.briefText),
+              sql`${casesTable.status} <> 'archived'`,
+              isNull(casesTable.licenseId),
+            ),
+          )
+          .orderBy(desc(casesTable.lastActivity))
+          .limit(20);
+        const target = candidates.find((candidate) => {
+          const shortlist = (candidate.evidence as PlaceCaseEvidence).shortlistSubmissionIds ?? [];
+          return candidate.briefText === lic.briefText && shortlist.includes(lic.submissionId);
+        });
+        if (!target || !["open", "awaiting_decision", "rights_review"].includes(target.status)) return null;
+
+        const now = new Date();
+        const [row] = await tx
+          .update(casesTable)
+          .set({
+            licenseId,
+            status: "rights_review",
+            pendingDecision: null,
+            objective: "rights review",
+            agentPlan: planForStatus(target, "rights_review"),
+            lastActivity: now,
+            updatedAt: now,
+          })
+          .where(and(eq(casesTable.id, target.id), isNull(casesTable.licenseId)))
+          .returning();
+        if (!row) return null;
+
+        await tx.insert(caseEventsTable).values({
+          id: randomUUID(),
+          caseId: target.id,
+          kind: "rights_review",
+          detail: {
+            licenseId,
+            submissionId: lic.submissionId,
+            prepared: true,
+            cleared: false,
+            note: "license request prepared; rights are NOT cleared",
+          },
+          createdAt: now,
+        });
+        return projectedCase(row, lic);
       });
-      return rowToCase(row!);
     },
 
     async getCaseByLicense(wallet, licenseId) {
@@ -584,6 +649,72 @@ async executeCommand(wallet, caseId, command) {
         )
         .limit(1);
       return row ? rowToCase(row) : null;
+    },
+
+    async reconcileLicenseOutcome(wallet, licenseId) {
+      const w = wallet.toLowerCase();
+      return db.transaction(async (tx) => {
+        const [license] = await tx
+          .select()
+          .from(licensesTable)
+          .where(and(eq(licensesTable.id, licenseId), eq(licensesTable.supervisorWallet, w)))
+          .limit(1);
+        if (!license) return null;
+
+        const candidates = await tx
+          .select()
+          .from(casesTable)
+          .where(
+            and(
+              eq(casesTable.supervisorWallet, w),
+              sql`${casesTable.status} <> 'archived'`,
+              or(
+                eq(casesTable.licenseId, license.id),
+                and(isNull(casesTable.licenseId), eq(casesTable.briefText, license.briefText)),
+              ),
+            ),
+          )
+          .orderBy(desc(casesTable.lastActivity))
+          .limit(20);
+        const target = candidates.find((candidate) => {
+          if (candidate.licenseId === license.id) return true;
+          const shortlist = (candidate.evidence as PlaceCaseEvidence).shortlistSubmissionIds ?? [];
+          return candidate.briefText === license.briefText && shortlist.includes(license.submissionId);
+        });
+        if (!target) return null;
+        if (license.status !== "paid") return projectedCase(target, license);
+        if (target.status === "settled") return projectedCase(target, license);
+
+        const now = new Date();
+        const [settled] = await tx
+          .update(casesTable)
+          .set({
+            licenseId: license.id,
+            status: "settled",
+            pendingDecision: null,
+            objective: "settlement recorded",
+            agentPlan: planForStatus(target, "settled"),
+            lastActivity: now,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(casesTable.id, target.id),
+              sql`${casesTable.status} <> 'settled'`,
+              or(isNull(casesTable.licenseId), eq(casesTable.licenseId, license.id)),
+            ),
+          )
+          .returning();
+        if (!settled) return null;
+        await tx.insert(caseEventsTable).values({
+          id: randomUUID(),
+          caseId: settled.id,
+          kind: "settled",
+          detail: { licenseId: license.id, paid: true },
+          createdAt: now,
+        });
+        return projectedCase(settled, license);
+      });
     },
   };
 }

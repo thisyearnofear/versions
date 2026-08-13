@@ -101,9 +101,7 @@ export async function POST(req: NextRequest) {
     let audioPath = `data/uploads/${filename}`;
     let audioIpfsCid: string | null = null;
     let ipfsResult: Awaited<ReturnType<typeof svc.ipfs.uploadAudio>> | null = null;
-    let ipfsAttempted = false;
     if (svc.ipfs.isConfigured()) {
-      ipfsAttempted = true;
       try {
         ipfsResult = await svc.ipfs.uploadAudio(audioBuffer, filename, audioContentType);
         audioIpfsCid = ipfsResult.cid;
@@ -153,12 +151,11 @@ export async function POST(req: NextRequest) {
       return errorResponse(rid, 400, 'SUBMISSION_REJECTED', result.error);
     }
 
-    // Open (or refresh) the artist's Release Case immediately after the
-    // submission record exists. Best-effort and idempotent: a release case
-    // failure must never block the submission that already succeeded.
-    void svc.releaseCases
-      .ensureForSubmission({ artistWallet, submissionId: result.submission.id })
-      .catch((err) => log.warn('release case open failed (best-effort)', { request_id: rid, err: (err as Error).message }));
+    // Persist the linked Release Case before acknowledging the submission. A
+    // retry after a transient failure is safe because both submission creation
+    // and release-case opening are idempotent; the artist dashboard also
+    // read-repairs historical submissions.
+    await svc.releaseCases.ensureForSubmission({ artistWallet, submissionId: result.submission.id });
 
     // MODULAR: dedup short-circuit cleanup. A retried upload
     // pinned/uploaded the same audio twice; the canonical

@@ -382,6 +382,9 @@ CREATE TABLE IF NOT EXISTS placement_cases (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_placement_cases_supervisor ON placement_cases(supervisor_wallet, last_activity);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_placement_cases_active_brief
+  ON placement_cases(supervisor_wallet, brief_text)
+  WHERE status NOT IN ('settled', 'archived');
 
 CREATE TABLE IF NOT EXISTS case_events (
   id TEXT PRIMARY KEY,

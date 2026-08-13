@@ -1,8 +1,6 @@
-// MODULAR: Integration tests for the Placement Case foundation — the
-// durable persistence contract that the release/settlement lifecycle will
-// build on. Covers: idempotent opens against an existing profile, explicit-
-// case shortlists (no cross-attach), ownership enforcement, and server-owned
-// transitions that only move when a REAL linked resource allows it.
+// MODULAR: Integration tests for the Placement Case foundation. Covers
+// DB-backed idempotency, explicit-case shortlists, ownership, server-owned
+// decisions, and lifecycle projection from authoritative license records.
 
 const { initTestDb: _initTestDb, getTestDb: _getTestDb, resetTestDb: _resetTestDb } = await import('../helpers/db');
 const { vi } = await import('vitest');
@@ -37,8 +35,6 @@ beforeEach(async () => {
 
 async function ensureProfile(wallet: string) {
   const db = _getTestDb();
-  // supervisor_profiles.wallet is FK'd to users.wallet_address — create the
-  // user first (the cases service's own ensureProfile does the same).
   await db.insert(users).values({
     id: wallet + '-user',
     walletAddress: wallet,
@@ -81,182 +77,208 @@ async function seedPublishedTake(subId: string) {
   }).onConflictDoNothing();
 }
 
+async function seedLicense(input: { id: string; submissionId: string; briefText: string; status?: 'pending_payment' | 'settling' | 'paid' }) {
+  await _getTestDb().insert(licenses).values({
+    id: input.id,
+    supervisorWallet: WALLET,
+    submissionId: input.submissionId,
+    briefHash: 'h-' + input.id,
+    briefText: input.briefText,
+    usageType: 'sync_tv_film',
+    feeUsdc: '250',
+    status: input.status ?? 'pending_payment',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+}
+
 describe('placement case foundation', () => {
-  it('openCase is idempotent and conflict-safe against an existing profile', async () => {
+  it('opens one active case for concurrent searches of the same brief', async () => {
     await ensureProfile(WALLET);
     const cases = createCasesService();
 
-    const first = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 42 });
-    const second = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 42 });
+    const rows = await Promise.all(
+      Array.from({ length: 4 }, () => cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 42 })),
+    );
 
-    expect(second.id).toBe(first.id);
-    expect(first.pending_decision).toBeTruthy();
-    // Repeated opens do not duplicate events for the same case.
-    const events = await _getTestDb().select().from(caseEvents).where(eq(caseEvents.caseId, first.id));
-    expect(events.filter((e) => e.kind === 'case_opened')).toHaveLength(1);
+    expect(new Set(rows.map((row) => row.id)).size).toBe(1);
+    const events = await _getTestDb().select().from(caseEvents).where(eq(caseEvents.caseId, rows[0].id));
+    expect(events.filter((event) => event.kind === 'case_opened')).toHaveLength(1);
   });
 
-  it('distinct briefs produce distinct cases', async () => {
+  it('creates distinct cases for distinct briefs', async () => {
     const cases = createCasesService();
     const a = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 10 });
     const b = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_B, rankedCount: 8 });
     expect(a.id).not.toBe(b.id);
   });
 
-  it('shortlist attaches to the EXPLICIT case, never cross-attaching across two open briefs', async () => {
+  it('shortlists against the explicit case without cross-attaching', async () => {
     const cases = createCasesService();
     const a = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 10 });
     const b = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_B, rankedCount: 8 });
-    const subA = 'sub-a';
-    await seedPublishedTake(subA);
+    await seedPublishedTake('sub-a');
 
-    await cases.addShortlist({ supervisorWallet: WALLET, caseId: a.id, submissionId: subA, fitScore: 0.9, rank: 1 });
+    await cases.addShortlist({ supervisorWallet: WALLET, caseId: a.id, submissionId: 'sub-a', fitScore: 0.9, rank: 1 });
 
     const aRow = await cases.getCase(WALLET, a.id);
     const bRow = await cases.getCase(WALLET, b.id);
-    expect(aRow!.case.evidence.shortlistSubmissionIds).toContain(subA);
-    expect(bRow!.case.evidence.shortlistSubmissionIds ?? []).not.toContain(subA);
+    expect(aRow!.case.evidence.shortlistSubmissionIds).toContain('sub-a');
+    expect(bRow!.case.evidence.shortlistSubmissionIds ?? []).not.toContain('sub-a');
     expect(aRow!.case.evidence.shortlisted?.[0]?.fitScore).toBe(0.9);
   });
-it('shortlist rejects a foreign wallet (ownership enforced)', async () => {
+
+  it('rejects a shortlist mutation by another supervisor', async () => {
     const cases = createCasesService();
     await ensureProfile(OTHER_WALLET);
     const mine = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 5 });
-    const subA = 'sub-f';
-    await seedPublishedTake(subA);
+    await seedPublishedTake('sub-f');
 
-    const res = await cases.addShortlist({ supervisorWallet: OTHER_WALLET, caseId: mine.id, submissionId: subA });
-    expect(res).toBeNull();
+    const result = await cases.addShortlist({ supervisorWallet: OTHER_WALLET, caseId: mine.id, submissionId: 'sub-f' });
+    expect(result).toBeNull();
     const mineRow = await cases.getCase(WALLET, mine.id);
     expect(mineRow!.case.evidence.shortlistSubmissionIds ?? []).toHaveLength(0);
   });
 
-  it('record_creative_decision is legal from open, illegal from rights_review', async () => {
+  it('allows only the pending creative decision to be recorded by a client', async () => {
     const cases = createCasesService();
     const c = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 42 });
 
-    const ok = await cases.executeCommand(WALLET, c.id, { type: 'record_creative_decision', note: 'go dark' });
-    expect(ok.ok).toBe(true);
-    if (!ok.ok) return;
-    expect(ok.row.status).toBe('rights_review');
-    expect(ok.row.pending_decision).toBeNull();
+    const recorded = await cases.executeCommand(WALLET, c.id, { type: 'record_creative_decision', note: 'go dark' });
+    expect(recorded.ok).toBe(true);
+    if (!recorded.ok) return;
+    expect(recorded.row.status).toBe('rights_review');
+    expect(recorded.row.pending_decision).toBeNull();
 
-    const again = await cases.executeCommand(WALLET, c.id, { type: 'record_creative_decision' });
-    expect(again.ok).toBe(false);
-    if (again.ok) return;
-    expect(again.code).toBe('ILLEGAL_TRANSITION');
+    const repeated = await cases.executeCommand(WALLET, c.id, { type: 'record_creative_decision' });
+    expect(repeated.ok).toBe(false);
+    if (!repeated.ok) expect(repeated.code).toBe('ILLEGAL_TRANSITION');
   });
 
-  it('settlement requires a real, owned license and a real paid state', async () => {
+  it('rejects owned licenses unless both the case brief and shortlist match', async () => {
     const cases = createCasesService();
-    await ensureProfile(WALLET);
     const c = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 42 });
-    await seedPublishedTake('sub-lic');
+    await seedPublishedTake('sub-shortlisted');
+    await seedPublishedTake('sub-unrelated');
+    await cases.addShortlist({ supervisorWallet: WALLET, caseId: c.id, submissionId: 'sub-shortlisted', fitScore: 0.8, rank: 1 });
 
-    // Must reach rights_review through a human decision first.
-    const decided = await cases.executeCommand(WALLET, c.id, { type: 'record_creative_decision', note: 'go dark' });
-    expect(decided.ok).toBe(true);
+    await seedLicense({ id: 'lic-wrong-submission', submissionId: 'sub-unrelated', briefText: BRIEF_A });
+    await seedLicense({ id: 'lic-wrong-brief', submissionId: 'sub-shortlisted', briefText: BRIEF_B });
 
-    // No license linked yet → settlement can NOT be prepared.
-    const rejected = await cases.executeCommand(WALLET, c.id, { type: 'mark_settlement_ready' });
-    expect(rejected.ok).toBe(false);
-    if (rejected.ok) return;
-    expect(rejected.code).toBe('INVALID_ARGUMENT');
+    expect(await cases.linkLicenseForOutcome(WALLET, { licenseId: 'lic-wrong-submission' })).toBeNull();
+    expect(await cases.linkLicenseForOutcome(WALLET, { licenseId: 'lic-wrong-brief' })).toBeNull();
 
-    // A license owned by a DIFFERENT wallet cannot be linked.
-    const notOwned = await cases.executeCommand(WALLET, c.id, { type: 'start_rights_review', licenseId: 'lic-other' });
-    expect(notOwned.ok).toBe(false);
+    const unchanged = await cases.getCase(WALLET, c.id);
+    expect(unchanged!.case.license_id).toBeNull();
+    expect(unchanged!.case.status).toBe('open');
+  });
 
-    // A real license this wallet owns CAN be linked, then settlement prepared.
-    await _getTestDb().insert(licenses).values({
-      id: 'lic-1',
-      supervisorWallet: WALLET,
-      submissionId: 'sub-lic',
-      briefHash: 'h',
-      briefText: BRIEF_A,
-      usageType: 'sync_tv_film',
-      feeUsdc: '250',
-      status: 'pending_payment',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).onConflictDoNothing();
+  it('derives lifecycle state from a compatible license even if an earlier link write failed', async () => {
+    const cases = createCasesService();
+    const c = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 42 });
+    await seedPublishedTake('sub-repair');
+    await cases.addShortlist({ supervisorWallet: WALLET, caseId: c.id, submissionId: 'sub-repair', fitScore: 0.8, rank: 1 });
+    await seedLicense({ id: 'lic-repair', submissionId: 'sub-repair', briefText: BRIEF_A, status: 'settling' });
 
-    const linked = await cases.executeCommand(WALLET, c.id, { type: 'start_rights_review', licenseId: 'lic-1' });
-    expect(linked.ok).toBe(true);
+    const settling = await cases.getCase(WALLET, c.id);
+    expect(settling!.case.license_id).toBe('lic-repair');
+    expect(settling!.case.pending_decision).toBeNull();
+    expect(settling!.case.status).toBe('settlement_pending');
+    expect(settling!.case.agent_plan.find((step) => step.key === 'rights')?.done).toBe(true);
+    expect(settling!.case.agent_plan.find((step) => step.key === 'settle')?.current).toBe(true);
 
-    const ready = await cases.executeCommand(WALLET, c.id, { type: 'mark_settlement_ready' });
-    expect(ready.ok).toBe(true);
-    if (!ready.ok) return;
-    expect(ready.row.status).toBe('settlement_pending');
+    await _getTestDb().update(licenses).set({ status: 'paid' }).where(eq(licenses.id, 'lic-repair'));
+    const settled = await cases.getCase(WALLET, c.id);
+    expect(settled!.case.status).toBe('settled');
+    expect(settled!.case.agent_plan.find((step) => step.key === 'settle')?.done).toBe(true);
+  });
 
-    // Settlement only records once the license is actually paid.
-    const notPaid = await cases.executeCommand(WALLET, c.id, { type: 'record_settlement' });
-    expect(notPaid.ok).toBe(false);
+  it('links a compatible license atomically and clears the stale decision projection', async () => {
+    const cases = createCasesService();
+    const c = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 42 });
+    await seedPublishedTake('sub-link');
+    await cases.addShortlist({ supervisorWallet: WALLET, caseId: c.id, submissionId: 'sub-link', fitScore: 0.8, rank: 1 });
+    await seedLicense({ id: 'lic-link', submissionId: 'sub-link', briefText: BRIEF_A });
 
-    await _getTestDb().update(licenses).set({ status: 'paid' }).where(eq(licenses.id, 'lic-1'));
-    const settled = await cases.executeCommand(WALLET, c.id, { type: 'record_settlement' });
-    expect(settled.ok).toBe(true);
-    if (!settled.ok) return;
-    expect(settled.row.status).toBe('settled');
+    const linked = await cases.linkLicenseForOutcome(WALLET, { licenseId: 'lic-link' });
+    expect(linked?.license_id).toBe('lic-link');
+    expect(linked?.status).toBe('rights_review');
+    expect(linked?.pending_decision).toBeNull();
 
-    // One settlement transition only, even if retried.
     const events = await _getTestDb().select().from(caseEvents).where(eq(caseEvents.caseId, c.id));
-    expect(events.filter((e) => e.kind === 'settled')).toHaveLength(1);
+    expect(events.filter((event) => event.kind === 'rights_review')).toHaveLength(1);
   });
 
-  it('executeCommand is owner-scoped (foreign wallet cannot mutate)', async () => {
+  it('scopes commands to the owning supervisor', async () => {
     const cases = createCasesService();
     await ensureProfile(OTHER_WALLET);
     const c = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 42 });
 
-    const res = await cases.executeCommand(OTHER_WALLET, c.id, { type: 'record_creative_decision' });
-    expect(res.ok).toBe(false);
-    if (res.ok) return;
-    expect(res.code).toBe('NOT_FOUND');
+    const result = await cases.executeCommand(OTHER_WALLET, c.id, { type: 'record_creative_decision' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('NOT_FOUND');
   });
+});
 
-  it('linkLicenseForOutcome links a real license to the shortlist case, then settlement progresses', async () => {
+
+
+describe('placement case terminal reconciliation', () => {
+  it('persists a paid outcome as terminal so a renewed same-brief case can open', async () => {
+    const cases = createCasesService();
+    const original = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 42 });
+    await seedPublishedTake('sub-terminal');
+    await cases.addShortlist({ supervisorWallet: WALLET, caseId: original.id, submissionId: 'sub-terminal', fitScore: 0.9, rank: 1 });
+    await seedLicense({ id: 'lic-terminal', submissionId: 'sub-terminal', briefText: BRIEF_A, status: 'paid' });
+
+    await expect(cases.reconcileLicenseOutcome(WALLET, 'lic-terminal')).resolves.toMatchObject({
+      id: original.id,
+      status: 'settled',
+    });
+
+    const renewed = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 12 });
+    expect(renewed.id).not.toBe(original.id);
+    expect(renewed.status).toBe('open');
+
+    const events = await _getTestDb().select().from(caseEvents).where(eq(caseEvents.caseId, original.id));
+    expect(events.filter((event) => event.kind === 'settled')).toHaveLength(1);
+  });
+});
+
+
+
+  it('does not let a later paid license replace an already linked case license', async () => {
     const cases = createCasesService();
     const c = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 42 });
-    const sub = 'sub-link';
-    await seedPublishedTake(sub);
-    await cases.addShortlist({ supervisorWallet: WALLET, caseId: c.id, submissionId: sub, fitScore: 0.8, rank: 1 });
+    await seedPublishedTake('sub-linked-first');
+    await seedPublishedTake('sub-linked-second');
+    await cases.addShortlist({ supervisorWallet: WALLET, caseId: c.id, submissionId: 'sub-linked-first', fitScore: 0.9, rank: 1 });
+    await cases.addShortlist({ supervisorWallet: WALLET, caseId: c.id, submissionId: 'sub-linked-second', fitScore: 0.8, rank: 2 });
+    await seedLicense({ id: 'lic-first', submissionId: 'sub-linked-first', briefText: BRIEF_A });
+    await seedLicense({ id: 'lic-second-paid', submissionId: 'sub-linked-second', briefText: BRIEF_A, status: 'paid' });
 
-    await _getTestDb().insert(licenses).values({
-      id: 'lic-link',
-      supervisorWallet: WALLET,
-      submissionId: sub,
-      briefHash: 'h',
-      briefText: BRIEF_A,
-      usageType: 'sync_tv_film',
-      feeUsdc: '250',
-      status: 'pending_payment',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).onConflictDoNothing();
+    await cases.linkLicenseForOutcome(WALLET, { licenseId: 'lic-first' });
+    await expect(cases.reconcileLicenseOutcome(WALLET, 'lic-second-paid')).resolves.toBeNull();
 
-    const linked = await cases.linkLicenseForOutcome(WALLET, { briefText: BRIEF_A, submissionId: sub, licenseId: 'lic-link' });
-    expect(linked).not.toBeNull();
-    if (!linked) return;
-    expect(linked.license_id).toBe('lic-link');
-    expect(linked.status).toBe('rights_review');
-
-    const byLicense = await cases.getCaseByLicense(WALLET, 'lic-link');
-    expect(byLicense?.id).toBe(c.id);
-
-    // Approval -> ready -> (pay succeeds) -> settled.
-    const ready = await cases.executeCommand(WALLET, c.id, { type: 'mark_settlement_ready' });
-    expect(ready.ok).toBe(true);
-    if (!ready.ok) return;
-    expect(ready.row.status).toBe('settlement_pending');
-
-    // A failed/retried payment (license still pending) cannot settle the case.
-    const notYetPaid = await cases.executeCommand(WALLET, c.id, { type: 'record_settlement' });
-    expect(notYetPaid.ok).toBe(false);
-
-    await _getTestDb().update(licenses).set({ status: 'paid' }).where(eq(licenses.id, 'lic-link'));
-    const settled = await cases.executeCommand(WALLET, c.id, { type: 'record_settlement' });
-    expect(settled.ok).toBe(true);
-    if (settled.ok) expect(settled.row.status).toBe('settled');
+    const unchanged = await cases.getCase(WALLET, c.id);
+    expect(unchanged!.case.license_id).toBe('lic-first');
+    expect(unchanged!.case.status).toBe('rights_review');
   });
+
+
+
+it('reconciles concurrent paid-license retries exactly once', async () => {
+  const cases = createCasesService();
+  const c = await cases.openCase({ supervisorWallet: WALLET, briefText: BRIEF_A, rankedCount: 42 });
+  await seedPublishedTake('sub-concurrent-paid');
+  await cases.addShortlist({ supervisorWallet: WALLET, caseId: c.id, submissionId: 'sub-concurrent-paid', fitScore: 0.9, rank: 1 });
+  await seedLicense({ id: 'lic-concurrent-paid', submissionId: 'sub-concurrent-paid', briefText: BRIEF_A, status: 'paid' });
+
+  await Promise.all(
+    Array.from({ length: 3 }, () => cases.reconcileLicenseOutcome(WALLET, 'lic-concurrent-paid')),
+  );
+
+  const events = await _getTestDb().select().from(caseEvents).where(eq(caseEvents.caseId, c.id));
+  expect(events.filter((event) => event.kind === 'settled')).toHaveLength(1);
+  const settled = await cases.getCase(WALLET, c.id);
+  expect(settled!.case.status).toBe('settled');
 });

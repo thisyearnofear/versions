@@ -9,12 +9,10 @@ import { resolveSupervisorIdentity } from "@/lib/supervisor-identity";
 
 export const dynamic = "force-dynamic";
 
-const CommandSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("record_creative_decision"), note: z.string().nullable().optional() }),
-  z.object({ type: z.literal("start_rights_review"), licenseId: z.string().nullable().optional() }),
-  z.object({ type: z.literal("mark_settlement_ready") }),
-  z.object({ type: z.literal("record_settlement") }),
-]);
+const CommandSchema = z.object({
+  type: z.literal("record_creative_decision"),
+  note: z.string().nullable().optional(),
+});
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const requestId = requestIdFor(req);

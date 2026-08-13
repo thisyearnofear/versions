@@ -7,7 +7,7 @@
 // fields the submission already holds.
 
 import { randomUUID } from "crypto";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "../lib/db";
 import {
   releaseCases as rcTable,
@@ -93,7 +93,7 @@ export function createReleaseCasesService(): ReleaseCasesService {
     };
   }
 
-  return {
+  const service: ReleaseCasesService = {
     async ensureForSubmission({ artistWallet, submissionId }) {
       const wallet = artistWallet.toLowerCase();
       const [sub] = await db
@@ -102,6 +102,9 @@ export function createReleaseCasesService(): ReleaseCasesService {
         .where(eq(submissionsTable.id, submissionId))
         .limit(1);
       if (!sub) throw new Error("submission not found: " + submissionId);
+      if (sub.artistWallet.toLowerCase() !== wallet) {
+        throw new Error("submission does not belong to artist: " + submissionId);
+      }
 
       const status = sub.status ?? "pending_payment";
       const plan = releasePlan(status);
@@ -142,6 +145,20 @@ export function createReleaseCasesService(): ReleaseCasesService {
 
     async getCasesForArtist(artistWallet, { limit = 50 } = {}) {
       const w = artistWallet.toLowerCase();
+
+      // Read-repair is the durable recovery path for submissions created
+      // before release cases existed or after a transient write failure. It is
+      // bounded by the requested page size and idempotent on submission_id.
+      const liveSubmissions = await db
+        .select({ id: submissionsTable.id })
+        .from(submissionsTable)
+        .where(and(eq(submissionsTable.artistWallet, w), isNull(submissionsTable.deletedAt)))
+        .orderBy(desc(submissionsTable.submittedAt))
+        .limit(limit);
+      await Promise.all(
+        liveSubmissions.map(({ id }) => service.ensureForSubmission({ artistWallet: w, submissionId: id })),
+      );
+
       const rows = await db
         .select({
           rc: rcTable,
@@ -164,4 +181,6 @@ export function createReleaseCasesService(): ReleaseCasesService {
       );
     },
   };
+
+  return service;
 }

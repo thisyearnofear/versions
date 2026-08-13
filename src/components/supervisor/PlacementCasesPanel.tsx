@@ -17,7 +17,7 @@ const STATUS_LABEL: Record<string, string> = {
   open: "Open",
   awaiting_decision: "Awaiting decision",
   rights_review: "Rights review",
-  settlement_ready: "Settlement ready",
+  settlement_pending: "Settlement pending",
   settled: "Settled",
   archived: "Archived",
 };

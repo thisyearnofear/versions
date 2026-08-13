@@ -111,3 +111,29 @@ describe('release case (artist slice)', () => {
     expect(theirs.map((c) => c.submission_id)).toEqual(['sub-r5']);
   });
 });
+
+
+
+describe('release case recovery', () => {
+  it('read-repairs a release case for an existing artist submission', async () => {
+    await seedArtist(ARTIST);
+    await seedSubmission('sub-existing', 'awaiting_curation');
+
+    const rows = await createReleaseCasesService().getCasesForArtist(ARTIST);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].submission_id).toBe('sub-existing');
+    expect(rows[0].submission_status).toBe('awaiting_curation');
+    expect(rows[0].agent_plan.find((step) => step.key === 'curation')?.current).toBe(true);
+  });
+
+  it('does not allow another artist to create a release case for a submission they do not own', async () => {
+    await seedArtist(ARTIST);
+    await seedArtist(OTHER_ARTIST);
+    await seedSubmission('sub-owned', 'pending_payment', ARTIST);
+
+    await expect(
+      createReleaseCasesService().ensureForSubmission({ artistWallet: OTHER_ARTIST, submissionId: 'sub-owned' }),
+    ).rejects.toThrow('submission does not belong to artist');
+  });
+});

@@ -844,11 +844,7 @@ export const apiClient = {
   /** Server-owned transition. The service decides whether the command is legal. */
   recordCaseDecision(
     id: string,
-    command:
-      | { type: "record_creative_decision"; note?: string | null }
-      | { type: "start_rights_review"; licenseId?: string | null }
-      | { type: "mark_settlement_ready" }
-      | { type: "record_settlement" },
+    command: { type: "record_creative_decision"; note?: string | null },
   ): Promise<{ row: PlacementCaseRow }> {
     return api.patch<{ row: PlacementCaseRow }>(`/api/v1/cases/${encodeURIComponent(id)}`, command);
   },

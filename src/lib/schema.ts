@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, text, integer, real, timestamp, index, unique, jsonb, boolean, customType, check } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, real, timestamp, index, unique, uniqueIndex, jsonb, boolean, customType, check } from 'drizzle-orm/pg-core';
 
 // MODULAR: pgvector custom column type. Stores a float array that
 // Postgres treats as a `vector(N)` column when the pgvector extension
@@ -533,6 +533,11 @@ export const placementCases = pgTable(
   },
   (table) => [
     index('idx_placement_cases_supervisor').on(table.supervisorWallet, table.lastActivity),
+    // Race-safe active-case idempotency: at most ONE non-terminal case per
+    // (supervisor, brief). Once a case is settled/archived a new one may open.
+    uniqueIndex('uq_placement_cases_active_brief')
+      .on(table.supervisorWallet, table.briefText)
+      .where(sql`${table.status} NOT IN ('settled', 'archived')`),
   ],
 );
 

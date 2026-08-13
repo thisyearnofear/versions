@@ -39,34 +39,23 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const existing = await svc.supervisor.getLicense(id, ida.identity!.wallet);
   if (!existing) return errorResponse(requestId, 404, 'NOT_FOUND', 'License not found.');
   if (existing.status === 'paid') {
+    await svc.cases.reconcileLicenseOutcome(ida.identity!.wallet, id);
     return successResponse(200, { license: existing }, requestId);
   }
 
   // Claim the pending row before touching ERC-8183 or USDC. The conditional
   // update makes concurrent clicks idempotent: only one request can move a
   // license from pending_payment to settling.
-  // MODULAR: find the placement case this license is attached to (if any) so
-  // settlement can advance it idempotently from the real pay path.
-  const linkedCase = await svc.cases.getCaseByLicense(ida.identity!.wallet, id);
-
   const claim = await svc.supervisor.beginLicenseSettlement(id, ida.identity!.wallet);
   if (!claim) {
     const current = await svc.supervisor.getLicense(id, ida.identity!.wallet);
     if (current?.status === 'paid') {
+      await svc.cases.reconcileLicenseOutcome(ida.identity!.wallet, id);
       return successResponse(200, { license: current }, requestId);
     }
     return errorResponse(requestId, 409, 'SETTLEMENT_IN_PROGRESS', 'This license is already being settled.');
   }
   const before = claim.license;
-
-  // The user is approving — the real license workflow is ready, so the linked
-  // case may prepare for settlement. Best-effort and idempotent (only allowed
-  // from rights_review / settlement_pending).
-  if (linkedCase) {
-    void svc.cases
-      .executeCommand(ida.identity!.wallet, linkedCase.id, { type: 'mark_settlement_ready' })
-      .catch(() => {});
-  }
 
   try {
     const client = svc.config.platformWallet ?? ida.identity!.wallet;
@@ -139,13 +128,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     );
   }
 
-  // The license is PAID. Only from this successful path may the linked case
-  // record settlement — a failed or retried payment can never do this.
-  if (linkedCase) {
-    void svc.cases
-      .executeCommand(ida.identity!.wallet, linkedCase.id, { type: 'record_settlement' })
-      .catch(() => {});
-  }
+  // Persist the terminal projection before returning success. The operation is
+  // idempotent, and a paid-license retry invokes it again if this request is
+  // interrupted after settlement.
+  await svc.cases.reconcileLicenseOutcome(ida.identity!.wallet, id);
+
+  // Case status is derived from this authoritative paid license during reads;
+  // no detached side effect can leave a case falsely pending or settled.
 
   const settlementTimestamp = new Date().toISOString();
   // Canonical receipt stream: the sync license and artist payout settled.
