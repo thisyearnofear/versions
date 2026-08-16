@@ -97,6 +97,15 @@ CREATE TABLE IF NOT EXISTS agent_reviews (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_agent_review ON agent_reviews(submission_id, agent_name);
 CREATE INDEX IF NOT EXISTS idx_agent_reviews_submission ON agent_reviews(submission_id);
 
+CREATE TABLE IF NOT EXISTS outbox_events (
+  id TEXT PRIMARY KEY,
+  topic TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  processed_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_outbox_unprocessed ON outbox_events(processed_at, created_at);
+
 CREATE TABLE IF NOT EXISTS placement_briefs (
   id TEXT PRIMARY KEY,
   submission_id TEXT NOT NULL UNIQUE,

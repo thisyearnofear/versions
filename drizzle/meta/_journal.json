@@ -64,6 +64,13 @@
       "when": 1786919862083,
       "tag": "0008_nasty_calypso",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786921851020,
+      "tag": "0009_furry_colonel_america",
+      "breakpoints": true
     }
   ]
 }

@@ -6,11 +6,16 @@
 // CLEAN: no external dependencies — native Web Streams API.
 
 import { subscribe } from '@/lib/event-bus';
+import { drainOutbox } from '@/services/outbox';
 
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'auto';
 
 export async function GET(req: Request): Promise<Response> {
+  // MODULAR: replay any durable receipt that was produced while this client
+  // (or the process) was offline, so a reconnect never permanently misses a
+  // settlement/tip/play. At-least-once: consumers re-fetch and dedupe by id.
+  void drainOutbox();
   const stream = new ReadableStream({
     start(controller) {
       // Subscribe to all event types that feed clients care about.

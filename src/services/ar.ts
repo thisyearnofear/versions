@@ -16,6 +16,7 @@ import {
 } from '../lib/schema';
 import { cached } from '../lib/cache';
 import { emit } from '../lib/event-bus';
+import { emitDurable } from './outbox';
 import type { ArcAdapter } from '../adapters/arc';
 import type { LlmAdapter } from '../adapters/llm';
 
@@ -583,7 +584,8 @@ export function createArService({
 
       const settlementTimestamp = new Date().toISOString();
       // Canonical receipt stream: the artist payout settled.
-      emit('settlement-event', {
+      // Canonical receipt stream: the play payout leg settled.
+        await emitDurable('settlement-event', {
         type: 'settled',
         source: 'play',
         settlementId: playId,

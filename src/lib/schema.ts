@@ -636,3 +636,22 @@ export const licenses = pgTable('licenses', {
   unique('uq_license_super_sub_brief').on(table.supervisorWallet, table.submissionId, table.briefHash),
   index('idx_licenses_supervisor').on(table.supervisorWallet, table.createdAt),
 ]);
+
+// ── Outbox (durable event replay) ───────────────────────
+// MODULAR: transactional-ish event persistence for the canonical receipt
+// stream (settlement / tip / play / economy). The in-process EventBus is
+// fire-and-forget — if the process dies between a settle and an SSE client
+// reading it, that receipt is lost. Every durable emit is additionally
+// written here; a cron/SSE drain replays unprocessed rows into the bus so
+// the receipt is at-least-once delivered without blocking the fast path.
+export const outboxEvents = pgTable(
+  'outbox_events',
+  {
+    id: text('id').primaryKey(),
+    topic: text('topic').notNull(), // 'settlement-event' | 'economy-event' | 'feed-update' | …
+    payload: jsonb('payload').notNull().$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    processedAt: timestamp('processed_at'),
+  },
+  (table) => [index('idx_outbox_unprocessed').on(table.processedAt, table.createdAt)],
+);

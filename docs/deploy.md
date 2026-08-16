@@ -75,6 +75,26 @@ push → verify). It is a pure additive change: existing rows are unaffected and
 the columns are nullable, so there is no backfill requirement. A recovery drill
 must succeed after the push (see below).
 
+### Pending schema change — `0009_furry_colonel_america.sql` (2026-08-16)
+
+Creates the durable event outbox for the canonical receipt stream:
+
+```sql
+CREATE TABLE "outbox_events" (
+  "id" text PRIMARY KEY NOT NULL,
+  "topic" text NOT NULL,
+  "payload" jsonb NOT NULL,
+  "created_at" timestamp DEFAULT now() NOT NULL,
+  "processed_at" timestamp
+);
+CREATE INDEX "idx_outbox_unprocessed" ON "outbox_events" USING btree ("processed_at","created_at");
+```
+
+Additive and safe to apply on the guarded push. Settlement/tip/play receipts are
+now written here as a replayable copy (in addition to the live SSE); a drain on
+the cron sweep + SSE reconnect replays any that were produced while a client was
+offline (at-least-once; consumers dedupe). No backfill required.
+
 `db:prod:push` always passes `--strict --verbose`; it refuses to run until
 `VERSIONS_DB_APPLY=1` is explicitly set. A server/client PostgreSQL-major
 mismatch makes `pg_dump` unusable, so the backup helper uses the official

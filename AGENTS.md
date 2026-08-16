@@ -97,6 +97,22 @@ field changes, update all of: `agent_reviews.detail` in `src/lib/schema.ts` (jso
 `src/components/curation/AgentMonitor.tsx`. Legacy rows without `detail` /
 `fit_score` must keep grading normally — gate UI rendering on field presence.
 
+## Durable receipt outbox (outbox_events)
+
+The in-process EventBus is fire-and-forget — it can drop a receipt if the
+process dies between "money moved" and "SSE read". The canonical receipt stream
+(`settlement-event`: split legs, tip batches, play payouts, license settlement)
+is therefore emitted via `emitDurable(topic, payload)` in `src/services/outbox.ts`,
+which writes a replayable row to `outbox_events` AND broadcasts immediately.
+`drainOutbox()` (so the receipt is at-least-once) runs on the cron sweep and on
+SSE reconnect; consumers re-fetch and dedupe.
+
+Rules: use `emitDurable` for anything a user pays for / is paid for; keep
+`emit` for pure ephemeral UX ticks (throttled typewriter/reveal visuals); never
+treat the outbox as the source of truth for money state (that stays in the
+settlement / license tables); keep `outbox_events` mirrored in
+`tests/helpers/db.ts` when the schema changes.
+
 ## Build & test commands
 
 ```bash

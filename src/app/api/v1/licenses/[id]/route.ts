@@ -6,6 +6,7 @@
 import { NextRequest } from 'next/server';
 import { services, successResponse, errorResponse, requestIdFor } from '@/lib/services';
 import { emit } from '@/lib/event-bus';
+import { emitDurable } from '@/services/outbox';
 import { resolveAuthenticatedSupervisorIdentity } from '@/lib/supervisor-identity';
 import { licenseDeliverableHash } from '@/adapters/erc8183';
 
@@ -138,7 +139,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const settlementTimestamp = new Date().toISOString();
   // Canonical receipt stream: the sync license and artist payout settled.
-  emit('settlement-event', {
+  await emitDurable('settlement-event', {
     type: 'settled',
     source: 'license',
     settlementId: id,

@@ -21,6 +21,7 @@ import {
   licenses as licensesTable,
 } from '../lib/schema';
 import { emit } from '../lib/event-bus';
+import { emitDurable } from './outbox';
 import type { SettlementStatus, RecipientRole } from '../lib/types';
 import type { ArcAdapter } from '../adapters/arc';
 
@@ -329,7 +330,7 @@ export function createSettlementService({
             .where(eq(legsTable.id, legId));
           const settlementTimestamp = new Date().toISOString();
           // Canonical receipt stream: one payout leg landed on-chain.
-          emit('settlement-event', {
+          await emitDurable('settlement-event', {
             type: 'settled',
             source: 'split',
             settlementId: leg.id,

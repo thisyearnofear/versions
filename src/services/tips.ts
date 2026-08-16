@@ -14,6 +14,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../lib/db';
 import { x402Proofs } from '../lib/schema';
 import { emit } from '../lib/event-bus';
+import { emitDurable } from './outbox';
 import { log } from '../lib/logger';
 import type { ArcAdapter } from '../adapters/arc';
 import { fromMicroUsdc } from './settlement';
@@ -70,7 +71,7 @@ export function createTipSettlementService({
         .where(inArray(x402Proofs.id, rows.map((row) => row.id)));
       const settlementTimestamp = new Date().toISOString();
       // Canonical receipt stream: one transfer settled the whole batch.
-      emit('settlement-event', {
+      await emitDurable('settlement-event', {
         type: 'settled',
         source: 'tip',
         settlementId: r.hash,
