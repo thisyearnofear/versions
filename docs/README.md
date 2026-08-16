@@ -26,7 +26,7 @@ Guests search free. Shortlist and license need a wallet session.
 | `/discover` | Brief search (primary) |
 | `/supervisor` | Shortlist, licenses, treasury, agent stack |
 | `/submit` | Artist upload |
-| `/agents` | Live review queue |
+| `/agents` | Live review queue — differentiated per-agent verdicts + sync-fit |
 | `/feed` | Published catalog |
 | `/auth/signin` | Connect + EIP-191 sign-in |
 | `/api/health/ready` | Adapter mock/live flags |
@@ -37,6 +37,7 @@ Guests search free. Shortlist and license need a wallet session.
 npm install
 npm run db:push
 npm run seed          # optional demo catalog
+npm run verify        # typecheck + tests + lint (the CI gate)
 npm run dev
 ```
 

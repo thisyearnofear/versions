@@ -38,10 +38,6 @@ catalog-provenance and settlement-lease changes were completed and verified on
 verified ledger baseline, it would replay the full historical chain and can
 fail on existing columns or leave another partial schema change.
 
-The production standard is an explicit, reviewed `drizzle-kit push` operation.
-It is intentionally separate from the app deploy so a schema diff is never
-applied as a side effect of rebuilding the container.
-
 Run these commands on `nuncio-vultr` from `/home/linuxuser/versions` in a
 maintenance window. They never print `DATABASE_URL`; when it is not exported,
 the helper reads it only in-process from the running `versions` container.
@@ -63,6 +59,21 @@ npm run db:prod:status
 curl -sf http://127.0.0.1:3000/api/health/ready
 curl -sf https://versions.persidian.com/api/health/ready
 ```
+
+### Pending schema change — `0008_nasty_calypso.sql` (2026-08-16)
+
+Adds two additive, nullable columns to `agent_reviews` so the /agents surface can
+render each agent's differentiated verdict long after the stream ends:
+
+```sql
+ALTER TABLE "agent_reviews" ADD COLUMN "detail" jsonb;      -- AgentDetail block
+ALTER TABLE "agent_reviews" ADD COLUMN "fit_score" integer; -- 1-10 sync-fit per agent
+```
+
+Apply it with the same guarded flow above (status → backup → `VERSIONS_DB_APPLY=1`
+push → verify). It is a pure additive change: existing rows are unaffected and
+the columns are nullable, so there is no backfill requirement. A recovery drill
+must succeed after the push (see below).
 
 `db:prod:push` always passes `--strict --verbose`; it refuses to run until
 `VERSIONS_DB_APPLY=1` is explicitly set. A server/client PostgreSQL-major

@@ -35,6 +35,7 @@ Next.js 16 · Postgres (Neon) · Drizzle · NextAuth (wallet) · Wagmi / Rainbow
 ```bash
 npm run dev          # local
 npm test             # vitest
+npm run verify       # typecheck + tests + lint (CI gate)
 npm run build        # production image
 npm run seed         # demo catalog
 npm run check:arc    # live Arc probe

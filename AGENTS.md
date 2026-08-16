@@ -72,19 +72,49 @@ apply it themselves. Skipping it reproduces the bug class where
 covers render as "···" placeholders and React logs duplicate-key
 warnings (every row keyed `undefined`).
 
+## AgentDetail wire convention (per-agent verdicts + sync-fit)
+
+Every agent verdict carries a per-agent differentiated block, `AgentDetail`,
+defined **once** in `src/lib/types.ts`. The adapter emits it, the agent service
+tolerantly parses + persists it, `normalizeReviewRow` maps it, and the /agents
+UI consumes it. Keep these in sync when touching any one:
+
+```ts
+export interface AgentDetail {
+  fit_score: number;    // 1-10 sync-fit as judged by THIS agent
+  metric: number;        // 0-10 headline metric for this agent's focus
+  metric_label: string;   // "mix clarity" | "vocal delivery" | "placement recall"
+  note: string;           // one-line expert note
+}
+```
+
+The three agents must render as **distinct lenses** (mix/mastering → delivery/feel
+→ placement recall), never "one model asked three times". When an agent or verdict
+field changes, update all of: `agent_reviews.detail` in `src/lib/schema.ts` (jsonb
+`AgentDetail`), the mock template in `src/adapters/llm.ts`, the tolerant parser in
+`src/services/agents.ts`, `normalizeReviewRow` in `src/lib/api-client.ts`, the
+`agent_verdict` SSE event in `src/lib/event-bus.ts`, and the /agents card in
+`src/components/curation/AgentMonitor.tsx`. Legacy rows without `detail` /
+`fit_score` must keep grading normally — gate UI rendering on field presence.
+
 ## Build & test commands
 
 ```bash
 npm test              # vitest
+npm run typecheck     # tsc --noEmit (typecheck only)
+npm run verify        # typecheck + tests + lint (the CI gate)
 npm run build         # next build . --experimental-build-mode compile
-npx tsc --noEmit      # typecheck only
-npx eslint src/ tests/ --max-warnings 0  # lint (pre-existing warnings exist)
+npx eslint src/ tests/ --max-warnings 0  # strict lint (see CI note)
 npm run db:push       # drizzle-kit push (schema → DB)
 npm run db:pgvector   # enable pgvector + create version_embeddings table
 npm run db:rename-briefs  # rename legacy placement_briefs columns
 npm run db:purge:preview  # dry-run legacy brief purge
 npm run db:purge:apply    # apply legacy brief purge
 ```
+
+CI (`.github/workflows/ci.yml`) hard-gates on typecheck + tests. The lint step
+is **non-blocking** until the pre-existing `react-hooks/set-state-in-effect`
+errors are cleared — do not reintroduce them, and new code should lint clean.
 
 ## Mock-first architecture
 
