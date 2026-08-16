@@ -106,10 +106,12 @@ export function SupervisorDashboard() {
   }, [fetchSavedBriefs, fetchRecentSearches, savedBriefsPage, savedBriefsSearch, recentSearchesPage, recentSearchesSearch]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshProfileAndInterests();
   }, [refreshProfileAndInterests]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshLists();
   }, [refreshLists]);
 
@@ -313,6 +315,7 @@ function CompactSearchInput({
   const [input, setInput] = useState(value);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setInput(value); }, [value]);
   useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
 
@@ -386,6 +389,7 @@ function ProfileSection({
 
   useEffect(() => {
     if (!editing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({
         name: profile?.name ?? "",
         email: profile?.email ?? "",

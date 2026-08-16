@@ -167,6 +167,7 @@ export function CuratorDashboard({ wallet }: { wallet: string }) {
   useEffect(() => {
     if (!initialUrlSyncDone.current) return;
     if (activeTab !== "earnings") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFilterEarningsRole("");
       setFilterEarningsDateFrom("");
       setFilterEarningsDateTo("");

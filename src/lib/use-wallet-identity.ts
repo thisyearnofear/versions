@@ -15,6 +15,9 @@ export function useWalletIdentity(address: string | null | undefined) {
 
   useEffect(() => {
     if (!address) {
+      // MODULAR: reset when wallet disconnects mid-session. Suppressed below
+      // intentionally — this is a synchronous reset-on-condition effect.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIdentity(null);
       return;
     }

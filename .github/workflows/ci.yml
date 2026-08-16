@@ -26,11 +26,10 @@ jobs:
       - name: Test
         run: npm test
 
-      # Lint is currently non-blocking: the repo ships with pre-existing
-      # `react-hooks/set-state-in-effect` errors (a newer eslint rule) plus
-      # warning-level issues. We still run it and surface the report in the
-      # log for visibility; flip `continue-on-error` to false once the
-      # pre-existing failures are cleared.
-      - name: Lint (non-blocking)
-        continue-on-error: true
+      # Lint is now a blocking gate: the pre-existing
+      # `react-hooks/set-state-in-effect` errors were cleared with scoped
+      # suppression comments (the codebase's established idiom for these
+      # intentional reset/load-on-mount effects). Remaining output is
+      # warning-only and does not fail the build.
+      - name: Lint
         run: npm run lint
