@@ -27,7 +27,9 @@
     "benchmark": "tsx scripts/benchmark.ts",
     "primitive:demo": "tsx scripts/primitive-demo.ts",
     "curate": "tsx scripts/curate.ts",
-    "seed": "tsx scripts/seed-catalog.ts"
+    "seed": "tsx scripts/seed-catalog.ts",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm test && npm run lint"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.74",

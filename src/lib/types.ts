@@ -57,6 +57,19 @@ export interface AgentReview extends TasteGraphRating {
   placementBrief?: PlacementBrief;
 }
 
+// MODULAR: per-agent differentiated verdict detail. Every agent grades on a
+// distinct expert headline metric so the three reviews read as three lenses
+// rather than one model asked three times. `fit_score` is that agent's 1-10
+// sync-fit read. Lives here (not in the LLM adapter or schema) because both
+// the adapter that emits it and the adapter-agnostic persistence/UI layers
+// must agree on the shape without coupling schema to a provider.
+export interface AgentDetail {
+  fit_score: number; // 1-10 sync-fit as judged by this agent
+  metric: number; // 0-10 headline metric for this agent's focus
+  metric_label: string; // e.g. "mix clarity" | "vocal delivery" | "placement recall"
+  note: string; // one-line expert take
+}
+
 export interface SettlementLeg {
   id: string;
   submissionId: string;

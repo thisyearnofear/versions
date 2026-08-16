@@ -10,7 +10,9 @@
 import { createHash } from 'crypto';
 import { requestJson } from '../lib/http';
 import { openRouterHeaders, type InferenceProvider } from '../lib/openrouter';
-import type { AgentName } from '../lib/types';
+import type { AgentName, AgentDetail } from '../lib/types';
+
+export type { AgentDetail };
 
 const DEFAULT_TIMEOUT = 30000;
 
@@ -152,6 +154,42 @@ export interface MockReview {
   mood_tags: string[];
   notes: string;
   placement_brief?: MockPlacementBrief;
+  // MODULAR: per-agent differentiated detail. Every agent renders a distinct
+  // expert headline metric (`metric_label` / `metric`) and a short pitch-note,
+  // so the three reviews read as genuinely different lenses rather than one
+  // model asked three times. `fit_score` is that agent's 1-10 sync-fit read.
+  detail?: AgentDetail;
+}
+
+function clamp01(n: number): number {
+  return Math.max(0, Math.min(10, Math.round(n)));
+}
+
+// MODULAR: deterministic per-agent detail block, seeded consistently per
+// (genre, versionType, agent) so mock reviews are stable across runs but
+// still visibly different between the three agents.
+function mockAgentDetail(agent: AgentName, seed: Buffer): AgentDetail {
+  const m: Record<AgentName, { label: string; note: string }> = {
+    production: {
+      label: 'mix clarity',
+      note: 'Production lens — mix and mastering define the grade.',
+    },
+    performance: {
+      label: 'vocal delivery',
+      note: 'Performance lens — feel and commitment define the grade.',
+    },
+    market: {
+      label: 'placement recall',
+      note: 'Market lens — how a supervisor brief would find this take.',
+    },
+  };
+  const meta = m[agent] ?? m.production;
+  return {
+    fit_score: clamp01(4 + (seed[4] % 5)), // 4-8
+    metric: clamp01(4 + (seed[5] % 5)),
+    metric_label: meta.label,
+    note: meta.note,
+  };
 }
 
 export const MOCK_TEMPLATES: Record<AgentName, {
@@ -173,6 +211,7 @@ export const MOCK_TEMPLATES: Record<AgentName, {
         tempo_feel: tempos[seed[3] % 3],
         mood_tags: pickMoods(seed, genre),
         notes: mockProductionNotes(genre, versionType, solo, vocal),
+        detail: mockAgentDetail('production', seed),
       };
     },
   },
@@ -191,6 +230,7 @@ export const MOCK_TEMPLATES: Record<AgentName, {
         tempo_feel: tempos[seed[3] % 3],
         mood_tags: pickMoods(seed, genre),
         notes: mockPerformanceNotes(genre, versionType, vocal),
+        detail: mockAgentDetail('performance', seed),
       };
     },
   },
@@ -210,6 +250,7 @@ export const MOCK_TEMPLATES: Record<AgentName, {
         mood_tags: pickMoods(seed, genre),
         notes: mockMarketNotes(genre, versionType),
         placement_brief: mockPlacementBrief(genre, versionType),
+        detail: mockAgentDetail('market', seed),
       };
     },
   },

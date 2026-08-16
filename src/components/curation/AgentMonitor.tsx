@@ -30,10 +30,44 @@ import DOMPurify from "dompurify";
 
 // ── Agent identity kit ─────────────────────────────────
 
-const AGENT_META: Record<string, { icon: string; label: string; color: string }> = {
-  production: { icon: "🎛️", label: "Production Agent", color: "var(--color-rust)" },
-  performance: { icon: "🎤", label: "Performance Agent", color: "var(--color-ink)" },
-  market: { icon: "📊", label: "Market Agent", color: "var(--color-ink-2)" },
+// MODULAR: each agent exposes a one-line `focus` — the specific rubric it
+// weighs. It is rendered on every verdict card so the three agents read as
+// genuinely distinct reviewers (mix/mastering vs delivery vs placement
+// recall) rather than the same model asked three times. The real system
+// prompts already differ (services/agents.ts); this surfaces that intent.
+interface AgentMeta {
+  icon: string;
+  label: string;
+  focus: string;
+  color: string;
+}
+
+const AGENT_META: Record<string, AgentMeta> = {
+  production: {
+    icon: "🎛️",
+    label: "Production Agent",
+    focus: "Mix · mastering · technical sound",
+    color: "var(--color-rust)",
+  },
+  performance: {
+    icon: "🎤",
+    label: "Performance Agent",
+    focus: "Delivery · feel · emotional impact",
+    color: "var(--color-ink)",
+  },
+  market: {
+    icon: "📊",
+    label: "Market Agent",
+    focus: "Placement fit · inverse-search recall",
+    color: "var(--color-ink-2)",
+  },
+};
+
+const FALLBACK_AGENT_META: AgentMeta = {
+  icon: "🤖",
+  label: "Agent",
+  focus: "Autonomous review",
+  color: "var(--color-ink)",
 };
 
 // ── Component ───────────────────────────────────────────
@@ -217,6 +251,9 @@ export function AgentMonitor() {
                         vocal_quality: e.vocal,
                         energy_vs_studio: e.energy as AgentReviewRecord["energy_vs_studio"],
                         tempo_feel: e.tempo as AgentReviewRecord["tempo_feel"],
+                        detail: e.detail ?? null,
+                        fit_score: e.fitScore ?? null,
+                        mock: e.mock,
                       },
                     },
                   },
@@ -492,7 +529,7 @@ export function AgentMonitor() {
                   (r) => r.agent_name === name && r.submission_id === selectedId,
                 );
                 if (!st && !fetched) return null;
-                const meta = AGENT_META[name] ?? { icon: "🤖", label: name, color: "var(--color-ink)" };
+                const meta = AGENT_META[name] ?? { ...FALLBACK_AGENT_META, label: name };
                 const review = fetched ?? st?.verdict;
                 return (
                   <motion.div
@@ -533,7 +570,7 @@ export function AgentMonitor() {
           <div className="flex flex-col gap-4">
             <AnimatePresence mode="popLayout">
               {reviews.map((r, idx) => {
-                const meta = AGENT_META[r.agent_name] ?? { icon: "🤖", label: r.agent_name, color: "var(--color-ink)" };
+                const meta = AGENT_META[r.agent_name] ?? { ...FALLBACK_AGENT_META, label: r.agent_name };
                 return (
                   <motion.div
                     key={`${r.submission_id}-${r.agent_name}`}
@@ -561,7 +598,7 @@ function AgentReviewCard({
   typewriter,
 }: {
   review: AgentReviewRecord;
-  meta: { icon: string; label: string; color: string };
+  meta: AgentMeta;
   typewriter?: { enabled: boolean; onDone?: () => void };
 }) {
   // MODULAR: parseMoodTags (lib/format) handles BOTH wire shapes
@@ -601,6 +638,29 @@ function AgentReviewCard({
           {meta.label}
         </span>
       </div>
+      {/* MODULAR: one-line rubric so the three agents render as distinct
+          reviewers rather than the same model asked three times. */}
+      <p className="mb-3 -mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+        {meta.focus}
+      </p>
+
+      {/* MODULAR: the agent's sync-fit + its distinct expert headline metric.
+          Persisted detail (agent_reviews.detail) may be absent on legacy
+          rows, so this block is gated on its presence. */}
+      {review.detail && (
+        <div className="mb-3 -mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <span
+            className="font-mono text-xs font-semibold tabular-nums"
+            style={{ color: meta.color }}
+          >
+            Fit {review.detail.fit_score}/10
+          </span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
+            {review.detail.metric_label} ·
+            <span className="text-[var(--color-ink)]">{review.detail.metric}/10</span>
+          </span>
+        </div>
+      )}
 
       <div className="flex items-start gap-4">
         {/* TasteGraph mini */}
@@ -672,7 +732,7 @@ function AgentReviewCard({
 }
 
 // Lightweight variant shown between agent_started and agent_verdict.
-function AgentThinkingCard({ meta }: { meta: { icon: string; label: string; color: string } }) {
+function AgentThinkingCard({ meta }: { meta: AgentMeta }) {
   return (
     <div className="border border-[var(--color-hair-strong)] p-4">
       <div className="flex items-center gap-2 mb-3 border-b border-[var(--color-hair)] pb-2">
@@ -697,7 +757,7 @@ function StreamFailedCard({
   meta,
   onSettled,
 }: {
-  meta: { icon: string; label: string; color: string };
+  meta: AgentMeta;
   onSettled: () => void;
 }) {
   const onSettledRef = useRef(onSettled);

@@ -90,6 +90,8 @@ CREATE TABLE IF NOT EXISTS agent_reviews (
   mood_tags JSONB NOT NULL,
   notes TEXT,
   raw_response TEXT,
+  detail JSONB,
+  fit_score INTEGER,
   submitted_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_agent_review ON agent_reviews(submission_id, agent_name);

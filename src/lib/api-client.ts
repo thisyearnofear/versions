@@ -6,6 +6,7 @@
 import { getGuestId } from "./guest-id";
 import type {
   AgentName,
+  AgentDetail,
   BriefSearchResponse,
   MoodTagsEnvelope,
   PlacementBrief,
@@ -38,7 +39,7 @@ import type { MatchBenchmarkReport } from "./match-benchmark";
 // in `@/lib/types` (source of truth). Re-export here so existing
 // `import { MoodTagsEnvelope } from '@/lib/api-client'` call sites
 // keep working without churn.
-export type { MoodTagsEnvelope, BriefSearchResponse, BriefSearchRow } from "./types";
+export type { MoodTagsEnvelope, BriefSearchResponse, BriefSearchRow, AgentDetail } from "./types";
 
 export class ApiError extends Error {
   code: string;
@@ -172,6 +173,10 @@ export interface AgentReviewRecord {
   energy_vs_studio: "lower" | "same" | "higher";
   tempo_feel: "dragging" | "locked" | "rushing";
   placement_brief?: PlacementBrief;
+  // MODULAR: per-agent differentiated verdict + that agent's 1-10 sync-fit.
+  detail?: AgentDetail | null;
+  fit_score?: number | null;
+  mock?: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -236,6 +241,9 @@ export function normalizeReviewRow(raw: Record<string, unknown>): AgentReviewRec
     energy_vs_studio: pick(raw.energy_vs_studio, raw.energyVsStudio),
     tempo_feel: pick(raw.tempo_feel, raw.tempoFeel),
     placement_brief: pick(raw.placement_brief, raw.placementBrief),
+    detail: pick(raw.detail, null),
+    fit_score: pick(raw.fit_score, raw.fitScore),
+    mock: pick(raw.mock, false),
   };
 }
 

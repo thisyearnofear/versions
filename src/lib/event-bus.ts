@@ -4,6 +4,8 @@
 // PERFORMANT: O(1) subscribe/unsubscribe. Events are fire-and-forget — if
 //             no subscribers exist, the emit is a no-op.
 
+import type { AgentDetail } from './types';
+
 export type EventName =
   | 'feed-update'
   | 'queue-update'
@@ -174,6 +176,11 @@ export type AgentStreamEvent =
       energy: string;
       tempo: string;
       moodTags: string[];
+      // MODULAR: per-agent differentiated verdict detail + that agent's
+      // 1-10 sync-fit, so the /agents surface can render the three agents
+      // as distinct lenses even while streaming.
+      detail?: AgentDetail | null;
+      fitScore?: number | null;
       mock: boolean;
       timestamp: string;
     }

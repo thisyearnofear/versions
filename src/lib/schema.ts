@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, text, integer, real, timestamp, index, unique, uniqueIndex, jsonb, boolean, customType, check } from 'drizzle-orm/pg-core';
+import type { AgentDetail } from './types';
 
 // MODULAR: pgvector custom column type. Stores a float array that
 // Postgres treats as a `vector(N)` column when the pgvector extension
@@ -127,6 +128,11 @@ export const agentReviews = pgTable('agent_reviews', {
   moodTags: jsonb('mood_tags').notNull().$type<string[]>(),
   notes: text('notes'),
   rawResponse: text('raw_response'),
+  // MODULAR: per-agent differentiated verdict detail (the expert headline
+  // metric + this agent's 1-10 sync-fit), persisted so the /agents surface
+  // can render the three agents' distinct lenses long after the stream ends.
+  detail: jsonb('detail').$type<AgentDetail | null>(),
+  fitScore: integer('fit_score'),
   submittedAt: timestamp('submitted_at').defaultNow().notNull(),
 }, (table) => [
   unique('uq_agent_review').on(table.submissionId, table.agentName),

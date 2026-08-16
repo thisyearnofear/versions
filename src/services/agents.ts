@@ -20,7 +20,7 @@ import { publishSubmission, PublishLegIncompleteError } from './publish';
 import { emit } from '../lib/event-bus';
 import type { LlmAdapter } from '../adapters/llm';
 import type { SettlementService } from './settlement';
-import type { AgentName } from '../lib/types';
+import type { AgentName, AgentDetail } from '../lib/types';
 
 export const PUBLISH_THRESHOLD = 3;
 
@@ -126,6 +126,7 @@ export interface ParsedReview {
     sync_comparables: Array<{ name: string; why: string }>;
     audience_summary: string;
   };
+  detail?: AgentDetail;
 }
 
 export function parseAgentResponse(text: string, agentName: AgentName): ParsedReview | null {
@@ -213,6 +214,22 @@ export function parseAgentResponse(text: string, agentName: AgentName): ParsedRe
         typeof pb.audience_summary === 'string' ? pb.audience_summary.slice(0, 600) : '',
     };
   }
+  // MODULAR: per-agent differentiated detail, tolerantly coerced + clamped so
+  // a drifting LLM response can't crash the parse. Kept optional so legacy /
+  // minimal reviews (no detail block) still grade normally.
+  if (parsed.detail && typeof parsed.detail === 'object') {
+    const d = parsed.detail as unknown as Record<string, unknown>;
+    const fitNum = Math.round(Number(d.fit_score));
+    const metNum = Math.round(Number(d.metric));
+    const label = typeof d.metric_label === 'string' ? d.metric_label.slice(0, 60) : '';
+    const note = typeof d.note === 'string' ? d.note.slice(0, 300) : '';
+    result.detail = {
+      fit_score: Number.isFinite(fitNum) ? Math.max(1, Math.min(10, fitNum)) : 5,
+      metric: Number.isFinite(metNum) ? Math.max(0, Math.min(10, metNum)) : 5,
+      metric_label: label,
+      note,
+    };
+  }
   return result;
 }
 
@@ -227,6 +244,8 @@ export interface AgentReviewSummary {
   mood_tags: string[];
   notes: string;
   mock: boolean;
+  detail?: AgentDetail;
+  fit_score: number | null;
 }
 
 export interface PublishedSummary {
@@ -369,6 +388,8 @@ export function createAgentService({
           moodTags: assertMoodTagsShape(parsed.mood_tags),
           notes: parsed.notes,
           rawResponse: result.text,
+          detail: parsed.detail ?? null,
+          fitScore: parsed.detail?.fit_score ?? null,
         });
 
         const ratingInserted = await db
@@ -431,6 +452,8 @@ export function createAgentService({
           mood_tags: parsed.mood_tags,
           notes: parsed.notes,
           mock,
+          detail: parsed.detail,
+          fit_score: parsed.detail?.fit_score ?? null,
         };
 
         // Economy ticker: one event per filed verdict.
@@ -460,6 +483,8 @@ export function createAgentService({
           energy: parsed.energy_vs_studio,
           tempo: parsed.tempo_feel,
           moodTags: parsed.mood_tags,
+          detail: parsed.detail ?? null,
+          fitScore: parsed.detail?.fit_score ?? null,
           mock,
           timestamp: new Date().toISOString(),
         });

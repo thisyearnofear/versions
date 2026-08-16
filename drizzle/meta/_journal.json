@@ -57,6 +57,13 @@
       "when": 1786578982340,
       "tag": "0007_black_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786919862083,
+      "tag": "0008_nasty_calypso",
+      "breakpoints": true
     }
   ]
 }
