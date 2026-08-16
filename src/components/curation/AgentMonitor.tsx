@@ -324,6 +324,18 @@ export function AgentMonitor() {
     ? Object.values(stream.agents).filter((a) => a?.phase === "verdict").length
     : 0;
 
+  // MODULAR: consensus aggregation — average of the per-agent 1-10 sync-fit
+  // scores carried on each AgentReviewRecord. Rounds the "three lenses"
+  // into one legible number at the head of the Agent Reviews pane.
+  const avgFit = (() => {
+    const fits = reviews
+      .map((r) => r.fit_score)
+      .filter((n): n is number => typeof n === "number");
+    return fits.length
+      ? Math.round((fits.reduce((a, b) => a + b, 0) / fits.length) * 10) / 10
+      : null;
+  })();
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-[var(--color-hair-strong)] pt-8">
       {/* Recent Verdicts strip — full-width above the queue/reviews grid */}
@@ -459,7 +471,14 @@ export function AgentMonitor() {
 
       {/* Agent review pane */}
       <section>
-        <h3 className="font-serif text-2xl font-black mb-4">Agent Reviews</h3>
+        <h3 className="font-serif text-2xl font-black mb-4">
+          Agent Reviews
+          {avgFit != null && (
+            <span className="ml-3 align-middle font-mono text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-rust)]">
+              avg fit · {avgFit}/10
+            </span>
+          )}
+        </h3>
         {selectedId && (
           <div className="mb-5 border border-[var(--color-hair-strong)] bg-[var(--color-paper-2)]/40 px-4 py-3">
             {/* A published submission leaves the queue, so fall back to
