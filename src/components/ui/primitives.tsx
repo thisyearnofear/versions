@@ -30,8 +30,11 @@ export function Container({
 }
 
 export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
+  // MODULAR: shared micro-label. Two sizes up from the old 9-10px ad-hoc
+  // caps so section + page headers stay legible (WCAG-friendly small text)
+  // while preserving the mono/uppercase editorial flavour.
   return (
-    <p className={cn("font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]", className)}>
+    <p className={cn("font-mono text-[12px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]", className)}>
       {children}
     </p>
   );

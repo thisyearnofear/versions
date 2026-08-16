@@ -33,7 +33,7 @@ export function SiteHeader({ active }: { active?: HeaderRoute }) {
                 title={t.title}
                 onClick={() => track("nav_click", { to: t.href, source: "site_header" })}
                 aria-current={active === t.id ? "page" : undefined}
-                className={`font-mono text-[11px] uppercase tracking-[0.18em] px-3 py-2 border-b-2 transition-colors whitespace-nowrap ${
+                className={`font-mono text-[12px] uppercase tracking-[0.18em] px-3 py-2 border-b-2 transition-colors whitespace-nowrap ${
                   active === t.id
                     ? "border-[var(--color-rust)] text-[var(--color-rust)]"
                     : "border-transparent text-[var(--color-ink-2)] hover:text-[var(--color-ink)]"
