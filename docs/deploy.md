@@ -60,26 +60,15 @@ curl -sf http://127.0.0.1:3000/api/health/ready
 curl -sf https://versions.persidian.com/api/health/ready
 ```
 
-### Pending schema change — `0008_nasty_calypso.sql` (2026-08-16)
+### Applied schema changes — `0008_nasty_calypso.sql` and `0009_furry_colonel_america.sql`
 
-Adds two additive, nullable columns to `agent_reviews` so the /agents surface can
-render each agent's differentiated verdict long after the stream ends:
+These additive changes were applied in production on 2026-08-17 after the
+pre-change backup `versions-before-schema-20260817T002054Z.dump` was verified:
 
 ```sql
 ALTER TABLE "agent_reviews" ADD COLUMN "detail" jsonb;      -- AgentDetail block
 ALTER TABLE "agent_reviews" ADD COLUMN "fit_score" integer; -- 1-10 sync-fit per agent
-```
 
-Apply it with the same guarded flow above (status → backup → `VERSIONS_DB_APPLY=1`
-push → verify). It is a pure additive change: existing rows are unaffected and
-the columns are nullable, so there is no backfill requirement. A recovery drill
-must succeed after the push (see below).
-
-### Pending schema change — `0009_furry_colonel_america.sql` (2026-08-16)
-
-Creates the durable event outbox for the canonical receipt stream:
-
-```sql
 CREATE TABLE "outbox_events" (
   "id" text PRIMARY KEY NOT NULL,
   "topic" text NOT NULL,
@@ -90,10 +79,25 @@ CREATE TABLE "outbox_events" (
 CREATE INDEX "idx_outbox_unprocessed" ON "outbox_events" USING btree ("processed_at","created_at");
 ```
 
-Additive and safe to apply on the guarded push. Settlement/tip/play receipts are
-now written here as a replayable copy (in addition to the live SSE); a drain on
-the cron sweep + SSE reconnect replays any that were produced while a client was
-offline (at-least-once; consumers dedupe). No backfill required.
+The `agent_reviews` columns are nullable, so existing rows were unaffected and
+no backfill was required. `outbox_events` is the replayable copy of the
+canonical settlement/tip/play receipt stream; cron and SSE reconnect drains
+replay receipts produced while a client was offline, with consumer deduplication.
+
+During the same reconciliation, production's existing `ar_playlist_tracks` data
+was checked (7 rows, no duplicate `(playlist_id, version_id)` pairs) and the
+code-defined constraint was added without truncating data:
+
+```sql
+ALTER TABLE "ar_playlist_tracks"
+  ADD CONSTRAINT "uq_playlist_track" UNIQUE ("playlist_id", "version_id");
+```
+
+Post-change verification passed: `npm run db:prod:status`, the local and public
+`/api/health/ready` checks, both `agent_reviews` columns, the `outbox_events`
+table, and its index. The Drizzle migration ledger remains intentionally absent;
+do not run `npm run db:migrate` against production. A post-change recovery drill
+is still required against a new post-change backup (see below).
 
 `db:prod:push` always passes `--strict --verbose`; it refuses to run until
 `VERSIONS_DB_APPLY=1` is explicitly set. A server/client PostgreSQL-major
