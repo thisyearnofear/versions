@@ -65,8 +65,19 @@ const envSchema = z.object({
 // are missing. Next sets NEXT_PHASE=PHASE_PRODUCTION_BUILD during `next build`.
 const isNextBuild = process.env.NEXT_PHASE === 'phase-production-build';
 
+// MODULAR: docker compose env_file materializes unset vars as `KEY=` (empty
+// string), and dotenv-style files do the same for commented-out lines. Treat
+// empty as absent so optional URL fields don't fail `z.string().url().optional()`
+// at module load — the class of bug that 500'd /api/cron/sweep on deploy when
+// the server .env carried a placeholder `LLM_API_URL=`. Coerced number fields
+// (UPSTREAM_TIMEOUT_MS, etc.) also fall through to their defaults instead of
+// NaN-ing. Required fields still fail (empty → undefined → "Required").
+const envInput = Object.fromEntries(
+  Object.entries(process.env).map(([key, value]) => [key, value === '' ? undefined : value]),
+);
+
 export const env = (isNextBuild ? envSchema.partial() : envSchema).parse(
-  process.env,
+  envInput,
 ) as z.infer<typeof envSchema>;
 
 export const config = {
