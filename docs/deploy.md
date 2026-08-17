@@ -331,8 +331,11 @@ Pre-demo checklist: deploy these changes (`git push origin master &&
 ./scripts/deploy-remote.sh`), ingest 2–3 real tracks
 (`npm run ingest:tracks -- --dir <folder>`), pre-auth
 (`npm run demo:signin`), and verify `/api/v1/demo/faucet` + the
-LiveDemoButton live path on prod. Treasury math at $1: 18 USDC covers
-~15 demo cycles after fees.
+LiveDemoButton live path on prod. Treasury math at $1: as of
+`ba14093b` the platform wallet holds ~5.5 USDC (18 USDC minus the
+verification settlements + faucet grants), covering ~5 demo license
+settle cycles — top up from the Arc testnet faucet before a long
+demo run.
 
 ### Post-deploy verification — 2026-08-17 @ `1d1bd517`
 
