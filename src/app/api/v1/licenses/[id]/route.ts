@@ -5,6 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { services, successResponse, errorResponse, requestIdFor } from '@/lib/services';
+import { log } from '@/lib/logger';
 import { emit } from '@/lib/event-bus';
 import { emitDurable } from '@/services/outbox';
 import { resolveAuthenticatedSupervisorIdentity } from '@/lib/supervisor-identity';
@@ -103,7 +104,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       jobId: before.job_id,
     });
     settledJob = { ...settledJob, mock: true };
-    void err;
+    // Money-path observability: the mock fallback hides live Arc failures
+    // unless we log the reason here (vitale for demo-day debugging).
+    log.error('erc8183 live settle failed, falling back to mock', {
+      request_id: requestId,
+      license_id: id,
+      job_id: before.job_id,
+      err: err instanceof Error ? err.message : String(err),
+    });
   }
 
   // 2. Attribute USDC to the take's artist (platform → artist). This is the
