@@ -198,14 +198,17 @@ restore point if anything ever drifts.
 - `ar_playlist_tracks` drift — resolved in the earlier session (constraint enforced, rows distinct).
 
 **Demo note (Arc Demos & Meetup, 2026-08).** The money path works
-end-to-end on prod, but the only published catalog is the
-guided-demo ccMixter ingest (`catalog.source: "demo"`); those takes
-return `license_availability.status: "demo_preview"` and cannot
-create a binding license/settlement. To demo a real license + Arc
-settlement, either publish a non-demo submission first or run
-`npm run demo` locally (mock adapters, full submit → pay → review →
-publish → tip loop). Licensing also requires a signed-in wallet
+end-to-end on prod and the catalog now holds real licensable tracks:
+two ElevenLabs-generated instrumentals (*Warm Keys at Dusk*,
+*Redline Pursuit*) were ingested live via `npm run ingest:tracks`
+(reviews by Venice, published `live`, embeddings backfilled), and a
+full license → ERC-8183 job → USDC settlement cycle was verified
+on-chain. The guided-demo ccMixter takes (`catalogSource: "demo"`)
+still return `license_availability.status: "demo_preview"` and cannot
+create a binding license. Licensing requires a signed-in wallet
 session — guests can search and record verdicts, nothing more.
+Test artifacts (smoke-test and settle-test submissions) were purged
+from the DB and uploads dir after verification.
 
 ## Operational constraints
 
@@ -307,6 +310,22 @@ held ~18 USDC while license fees were $75–250. Fixes shipped:
   backfill). Real artist submissions publish with the schema default
   `catalogSource: 'live'` and are licensable; only cc-catalog/seed
   ingests are `'demo'`.
+- **LLM provider fallback chain** — agent reviews walk an ordered
+  chain (Venice → HF Qwen → TokenRouter → OpenRouter) before ever
+  falling back to mock, after OpenRouter's free tier (50 req/day)
+  silently mocked every review. `resolveLlmChain()` builds the chain
+  from env (`VENICE_API_KEY`, `HF_QWEN_API_URL`, `TOKENROUTER_API_KEY`
+  + `TOKENROUTER_API_URL`, `OPENROUTER_API_KEY`); each failed provider
+  is logged with its error. Venice is the configured primary; Qwen's
+  keyless public endpoint and the free-tier OpenRouter model stay as
+  backups, so OpenRouter never needs funding.
+- **ERC-8183 settle race fixed** — `setBudget`/`approve` were
+  fire-and-forget, so `fund` ran before the allowance was mined,
+  reverted silently, and the job stuck in `Open` until `submit`
+  reverted and the route mock-fell-back. Every step now waits for a
+  mined receipt and throws on on-chain revert; the settle route logs
+  the failure instead of swallowing it. Verified live: job `180457`
+  reached on-chain `Completed` with real create/complete/payment txs.
 
 Pre-demo checklist: deploy these changes (`git push origin master &&
 ./scripts/deploy-remote.sh`), ingest 2–3 real tracks
@@ -314,6 +333,30 @@ Pre-demo checklist: deploy these changes (`git push origin master &&
 (`npm run demo:signin`), and verify `/api/v1/demo/faucet` + the
 LiveDemoButton live path on prod. Treasury math at $1: 18 USDC covers
 ~15 demo cycles after fees.
+
+### Post-deploy verification — 2026-08-17 @ `1d1bd517`
+
+LLM fallback chain + ERC-8183 settle fix shipped. Verification
+against `https://versions.persidian.com`:
+
+| Probe | Result |
+|-------|--------|
+| `GET /api/health/ready` | `llm: provider=venice, model=venice-uncensored, fallbacks=[hfqwen, openrouter]`; arc/erc8183/gateway live; embedding still openrouter (vector space unchanged) |
+| Venice JSON compliance | all three agent prompts return parseable reviews incl. full `placement_brief` shape; market-agent test verified locally before deploy |
+| Fallback walk | broken primary URL → chain advances to next provider (verified locally); only when every provider fails does it mock, with all errors logged |
+| Fresh ingest | `scripts/ingest-my-tracks.ts` → submit → faucet → fee → 3 Venice reviews → published `live` in ~7 s |
+| License + settle | license `be26cd07…` (job `180457`): create/fund/submit/complete all mined (`0x1`), job status on-chain `Completed`, royalty USDC transfer confirmed on-chain, `payment_mock: false` |
+
+Env additions (server `.env`): `VENICE_API_KEY`, `HF_QWEN_API_URL`,
+`TOKENROUTER_API_KEY` (TokenRouter activates once `TOKENROUTER_API_URL`
+is also set — its base URL is service-specific and was not published).
+
+**Open items:** TokenRouter base URL (DeepSeek backup stays dormant
+until it is supplied); rotate the Venice/TokenRouter keys after the
+demo (they passed through chat); CI lockfile is out of sync
+(`zod@3.25.76` missing from `package-lock.json` after the drizzle
+rc.4 / Circle App Kit bumps) — `npm ci` fails on GitHub while local
+`npm install` reports up-to-date; deploys are unaffected.
 
 ## Secrets
 

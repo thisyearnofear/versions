@@ -42,6 +42,12 @@ npm run dev
 ```
 
 `GET /api/health/ready` reports `arc` / `llm` / `embedding` mock flags.
-Inference: `OPENROUTER_API_KEY`. Arc: `ARC_RPC_URL` + platform wallet key.
+Inference runs a provider fallback chain so one rate limit never silently
+mocks the agents: LLM is Venice → HF Qwen → TokenRouter (DeepSeek) →
+OpenRouter → mock; set `VENICE_API_KEY` (primary), `HF_QWEN_API_URL`,
+`TOKENROUTER_API_KEY` + `TOKENROUTER_API_URL`, and/or `OPENROUTER_API_KEY`.
+Embeddings stay single-provider to keep one vector space (OpenRouter by
+default; Venice bge-m3 is opt-in via `VENICE_EMBED_ENABLE=1` + a
+re-embed). Arc: `ARC_RPC_URL` + platform wallet key.
 Embeddings backfill: `POST /api/v1/embeddings/backfill` (needs pgvector:
 `npm run db:pgvector`).
