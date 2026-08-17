@@ -129,6 +129,77 @@ Do not fabricate rows in `__drizzle_migrations`. Establishing a ledger baseline
 requires a separately reviewed, hash-verified migration plan. Until then, keep
 using the guarded status → backup → strict push workflow above.
 
+## Operational constraints
+
+**Single instance — do not scale out horizontally.** The in-process
+EventBus (SSE fan-out), TTL cache, in-memory rate limiter, outbox drain
+mutex, and the settlement sweeper are all per-process. Running two app
+containers would split the live event stream and double the sweep ticks.
+To scale out, first move the bus to a broker (Upstash pub/sub or Redis),
+the cache/limiter to Upstash Redis (env already supported by the limiter),
+and the outbox claim into the DB (`claimed_at` column or
+`pg_advisory_xact_lock`).
+
+**Database.** The app uses a real `pg` Pool (`src/lib/db.ts`), not the
+Neon HTTP driver — persistent pooled connections, real
+`db.transaction()` blocks, no 1000-row result cap. Point `DATABASE_URL`
+at the Neon **pooler** endpoint (`…:6432`) rather than the direct
+endpoint for best throughput; tune `DB_POOL_MAX` (default 10) if you see
+`connectionTimeoutMillis` (10s) failures under load.
+
+**Sweep cron (retention + outbox).** `POST /api/cron/sweep` drives the
+settlement sweeper, the authoritative outbox drain, and retention pruning
+(at most once per 30 min). Retention windows are env-overridable days:
+`RETENTION_OUTBOX_DAYS` (14, processed rows only),
+`RETENTION_TELEMETRY_DAYS` (30), `RETENTION_SEARCHES_DAYS` (90),
+`RETENTION_AUDIT_DAYS` (365 — x402 proofs, play/listen events). Money
+state (`settlement_legs`, `licenses`, unprocessed outbox rows) is never
+pruned.
+
+**Protect the sweep endpoint.** Set `CRON_SECRET` in the server `.env` and
+have the cron job send it as the `x-cron-secret` header:
+
+```bash
+curl -sf -X POST -H "x-cron-secret: $CRON_SECRET" \
+  https://versions.persidian.com/api/cron/sweep
+```
+
+Until `CRON_SECRET` is set the route fails open (with a startup warning) so
+an existing crontab keeps ticking; the moment it is set, requests without
+the matching header are rejected 401. After setting it, update the crontab
+line to include the header — otherwise the sweep silently stops.
+
+**Error monitoring.** Sentry is env-gated: set `SENTRY_DSN` in the server
+`.env` to enable (`instrumentation.ts` inits the SDK; wallet addresses are
+redacted from events before they leave the process). Empty = inert.
+`SENTRY_ORG`/`SENTRY_PROJECT` only if the build should upload source maps.
+
+**CC demo catalog (optional).** Free Music Archive's API is shut down;
+ccMixter's Query API 2.0 is the live, keyless, CC-licensed source. Ingest
+real CC-BY tracks into the demo catalog (illustrative only, never
+licensable):
+
+```bash
+CCMIXTER_API_URL=https://ccmixter.org/api/query \
+  npx tsx scripts/ingest-ccmixter.ts 10
+```
+
+Without `CCMIXTER_API_URL` the script runs in deterministic mock mode
+(no network). Files are Referer-protected, so they are downloaded
+server-side (with a ccMixter referer) into the uploads dir; browsers
+cannot stream them cross-origin. Idempotent: re-runs skip existing tracks
+and backfill missing `version_embeddings` rows (same adapter resolution as
+the server registry) so the tracks are searchable via the semantic
+(pgvector) path, not just the structured-tag fallback. Adapter status
+(`mock`/`configured`) is reported under `providers.ccmixter` in
+`GET /api/health/ready`.
+
+**Admin vitals.** `/admin/vitals` (API: `GET /api/v1/vitals?hours=24`) shows
+the money-path vitals: supervisor search latency p50/p95 (client-observed,
+sampled from logged brief searches — signed-in and guest device-id),
+outbox depth + oldest backlog age, sweeper tick health, and the last
+retention report. Aggregates only — no wallets or briefs.
+
 ## Secrets
 
 | Where | File |

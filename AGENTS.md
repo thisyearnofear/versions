@@ -105,7 +105,11 @@ process dies between "money moved" and "SSE read". The canonical receipt stream
 is therefore emitted via `emitDurable(topic, payload)` in `src/services/outbox.ts`,
 which writes a replayable row to `outbox_events` AND broadcasts immediately.
 `drainOutbox()` (so the receipt is at-least-once) runs on the cron sweep and on
-SSE reconnect; consumers re-fetch and dedupe.
+SSE reconnect (throttled in-process for the hot path); consumers re-fetch and
+dedupe. The cron tick also runs `pruneRetention()` (env-tunable windows,
+max once / 30 min; never touches money tables or unprocessed rows). See
+docs/deploy.md → "Operational constraints" for the single-instance
+requirement this design assumes.
 
 Rules: use `emitDurable` for anything a user pays for / is paid for; keep
 `emit` for pure ephemeral UX ticks (throttled typewriter/reveal visuals); never

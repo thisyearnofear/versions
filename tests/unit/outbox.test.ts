@@ -47,7 +47,7 @@ describe('durable outbox', () => {
     await enqueue('settlement-event', makeEvent('b'));
     const seen = collect('settlement-event');
 
-    const first = await drainOutbox();
+    const first = await drainOutbox(200, { throttle: false });
     expect(first.replayed).toBe(2);
     expect(first.unprocessed).toBe(0);
     expect(seen.length).toBe(2);
@@ -57,8 +57,8 @@ describe('durable outbox', () => {
 
   it('is idempotent — a second drain replays nothing', async () => {
     await enqueue('settlement-event', makeEvent('only'));
-    await drainOutbox();
-    const again = await drainOutbox();
+    await drainOutbox(200, { throttle: false });
+    const again = await drainOutbox(200, { throttle: false });
     expect(again.replayed).toBe(0);
     expect(again.unprocessed).toBe(0);
   });
@@ -69,7 +69,19 @@ describe('durable outbox', () => {
     // Immediate live broadcast happened.
     expect(seen.length).toBe(1);
     // Drain replays the persisted copy (at-least-once — duplicate expected).
-    const replayed = await drainOutbox();
+    const replayed = await drainOutbox(200, { throttle: false });
     expect(replayed.replayed).toBe(1);
+  });
+
+  it('throttles hot-path (SSE-connect) drains to one per interval', async () => {
+    // Previous tests drained recently, so back-to-back default drains must
+    // not race each other — at minimum the second is a no-op skip.
+    const a = await drainOutbox();
+    const b = await drainOutbox();
+    expect(b.skipped).toBe(true);
+    if (!a.skipped) {
+      expect(b.replayed).toBe(0);
+      expect(b.unprocessed).toBe(-1);
+    }
   });
 });

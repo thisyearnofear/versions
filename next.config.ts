@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "node:path";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const projectRoot = path.resolve(__dirname);
 
@@ -68,4 +69,11 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// MODULAR: Sentry source-map wiring. Silent + no org/project env means the
+// build skips upload entirely (no CI credentials required); at runtime the
+// SDK stays inert unless SENTRY_DSN is set (see instrumentation.ts).
+export default withSentryConfig(nextConfig, {
+  silent: true,
+  org: process.env.SENTRY_ORG || undefined,
+  project: process.env.SENTRY_PROJECT || undefined,
+});

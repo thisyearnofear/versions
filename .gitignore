@@ -26,6 +26,7 @@
 
 # local IDE/agent state
 .qoder/
+.commandcode/
 
 # local audio uploads (submissions land here in dev)
 /data/

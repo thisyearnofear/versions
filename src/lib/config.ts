@@ -44,9 +44,16 @@ const envSchema = z.object({
   // CORS (reserved — not yet wired into route handlers)
   ALLOWED_ORIGINS: z.string().optional(),
 
-  // Monitoring (reserved — not yet wired into error tracking or product analytics)
+  // Monitoring — wired via instrumentation.ts (Sentry init, env-gated;
+  // inert unless SENTRY_DSN is set) and /admin/vitals + /api/v1/vitals.
   SENTRY_DSN: z.string().optional(),
   POSTHOG_KEY: z.string().optional(),
+
+  // Cron — shared secret that guards /api/cron/sweep (settlement retries,
+  // outbox drain, retention deletes). When unset the route logs a warning
+  // and fails open so existing deploys keep ticking; once set, requests
+  // must send it as the `x-cron-secret` header.
+  CRON_SECRET: z.string().optional(),
 });
 
 // During `next build`, Next.js evaluates server-component / route module graphs
