@@ -5,10 +5,9 @@
 
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
-import * as schema from '../../src/lib/schema';
 
 let _pg: PGlite | null = null;
-let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+let _db: ReturnType<typeof drizzle> | null = null;
 
 // Hand-rolled DDL from src/lib/schema.ts. PGlite supports the same
 // Postgres DDL the schema uses.
@@ -432,11 +431,11 @@ export async function initTestDb(): Promise<ReturnType<typeof drizzle<typeof sch
   // Apply DDL — each statement runs sequentially because PGlite's exec()
   // accepts a single string with multiple statements.
   await _pg.exec(DDL);
-  _db = drizzle(_pg, { schema }) as ReturnType<typeof drizzle<typeof schema>>;
+  _db = drizzle({ client: _pg });
   return _db;
 }
 
-export function getTestDb(): ReturnType<typeof drizzle<typeof schema>> {
+export function getTestDb(): ReturnType<typeof drizzle> {
   if (!_db) {
     throw new Error('getTestDb called before initTestDb');
   }

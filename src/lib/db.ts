@@ -15,7 +15,6 @@
 // fan out across it further.
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import * as schema from './schema';
 
 // `next build` imports the service/route module graph (e.g. to collect page
 // data for /api/feed) and executes top-level code. Docker builds have no
@@ -42,7 +41,7 @@ const pool = connectionString
   : undefined;
 
 export const db = pool
-  ? drizzle(pool, { schema })
+  ? drizzle({ client: pool })
   : (undefined as unknown as ReturnType<typeof drizzle>);
 
 export type Db = typeof db;
