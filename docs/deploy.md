@@ -129,39 +129,34 @@ Do not fabricate rows in `__drizzle_migrations`. Establishing a ledger baseline
 requires a separately reviewed, hash-verified migration plan. Until then, keep
 using the guarded status → backup → strict push workflow above.
 
-**Known drizzle-kit false positive (2026-08-17).** `drizzle-kit push`
-permanently proposes adding `uq_playlist_track` to `ar_playlist_tracks`
-even though the constraint exists on prod and is enforced (verified by a
-duplicate-insert rejection). The table's 7 rows are all distinct
-`(playlist_id, version_id)` pairs, so there is nothing to dedupe; the
-`idx_ar_playlist_tracks_playlist` index is also present. Do NOT answer the
-truncate prompt — the diff is a phantom. If `push` ever reports additional
-changes beyond this constraint, treat those as real.
+**Drizzle-orm 1.0.0-rc.4 + drizzle-kit 1.0.0-rc.4 (2026-08-17).**
+Both packages are pinned to the same RC tag — the rc needs the
+matching drizzle-orm (the `1.0` series is a coordinated dual release).
+`push --explain` against the live DB reports `No changes detected`
+for our schema, so the upgrade is **net-zero** for prod: no
+DDL is proposed, no migration-table upgrade is needed, and the
+`0.31.10` introspection bugs (unique-constraint column order,
+FK-identifier truncation) are gone. The previous column-order
+workarounds in `schema.ts` were reverted; the constraint column
+order in the file now matches what Postgres stores.
 
-**drizzle-kit 0.31.10 introspection bugs (fixed via workaround).** Two
-introspection mismatches make `push` perpetually propose changes against
-the live DB:
+The rc.4 `drizzle()` API dropped the `schema` init arg:
+```ts
+// before: drizzle(pool, { schema })
+// after:  drizzle({ client: pool })
+```
+Both `src/lib/db.ts` (node-postgres) and `tests/helpers/db.ts`
+(PGlite) follow this. Per-query `.from(table)` keeps working
+unchanged — the schema namespace was only needed at init for
+RQB v1 (`db.query.*`), which we do not use.
 
-1. *Unique constraint column order.* `introspect` reverses or permutes
-   the columns of some unique constraints vs `schema.ts`. Fix:
-   `uq_playlist_track` columns are reversed in `schema.ts` to match the
-   introspected order; `uq_match_feedback_super_brief_sub` has its last
-   two columns swapped. Both constraints are semantically identical
-   (UNIQUE is column-set, not column-order), and the DB enforces them
-   correctly. See the comment above each affected `unique(...)` in
-   `src/lib/schema.ts`.
-2. *FK name suffix.* `introspect` returns the actual stored FK name,
-   which for the longest FKs lacks the `_fk` suffix because PostgreSQL
-   truncates identifiers to 63 chars. `push` proposes DROP+ADD to add
-   the suffix; for the truncated names PG truncates the new name back,
-   so the rename is a no-op. For shorter FKs that fit, the rename
-   succeeds and is one-time. These renames apply automatically without
-   a confirmation prompt — safe but noisy.
-
-The real fix is to upgrade `drizzle-kit` to a version where the
-introspection handles identifier-length truncation and preserves the
-declared column order; until then, the column-order workarounds in
-`schema.ts` and the FK churn are accepted.
+**Migration table upgrade is intentionally deferred.** Our prod
+`drizzle.__drizzle_migrations` still has the v0 columns
+(`id, hash, created_at`); the v1 upgrade adds `name, applied_at`
+and backfills existing rows. We only use `push`, which works
+against either format, so the upgrade can wait. When we adopt
+`generate` / `migrate` later, run `drizzle-kit up` on a non-prod
+DB to validate the upgrade before applying it on prod.
 
 ## Operational constraints
 

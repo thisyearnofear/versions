@@ -240,10 +240,7 @@ export const arPlaylistTracks = pgTable('ar_playlist_tracks', {
   position: integer('position').notNull(),
   addedAt: timestamp('added_at').defaultNow().notNull(),
 }, (table) => [
-  // MODULAR: column order reversed to match drizzle-kit 0.31.10's
-  // introspection output (the DB enforces UNIQUE as a column set, so the
-  // order is semantically irrelevant). See docs/deploy.md.
-  unique('uq_playlist_track').on(table.versionId, table.playlistId),
+  unique('uq_playlist_track').on(table.playlistId, table.versionId),
   index('idx_ar_playlist_tracks_playlist').on(table.playlistId, table.position),
 ]);
 
@@ -477,10 +474,7 @@ export const matchFeedback = pgTable('match_feedback', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
-  // MODULAR: column order swapped (introspected by drizzle-kit 0.31.10
-  // as supervisorWallet, submissionId, briefHash). UNIQUE is a column
-  // set. See docs/deploy.md.
-  unique('uq_match_feedback_super_brief_sub').on(table.supervisorWallet, table.submissionId, table.briefHash),
+  unique('uq_match_feedback_super_brief_sub').on(table.supervisorWallet, table.briefHash, table.submissionId),
   index('idx_match_feedback_brief_hash').on(table.briefHash),
   index('idx_match_feedback_verdict_created').on(table.verdict, table.createdAt),
   check('match_feedback_catalog_source_check', sql`${table.catalogSource} IN ('demo', 'live')`),
