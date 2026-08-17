@@ -16,7 +16,7 @@ import { createErc8004Adapter, type Erc8004Adapter, type AgentLabel } from '../a
 import { createTipSettlementService, type TipSettlementService } from '../services/tips';
 import { createLlmAdapter } from '../adapters/llm';
 import { createEmbeddingAdapter } from '../adapters/embedding';
-import { resolveEmbeddingConfig, resolveLlmConfig } from '../lib/openrouter';
+import { resolveEmbeddingConfig, resolveLlmChain, resolveLlmConfig } from '../lib/openrouter';
 import { createSubmissionsService, type SubmissionsService } from '../services/submissions';
 import { createSettlementService, type SettlementService } from '../services/settlement';
 import { createCurationService, type CurationService } from '../services/curation';
@@ -67,6 +67,7 @@ export interface ServiceRegistry {
     agentWallets: string[];
     llmModel: string;
     llmProvider: string;
+    llmFallbackProviders: string[];
     embeddingProvider: string;
     arcMock: boolean;
     erc8183Mock: boolean;
@@ -86,7 +87,8 @@ function build(): ServiceRegistry {
   const platformWallet = process.env.PLATFORM_WALLET || null;
   const arcRpcUrl = process.env.ARC_RPC_URL || '';
   const arcUsdcContract = process.env.ARC_USDC_CONTRACT || '';
-  const llmCfg = resolveLlmConfig();
+  const llmChain = resolveLlmChain();
+  const llmCfg = llmChain[0] ?? resolveLlmConfig();
   const embedCfg = resolveEmbeddingConfig();
 
   // MODULAR: seed-derived agent signers. AGENT_KEY_SEED gives each
@@ -171,6 +173,10 @@ function build(): ServiceRegistry {
     apiUrl: llmCfg.apiUrl || undefined,
     apiKey: llmCfg.apiKey || undefined,
     model: llmCfg.model,
+    bodyExtra: llmCfg.bodyExtra,
+    // Fallback chain (Venice → OpenRouter → HF Qwen) so one provider's
+    // rate limit never silently degrades agent reviews to mock.
+    fallbacks: llmChain.slice(1),
   });
   const agents = createAgentService({ llm, settlement, agentWallets });
   const ar = createArService({ arc, arWallet, llm });
@@ -220,6 +226,7 @@ function build(): ServiceRegistry {
       agentWallets,
       llmModel: llmCfg.model,
       llmProvider: llmCfg.provider,
+      llmFallbackProviders: llmChain.slice(1).map((c) => c.provider),
       embeddingProvider: embedCfg.provider,
       arcMock: !arcRpcUrl,
       erc8183Mock: erc8183.mock,

@@ -1,15 +1,19 @@
 // MODULAR: LLM adapter. Single interface for all LLM calls.
 // DRY: every agent review goes through this adapter. No other module
 //      talks to an LLM endpoint.
-// PERFORMANT: mock-first — when LLM_API_KEY is missing, returns
+// PERFORMANT: mock-first — when no live provider is configured, returns
 //             deterministic reviews so the demo runs without an
 //             external service.
+// ROBUST: provider fallback chain (Venice → HF Qwen → OpenRouter …) —
+//         complete() walks every configured candidate before falling
+//         back to mock, so one provider's rate limit no longer
+//         silently mocks the reviews.
 // CLEAN: returns typed responses; never throws on connectivity — falls
 //        back to mock and flags the response with `mock: true`.
 
 import { createHash } from 'crypto';
 import { requestJson } from '../lib/http';
-import { openRouterHeaders, type InferenceProvider } from '../lib/openrouter';
+import { openRouterHeaders, type InferenceProvider, type ResolvedLlmConfig } from '../lib/openrouter';
 import type { AgentName, AgentDetail } from '../lib/types';
 
 export type { AgentDetail };
@@ -284,6 +288,8 @@ export interface LlmAdapter {
   provider: InferenceProvider;
   model: string;
   apiUrl: string | null;
+  /** Provider ids in fallback order after the primary (for health display). */
+  fallbackProviders: InferenceProvider[];
   complete: (args: LlmCompleteArgs) => Promise<LlmCompleteResult>;
 }
 
@@ -293,20 +299,98 @@ export function createLlmAdapter({
   model = 'gpt-4o-mini',
   provider = 'custom',
   requestTimeoutMs = DEFAULT_TIMEOUT,
+  fallbacks = [],
+  bodyExtra,
 }: {
   apiUrl?: string;
   apiKey?: string;
   model?: string;
   provider?: InferenceProvider;
   requestTimeoutMs?: number;
+  /** Ordered live candidates tried after the primary fails. */
+  fallbacks?: Array<Partial<ResolvedLlmConfig>>;
+  bodyExtra?: Record<string, unknown>;
 }): LlmAdapter {
-  const useMock = !apiKey;
+  const primary: Partial<ResolvedLlmConfig> & { requestTimeoutMs?: number } = {
+    provider,
+    apiUrl: apiUrl || null,
+    apiKey: apiKey || null,
+    model,
+    bodyExtra,
+  };
+  // A candidate is live when it has an endpoint; keyed providers additionally
+  // need a key (hfqwen runs keyless with apiKey 'none').
+  const isLive = (c: Partial<ResolvedLlmConfig>): boolean =>
+    !!c.apiUrl && (!!c.apiKey || c.provider === 'hfqwen');
+  const candidates = [primary, ...fallbacks].filter(isLive) as ResolvedLlmConfig[];
+  const useMock = candidates.length === 0;
+
+  async function completeWith(
+    cfg: ResolvedLlmConfig,
+    { system, user }: LlmCompleteArgs,
+  ): Promise<LlmCompleteResult> {
+    const url = `${cfg.apiUrl}/chat/completions`;
+    const body: Record<string, unknown> = {
+      model: cfg.model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      ...(cfg.bodyExtra ?? {}),
+    };
+    // hfqwen: no response_format — the shared vLLM endpoint may reject it;
+    // the system prompt already demands JSON and parsing is tolerant.
+    if (cfg.provider !== 'hfqwen') {
+      body.response_format = { type: 'json_object' };
+    }
+
+    const headers: Record<string, string> =
+      cfg.provider === 'openrouter'
+        ? openRouterHeaders(cfg.apiKey!)
+        : {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${cfg.apiKey}`,
+          };
+
+    const res = await requestJson<{
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: LlmUsage;
+    }>(
+      url,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        timeoutMs: requestTimeoutMs,
+      },
+      'LLM complete',
+    );
+
+    const text = res.choices && res.choices[0] && res.choices[0].message
+      ? res.choices[0].message.content
+      : '';
+
+    let parsed: MockReview | null = null;
+    try {
+      parsed = JSON.parse(text || '') as MockReview;
+    } catch {
+      parsed = null;
+    }
+
+    return {
+      text: text || '',
+      parsed,
+      usage: res.usage || { promptTokens: 0, completionTokens: 0 },
+      mock: false,
+    };
+  }
 
   return {
     mock: useMock,
     provider: useMock ? 'mock' : provider,
     model,
     apiUrl: apiUrl || null,
+    fallbackProviders: candidates.slice(1).map((c) => c.provider),
 
     async complete({ system, user, agentName, genre, versionType }: LlmCompleteArgs): Promise<LlmCompleteResult> {
       if (useMock) {
@@ -320,69 +404,28 @@ export function createLlmAdapter({
         };
       }
 
-      const url = `${apiUrl}/chat/completions`;
-      const body = {
-        model,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        response_format: { type: 'json_object' },
-      };
-
-      const headers: Record<string, string> =
-        provider === 'openrouter'
-          ? openRouterHeaders(apiKey!)
-          : {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
-            };
-
-      try {
-        const res = await requestJson<{
-          choices?: Array<{ message?: { content?: string } }>;
-          usage?: LlmUsage;
-        }>(
-          url,
-          {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body),
-            timeoutMs: requestTimeoutMs,
-          },
-          'LLM complete',
-        );
-
-        const text = res.choices && res.choices[0] && res.choices[0].message
-          ? res.choices[0].message.content
-          : '';
-
-        let parsed: MockReview | null = null;
+      const errors: string[] = [];
+      for (const cfg of candidates) {
         try {
-          parsed = JSON.parse(text || '') as MockReview;
-        } catch {
-          parsed = null;
+          const result = await completeWith(cfg, { system, user, agentName, genre, versionType });
+          if (result.text) return result;
+          errors.push(`${cfg.provider}: empty response`);
+        } catch (err) {
+          errors.push(`${cfg.provider}: ${err instanceof Error ? err.message : String(err)}`);
         }
-
-        return {
-          text: text || '',
-          parsed,
-          usage: res.usage || { promptTokens: 0, completionTokens: 0 },
-          mock: false,
-        };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.warn(`[llm] API call failed, falling back to mock: ${msg}`);
-        const template = MOCK_TEMPLATES[agentName] || MOCK_TEMPLATES.production;
-        const review = template.getReview(genre || 'rock', versionType || 'live');
-        return {
-          text: JSON.stringify(review),
-          parsed: review,
-          usage: { promptTokens: 0, completionTokens: 0 },
-          mock: true,
-          error: msg,
-        };
       }
+
+      const msg = errors.join(' | ');
+      console.warn(`[llm] all ${candidates.length} provider(s) failed, falling back to mock: ${msg}`);
+      const template = MOCK_TEMPLATES[agentName] || MOCK_TEMPLATES.production;
+      const review = template.getReview(genre || 'rock', versionType || 'live');
+      return {
+        text: JSON.stringify(review),
+        parsed: review,
+        usage: { promptTokens: 0, completionTokens: 0 },
+        mock: true,
+        error: msg,
+      };
     },
   };
 }

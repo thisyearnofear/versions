@@ -49,6 +49,7 @@ export async function GET(req: NextRequest): Promise<Response> {
             mock: svc.config.llmMock,
             model: svc.config.llmModel,
             provider: svc.config.llmProvider,
+            fallbacks: svc.config.llmFallbackProviders,
           },
           embedding: {
             mock: svc.config.embeddingMock,

@@ -7,7 +7,10 @@
 const env = process.env;
 (env as Record<string, string | undefined>)['NODE_ENV'] = env['NODE_ENV'] || 'test';
 process.env.DATABASE_URL = 'postgresql://placeholder@localhost:5432/placeholder';
-process.env.NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || 'test-secret';
+// NextAuth secret must satisfy src/lib/config.ts's z.string().min(32).
+// Use a 40-char fallback so forks that don't load .env still pass validation.
+process.env.NEXTAUTH_SECRET =
+  process.env.NEXTAUTH_SECRET || 'test-secret-test-secret-test-secret-40';
 process.env.PINATA_JWT = process.env.PINATA_JWT || '';
 process.env.LLM_API_KEY = process.env.LLM_API_KEY || '';
 // Leave ARC_RPC_URL unset (not empty) — src/lib/config validates it as an

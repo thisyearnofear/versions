@@ -26,6 +26,13 @@ export interface EmbeddingConfig {
   dimensions?: number;
   provider?: InferenceProvider;
   audioCapable?: boolean;
+  /** Ordered text-embedding candidates tried after the primary fails. */
+  fallbacks?: Array<{
+    apiUrl?: string;
+    apiKey?: string;
+    model?: string;
+    provider?: InferenceProvider;
+  }>;
 }
 
 export interface EmbeddingResult {
@@ -42,6 +49,8 @@ export interface EmbeddingAdapter {
   audioCapable: boolean;
   dimensions: number;
   model: string;
+  /** Provider ids in fallback order after the primary (for health display). */
+  fallbackProviders: InferenceProvider[];
 }
 
 function mockEmbedding(input: string, dimensions: number): number[] {
@@ -86,6 +95,12 @@ export function createEmbeddingAdapter(config: EmbeddingConfig = {}): EmbeddingA
     (provider === 'openrouter' && !apiKey) ||
     (provider === 'custom' && !apiUrl);
 
+  // Fallback candidates for text embeddings. Audio embedding stays on the
+  // primary adapter because only a CLAP-style custom service supports it.
+  const fallbackConfigs = (config.fallbacks ?? []).filter(
+    (f) => f.apiUrl && f.provider !== 'custom',
+  );
+
   async function customEmbed(payload: Record<string, unknown>): Promise<EmbeddingResult> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
@@ -107,26 +122,55 @@ export function createEmbeddingAdapter(config: EmbeddingConfig = {}): EmbeddingA
     };
   }
 
-  async function openRouterEmbed(text: string): Promise<EmbeddingResult> {
+  async function openAiCompatEmbed(
+    text: string,
+    targetUrl: string,
+    headers: Record<string, string>,
+    targetModel: string,
+  ): Promise<EmbeddingResult> {
     const result = await requestJson<OpenRouterEmbedResponse>(
-      `${OPENROUTER_API_BASE}/embeddings`,
+      targetUrl,
       {
         method: 'POST',
-        headers: openRouterHeaders(apiKey),
-        body: JSON.stringify({ model, input: text }),
+        headers,
+        body: JSON.stringify({ model: targetModel, input: text }),
         timeoutMs: DEFAULT_TIMEOUT,
       },
-      'OpenRouter embedding',
+      'embedding',
     );
     const raw = result.data?.[0]?.embedding;
     if (!raw?.length) {
-      throw new Error('OpenRouter embedding response missing vector');
+      throw new Error('Embedding response missing vector');
     }
     return {
       embedding: fitEmbeddingDimensions(raw, dimensions),
       mock: false,
-      model: result.model || model,
+      model: result.model || targetModel,
     };
+  }
+
+  async function openRouterEmbed(text: string): Promise<EmbeddingResult> {
+    return openAiCompatEmbed(text, `${OPENROUTER_API_BASE}/embeddings`, openRouterHeaders(apiKey), model);
+  }
+
+  async function embedTextWithConfig(
+    text: string,
+    cfg: { apiUrl?: string; apiKey?: string; model?: string; provider?: InferenceProvider },
+  ): Promise<EmbeddingResult> {
+    if (cfg.provider === 'openrouter') {
+      return openAiCompatEmbed(
+        text,
+        `${(cfg.apiUrl || OPENROUTER_API_BASE).replace(/\/$/, '')}/embeddings`,
+        openRouterHeaders(cfg.apiKey || ''),
+        cfg.model || model,
+      );
+    }
+    // Venice and other OpenAI-compatible text endpoints.
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
+    const base = (cfg.apiUrl || '').replace(/\/$/, '');
+    const endpoint = base.endsWith('/embeddings') ? base : `${base}/embeddings`;
+    return openAiCompatEmbed(text, endpoint, headers, cfg.model || model);
   }
 
   async function embedTextLive(text: string): Promise<EmbeddingResult> {
@@ -140,6 +184,7 @@ export function createEmbeddingAdapter(config: EmbeddingConfig = {}): EmbeddingA
     audioCapable: !isMock && audioCapable,
     dimensions,
     model,
+    fallbackProviders: fallbackConfigs.map((f) => f.provider ?? 'custom'),
     async embedAudio(audioUrl: string): Promise<EmbeddingResult> {
       if (isMock) {
         return { embedding: mockEmbedding('audio:' + audioUrl, dimensions), mock: true, model };
@@ -155,7 +200,22 @@ export function createEmbeddingAdapter(config: EmbeddingConfig = {}): EmbeddingA
       if (isMock) {
         return { embedding: mockEmbedding('text:' + text, dimensions), mock: true, model };
       }
-      return embedTextLive(text);
+      const errors: string[] = [];
+      const candidates = [
+        { apiUrl, apiKey, model, provider },
+        ...fallbackConfigs,
+      ].filter((c) => c.provider !== 'custom' || c.apiUrl);
+      for (const cfg of candidates) {
+        try {
+          if (cfg.provider === 'custom') {
+            return await customEmbed({ text });
+          }
+          return await embedTextWithConfig(text, cfg);
+        } catch (err) {
+          errors.push(`${cfg.provider}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      throw new Error(`All embedding providers failed: ${errors.join(' | ')}`);
     },
   };
 }
