@@ -356,10 +356,11 @@ is also set — its base URL is service-specific and was not published).
 
 **Open items:** TokenRouter base URL (DeepSeek backup stays dormant
 until it is supplied); rotate the Venice/TokenRouter keys after the
-demo (they passed through chat); CI lockfile is out of sync
-(`zod@3.25.76` missing from `package-lock.json` after the drizzle
-rc.4 / Circle App Kit bumps) — `npm ci` fails on GitHub while local
-`npm install` reports up-to-date; deploys are unaffected.
+demo (they passed through chat). CI's `npm ci` failure ("Missing:
+zod@3.25.76 from lock file") was a toolchain mismatch, not lockfile
+corruption — the lockfile is complete under npm 11; CI now runs Node
+24 (npm 11) to match. Deploys were never affected (Docker uses
+`npm install`, which is not strict about the lockfile).
 
 ## Secrets
 
