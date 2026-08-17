@@ -138,6 +138,31 @@ duplicate-insert rejection). The table's 7 rows are all distinct
 truncate prompt — the diff is a phantom. If `push` ever reports additional
 changes beyond this constraint, treat those as real.
 
+**drizzle-kit 0.31.10 introspection bugs (fixed via workaround).** Two
+introspection mismatches make `push` perpetually propose changes against
+the live DB:
+
+1. *Unique constraint column order.* `introspect` reverses or permutes
+   the columns of some unique constraints vs `schema.ts`. Fix:
+   `uq_playlist_track` columns are reversed in `schema.ts` to match the
+   introspected order; `uq_match_feedback_super_brief_sub` has its last
+   two columns swapped. Both constraints are semantically identical
+   (UNIQUE is column-set, not column-order), and the DB enforces them
+   correctly. See the comment above each affected `unique(...)` in
+   `src/lib/schema.ts`.
+2. *FK name suffix.* `introspect` returns the actual stored FK name,
+   which for the longest FKs lacks the `_fk` suffix because PostgreSQL
+   truncates identifiers to 63 chars. `push` proposes DROP+ADD to add
+   the suffix; for the truncated names PG truncates the new name back,
+   so the rename is a no-op. For shorter FKs that fit, the rename
+   succeeds and is one-time. These renames apply automatically without
+   a confirmation prompt — safe but noisy.
+
+The real fix is to upgrade `drizzle-kit` to a version where the
+introspection handles identifier-length truncation and preserves the
+declared column order; until then, the column-order workarounds in
+`schema.ts` and the FK churn are accepted.
+
 ## Operational constraints
 
 **Single instance — do not scale out horizontally.** The in-process
