@@ -62,19 +62,19 @@ export function mulberry32(seed: number): () => number {
 // MODULAR: three ink-on-paper palettes. Dark = deep indigo night
 // register, neutral = the cream/ink/rust house palette, bright =
 // warm gold morning register. Each has bg + fg + accent.
-interface Palette {
+export interface Palette {
   bg: string;
   fg: string;
   accent: string;
 }
 
-const PALETTES: Record<string, Palette> = {
+export const PALETTES: Record<string, Palette> = {
   dark: { bg: "#23233a", fg: "#f4efe5", accent: "#c84a1f" },
   neutral: { bg: "#f4efe5", fg: "#1a1a1a", accent: "#c84a1f" },
   bright: { bg: "#f2e3c3", fg: "#1a1a1a", accent: "#a33818" },
 };
 
-function paletteFor(valence: string | null | undefined): Palette {
+export function paletteFor(valence: string | null | undefined): Palette {
   return PALETTES[valence ?? ""] ?? PALETTES.neutral;
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -21,6 +21,7 @@ import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
 import type { LicenseUsageType } from "@/lib/pricing";
 import { searchByBriefPaid, SCORE_FEE_USDC, type ScorePaymentReceipt } from "@/lib/x402-score-client";
 import { AgentTrace } from "@/components/discovery/AgentTrace";
+import { SceneCard } from "@/components/discovery/SceneCard";
 import { AgentThinkingPulse, FitScorePop, SuccessCheck } from "@/components/discovery/motion";
 
 const BRIEF_REFINEMENTS = [
@@ -51,6 +52,10 @@ function MatchSearch() {
   const { signTypedDataAsync } = useSignTypedData();
   const searchParams = useSearchParams();
   const [brief, setBrief] = useState(() => searchParams.get("brief") ?? "");
+  // The brief that arrived via ?brief= deep link. Auto-search fires ONLY
+  // for this value on mount — a supervisor typing a fresh brief on
+  // /discover must be able to finish the sentence before anything runs.
+  const initialBriefRef = useRef(searchParams.get("brief") ?? "");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<BriefSearchResponse | null>(null);
   const [searchTimeMs, setSearchTimeMs] = useState<number | null>(null);
@@ -58,14 +63,18 @@ function MatchSearch() {
   const [refinements, setRefinements] = useState<string[]>([]);
   const [shortlistedIds, setShortlistedIds] = useState<Set<string>>(new Set());
   const [payment, setPayment] = useState<ScorePaymentReceipt | null>(null);
-  const [preferPaid, setPreferPaid] = useState(true);
+  // OPT-IN: enhanced (paid) scoring defaults OFF so the primary action
+  // stays the free match for every user — the wallet is the rail,
+  // never the front door (STRATEGY §2). Supervisors opt in via
+  // "Search settings".
+  const [preferPaid, setPreferPaid] = useState(false);
   // The case this search opened/resumed. Used to attach shortlists to the
   // EXPLICIT case (never "most recently active") and to surface a recoverable
   // sync failure instead of silently swallowing it.
   const [currentCaseId, setCurrentCaseId] = useState<string | null>(null);
   const [caseSyncFailed, setCaseSyncFailed] = useState(false);
 
-  const runSearch = useCallback(async (text: string, opts?: { paid?: boolean }) => {
+  const runSearch = useCallback(async (text: string, opts?: { paid?: boolean; baseBrief?: string; logSearch?: boolean }) => {
     const trimmed = text.trim();
     if (trimmed.length < 3 || trimmed.length > 500) return;
     setLoading(true);
@@ -75,10 +84,16 @@ function MatchSearch() {
     // Open/resume the persistent placement case for this brief (works for both
     // free and paid searches). Remembers the case id so shortlists attach to
     // the right case, and surfaces a recoverable failure state.
+    //
+    // Cases are keyed on the BASE brief, not the refined search string:
+    // refining ("darker", "no vocals") is iteration INSIDE the same case,
+    // not a new placement. Without this, every refinement chip minted a
+    // near-duplicate case in the workspace.
+    const caseKey = (opts?.baseBrief ?? trimmed).trim();
     const syncCase = (res: BriefSearchResponse) => {
       void apiClient
         .openCase({
-          briefText: trimmed,
+          briefText: caseKey,
           rankedCount: res.total,
           candidateTitles: res.rows.slice(0, 3).map((r) => r.title ?? "").filter(Boolean),
         })
@@ -105,13 +120,15 @@ function MatchSearch() {
       const usePaid = !!opts?.paid && isAuthenticated && isConnected && preferPaid;
       if (usePaid) {
         try {
-          const res = await searchByBriefPaid({
+          // searchLatencyMs excludes the wallet signature wait — the vitals
+          // p50/p95 measure the actual scoring, not human approval speed.
+          const { response: res, searchLatencyMs } = await searchByBriefPaid({
             brief: trimmed,
             limit: 20,
             chainId: chainId || 5042002,
             signTypedDataAsync: signTypedDataAsync as never,
           });
-          setSearchTimeMs(Math.round(performance.now() - t0));
+          setSearchTimeMs(searchLatencyMs);
           setResults(res);
           setPayment(res.payment);
           trackCatalogSearch(res, true);
@@ -124,7 +141,9 @@ function MatchSearch() {
               2500,
             );
           }
-          void apiClient.logSearch({ briefText: trimmed, resultsCount: res.total }).catch(() => {});
+          if (opts?.logSearch !== false) {
+            void apiClient.logSearch({ briefText: trimmed, resultsCount: res.total, durationMs: searchLatencyMs }).catch(() => {});
+          }
           syncCase(res);
           return;
         } catch (err) {
@@ -145,7 +164,9 @@ function MatchSearch() {
       if (res.rows.length === 0) {
         showToast("No matches — try a broader brief.", "info");
       }
-      void apiClient.logSearch({ briefText: trimmed, resultsCount: res.total }).catch(() => {});
+      if (opts?.logSearch !== false) {
+        void apiClient.logSearch({ briefText: trimmed, resultsCount: res.total, durationMs: Math.round(performance.now() - t0) }).catch(() => {});
+      }
       syncCase(res);
     } catch (err) {
       showToast(`Search failed: ${(err as Error).message}`, "error");
@@ -156,10 +177,15 @@ function MatchSearch() {
     }
   }, [showToast, isAuthenticated, isConnected, preferPaid, chainId, signTypedDataAsync]);
 
+  // Auto-run exactly once, and only for a deep-linked ?brief= that the user
+  // hasn't edited. Typed input never auto-searches. The setTimeout defers
+  // the first setState out of the synchronous effect body (lint rule).
   useEffect(() => {
+    if (!initialBriefRef.current) return;
+    if (brief !== initialBriefRef.current) return;
     if (brief.trim().length < 3 || submitAttempted || results) return;
     const timer = window.setTimeout(() => {
-      void runSearch(brief, { paid: false });
+      void runSearch(brief, { paid: false, baseBrief: brief });
     }, 0);
     return () => window.clearTimeout(timer);
   }, [brief, runSearch, submitAttempted, results]);
@@ -180,7 +206,7 @@ function MatchSearch() {
     (instruction: string) => {
       const next = [...refinements, instruction];
       setRefinements(next);
-      void runSearch([brief.trim(), ...next].filter(Boolean).join(" · "), { paid: false });
+      void runSearch([brief.trim(), ...next].filter(Boolean).join(" · "), { paid: false, baseBrief: brief, logSearch: false });
     },
     [brief, refinements, runSearch],
   );
@@ -188,7 +214,7 @@ function MatchSearch() {
     (instruction: string) => {
       const next = refinements.filter((r) => r !== instruction);
       setRefinements(next);
-      void runSearch([brief.trim(), ...next].filter(Boolean).join(" · "), { paid: false });
+      void runSearch([brief.trim(), ...next].filter(Boolean).join(" · "), { paid: false, baseBrief: brief, logSearch: false });
     },
     [brief, refinements, runSearch],
   );
@@ -214,11 +240,11 @@ function MatchSearch() {
             type="button"
             onClick={() => {
               if (canPayAgents) {
-                void runSearch(brief, { paid: true });
+                void runSearch(brief, { paid: true, logSearch: refinements.length === 0 });
               } else if (isAuthenticated && !isConnected) {
                 requireAuth();
               } else {
-                void runSearch(brief, { paid: false });
+                void runSearch(brief, { paid: false, logSearch: refinements.length === 0 });
               }
             }}
             disabled={loading || brief.trim().length < 3}
@@ -252,7 +278,7 @@ function MatchSearch() {
               <button
                 key={e.id}
                 type="button"
-                onClick={() => { setBrief(e.brief); void runSearch(e.brief, { paid: false }); }}
+                onClick={() => { setBrief(e.brief); void runSearch(e.brief, { paid: false, baseBrief: e.brief }); }}
                 className="border border-[var(--color-hair-strong)] px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide text-[var(--color-ink-2)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
               >
                 {e.label}
@@ -280,6 +306,12 @@ function MatchSearch() {
           </ol>
           <CatalogDisclosure catalog={results.catalog} />
           <DecisionSummary row={results.rows[0]} total={results.total} />
+          <SceneCard
+            brief={results.rows[0].brief}
+            briefText={effectiveBrief || brief}
+            trackTitle={results.rows[0].title}
+            artistName={results.rows[0].artist_name}
+          />
           <p className="mb-4 font-serif text-sm leading-snug text-[var(--color-ink-2)]">
             Start with a preview. Open a take when you want to compare the fit or review its rights status.
           </p>

@@ -133,7 +133,7 @@ export function SupervisorDashboard() {
   return (
     <div className="flex flex-col gap-2">
       {!isAuthenticated && (
-        <div className="mb-6 border border-[var(--color-hair-strong)] rounded-sm p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="mb-6 border border-[var(--color-hair-strong)] rounded-sm p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3" role="note">
           <div>
             <Eyebrow className="mb-1 text-[var(--color-rust)]">Sign in required</Eyebrow>
             <p className="font-serif text-sm text-[var(--color-ink-2)]">
@@ -169,11 +169,11 @@ export function SupervisorDashboard() {
 
       <PlacementCasesPanel />
 
-      <section className="order-0 mb-4 border-l-2 border-[var(--color-rust)] bg-[var(--color-paper-2)] px-4 py-3">
+      <section aria-labelledby="supervisor-workspace-title" className="order-0 mb-4 border-l-2 border-[var(--color-rust)] bg-[var(--color-paper-2)] px-4 py-3">
         <Eyebrow className="mb-1 text-[var(--color-rust)]">Supervisor workspace</Eyebrow>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="font-serif text-xl font-semibold">Your next decisions</h2>
+            <h2 id="supervisor-workspace-title" className="font-serif text-xl font-semibold">Your next decisions</h2>
             <p className="mt-1 font-serif text-sm text-[var(--color-ink-2)]">
               Review shortlisted takes, progress active license requests, or start a new brief.
             </p>
@@ -218,7 +218,7 @@ export function SupervisorDashboard() {
         {recentSearches.length === 0 ? (
           <EmptyState text="No recent searches." href="/discover" linkLabel="Run a brief →" />
         ) : (
-          <ul className="mt-4 space-y-2">
+          <ul className="mt-4 space-y-2" aria-label="Recent searches">
             {recentSearches.map((s) => (
               <li key={s.id}>
                 <CompactRow
@@ -227,6 +227,7 @@ export function SupervisorDashboard() {
                   action={
                     <Link
                       href={`/discover?brief=${encodeURIComponent(s.brief_text)}`}
+                      aria-label={`Run search again: ${s.brief_text}`}
                       className="font-mono text-[10px] uppercase tracking-[0.12em] border border-[var(--color-ink)] px-3 py-1.5 hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
                     >
                       Run again
@@ -261,7 +262,7 @@ export function SupervisorDashboard() {
         {savedBriefs.length === 0 ? (
           <EmptyState text="No saved briefs yet." href="/discover" linkLabel="Search catalog →" />
         ) : (
-          <ul className="mt-4 space-y-2">
+          <ul className="mt-4 space-y-2" aria-label="Saved briefs">
             {savedBriefs.map((b) => (
               <SavedBriefRow key={b.id} brief={b} onDelete={refreshLists} />
             ))}
@@ -295,7 +296,7 @@ export function SupervisorDashboard() {
       </details>
 
       {(loading || listsLoading) && (
-        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] py-4">
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] py-4" role="status">
           Loading…
         </p>
       )}
@@ -331,6 +332,7 @@ function CompactSearchInput({
       value={input}
       onChange={(e) => handleChange(e.target.value)}
       placeholder={placeholder}
+      aria-label={placeholder}
       className="w-full max-w-md border border-[var(--color-hair-strong)] bg-transparent px-3 py-2 font-mono text-[11px] text-[var(--color-ink)] placeholder:text-[var(--color-ink-3)] focus:outline-none focus:border-[var(--color-ink)]"
     />
   );
@@ -421,12 +423,14 @@ function ProfileSection({
               value={form[field]}
               onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))}
               placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+              aria-label={field.charAt(0).toUpperCase() + field.slice(1)}
               className="border border-[var(--color-hair-strong)] bg-transparent px-3 py-2 font-serif text-sm focus:outline-none focus:border-[var(--color-ink)]"
             />
           ))}
           <select
             value={form.role}
             onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as SupervisorProfile["role"] }))}
+            aria-label="Your role"
             className="border border-[var(--color-hair-strong)] bg-transparent px-3 py-2 font-serif text-sm"
           >
             <option value="supervisor">Music Supervisor</option>
@@ -484,6 +488,7 @@ function SavedBriefRow({ brief, onDelete }: { brief: SavedBrief; onDelete: () =>
         <div className="flex gap-2 shrink-0">
           <Link
             href={`/discover?brief=${encodeURIComponent(brief.brief_text)}`}
+            aria-label={`Search this brief: ${brief.brief_text}`}
             className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 hover:bg-[var(--color-rust)] transition-colors"
           >
             Search
@@ -491,6 +496,7 @@ function SavedBriefRow({ brief, onDelete }: { brief: SavedBrief; onDelete: () =>
           <button
             type="button"
             onClick={() => void onDeleteClick()}
+            aria-label={`Delete saved brief: ${brief.brief_text}`}
             className="font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
           >
             Delete
@@ -564,7 +570,7 @@ function ShortlistSection({
       ) : interests.filter((i) => i.status !== "passed").length === 0 ? (
         <EmptyState text="No shortlisted tracks." href="/discover" linkLabel="Find matches →" />
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2" aria-label="Shortlisted tracks">
           {interests.filter((i) => i.status !== "passed").map((i) => (
             <li key={i.id}>
               <div className="border border-[var(--color-hair)] rounded-sm p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-[var(--color-ink-3)] transition-colors">
@@ -582,6 +588,7 @@ function ShortlistSection({
                     type="button"
                     onClick={() => void onRequestLicense(i)}
                     disabled={licensingId === i.id}
+                    aria-label={`Request license for ${i.title ?? "Untitled"} by ${i.artist_name ?? "Unknown"}`}
                     className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 hover:bg-[var(--color-rust)] transition-colors disabled:opacity-50"
                   >
                     {licensingId === i.id ? "…" : "License · $250"}
@@ -589,6 +596,7 @@ function ShortlistSection({
                   <button
                     type="button"
                     onClick={() => void onRemove(i.id)}
+                    aria-label={`Remove ${i.title ?? "Untitled"} from shortlist`}
                     className="font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
                   >
                     Remove

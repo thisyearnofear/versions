@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -9,9 +10,29 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { track } from "@/lib/analytics";
 import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
 import { HowItWorks } from "@/components/home/HowItWorks";
-import { LiveActivityStrip } from "@/components/home/LiveActivityStrip";
-import { WaveformGallery } from "@/components/home/WaveformGallery";
 import { EconomyTicker } from "@/components/economy/EconomyTicker";
+import { SceneCard, type SceneCardBrief } from "@/components/discovery/SceneCard";
+
+// PERF: below-the-fold sections are client-only dynamic chunks. They
+// fetch their own data on mount anyway, so keeping them out of the
+// initial HTML + main page chunk shortens the critical path for the
+// hero (the actual LCP). EconomyTicker stays eager — it's in the
+// first viewport.
+const WaveformGallery = dynamic(
+  () => import("@/components/home/WaveformGallery").then((m) => m.WaveformGallery),
+  { ssr: false, loading: () => <div className="min-h-[340px] md:min-h-[420px]" aria-hidden="true" /> },
+);
+const LiveActivityStrip = dynamic(
+  () => import("@/components/home/LiveActivityStrip").then((m) => m.LiveActivityStrip),
+  { ssr: false, loading: () => <div className="min-h-[220px]" aria-hidden="true" /> },
+);
+
+const HOME_SCENE_BRIEF: SceneCardBrief = {
+  scene_tags: ["neon city", "night drive", "forward motion"],
+  instruments: ["synth", "sub bass", "drums"],
+  emotional_arcs: ["tense", "driving", "release"],
+  audience_summary: "A restrained electronic bed that leaves room for dialogue, then opens into a clean payoff.",
+};
 
 export default function Home() {
   return (
@@ -77,6 +98,34 @@ export default function Home() {
           </div>
         </section>
 
+        <section className="border-b border-[var(--color-hair-strong)] px-6 py-14 md:py-20" aria-labelledby="scene-preview-title">
+          <div className="mx-auto grid max-w-5xl items-center gap-10 lg:grid-cols-[minmax(0,1fr)_420px]">
+            <div>
+              <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-rust)]">
+                New · visual brief preview
+              </p>
+              <h2 id="scene-preview-title" className="font-serif text-3xl font-black tracking-tight md:text-4xl">
+                See the scene before you choose the take.
+              </h2>
+              <p className="mt-4 max-w-xl font-serif text-base leading-snug text-[var(--color-ink-2)]">
+                Describe the picture in plain language. The brief becomes a quick storyboard, so you can judge whether the music is moving in the right direction before opening a full take.
+              </p>
+              <Link
+                href="/discover?brief=Tense%20neon-lit%20car%20chase%20at%20night%2C%20electronic%2C%20no%20vocals"
+                className="mt-6 inline-flex bg-[var(--color-ink)] px-5 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-paper)] transition-colors hover:bg-[var(--color-rust)]"
+              >
+                Try the visual brief →
+              </Link>
+            </div>
+            <SceneCard
+              brief={HOME_SCENE_BRIEF}
+              briefText="Tense neon-lit car chase at night, electronic, no vocals"
+              trackTitle="Example take · Neon Afterimage"
+              artistName="VERSIONS demo"
+            />
+          </div>
+        </section>
+
         <section aria-label="Recent work published by the agents">
           <div className="px-6 pt-12 pb-4 text-center">
             <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]">
@@ -85,7 +134,6 @@ export default function Home() {
           </div>
           <WaveformGallery />
         </section>
-
         <LiveActivityStrip />
         <HowItWorks />
       </main>
