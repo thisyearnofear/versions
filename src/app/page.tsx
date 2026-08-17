@@ -26,6 +26,12 @@ const LiveActivityStrip = dynamic(
   () => import("@/components/home/LiveActivityStrip").then((m) => m.LiveActivityStrip),
   { ssr: false, loading: () => <div className="min-h-[220px]" aria-hidden="true" /> },
 );
+// One-button live demo (submit → pay on Arc → agent review → publish → tip).
+// Client-only: it builds wallets in the browser and drives public APIs.
+const LiveDemoButton = dynamic(
+  () => import("@/components/home/LiveDemoButton").then((m) => m.LiveDemoButton),
+  { ssr: false, loading: () => <div className="min-h-[120px]" aria-hidden="true" /> },
+);
 
 const HOME_SCENE_BRIEF: SceneCardBrief = {
   scene_tags: ["neon city", "night drive", "forward motion"],
@@ -93,7 +99,10 @@ export default function Home() {
               <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
                 Live · system proof
               </p>
-              <EconomyTicker limit={6} />
+              <LiveDemoButton />
+              <div className="mt-6">
+                <EconomyTicker limit={6} />
+              </div>
             </div>
           </div>
         </section>
