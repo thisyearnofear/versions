@@ -129,6 +129,15 @@ Do not fabricate rows in `__drizzle_migrations`. Establishing a ledger baseline
 requires a separately reviewed, hash-verified migration plan. Until then, keep
 using the guarded status → backup → strict push workflow above.
 
+**Known drizzle-kit false positive (2026-08-17).** `drizzle-kit push`
+permanently proposes adding `uq_playlist_track` to `ar_playlist_tracks`
+even though the constraint exists on prod and is enforced (verified by a
+duplicate-insert rejection). The table's 7 rows are all distinct
+`(playlist_id, version_id)` pairs, so there is nothing to dedupe; the
+`idx_ar_playlist_tracks_playlist` index is also present. Do NOT answer the
+truncate prompt — the diff is a phantom. If `push` ever reports additional
+changes beyond this constraint, treat those as real.
+
 ## Operational constraints
 
 **Single instance — do not scale out horizontally.** The in-process
