@@ -46,6 +46,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# demo helper state (wallet keys, session cookies) — never commit
+.demo/
+
 # vercel
 .vercel
 

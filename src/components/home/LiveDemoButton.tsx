@@ -10,6 +10,8 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { createPublicClient, createWalletClient, defineChain, http } from "viem";
+import { encodeErc20Transfer } from "@/lib/erc20-transfer";
 import { setSoundEnabled } from "@/lib/audio-feedback";
 import { track } from "@/lib/analytics";
 import { agentIdentity } from "@/lib/agent-identity";
@@ -183,6 +185,7 @@ export function LiveDemoButton() {
       if (!submitRes.ok) throw new Error(`submit failed (${submitRes.status})`);
       const submitJson = await submitRes.json();
       const submissionId = String((submitJson.data ?? submitJson).id);
+      const feeQuote = String((submitJson.data ?? submitJson).fee_quote_usdc ?? "0.50");
       setStep(0, "done", "track submitted");
 
       // Step 2 — verify payment (mock tx), which auto-fires the agent review.
@@ -195,20 +198,82 @@ export function LiveDemoButton() {
       });
       failedStep = 1;
       setStep(1, "active");
+
+      // MODULAR: live-vs-mock branching. In mock mode a random hash is
+      // accepted by verify-payment. In live mode we must actually move USDC on
+      // Arc: first fund the throwaway artist wallet from the demo faucet,
+      // then send the submission fee to the platform wallet, and hand the
+      // resulting on-chain tx hash to verify-payment.
+      const arcInfoRes = await fetch("/api/v1/arc/info").then((r) => r.json()).catch(() => null);
+      const arcInfo = (arcInfoRes?.data ?? null) as {
+        mock?: boolean;
+        chainId?: string;
+        rpcUrl?: string | null;
+        usdcContract?: string | null;
+        usdcDecimals?: number;
+        platformWallet?: string | null;
+      } | null;
+      const isLive = !!arcInfo && arcInfo.mock === false;
+
+      let paymentTxHash: `0x${string}`;
+      if (!isLive) {
+        paymentTxHash = randomHex(32);
+      } else {
+        // 1. Fund the throwaway artist wallet from the demo faucet.
+        const faucetRes = await fetch("/api/v1/demo/faucet", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address: account.address }),
+        });
+        if (!faucetRes.ok) {
+          throw new Error(`faucet funding failed (${faucetRes.status})`);
+        }
+
+        // 2. Build the Arc chain definition from live info.
+        const chainId = Number(BigInt(arcInfo!.chainId!));
+        const rpcUrl = arcInfo!.rpcUrl as string;
+        const arcChain = defineChain({
+          id: chainId,
+          name: "Arc Testnet",
+          nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+          rpcUrls: { default: { http: [rpcUrl] } },
+        });
+        const transport = http(rpcUrl);
+        const publicClient = createPublicClient({ chain: arcChain, transport });
+        const walletClient = createWalletClient({ account, chain: arcChain, transport });
+
+        // 3. Pay the submission fee to the platform wallet on-chain.
+        const transferData = encodeErc20Transfer({
+          to: arcInfo!.platformWallet!,
+          amountUsdc: feeQuote,
+          usdcDecimals: arcInfo!.usdcDecimals ?? 6,
+        });
+        paymentTxHash = (await walletClient.sendTransaction({
+          account,
+          to: arcInfo!.usdcContract! as `0x${string}`,
+          data: transferData,
+          value: 0n,
+        })) as `0x${string}`;
+        // Wait for one confirmation so verify-payment sees the tx.
+        await publicClient.waitForTransactionReceipt({ hash: paymentTxHash, timeout: 60_000 });
+      }
+
       const verifyRes = await fetch(`/api/v1/submissions/${submissionId}/verify-payment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ txHash: randomHex(32) }),
+        body: JSON.stringify({ txHash: paymentTxHash }),
       });
       if (!verifyRes.ok) throw new Error(`payment verification failed (${verifyRes.status})`);
-      setStep(1, "done", "0.50 USDC fee");
+      setStep(1, "done", `${feeQuote} USDC fee`);
 
       // Step 3 + 4 — three agents review in parallel; publish fires at consensus.
       failedStep = 2;
       if (!snippetSeen) setStep(2, "active", "3 agents reviewing…");
+      // Live LLM reviews (3 agents in parallel) can take up to a couple of
+      // minutes, so poll generously (180 s) rather than failing early.
       const start = Date.now();
       let status = "in_curation";
-      while (Date.now() - start < 60_000) {
+      while (Date.now() - start < 180_000) {
         await new Promise((r) => setTimeout(r, 1000));
         const pollRes = await fetch(`/api/v1/submissions/${submissionId}`);
         const pollJson = await pollRes.json().catch(() => null);

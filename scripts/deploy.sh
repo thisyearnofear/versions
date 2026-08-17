@@ -48,6 +48,13 @@ git fetch origin "$DEPLOY_BRANCH"
 log "Pulling latest (ff-only)..."
 git pull --ff-only origin "$DEPLOY_BRANCH"
 
+# ── Uploads dir must be writable by container uid 1001 (bind mount) ──
+# Host dir ownership can drift (fresh clone, reinstall); fix idempotently.
+mkdir -p data/uploads
+sudo -n chown -R 1001:1001 data/uploads 2>/dev/null \
+  || chmod -R a+rwX data/uploads 2>/dev/null \
+  || log "WARNING: could not fix data/uploads ownership — uploads may EACCES"
+
 AFTER="$(git rev-parse --short HEAD)"
 AFTER_FULL="$(git rev-parse HEAD)"
 log "Now at ${AFTER} ($(git log -1 --format='%s'))"

@@ -158,6 +158,55 @@ against either format, so the upgrade can wait. When we adopt
 `generate` / `migrate` later, run `drizzle-kit up` on a non-prod
 DB to validate the upgrade before applying it on prod.
 
+### Post-deploy verification — 2026-08-17 @ `14dde36e`
+
+The dual pre-release upgrade shipped to prod at `14dde36e`
+(`revert(schema): restore unique-constraint column order after rc.4
+upgrade`). Prod verification, run against
+`https://versions.persidian.com`:
+
+| Probe | Result |
+|-------|--------|
+| `GET /api/health/ready` | 200 `ready`; live (non-mock): `arc` (chain `0x4cef52`, signer configured, platform balance 18 060 200 micro-USDC), `llm` (openrouter / `gpt-oss-20b:free`), `embedding` (openrouter), `gateway`, `erc8183` (`0x0747…4583`). Mock/unset: `erc8004` (registry address set, adapter mock), `ipfs` (not configured), `ccmixter` (not configured) |
+| `POST /api/cron/sweep` (with `x-cron-secret`) | 200; retention report clean, outbox 0 unprocessed |
+| `POST /api/cron/sweep` (without secret) | 401 — auth guard live |
+| `GET /api/v1/discover/brief?brief=warm piano vibraphone instrumental` | 200; 17 results (incl. Speck — "Lost Roamin'") — real-mode brief-search path (pg Pool + drizzle rc.4 + semantic ranking) exercised end-to-end |
+| `GET /`, `/discover`, `/api/v1/feed`, `/api/v1/vitals` | all 200 |
+
+Final state:
+
+| Item | State |
+|------|-------|
+| drizzle-orm / drizzle-kit | `1.0.0-rc.4`, pinned exact (coordinated dual release) |
+| Migration format | v3 folders (`drizzle/<ts>_<name>/{migration.sql,snapshot.json}`) |
+| `push --explain` against prod | "No changes detected" ✅ |
+| Schema workarounds | Reverted — column orders in `schema.ts` match prod exactly |
+| FK-rename churn | None — the 0.31.10 identifier-truncation bug is gone in rc.4 |
+| Unique-constraint phantom | None — rc.4 preserves declared column order |
+| Prod schema | Untouched (pure code change, no DDL applied) |
+
+The `0.31.10` column-order and FK-truncation bugs that drove the
+prior workaround commits (`305a761`, `f4011ad`) are fixed in
+`1.0.0-rc.4`. The pre-change backup
+`versions-before-schema-20260817T002054Z.dump` remains the safe
+restore point if anything ever drifts.
+
+**Open items (carried forward, not regressions):**
+
+- `SENTRY_DSN` — paste it when error reporting should go live; empty stays inert.
+- Migration table v0→v1 upgrade — intentionally deferred; we only use `push`, which works against either format. Run `drizzle-kit up` on a non-prod DB when we adopt `generate` / `migrate`.
+- `ar_playlist_tracks` drift — resolved in the earlier session (constraint enforced, rows distinct).
+
+**Demo note (Arc Demos & Meetup, 2026-08).** The money path works
+end-to-end on prod, but the only published catalog is the
+guided-demo ccMixter ingest (`catalog.source: "demo"`); those takes
+return `license_availability.status: "demo_preview"` and cannot
+create a binding license/settlement. To demo a real license + Arc
+settlement, either publish a non-demo submission first or run
+`npm run demo` locally (mock adapters, full submit → pay → review →
+publish → tip loop). Licensing also requires a signed-in wallet
+session — guests can search and record verdicts, nothing more.
+
 ## Operational constraints
 
 **Single instance — do not scale out horizontally.** The in-process
@@ -228,6 +277,43 @@ the money-path vitals: supervisor search latency p50/p95 (client-observed,
 sampled from logged brief searches — signed-in and guest device-id),
 outbox depth + oldest backlog age, sweeper tick health, and the last
 retention report. Aggregates only — no wallets or briefs.
+
+**Demo prep — Arc Demos & Meetup (2026-08).** Three gates blocked a
+live on-chain license/settlement demo on prod: (1) the only catalog was
+guided-demo ccMixter ingest (`catalogSource: 'demo'` → `409
+DEMO_CATALOG_ONLY` on license creation); (2) licensing requires a
+signed-in supervisor wallet (guests 401); (3) the platform treasury
+held ~18 USDC while license fees were $75–250. Fixes shipped:
+
+- **License fees → $1.00** across all usage types (`src/lib/pricing.ts`,
+  testnet demo pricing; revert for production economics).
+- **Demo faucet** `POST /api/v1/demo/faucet {address}` — sends a fixed
+  1.00 USDC from the platform treasury to fund a throwaway artist
+  wallet (fee + gas). Rate-limited via `generalLimiter`; amount is a
+  server constant, not caller-controlled.
+- **LiveDemoButton live mode** — the homepage one-button loop now
+  detects live Arc (`/api/v1/arc/info` → `mock: false`), funds the
+  throwaway wallet via the faucet, pays the real submission fee
+  on-chain (viem ERC-20 transfer → platform wallet), waits for
+  confirmation, and verifies with the real tx hash. Mock mode keeps
+  the synthetic-hash path. Review-polling timeout raised 60 s → 180 s
+  for live LLM agents.
+- **Helper scripts**: `npm run demo:signin` (pre-authenticate a
+  supervisor session via NextAuth credentials; saves cookie to
+  `.demo/cookies.txt`, wallet key to `.demo/wallet.json` — both
+  gitignored) and `npm run ingest:tracks` (bulk-ingest local audio
+  through the real artist pipeline: submit → faucet-fund → pay fee →
+  agent review → publish as `live` catalogSource → embedding
+  backfill). Real artist submissions publish with the schema default
+  `catalogSource: 'live'` and are licensable; only cc-catalog/seed
+  ingests are `'demo'`.
+
+Pre-demo checklist: deploy these changes (`git push origin master &&
+./scripts/deploy-remote.sh`), ingest 2–3 real tracks
+(`npm run ingest:tracks -- --dir <folder>`), pre-auth
+(`npm run demo:signin`), and verify `/api/v1/demo/faucet` + the
+LiveDemoButton live path on prod. Treasury math at $1: 18 USDC covers
+~15 demo cycles after fees.
 
 ## Secrets
 

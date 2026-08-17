@@ -10,10 +10,10 @@ export const LICENSE_USAGE_TYPES = ['sync_ad', 'sync_tv_film', 'sync_digital', '
 export type LicenseUsageType = (typeof LICENSE_USAGE_TYPES)[number];
 
 export const LICENSE_FEES: Record<LicenseUsageType, string> = {
-  sync_ad: '150.00',
-  sync_tv_film: '250.00',
-  sync_digital: '75.00',
-  other: '100.00',
+  sync_ad: '1.00',
+  sync_tv_film: '1.00',
+  sync_digital: '1.00',
+  other: '1.00',
 };
 
 export function licenseFeeUsdc(usage: LicenseUsageType): string {

@@ -23,6 +23,8 @@
     "db:rename-briefs": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/rename-placement-briefs-columns.sql",
     "db:pgvector": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/create-pgvector-extension.sql",
     "demo": "tsx scripts/demo.ts",
+    "demo:signin": "tsx scripts/demo-signin.ts",
+    "ingest:tracks": "tsx scripts/ingest-my-tracks.ts",
     "check:arc": "tsx scripts/check-arc-live.ts",
     "benchmark": "tsx scripts/benchmark.ts",
     "primitive:demo": "tsx scripts/primitive-demo.ts",

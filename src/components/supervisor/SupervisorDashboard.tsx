@@ -591,7 +591,7 @@ function ShortlistSection({
                     aria-label={`Request license for ${i.title ?? "Untitled"} by ${i.artist_name ?? "Unknown"}`}
                     className="bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 hover:bg-[var(--color-rust)] transition-colors disabled:opacity-50"
                   >
-                    {licensingId === i.id ? "…" : "License · $250"}
+                    {licensingId === i.id ? "…" : `License · $${LICENSE_FEES.sync_tv_film}`}
                   </button>
                   <button
                     type="button"

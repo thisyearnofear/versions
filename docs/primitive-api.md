@@ -86,10 +86,10 @@ clearance claim.
       "territory": "worldwide",
       "term_months": 12,
       "usage_options": [
-        { "usage_type": "sync_ad", "fee_usdc": "150.00" },
-        { "usage_type": "sync_tv_film", "fee_usdc": "250.00" },
-        { "usage_type": "sync_digital", "fee_usdc": "75.00" },
-        { "usage_type": "other", "fee_usdc": "100.00" }
+        { "usage_type": "sync_ad", "fee_usdc": "1.00" },
+        { "usage_type": "sync_tv_film", "fee_usdc": "1.00" },
+        { "usage_type": "sync_digital", "fee_usdc": "1.00" },
+        { "usage_type": "other", "fee_usdc": "1.00" }
       ]
     },
     "licensing_evidence": {

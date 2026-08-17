@@ -172,7 +172,7 @@ describe('discover/brief: happy path', () => {
         territory: 'worldwide',
         term_months: 12,
         usage_options: expect.arrayContaining([
-          expect.objectContaining({ usage_type: 'sync_tv_film', fee_usdc: '250.00' }),
+          expect.objectContaining({ usage_type: 'sync_tv_film', fee_usdc: '1.00' }),
         ]),
       },
       licensing_evidence: {

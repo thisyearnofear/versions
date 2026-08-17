@@ -152,7 +152,7 @@ describe('integration: full primitive wedge (match → verdict → license → s
     });
     expect(license).not.toBeNull();
     expect(license!.status).toBe('pending_payment');
-    expect(license!.fee_usdc).toBe('250.00');
+    expect(license!.fee_usdc).toBe('1.00');
     expect(license!.artist_wallet).toBe(WALLET);
 
     // ── 5. Claim + settle it (as the pay route would, mock tx) ──

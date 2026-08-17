@@ -232,7 +232,7 @@ describe('supervisor service', () => {
     });
     expect(license).not.toBeNull();
     expect(license!.status).toBe('pending_payment');
-    expect(license!.fee_usdc).toBe('250.00');
+    expect(license!.fee_usdc).toBe('1.00');
     expect(license!.submission_id).toBe('sub-lic-1');
     expect(license!.title).toBe('Seed sub-lic-1');
     expect(license!.artist_wallet).toBe(WALLET.toLowerCase());
