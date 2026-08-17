@@ -11,7 +11,6 @@ import { track } from "@/lib/analytics";
 import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { EconomyTicker } from "@/components/economy/EconomyTicker";
-import { SceneCard, type SceneCardBrief } from "@/components/discovery/SceneCard";
 
 // PERF: below-the-fold sections are client-only dynamic chunks. They
 // fetch their own data on mount anyway, so keeping them out of the
@@ -22,23 +21,12 @@ const WaveformGallery = dynamic(
   () => import("@/components/home/WaveformGallery").then((m) => m.WaveformGallery),
   { ssr: false, loading: () => <div className="min-h-[340px] md:min-h-[420px]" aria-hidden="true" /> },
 );
-const LiveActivityStrip = dynamic(
-  () => import("@/components/home/LiveActivityStrip").then((m) => m.LiveActivityStrip),
-  { ssr: false, loading: () => <div className="min-h-[220px]" aria-hidden="true" /> },
-);
 // One-button live demo (submit → pay on Arc → agent review → publish → tip).
 // Client-only: it builds wallets in the browser and drives public APIs.
 const LiveDemoButton = dynamic(
   () => import("@/components/home/LiveDemoButton").then((m) => m.LiveDemoButton),
   { ssr: false, loading: () => <div className="min-h-[120px]" aria-hidden="true" /> },
 );
-
-const HOME_SCENE_BRIEF: SceneCardBrief = {
-  scene_tags: ["neon city", "night drive", "forward motion"],
-  instruments: ["synth", "sub bass", "drums"],
-  emotional_arcs: ["tense", "driving", "release"],
-  audience_summary: "A restrained electronic bed that leaves room for dialogue, then opens into a clean payoff.",
-};
 
 export default function Home() {
   return (
@@ -58,28 +46,11 @@ export default function Home() {
               <h2 id="placement-case-title" className="font-serif text-3xl font-black tracking-tight md:text-4xl">
                 Owned by an agent. Held open for one human decision.
               </h2>
-              <div className="mt-6 border border-[var(--color-hair-strong)] bg-[var(--color-paper)] p-5 font-mono text-xs">
-                <div className="mb-3 border-b border-[var(--color-hair)] pb-3 text-[var(--color-ink-2)]">
-                  Night drive · restrained electronic · 30 sec · no vocals
-                </div>
-                <ul className="flex flex-col gap-2 text-[var(--color-ink-2)]">
-                  <li className="flex gap-2">
-                    <span className="text-[var(--color-rust)]" aria-hidden="true">✓</span> Interpreted the brief
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="text-[var(--color-rust)]" aria-hidden="true">✓</span> Ranked 42 eligible takes
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="text-[var(--color-rust)]" aria-hidden="true">✓</span> Prepared 3 evidence-backed recommendations
-                  </li>
-                  <li className="flex gap-2 font-medium text-[var(--color-ink)]" aria-hidden="true">
-                    <span>!</span> Needs your judgment — choose a creative direction
-                  </li>
-                  <li className="flex gap-2 text-[var(--color-ink-3)]">
-                    <span aria-hidden="true">○</span> Rights review begins once you shortlist
-                  </li>
-                </ul>
-              </div>
+              <p className="mt-4 max-w-lg font-serif text-base leading-snug text-[var(--color-ink-2)]">
+                Describe the scene. Agents interpret the brief, rank every eligible take by
+                sync-fit, and prepare the evidence. You make the creative call — the rest
+                settles on Arc.
+              </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
                   href="/discover"
@@ -108,30 +79,24 @@ export default function Home() {
         </section>
 
         <section className="border-b border-[var(--color-hair-strong)] px-6 py-14 md:py-20" aria-labelledby="scene-preview-title">
-          <div className="mx-auto grid max-w-5xl items-center gap-10 lg:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 flex-wrap">
             <div>
               <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-rust)]">
                 New · visual brief preview
               </p>
-              <h2 id="scene-preview-title" className="font-serif text-3xl font-black tracking-tight md:text-4xl">
+              <h2 id="scene-preview-title" className="font-serif text-2xl md:text-3xl font-black tracking-tight">
                 See the scene before you choose the take.
               </h2>
-              <p className="mt-4 max-w-xl font-serif text-base leading-snug text-[var(--color-ink-2)]">
+              <p className="mt-2 max-w-xl font-serif text-sm leading-snug text-[var(--color-ink-2)]">
                 Describe the picture in plain language. The brief becomes a quick storyboard, so you can judge whether the music is moving in the right direction before opening a full take.
               </p>
-              <Link
-                href="/discover?brief=Tense%20neon-lit%20car%20chase%20at%20night%2C%20electronic%2C%20no%20vocals"
-                className="mt-6 inline-flex bg-[var(--color-ink)] px-5 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-paper)] transition-colors hover:bg-[var(--color-rust)]"
-              >
-                Try the visual brief →
-              </Link>
             </div>
-            <SceneCard
-              brief={HOME_SCENE_BRIEF}
-              briefText="Tense neon-lit car chase at night, electronic, no vocals"
-              trackTitle="Example take · Neon Afterimage"
-              artistName="VERSIONS demo"
-            />
+            <Link
+              href="/discover?brief=Tense%20neon-lit%20car%20chase%20at%20night%2C%20electronic%2C%20no%20vocals"
+              className="inline-flex shrink-0 bg-[var(--color-ink)] px-5 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-paper)] transition-colors hover:bg-[var(--color-rust)]"
+            >
+              Try the visual brief →
+            </Link>
           </div>
         </section>
 
@@ -143,7 +108,6 @@ export default function Home() {
           </div>
           <WaveformGallery />
         </section>
-        <LiveActivityStrip />
         <HowItWorks />
       </main>
       <SiteFooter />
