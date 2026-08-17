@@ -30,6 +30,9 @@ describe('inference provider chain', () => {
     'HF_QWEN_API_URL',
     'HF_QWEN_API_KEY',
     'HF_QWEN_MODEL',
+    'TOKENROUTER_API_KEY',
+    'TOKENROUTER_API_URL',
+    'TOKENROUTER_MODEL',
     'EMBEDDING_API_URL',
     'EMBEDDING_API_KEY',
     'EMBEDDING_MODEL',
@@ -88,18 +91,33 @@ describe('inference provider chain', () => {
     expect(chain.map((c) => c.provider)).toEqual(['custom', 'venice', 'openrouter']);
   });
 
-  it('HF Qwen joins only when HF_QWEN_API_URL is set, ordered last (free but unreliable)', () => {
+  it('HF Qwen joins only when HF_QWEN_API_URL is set, ordered before OpenRouter (free backups first)', () => {
     clearInference();
     process.env.VENICE_API_KEY = 'venice-test';
     process.env.HF_QWEN_API_URL = 'https://hf.example.com/v1';
     process.env.OPENROUTER_API_KEY = 'or-test';
     const chain = resolveLlmChain();
-    expect(chain.map((c) => c.provider)).toEqual(['venice', 'openrouter', 'hfqwen']);
-    const qwen = chain[2];
+    expect(chain.map((c) => c.provider)).toEqual(['venice', 'hfqwen', 'openrouter']);
+    const qwen = chain[1];
     expect(qwen.model).toBe(HF_QWEN_DEFAULT_MODEL);
     expect(qwen.apiKey).toBe('none');
     // Qwen disables thinking for fast JSON reviews.
     expect(qwen.bodyExtra).toEqual({ reasoning_effort: 'none' });
+  });
+
+  it('TokenRouter joins only when BOTH key and URL are set, ordered after HF Qwen and before OpenRouter', () => {
+    clearInference();
+    process.env.VENICE_API_KEY = 'venice-test';
+    process.env.HF_QWEN_API_URL = 'https://hf.example.com/v1';
+    process.env.TOKENROUTER_API_KEY = 'tr-test';
+    process.env.TOKENROUTER_API_URL = 'https://tr.example.com/v1';
+    process.env.OPENROUTER_API_KEY = 'or-test';
+    const chain = resolveLlmChain();
+    expect(chain.map((c) => c.provider)).toEqual(['venice', 'hfqwen', 'tokenrouter', 'openrouter']);
+    expect(chain[2].model).toBe('deepseek/deepseek-v4-pro-0813-free');
+    // Key without URL stays inactive (base URL is service-specific).
+    delete process.env.TOKENROUTER_API_URL;
+    expect(resolveLlmChain().some((c) => c.provider === 'tokenrouter')).toBe(false);
   });
 
   it('Venice embeddings are opt-in via VENICE_EMBED_ENABLE', () => {

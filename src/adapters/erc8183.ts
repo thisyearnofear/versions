@@ -243,19 +243,33 @@ export function createErc8183Adapter({
       }
       const jobIdBig = BigInt(jobId);
 
-      await providerWallet.writeContract({
+      // MONEY-PATH: wait for each tx before the next one depends on it.
+      // setBudget/approve were previously fire-and-forget, so `fund` ran
+      // before the allowance was mined and reverted silently (job stuck in
+      // Open, settle fell back to mock).
+      const waitMined = async (hash: `0x${string}`, step: string) => {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 60_000 });
+        if (receipt.status !== 'success') {
+          throw new Error(`ERC-8183 ${step} tx reverted on-chain: ${hash}`);
+        }
+        return receipt;
+      };
+
+      const setBudgetHash = await providerWallet.writeContract({
         address: contractAddress as `0x${string}`,
         abi: agenticCommerceAbi,
         functionName: "setBudget",
         args: [jobIdBig, budget, EMPTY_BYTES],
       });
+      await waitMined(setBudgetHash, 'setBudget');
 
-      await clientWallet.writeContract({
+      const approveHash = await clientWallet.writeContract({
         address: usdcContract as `0x${string}`,
         abi: erc20ApproveAbi,
         functionName: "approve",
         args: [contractAddress as `0x${string}`, budget],
       });
+      await waitMined(approveHash, 'approve');
 
       const fundTxHash = await clientWallet.writeContract({
         address: contractAddress as `0x${string}`,
@@ -263,7 +277,7 @@ export function createErc8183Adapter({
         functionName: "fund",
         args: [jobIdBig, EMPTY_BYTES],
       });
-      await publicClient.waitForTransactionReceipt({ hash: fundTxHash, timeout: 60_000 });
+      await waitMined(fundTxHash, 'fund');
 
       const submitTxHash = await providerWallet.writeContract({
         address: contractAddress as `0x${string}`,
@@ -271,7 +285,7 @@ export function createErc8183Adapter({
         functionName: "submit",
         args: [jobIdBig, deliverableHash, EMPTY_BYTES],
       });
-      await publicClient.waitForTransactionReceipt({ hash: submitTxHash, timeout: 60_000 });
+      await waitMined(submitTxHash, 'submit');
 
       const reasonHash = keccak256(toHex("versions.license.approved"));
       const completeTxHash = await clientWallet.writeContract({
@@ -280,7 +294,7 @@ export function createErc8183Adapter({
         functionName: "complete",
         args: [jobIdBig, reasonHash, EMPTY_BYTES],
       });
-      await publicClient.waitForTransactionReceipt({ hash: completeTxHash, timeout: 60_000 });
+      await waitMined(completeTxHash, 'complete');
 
       void clientAccount;
       void providerAccount;

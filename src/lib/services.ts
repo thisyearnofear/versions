@@ -174,8 +174,8 @@ function build(): ServiceRegistry {
     apiKey: llmCfg.apiKey || undefined,
     model: llmCfg.model,
     bodyExtra: llmCfg.bodyExtra,
-    // Fallback chain (Venice → OpenRouter → HF Qwen) so one provider's
-    // rate limit never silently degrades agent reviews to mock.
+    // Fallback chain (Venice → HF Qwen → TokenRouter → OpenRouter) so one
+    // provider's rate limit never silently degrades agent reviews to mock.
     fallbacks: llmChain.slice(1),
   });
   const agents = createAgentService({ llm, settlement, agentWallets });

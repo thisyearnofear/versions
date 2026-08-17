@@ -4,8 +4,9 @@
 //
 // DEMO HARDENING: agent reviews and brief-search embeddings now run
 // through an ordered provider chain (Venice primary → HF Qwen →
-// OpenRouter) so a single provider's rate limit never silently degrades
-// the demo to mock. resolveLlmChain()/resolveEmbeddingChain() build the
+// TokenRouter/DeepSeek → OpenRouter last) so a single provider's rate
+// limit never silently degrades the demo to mock, and OpenRouter never
+// needs funding. resolveLlmChain()/resolveEmbeddingChain() build the
 // chain from env; resolveLlmConfig()/resolveEmbeddingConfig() keep
 // returning the head entry for display.
 
@@ -29,7 +30,18 @@ export const HF_QWEN_API_BASE =
   'https://g9hnto0u7lvbu837.us-east-2.aws.endpoints.huggingface.cloud/v1';
 export const HF_QWEN_DEFAULT_MODEL = 'Qwen/Qwen3.8-27B';
 
-export type InferenceProvider = 'openrouter' | 'custom' | 'venice' | 'hfqwen' | 'mock';
+// TokenRouter: OpenAI-compatible aggregator hosting free models
+// (e.g. deepseek/deepseek-v4-pro-0813-free). Keyed; base URL is
+// service-specific and must be supplied via TOKENROUTER_API_URL.
+export const TOKENROUTER_DEFAULT_MODEL = 'deepseek/deepseek-v4-pro-0813-free';
+
+export type InferenceProvider =
+  | 'openrouter'
+  | 'custom'
+  | 'venice'
+  | 'hfqwen'
+  | 'tokenrouter'
+  | 'mock';
 
 export interface ResolvedLlmConfig {
   provider: InferenceProvider;
@@ -79,13 +91,16 @@ export function fitEmbeddingDimensions(vec: number[], target: number): number[] 
 
 /**
  * Ordered live-provider chain for LLM calls. Head = primary; the adapter
- * walks the chain on failure. Providers are opt-in via env:
- *   1. custom    — LLM_API_KEY (+ LLM_API_URL / LLM_MODEL)
- *   2. venice    — VENICE_API_KEY (reliable, keyed)
- *   3. openrouter — OPENROUTER_API_KEY (free-tier, rate-limited)
- *   4. hfqwen    — HF_QWEN_API_URL (keyless public endpoint; free but
- *                  rate-limited ~30 req/min and retired after launch
- *                  buzz, hence last resort)
+ * walks the chain on failure. Providers are opt-in via env. Free/
+ * unreliable providers are kept as backups so OpenRouter never has to be
+ * funded:
+ *   1. custom      — LLM_API_KEY (+ LLM_API_URL / LLM_MODEL)
+ *   2. venice      — VENICE_API_KEY (reliable, keyed → primary)
+ *   3. hfqwen      — HF_QWEN_API_URL (keyless public endpoint; free but
+ *                    rate-limited ~30 req/min and retired after launch buzz)
+ *   4. tokenrouter — TOKENROUTER_API_KEY + TOKENROUTER_API_URL (free DeepSeek;
+ *                    stability/concurrency not guaranteed)
+ *   5. openrouter  — OPENROUTER_API_KEY (free-tier, rate-limited; last resort)
  * Returns [] when nothing is configured (adapter then runs mock).
  */
 export function resolveLlmChain(): ResolvedLlmConfig[] {
@@ -113,16 +128,6 @@ export function resolveLlmChain(): ResolvedLlmConfig[] {
     });
   }
 
-  const openRouterKey = process.env.OPENROUTER_API_KEY?.trim() || '';
-  if (openRouterKey && !chain.some((c) => c.provider === 'openrouter')) {
-    chain.push({
-      provider: 'openrouter',
-      apiUrl: llmApiUrl || OPENROUTER_API_BASE,
-      apiKey: openRouterKey,
-      model: model || OPENROUTER_DEFAULT_LLM_MODEL,
-    });
-  }
-
   const hfUrl = process.env.HF_QWEN_API_URL?.trim() || '';
   if (hfUrl) {
     chain.push({
@@ -132,6 +137,29 @@ export function resolveLlmChain(): ResolvedLlmConfig[] {
       model: process.env.HF_QWEN_MODEL?.trim() || HF_QWEN_DEFAULT_MODEL,
       // Thinking off: fast, clean JSON answers for agent reviews.
       bodyExtra: { reasoning_effort: 'none' },
+    });
+  }
+
+  const tokenRouterKey = process.env.TOKENROUTER_API_KEY?.trim() || '';
+  const tokenRouterUrl = process.env.TOKENROUTER_API_URL?.trim() || '';
+  // TokenRouter's base URL is service-specific and not published in the
+  // model card, so the provider only activates when BOTH key and URL are set.
+  if (tokenRouterKey && tokenRouterUrl) {
+    chain.push({
+      provider: 'tokenrouter',
+      apiUrl: tokenRouterUrl,
+      apiKey: tokenRouterKey,
+      model: process.env.TOKENROUTER_MODEL?.trim() || TOKENROUTER_DEFAULT_MODEL,
+    });
+  }
+
+  const openRouterKey = process.env.OPENROUTER_API_KEY?.trim() || '';
+  if (openRouterKey && !chain.some((c) => c.provider === 'openrouter')) {
+    chain.push({
+      provider: 'openrouter',
+      apiUrl: llmApiUrl || OPENROUTER_API_BASE,
+      apiKey: openRouterKey,
+      model: model || OPENROUTER_DEFAULT_LLM_MODEL,
     });
   }
 
