@@ -13,18 +13,29 @@ Before touching product or UI code, hold the strategic frame. Full thesis:
 
 The short version:
 
-- **We are** the autonomous curation + per-play settlement layer for music
-  licensing. Positioned as a **wedge built on one agentic primitive**: an
-  *autonomous brief → licensed-track pipeline* (three AI agents rank the
-  long tail of alternate takes by fit + per-play micro-settlement on Arc USDC).
-- **Supervisor-first.** The primary user is the music supervisor/A&R; the
-  primary action is searching the catalog by brief. Search is guest-friendly —
-  no wallet required. The consumer catalog/feed/tips are beachhead and
-  distribution, **not** the business model.
+- **We are** the consent, curation, and settlement layer for **derivative
+  music versions**. Wedge: *one rights-controlled song → a portfolio of
+  artist-authorized versions (alt takes today; approved AI derivatives as
+  the growth path) → ranked against real briefs → paid placements*, with
+  per-version attribution and micro-settlement on Arc USDC. We are **not**
+  a generation platform and **not** a consumer remix feed — Spotify/UMG
+  own the on-platform fan-cover lane since May 2026. We own the
+  cross-platform commercial conversion rail they won't build.
+- **Supervisor-first on the demand side.** The primary *buyer* is the music
+  supervisor/A&R; the primary action is searching versions by brief.
+  Search is guest-friendly — no wallet required. Artists are the
+  supply-side partners (opt-in consent programs), not the business model.
+  The consumer catalog/feed/tips are beachhead and distribution, **not**
+  the business model.
 - **Keep the outcome we sell clear in the UI.** Lead with the supervisor
-  job (brief → ranked, license-ready tracks); treat the agent economy and
+  job (brief → ranked, license-ready versions); treat the agent economy and
   wallet as the proof/rail underneath, not the headline. Don't regress the
   supervisor-first framing or put the wallet back at the front door.
+- **Claim discipline.** "Pre-cleared" applies only to versions inside an
+  authorized-version program; legacy/demo catalog results stay labeled
+  rights-unverified. "Settled" applies only to uses VERSIONS tracks and
+  controls. Agents currently score metadata, not audio — don't claim they
+  listened until audio-aware evaluation ships.
 
 ## Mood-tag wire-format convention
 

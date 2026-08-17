@@ -6,60 +6,61 @@
 
 ## The one-liner
 
-**VERSIONS turns a music brief into a licensed track — ranked by AI agents,
-attributed per take, settling in micro-payments on Arc — and owns the
-ground-truth data no incumbent can build, because building it would
-cannibalize their business.**
+**VERSIONS turns one rights-controlled song into a portfolio of authorized
+versions, ranks them against commercial briefs, and converts the strongest
+takes into paid placements — settled per version on Arc.**
 
 ## The problem
 
-Music supervisors, A&R teams, and sync houses search a **long tail of
-alternate takes** by describing a scene in plain English ("tense car chase,
-no vocals, ~120 bpm"). Today this is manual, slow, and invisible — most of
-the catalogue is never cleared, matched, or licensed. Incumbents can't fix
-it affordably: their economics and incentives are built on premium curated
-catalogs and human sync teams, which automation commoditizes.
+Music supervisors need the right track for a scene — fast, cleared, and
+affordable. Today that means digging through bloated catalogs, negotiating
+rights piecemeal, and paying premium prices for a handful of "safe" choices.
+Meanwhile, artists sit on under-monetized catalogs and fans are creating
+unauthorized AI versions with no way to consent, credit, or pay them.
 
 ## The solution — one agentic primitive
 
-An **autonomous brief → licensed-track pipeline**:
+An **autonomous brief → licensed-version pipeline**:
 
-1. **Paste a brief.** Plain English, no wallet, free.
-2. **Three AI agents** (Production, Performance, Market) score the long tail
-   of alternate takes by fit, with an explainable `why_fits` rationale and a
-   configurable human gate.
-3. **Per-play micro-settlement on Arc USDC** — attributed per take, batched
-   and verifiable. No middlemen, no minimum.
+1. **Artist opts in** with a rights-controlled song and sets the consent
+   policy (allowed transformations, splits, territories).
+2. **Creators produce versions** using external tools; VERSIONS verifies
+   provenance and policy compliance.
+3. **Three AI agents** (Production, Performance, Market) score each version
+   by sync-fit, with explainable rationale and a human approval gate.
+4. **Supervisors search by brief**, pick a version, and license it.
+5. **Per-use micro-settlement on Arc USDC** — attributed per version,
+   batched, verifiable on-chain.
 
 We sell the **outcome** — pre-cleared, attributed, micro-settled licenses —
-not a similarity API.
+not a similarity API, not a generation tool, not a streaming service.
 
 ## Why we win
 
-- **Incumbents are structurally disincentivized (innovator's dilemma).**
-  Labels and catalog houses monetize curation premium + human sync teams;
-  DSPs avoid the rights-heavy "schlep." Autonomy eats their margin — so the
-  primitive stays un-cloned.
-- **The moat compounds.** A cross-catalog **ground-truth dataset** (what
-  actually fits, clears, and licenses), **settlement liquidity**, and
-  **zero-marginal-cost scale** for the long tail. We become *the memory of
-  what licenses and settles, per take, per play.*
-- **Distribution is built into the product.** Settlement is a visible brand
-  moment; the supervisor surface wins the niche and earns pricing leverage;
-  every catalog integration is a channel.
+- **Incumbents can't follow.** Spotify/UMG own the creation lane; labels
+  own the catalog lane. Neither builds the cross-platform commercial
+  conversion + settlement layer because it cannibalizes their core model.
+- **The graph compounds.** Every version evaluated, every brief matched,
+  every license settled adds to a proprietary dataset:
+  consent → lineage → fit → license → waterfall. No one else is
+  assembling this cross-artist, cross-platform.
+- **Zero marginal cost to rank version N.** Scale favors us; it hurts
+  human-curated sync houses.
 
 ## Market & wedge
 
-Beachhead: the long tail of alternate takes for music **sync** — a niche
-incumbents under-serve. Then: sell the primitive as an outcome to catalogs,
-labels, and sync tools; optionally abstract the settlement + attribution
-rail beyond music.
+**Beachhead:** one artist, one song, invited creators, real briefs —
+prove the full loop from consent to cash. Then expand artist-by-artist.
+
+**Expansion:** sell the primitive as an outcome to catalogs, labels, and
+sync tools. Optionally abstract the settlement rail beyond music.
 
 ## The ask
 
-A beachhead partner + ground-truth data. A catalog or sync team willing to
-let the autonomous pipeline clear, match, and micro-settle their long tail —
-today.
+One rights-controlled song from an independent artist, plus 3–5
+supervisors willing to evaluate against real briefs. That's the pilot.
+Everything else — the agents, the settlement rail, the graph — is
+already running.
 
 ---
 
