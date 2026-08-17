@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
     briefText: parsed.data.briefText,
     filters: parsed.data.filters,
     resultsCount: typeof body.resultsCount === "number" ? body.resultsCount : 0,
+    durationMs: typeof body.durationMs === "number" ? body.durationMs : null,
   });
 
   return successResponse(200, { row }, requestId);

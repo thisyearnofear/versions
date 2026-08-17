@@ -11,7 +11,7 @@ const { emit } = await import('../../src/lib/event-bus');
 
 const { describe, it, expect, beforeAll, beforeEach } = await import('vitest');
 const { eq } = await import('drizzle-orm');
-const { createFeedService } = await import('../../src/services/feed');
+const { createFeedService, normalizeTimestamp } = await import('../../src/services/feed');
 const { publishedVersions, submissions, placementBriefs } = await import('../../src/lib/schema');
 
 async function seedSubmission(subId: string) {
@@ -265,6 +265,28 @@ describe('feed: searchByBrief', () => {
     // event-bus listener on the first call.
     emit('feed-update', { type: 'published', submissionId: 'sub-brief-2', timestamp: new Date().toISOString() });
     expect(cacheStats().entries).toBe(0);
+  });
+});
+
+describe('feed: normalizeTimestamp (semantic-path timestamp coercion)', () => {
+  it('parses a node-postgres timestamp string into a Date', () => {
+    const d = normalizeTimestamp('2026-08-08 20:12:21.724');
+    expect(d).toBeInstanceOf(Date);
+    // The column is `timestamp without time zone`, so the string has no
+    // offset and is parsed in local time — assert the same local-time parse
+    // and that `.getTime()` no longer throws.
+    expect(d!.getTime()).toBe(new Date('2026-08-08 20:12:21.724').getTime());
+  });
+
+  it('passes Date objects through unchanged', () => {
+    const input = new Date('2026-01-01T00:00:00Z');
+    expect(normalizeTimestamp(input)).toBe(input);
+  });
+
+  it('returns null for null/undefined/invalid', () => {
+    expect(normalizeTimestamp(null)).toBeNull();
+    expect(normalizeTimestamp(undefined)).toBeNull();
+    expect(normalizeTimestamp('not-a-date')).toBeNull();
   });
 });
 

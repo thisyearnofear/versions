@@ -30,6 +30,14 @@ export type PaidBriefSearchResponse = BriefSearchResponse & {
   payment: ScorePaymentReceipt;
 };
 
+export interface PaidSearchOutcome {
+  response: PaidBriefSearchResponse;
+  /** Client-observed time of the paid scoring requests, in ms. The wallet
+   *  signature wait is EXCLUDED — it is human-speed payment UX, not search,
+   *  and must not inflate the vitals latency p50/p95. */
+  searchLatencyMs: number;
+}
+
 function decodeBase64<T>(b64: string): T {
   const json =
     typeof window === "undefined"
@@ -48,17 +56,24 @@ export async function searchByBriefPaid(args: {
     primaryType: "Offer";
     message: Record<string, unknown>;
   }) => Promise<`0x${string}`>;
-}): Promise<PaidBriefSearchResponse> {
+}): Promise<PaidSearchOutcome> {
   const body = JSON.stringify({
     brief: args.brief,
     limit: args.limit ?? 20,
   });
 
+  // Time the two scoring round-trips (the 402 challenge + the scored
+  // response) but NOT the signature prompt between them. The signature is
+  // payment UX at human speed — the vitals latency metric must measure
+  // search, so the clock starts after the challenge and resumes after the
+  // signature, never spanning it.
+  const t0 = performance.now();
   const first = await fetch("/api/x402/score", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
   });
+  const t1 = performance.now();
   const challengeHeader = first.headers.get("PAYMENT-REQUIRED");
   if (first.status !== 402 || !challengeHeader) {
     const json = (await first.json().catch(() => ({}))) as {
@@ -90,6 +105,7 @@ export async function searchByBriefPaid(args: {
       ? Buffer.from(JSON.stringify(proof), "utf8").toString("base64")
       : btoa(JSON.stringify(proof));
 
+  const t2 = performance.now();
   const second = await fetch("/api/x402/score", {
     method: "POST",
     headers: {
@@ -106,5 +122,10 @@ export async function searchByBriefPaid(args: {
   if (!second.ok || !json.success || !json.data) {
     throw new Error(json.error?.message ?? `score failed (${second.status})`);
   }
-  return json.data;
+  const t3 = performance.now();
+
+  return {
+    response: json.data,
+    searchLatencyMs: Math.round(t1 - t0 + (t3 - t2)),
+  };
 }

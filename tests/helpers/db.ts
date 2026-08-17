@@ -317,6 +317,7 @@ CREATE TABLE IF NOT EXISTS brief_searches (
   brief_text TEXT NOT NULL,
   filters JSONB NOT NULL DEFAULT '{}',
   results_count INTEGER NOT NULL DEFAULT 0,
+  duration_ms INTEGER,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_brief_searches_supervisor ON brief_searches(supervisor_wallet, created_at);

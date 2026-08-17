@@ -255,6 +255,18 @@ function daysSince(date: Date | null | undefined): number {
   return Math.floor(ms / (1000 * 60 * 60 * 24));
 }
 
+// MODULAR: node-postgres returns `timestamp` columns as strings from raw
+// db.execute(); drizzle's typed selects return real Date objects. Coerce
+// both shapes into a Date so downstream `.getTime()` calls are safe.
+// Exported for unit tests (PGlite has no pgvector, so the semantic path
+// can't be exercised end-to-end in the test DB).
+export function normalizeTimestamp(value: unknown): Date | null {
+  if (value == null) return null;
+  if (value instanceof Date) return value;
+  const d = new Date(String(value));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 // MODULAR: licensing and catalog source are related operational states, but
 // distinct facts. A demo take can be useful for guided evaluation without
 // being able to create a license, job, or settlement.
@@ -508,7 +520,10 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
         ratingCount: row.rating_count as number,
         catalogSource: row.catalog_source as string,
         aggregatedMoodTags: row.aggregated_mood_tags as string[] | null,
-        publishedAt: row.published_at as Date,
+        // MODULAR: raw db.execute returns `timestamp` columns as strings
+        // (node-postgres), not Date objects — normalize so daysSince()
+        // and the tiebreak sort's `.getTime()` don't throw.
+        publishedAt: normalizeTimestamp(row.published_at),
       } as typeof pvTable.$inferSelect;
 
       // MODULAR: brief may be null if the version has no

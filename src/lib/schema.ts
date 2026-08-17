@@ -426,6 +426,9 @@ export const briefSearches = pgTable('brief_searches', {
   briefText: text('brief_text').notNull(),
   filters: jsonb('filters').notNull().$type<Record<string, unknown>>().default({}),
   resultsCount: integer('results_count').notNull().default(0),
+  // Client-observed end-to-end search latency (ms). Null for rows logged
+  // before the column existed; feeds the /admin/vitals latency p50/p95.
+  durationMs: integer('duration_ms'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('idx_brief_searches_supervisor').on(table.supervisorWallet, table.createdAt),

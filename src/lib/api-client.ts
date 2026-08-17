@@ -505,6 +505,7 @@ export interface BriefSearchRecord {
   brief_text: string;
   filters: Record<string, unknown>;
   results_count: number;
+  duration_ms: number | null;
   created_at: string;
 }
 
@@ -816,7 +817,7 @@ export const apiClient = {
     const qs = params.toString();
     return api.get<{ rows: BriefSearchRecord[]; total: number }>(`/api/v1/supervisor/recent-searches${qs ? `?${qs}` : ""}`);
   },
-  logSearch(body: { briefText: string; filters?: Record<string, unknown>; resultsCount?: number }): Promise<{ row: BriefSearchRecord }> {
+  logSearch(body: { briefText: string; filters?: Record<string, unknown>; resultsCount?: number; durationMs?: number | null }): Promise<{ row: BriefSearchRecord }> {
     return api.post<{ row: BriefSearchRecord }>("/api/v1/supervisor/recent-searches", body);
   },
   getInterests(opts?: { limit?: number; offset?: number }): Promise<{ rows: LicensingInterest[]; total: number }> {

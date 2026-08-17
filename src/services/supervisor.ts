@@ -64,6 +64,8 @@ export interface BriefSearchInput {
   briefText: string;
   filters?: Record<string, unknown>;
   resultsCount?: number;
+  /** Client-observed end-to-end search latency in ms (admin vitals). */
+  durationMs?: number | null;
 }
 
 export interface BriefSearchRow {
@@ -72,6 +74,7 @@ export interface BriefSearchRow {
   brief_text: string;
   filters: Record<string, unknown>;
   results_count: number;
+  duration_ms: number | null;
   created_at: Date;
 }
 
@@ -237,6 +240,7 @@ function rowToBriefSearch(row: typeof briefSearchesTable.$inferSelect): BriefSea
     brief_text: row.briefText,
     filters: (row.filters as Record<string, unknown>) ?? {},
     results_count: row.resultsCount,
+    duration_ms: row.durationMs,
     created_at: row.createdAt,
   };
 }
@@ -435,6 +439,10 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
           briefText: input.briefText,
           filters: input.filters ?? {},
           resultsCount: input.resultsCount ?? 0,
+          durationMs:
+            typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) && input.durationMs >= 0
+              ? Math.round(input.durationMs)
+              : null,
         })
         .returning();
       return rowToBriefSearch(row);
