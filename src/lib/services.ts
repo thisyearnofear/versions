@@ -28,6 +28,7 @@ import { createSweeper, type Sweeper } from '../services/settlement-sweeper';
 import { createRateLimiter, type RateLimiter } from './rate-limit';
 import { createIpfsFromEnv, type PinataClient } from './ipfs';
 import { createListenerService, type ListenerService } from '../services/listeners';
+import { createCcMixterAdapter, type CcMixterAdapter } from '../adapters/ccmixter';
 import { createSupervisorDashboardService, type SupervisorDashboardService } from '../services/supervisor';
 import { createCasesService, type CasesService } from '../services/cases';
 import { createReleaseCasesService, type ReleaseCasesService } from '../services/release-cases';
@@ -53,6 +54,7 @@ export interface ServiceRegistry {
   ar: ArService;
   sweeper: Sweeper;
   listeners: ListenerService;
+  ccmixter: CcMixterAdapter;
   supervisor: SupervisorDashboardService;
   cases: CasesService;
   releaseCases: ReleaseCasesService;
@@ -72,6 +74,7 @@ export interface ServiceRegistry {
     llmMock: boolean;
     gatewayMock: boolean;
     embeddingMock: boolean;
+    ccmixterMock: boolean;
     uploadDir: string;
     ipfsConfigured: boolean;
   };
@@ -172,6 +175,7 @@ function build(): ServiceRegistry {
   const agents = createAgentService({ llm, settlement, agentWallets });
   const ar = createArService({ arc, arWallet, llm });
   const listeners = createListenerService();
+  const ccmixter = createCcMixterAdapter();
   const supervisor = createSupervisorDashboardService();
   const cases = createCasesService();
   const releaseCases = createReleaseCasesService();
@@ -202,6 +206,7 @@ function build(): ServiceRegistry {
     agents,
     ar,
     listeners,
+    ccmixter,
     supervisor,
     cases,
     releaseCases,
@@ -224,6 +229,7 @@ function build(): ServiceRegistry {
       // for the health endpoint contract.
       gatewayMock: !arcRpcUrl,
       embeddingMock: embeddingAdapter.mock,
+      ccmixterMock: ccmixter.mock,
       uploadDir,
       ipfsConfigured: ipfs.isConfigured(),
     },
