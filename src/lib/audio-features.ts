@@ -14,6 +14,9 @@
 // - Agent prompts include features alongside metadata (see agents.ts)
 
 import type { AudioFeatures } from './types';
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
 
 export { type AudioFeatures };
 
@@ -53,14 +56,8 @@ async function extractViaApi(
   apiKey: string,
   apiUrl: string,
 ): Promise<AudioFeatures> {
-  const fs = await import('fs');
-  const path = await import('path');
-  const { Readable } = await import('stream');
-  const { pipeline } = await import('stream/promises');
-
-  const ext = path.extname(audioPath);
   const buffer = fs.readFileSync(audioPath);
-  const readable = Readable.from(buffer);
+  const ext = path.extname(audioPath);
 
   const response = await fetch(apiUrl, {
     method: 'POST',
@@ -99,8 +96,6 @@ async function extractViaApi(
  * the pilot — more detailed features require a trained model.
  */
 async function extractManually(audioPath: string): Promise<AudioFeatures> {
-  const { execSync } = await import('child_process');
-
   // Use ffmpeg to extract basic audio properties
   const probe = JSON.parse(
     execSync(`ffprobe -v quiet -print_format json -show_format -show_streams "${audioPath}"`).toString(),
