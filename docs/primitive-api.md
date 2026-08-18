@@ -172,6 +172,15 @@ nDCG, and score discrimination.
 The v1 contract intentionally does not promise a simulated agent trace or
 rights clearance. The new requestability and indicative-quote fields make the
 current workflow inspectable, but they are not substitutes for verification.
+
+**Audio-aware evaluation:** agents now receive audio features (tempo, key,
+energy, danceability, acousticness, loudness, instrumentalness, valence)
+when available — extracted from the audio file at publish time and included
+in the prompt. When features are absent, the prompt includes: `"Audio
+features not available (rating based on metadata only)."` This makes the
+scoring basis transparent: agents score from actual audio when present,
+and the supervisor can see the limitation.
+
 Before a future version exposes named agent verdicts or a `clearance.status`
 other than `unverified`, a ranked row needs auditable fields such as:
 

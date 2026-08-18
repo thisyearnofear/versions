@@ -354,6 +354,26 @@ Env additions (server `.env`): `VENICE_API_KEY`, `HF_QWEN_API_URL`,
 `TOKENROUTER_API_KEY` (TokenRouter activates once `TOKENROUTER_API_URL`
 is also set — its base URL is service-specific and was not published).
 
+### Post-deploy verification — 2026-08-18 @ `5280a50d`
+
+Pilot schema + audio-aware evaluation shipped. Verification:
+
+| Probe | Result |
+|-------|--------|
+| `GET /api/health/ready` | `llm: mock=False provider=venice`; all services ready |
+| DB: `version_programs` table | Created via direct SQL (drizzle conflict on existing `ar_playlist_tracks` unique constraint); check constraint `IN ('active','revoked','completed')` verified |
+| DB: `submissions` columns | `program_id`, `authorization_status`, `authorized_at`, `lineage`, `audio_features` — all applied |
+| DB: `published_versions` check | Extended to `IN ('demo','live','authorized')` |
+| DB: `match_feedback` check | Extended to `IN ('demo','live','authorized')` |
+| Agent prompts | All three now include audio features in the user prompt; when absent: `"Audio features not available (rating based on metadata only)."` |
+| `GET /discover/brief` | `license_availability.clearance.status: 'cleared'` on `catalog_source: 'authorized'` rows |
+| License route | 409 gates: `PROGRAM_NOT_FOUND` / `PROGRAM_NOT_ACTIVE` / `VERSION_NOT_APPROVED` |
+| `scripts/extract-features.ts` | `npm run extract:features` available for post-pilot audio feature extraction |
+
+Pilot agreement draft: `docs/pilot-agreement-draft.md` — structured template
+for counsel review covering permitted transformations, attribution, royalty
+waterfall, revocation, content standards, and a music counsel checklist.
+
 **Open items:** TokenRouter base URL (DeepSeek backup stays dormant
 until it is supplied); rotate the Venice/TokenRouter keys after the
 demo (they passed through chat). CI's `npm ci` failure ("Missing:
@@ -361,6 +381,12 @@ zod@3.25.76 from lock file") was a toolchain mismatch, not lockfile
 corruption — the lockfile is complete under npm 11; CI now runs Node
 24 (npm 11) to match. Deploys were never affected (Docker uses
 `npm install`, which is not strict about the lockfile).
+
+Audio-features extraction: the `extractAudioFeatures` pipeline tries a
+configured `EMBEDDING_API_URL` first (CLAP/ONNX model), then falls back
+to ffmpeg-only extraction (which provides duration/sample-rate/codec but
+not tempo/key/energy). For a defensible pilot, configure a model endpoint
+or run a local Chromagram extractor before the pilot launches.
 
 ## Secrets
 
