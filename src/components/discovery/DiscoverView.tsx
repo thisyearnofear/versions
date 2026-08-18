@@ -23,6 +23,7 @@ import { searchByBriefPaid, SCORE_FEE_USDC, type ScorePaymentReceipt } from "@/l
 import { AgentTrace } from "@/components/discovery/AgentTrace";
 import { SceneCard } from "@/components/discovery/SceneCard";
 import { AgentThinkingPulse, FitScorePop, SuccessCheck } from "@/components/discovery/motion";
+import { PipelineStepper } from "@/components/economy/PipelineStepper";
 
 const BRIEF_REFINEMENTS = [
   { id: "no-vocals", label: "no vocals", instruction: "no vocals, instrumental" },
@@ -455,6 +456,47 @@ function MatchRow({
   const selectedQuote = row.license_quote.usage_options.find(({ usage_type }) => usage_type === usageType);
   const isDemo = row.catalog.source === 'demo';
 
+  // Hover-to-play snippet (10s)
+  const snippetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const snippetAudioRef = useRef<HTMLAudioElement | null>(null);
+  const snippetPlayingRef = useRef(false);
+  const [snippetPlaying, setSnippetPlaying] = useState(false);
+
+  const playSnippet = () => {
+    if (snippetTimerRef.current) {
+      clearTimeout(snippetTimerRef.current);
+      snippetTimerRef.current = null;
+    }
+    snippetTimerRef.current = setTimeout(() => {
+      if (snippetAudioRef.current) {
+        snippetAudioRef.current.currentTime = 0;
+        snippetAudioRef.current.play().catch(() => {});
+        snippetPlayingRef.current = true;
+        setSnippetPlaying(true);
+      }
+    }, 200); // debounce 200ms to avoid playing on accidental hover
+  };
+
+  const stopSnippet = () => {
+    if (snippetTimerRef.current) {
+      clearTimeout(snippetTimerRef.current);
+      snippetTimerRef.current = null;
+    }
+    if (snippetAudioRef.current) {
+      snippetAudioRef.current.pause();
+      snippetAudioRef.current.currentTime = 0;
+      snippetPlayingRef.current = false;
+      setSnippetPlaying(false);
+    }
+  };
+
+  // Stop snippet when another one starts playing
+  useEffect(() => {
+    return () => {
+      if (snippetTimerRef.current) clearTimeout(snippetTimerRef.current);
+    };
+  }, []);
+
   const returnTo = typeof window !== "undefined"
     ? `${window.location.pathname}${window.location.search}`
     : "/discover";
@@ -571,7 +613,12 @@ function MatchRow({
       <button
         type="button"
         aria-expanded={expanded}
-        onClick={() => setExpanded((p) => !p)}
+        onClick={() => {
+          setExpanded((p) => !p);
+          if (!expanded) stopSnippet(); // stop snippet when user expands to fully listen
+        }}
+        onMouseEnter={() => !expanded && playSnippet()}
+        onMouseLeave={() => !expanded && stopSnippet()}
         className="group w-full p-3 text-left"
       >
         <div className="flex items-center gap-3">
@@ -599,6 +646,27 @@ function MatchRow({
               <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-ink-3)] truncate mt-0.5">
                 Evidence · {reason}
               </p>
+            )}
+            {/* Inline why_fits chips (top 2) */}
+            {row.why_fits.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {row.why_fits.slice(0, 2).map((fit, idx) => (
+                  <span
+                    key={`${fit}-${idx}`}
+                    className="bg-[var(--color-paper-2)] border border-[var(--color-hair)] px-1.5 py-0.3 font-mono text-[8px] uppercase tracking-wide text-[var(--color-ink-2)] rounded-sm truncate max-w-[220px]"
+                    title={fit}
+                  >
+                    {fit.length > 48 ? `${fit.slice(0, 45)}…` : fit}
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* Snippet playing indicator */}
+            {snippetPlaying && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-rust)] animate-pulse" />
+                <span className="font-mono text-[8px] text-[var(--color-ink-3)]">Snippet playing</span>
+              </div>
             )}
           </div>
 
@@ -639,6 +707,12 @@ function MatchRow({
             className="overflow-hidden"
           >
             <div className="px-3 pb-3 pt-1 border-t border-[var(--color-hair)]">
+              {/* Pipeline stepper (live updates during agent review) */}
+              <PipelineStepper
+                status={row.status}
+                ratingCount={row.rating_count}
+              />
+
               <AudioPlayer
                 src={`/api/v1/uploads/${row.audio_path?.split("/").pop() ?? ""}`}
                 title={row.title}
@@ -863,6 +937,15 @@ function MatchRow({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Hidden audio element for hover-to-play snippet */}
+      <audio
+        ref={snippetAudioRef}
+        src={`/api/v1/uploads/${row.audio_path?.split("/").pop() ?? ""}`}
+        preload="metadata"
+        onEnded={() => setSnippetPlaying(false)}
+        className="hidden"
+      />
     </article>
   );
 }

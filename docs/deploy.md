@@ -388,6 +388,25 @@ to ffmpeg-only extraction (which provides duration/sample-rate/codec but
 not tempo/key/energy). For a defensible pilot, configure a model endpoint
 or run a local Chromagram extractor before the pilot launches.
 
+### Post-deploy verification — 2026-08-18 @ Phase 1 UX improvements
+
+Pipeline stepper + inline why_fits chips + hover-to-play snippets shipped.
+Verification against `https://versions.persidian.com`:
+
+| Probe | Result |
+|-------|--------|
+| Typecheck (`tsc --noEmit`) | ✅ clean |
+| Lint (`eslint --max-warnings 0`) | ✅ 0 warnings |
+| Tests | ✅ 542 passed, 0 failed |
+| `MatchRow` collapsed | Top 2 `why_fits` render as chips below title/artist |
+| `MatchRow` hover | 200ms-debounced snippet auto-plays on mouse enter; plays indicator with pulsing dot |
+| `MatchRow` expanded | PipelineStepper renders above AudioPlayer showing lifecycle (status + ratingCount) |
+| `MatchRow` expand | Auto-stops snippet so full listen is not interrupted |
+
+`BriefSearchRow.status` is an optional field on the response type;
+when the search API returns a submission status string, the PipelineStepper
+derives live stage states (Submit → Pay → Review X/3 → Publish → Settle).
+
 ## Secrets
 
 | Where | File |

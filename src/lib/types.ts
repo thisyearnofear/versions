@@ -202,6 +202,7 @@ export interface BriefSearchRow {
   energy_consensus: string | null | undefined;
   tempo_consensus: string | null | undefined;
   rating_count: number;
+  status?: string; // submission lifecycle status (for pipeline stepper)
   aggregated_mood_tags: MoodTagsEnvelope;
   published_at: string | null | undefined;
   catalog: CatalogProvenance;
