@@ -121,6 +121,12 @@ export async function publishSubmission(
       tempoConsensus: agg.tempo_consensus,
       aggregatedMoodTags: assertMoodTagsShape(agg.aggregated_mood_tags, "aggregated_mood_tags"),
       ratingCount: agg.rating_count,
+      // MODULAR: catalog provenance from the program gate. A submission that
+      // is linked to a version program AND artist-approved publishes as
+      // 'authorized' — the only source where pre-clearance is a recorded
+      // fact. Non-program takes keep the schema default 'live'.
+      catalogSource:
+        sub.programId && sub.authorizationStatus === 'approved' ? 'authorized' : 'live',
       publishedAt: new Date(),
     };
 

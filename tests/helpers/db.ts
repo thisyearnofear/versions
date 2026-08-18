@@ -21,6 +21,20 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS version_programs (
+  id TEXT PRIMARY KEY,
+  rights_holder_wallet TEXT NOT NULL,
+  source_title TEXT NOT NULL,
+  source_artist TEXT NOT NULL,
+  musicbrainz_id TEXT,
+  consent_policy JSONB NOT NULL,
+  splits JSONB NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked', 'completed')),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_version_programs_rights_holder ON version_programs(rights_holder_wallet);
+
 CREATE TABLE IF NOT EXISTS submissions (
   id TEXT PRIMARY KEY,
   artist_wallet TEXT NOT NULL,
@@ -39,6 +53,10 @@ CREATE TABLE IF NOT EXISTS submissions (
   content_type TEXT NOT NULL,
   fee_quote_usdc TEXT NOT NULL,
   cover_svg TEXT,
+  program_id TEXT REFERENCES version_programs(id),
+  authorization_status TEXT CHECK (authorization_status IN ('pending_approval', 'approved', 'rejected')),
+  authorized_at TIMESTAMP,
+  lineage JSONB,
   status TEXT NOT NULL DEFAULT 'pending_payment',
   payment_tx_hash TEXT,
   payment_verified_at TIMESTAMP,
@@ -152,7 +170,7 @@ CREATE TABLE IF NOT EXISTS published_versions (
   tempo_consensus TEXT,
   aggregated_mood_tags JSONB,
   rating_count INTEGER NOT NULL,
-  catalog_source TEXT NOT NULL DEFAULT 'live' CHECK (catalog_source IN ('demo', 'live')),
+  catalog_source TEXT NOT NULL DEFAULT 'live' CHECK (catalog_source IN ('demo', 'live', 'authorized')),
   published_at TIMESTAMP NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_published_at ON published_versions(published_at);
@@ -339,7 +357,7 @@ CREATE TABLE IF NOT EXISTS match_feedback (
   brief_hash TEXT NOT NULL,
   brief_text TEXT NOT NULL,
   submission_id TEXT NOT NULL REFERENCES published_versions(submission_id),
-  catalog_source TEXT NOT NULL DEFAULT 'live' CHECK (catalog_source IN ('demo', 'live')),
+  catalog_source TEXT NOT NULL DEFAULT 'live' CHECK (catalog_source IN ('demo', 'live', 'authorized')),
   fit_score_shown REAL NOT NULL,
   rank_shown INTEGER,
   verdict TEXT NOT NULL,

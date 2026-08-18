@@ -11,11 +11,14 @@ export type RecipientRole = 'curator' | 'platform' | 'musicbrainz';
 
 // Catalog provenance describes where a take came from. It is intentionally
 // separate from version type, ranking quality, and rights clearance.
-export type CatalogSource = 'demo' | 'live';
+// 'authorized' = published from a submission inside an artist-authorized
+// version program (pilot) — the one source where pre-clearance is a fact
+// (consent recorded per version) rather than an assumption.
+export type CatalogSource = 'demo' | 'live' | 'authorized';
 export type CatalogMode = 'guided_demo' | 'live_catalog' | 'mixed';
 export interface CatalogProvenance {
   source: CatalogSource;
-  label: 'Guided demo' | 'Live catalog';
+  label: 'Guided demo' | 'Live catalog' | 'Authorized program';
   description: string;
 }
 
@@ -92,11 +95,12 @@ export interface SettlementLeg {
 // `why_fits` citations). See src/services/feed.ts.
 export interface BriefSearchLicenseAvailability {
   // Demo tracks are intentionally preview-only; live tracks can enter the
-  // authenticated workflow. Neither state represents rights clearance.
+  // authenticated workflow. Authorized-program tracks are the only state
+  // where clearance is recorded per version ('cleared').
   status: 'demo_preview' | 'requestable';
   reason: string;
   clearance: {
-    status: 'unverified';
+    status: 'unverified' | 'cleared';
     reason: string;
   };
 }
@@ -117,12 +121,57 @@ export interface BriefSearchLicenseQuote {
 // the specific evidence still required for a final license explicit so a
 // supervisor can distinguish a requestable workflow from a cleared outcome.
 export interface BriefSearchLicensingEvidence {
-  status: 'sample_only' | 'rights_review_required';
+  status: 'sample_only' | 'rights_review_required' | 'program_cleared';
   summary: string;
   outstanding: Array<{
     requirement: 'rights_authority' | 'scope_and_restrictions' | 'final_quote';
     description: string;
   }>;
+}
+
+// ── Authorized version programs (pilot) ────────────────
+// MODULAR: the consent record + royalty waterfall for an artist-authorized
+// version program. The concierge pilot mirrors ONE lawyer-drafted agreement
+// per program; these shapes are the structured slice of that agreement that
+// the platform needs to gate, evidence, and settle. Canonical definitions —
+// schema.jsonb and services both consume these.
+export type ProgramStatus = 'active' | 'revoked' | 'completed';
+export type AuthorizationStatus = 'pending_approval' | 'approved' | 'rejected';
+
+export interface ConsentPolicy {
+  allowed_transformations: string[]; // e.g. ['alt_vocals', 'remix', 'mood_flip']
+  prohibited: string[];
+  territories: string[]; // ['worldwide'] or ISO codes
+  term_months: number;
+  revocable: boolean;
+  model_training_allowed: boolean;
+  notes?: string; // free-text summary of the signed agreement
+  agreement_ref?: string; // pointer to the signed document (path/URL)
+}
+
+// One leg of the per-use royalty waterfall. share_bps is basis points; legs
+// must sum to exactly 10000 (100%).
+export interface RoyaltySplit {
+  wallet: string;
+  label: string; // 'artist' | 'creator' | 'publisher' | 'platform' | ...
+  share_bps: number;
+}
+
+// Derivative-version provenance: how this version was made and from what.
+export interface VersionLineage {
+  creator_tools: string[]; // tool-agnostic labels, e.g. ['suno', 'manual_mix']
+  source_version_ids: string[]; // upstream versions/stems used, if any
+  notes?: string;
+}
+
+// Read-side gate for the license route: is this version still inside an
+// active, artist-approved program? Derived at read time so a program
+// revocation stops new licenses immediately without touching old rows.
+export interface ProgramGate {
+  program_id: string;
+  program_status: ProgramStatus;
+  rights_holder_wallet: string;
+  authorization_status: AuthorizationStatus | null;
 }
 
 export interface BriefSearchRow {

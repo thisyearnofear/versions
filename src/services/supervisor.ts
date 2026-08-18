@@ -276,7 +276,9 @@ function rowToMatchFeedback(row: typeof matchFeedbackTable.$inferSelect): MatchF
     brief_hash: row.briefHash,
     brief_text: row.briefText,
     submission_id: row.submissionId,
-    catalog_source: row.catalogSource === 'live' ? 'live' : 'demo',
+    // MODULAR: preserve the full CatalogSource — 'authorized' feedback is
+    // the highest-value ground-truth row for the outcome graph.
+    catalog_source: row.catalogSource === 'authorized' ? 'authorized' : row.catalogSource === 'live' ? 'live' : 'demo',
     fit_score_shown: row.fitScoreShown,
     rank_shown: row.rankShown,
     verdict: row.verdict as MatchFeedbackVerdict,
@@ -534,7 +536,9 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
     async recordMatchFeedback(input) {
       await ensureProfile(input.supervisorWallet);
       const version = await getVersionRow(input.submissionId);
-      const catalogSource: CatalogSource = version?.catalogSource === 'live' ? 'live' : 'demo';
+      const catalogSource: CatalogSource = version?.catalogSource === 'authorized'
+        ? 'authorized'
+        : version?.catalogSource === 'live' ? 'live' : 'demo';
       const now = new Date();
       const [row] = await db
         .insert(matchFeedbackTable)
@@ -596,7 +600,9 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
     async createLicense(input) {
       await ensureProfile(input.supervisorWallet);
       const version = await getVersionRow(input.submissionId);
-      if (!version || version.catalogSource !== 'live') return null; // only explicit live takes can create binding licenses
+      // 'demo' takes are preview-only; 'live' and 'authorized' can create
+      // binding licenses (authorized adds the program gate at the route).
+      if (!version || version.catalogSource === 'demo') return null;
       const fee = licenseFeeUsdc(input.usageType);
       const now = new Date();
       const [row] = await db

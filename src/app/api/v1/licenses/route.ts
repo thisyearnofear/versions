@@ -48,6 +48,37 @@ export async function POST(req: NextRequest) {
       'Guided-demo takes support a non-binding preview only and cannot create a license job or settlement.',
     );
   }
+  // MODULAR: pilot pre-clearance gate. Authorized versions are licensable
+  // only while their program is active and the version is still
+  // artist-approved — a revocation or rejection blocks new licenses at the
+  // money gate, not at search time.
+  if (version.version.catalogSource === 'authorized') {
+    const gate = version.program;
+    if (!gate) {
+      return errorResponse(
+        requestId,
+        409,
+        'PROGRAM_NOT_FOUND',
+        'This version references an authorized-version program that no longer exists.',
+      );
+    }
+    if (gate.program_status !== 'active') {
+      return errorResponse(
+        requestId,
+        409,
+        'PROGRAM_NOT_ACTIVE',
+        `The authorizing program is ${gate.program_status}; this version is no longer pre-cleared.`,
+      );
+    }
+    if (gate.authorization_status !== 'approved') {
+      return errorResponse(
+        requestId,
+        409,
+        'VERSION_NOT_APPROVED',
+        'The artist has not approved this version for licensing.',
+      );
+    }
+  }
   const license = await svc.supervisor.createLicense({
     supervisorWallet: identity.wallet,
     submissionId: parsed.data.submissionId,

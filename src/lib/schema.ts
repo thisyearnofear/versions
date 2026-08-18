@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, text, integer, real, timestamp, index, unique, uniqueIndex, jsonb, boolean, customType, check } from 'drizzle-orm/pg-core';
-import type { AgentDetail } from './types';
+import type { AgentDetail, AuthorizationStatus, ConsentPolicy, ProgramStatus, RoyaltySplit, VersionLineage } from './types';
 
 // MODULAR: pgvector custom column type. Stores a float array that
 // Postgres treats as a `vector(N)` column when the pgvector extension
@@ -61,6 +61,16 @@ export const submissions = pgTable('submissions', {
 
   feeQuoteUsdc: text('fee_quote_usdc').notNull(),
   coverSvg: text('cover_svg'),
+  // MODULAR: authorized-version program lineage (pilot). When set, this
+  // submission is a derivative version produced under an artist-authorized
+  // consent program. authorizationStatus is the artist's per-version gate:
+  // only 'approved' versions publish as catalog_source 'authorized' (and
+  // therefore carry pre-clearance). lineage records derivative provenance
+  // (tools + upstream versions) for audit. NULL on all non-program takes.
+  programId: text('program_id').references(() => versionPrograms.id),
+  authorizationStatus: text('authorization_status').$type<AuthorizationStatus | null>(), // pending_approval|approved|rejected
+  authorizedAt: timestamp('authorized_at'),
+  lineage: jsonb('lineage').$type<VersionLineage | null>(),
   status: text('status').notNull().default('pending_payment'), // pending_payment|awaiting_curation|in_curation|published|rejected
   paymentTxHash: text('payment_tx_hash'),
   paymentVerifiedAt: timestamp('payment_verified_at'),
@@ -80,6 +90,32 @@ export const submissions = pgTable('submissions', {
   // double-click race in case the lookup SELECT misses (rare but
   // possible across parallel workers in the same cold-start).
   unique('uq_audio_sha256_wallet').on(table.audioSha256, table.artistWallet),
+]);
+
+// ── Authorized Version Programs (pilot) ───────────────
+// MODULAR: one row per artist-authorized version program — the consent
+// record + royalty waterfall for a pilot. A submission links to a program
+// via submissions.program_id; when it publishes with authorizationStatus
+// 'approved', published_versions.catalog_source becomes 'authorized' (the
+// one source where pre-clearance is a recorded fact, not an assumption).
+// The concierge pilot mirrors ONE lawyer-drafted agreement per program; the
+// jsonb columns are the structured slice of that agreement the platform
+// needs to gate, evidence, and settle. Canonical shapes: src/lib/types.ts.
+export const versionPrograms = pgTable('version_programs', {
+  id: text('id').primaryKey(),
+  rightsHolderWallet: text('rights_holder_wallet').notNull(),
+  sourceTitle: text('source_title').notNull(),
+  sourceArtist: text('source_artist').notNull(),
+  musicbrainzId: text('musicbrainz_id'),
+  consentPolicy: jsonb('consent_policy').notNull().$type<ConsentPolicy>(),
+  splits: jsonb('splits').notNull().$type<RoyaltySplit[]>(),
+  status: text('status').notNull().default('active').$type<ProgramStatus>(), // active|revoked|completed
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_version_programs_rights_holder').on(table.rightsHolderWallet),
+  check('version_programs_status_check', sql`${table.status} IN ('active', 'revoked', 'completed')`),
+  check('version_programs_splits_check', sql`jsonb_array_length(${table.splits}) >= 1`),
 ]);
 
 // ── Curator Claims ─────────────────────────────────────
@@ -206,12 +242,14 @@ export const publishedVersions = pgTable('published_versions', {
   ratingCount: integer('rating_count').notNull(),
   // Catalog provenance is independent of version_type and rights clearance.
   // Default live so newly published artist submissions cannot silently inherit
-  // the guided-demo behavior used by deterministic seed data.
-  catalogSource: text('catalog_source').notNull().default('live'), // demo | live
+  // the guided-demo behavior used by deterministic seed data. 'authorized'
+  // is set only when publishing an approved submission inside an active
+  // version program (see publish.ts).
+  catalogSource: text('catalog_source').notNull().default('live'), // demo | live | authorized
   publishedAt: timestamp('published_at').notNull(),
 }, (table) => [
   index('idx_published_at').on(table.publishedAt),
-  check('published_versions_catalog_source_check', sql`${table.catalogSource} IN ('demo', 'live')`),
+  check('published_versions_catalog_source_check', sql`${table.catalogSource} IN ('demo', 'live', 'authorized')`),
 ]);
 
 // ── A&R Playlists ──────────────────────────────────────
@@ -466,8 +504,10 @@ export const matchFeedback = pgTable('match_feedback', {
   briefText: text('brief_text').notNull(),
   submissionId: text('submission_id').notNull().references(() => publishedVersions.submissionId),
   // Snapshot the source at feedback time so later catalog edits cannot mix
-  // guided-demo judgments into the production ranking benchmark.
-  catalogSource: text('catalog_source').notNull().default('live'), // demo | live
+  // guided-demo judgments into the production ranking benchmark. Includes
+  // 'authorized' — supervisor verdicts on artist-authorized versions are
+  // the highest-value ground-truth rows for the outcome graph.
+  catalogSource: text('catalog_source').notNull().default('live'), // demo | live | authorized
   fitScoreShown: real('fit_score_shown').notNull(),
   rankShown: integer('rank_shown'),
   verdict: text('verdict').notNull(), // good_fit | wrong_fit
@@ -477,7 +517,7 @@ export const matchFeedback = pgTable('match_feedback', {
   unique('uq_match_feedback_super_brief_sub').on(table.supervisorWallet, table.briefHash, table.submissionId),
   index('idx_match_feedback_brief_hash').on(table.briefHash),
   index('idx_match_feedback_verdict_created').on(table.verdict, table.createdAt),
-  check('match_feedback_catalog_source_check', sql`${table.catalogSource} IN ('demo', 'live')`),
+  check('match_feedback_catalog_source_check', sql`${table.catalogSource} IN ('demo', 'live', 'authorized')`),
 ]);
 
 // ── Licenses ────────────────────────────────────────────

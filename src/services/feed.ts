@@ -30,6 +30,8 @@ import {
   publishedVersions as pvTable,
   settlementLegs as legsTable,
   placementBriefs as briefsTable,
+  submissions as subsTable,
+  versionPrograms as vpTable,
 } from '../lib/schema';
 import { cached } from '../lib/cache';
 import { createEmbeddingAdapter, type EmbeddingAdapter } from '../adapters/embedding';
@@ -40,7 +42,7 @@ import {
   LICENSE_USAGE_TYPES,
   licenseFeeUsdc,
 } from '../lib/pricing';
-import type { CatalogMode, CatalogSource, Energy, Tempo, BriefSearchRow } from '../lib/types';
+import type { CatalogMode, CatalogSource, Energy, Tempo, BriefSearchRow, ProgramGate } from '../lib/types';
 
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 100;
@@ -79,6 +81,10 @@ export interface FeedListResult {
 export interface FeedVersionResult {
   version: typeof pvTable.$inferSelect;
   settlement_legs: Array<typeof legsTable.$inferSelect>;
+  // MODULAR: pilot gate for authorized versions — the live program state
+  // behind the version's consent (null for non-program takes). Read at
+  // request time so a revocation stops new licenses immediately.
+  program: ProgramGate | null;
 }
 
 export interface FeedService {
@@ -269,23 +275,34 @@ export function normalizeTimestamp(value: unknown): Date | null {
 
 // MODULAR: licensing and catalog source are related operational states, but
 // distinct facts. A demo take can be useful for guided evaluation without
-// being able to create a license, job, or settlement.
+// being able to create a license, job, or settlement. 'authorized' is the
+// third, rights-recorded source — an approved version inside an active
+// artist-authorized program.
 function catalogSourceFor(version: typeof pvTable.$inferSelect): CatalogSource {
+  if (version.catalogSource === 'authorized') return 'authorized';
   return version.catalogSource === 'live' ? 'live' : 'demo';
 }
 
 function buildCatalogProvenance(source: CatalogSource): BriefSearchRow['catalog'] {
-  return source === 'demo'
-    ? {
-        source,
-        label: 'Guided demo',
-        description: 'Sample catalog data for evaluating the brief-to-match workflow. It cannot create a license or settlement.',
-      }
-    : {
-        source,
-        label: 'Live catalog',
-        description: 'Catalog data supplied for the live workflow. Rights clearance remains independently unverified unless evidenced.',
-      };
+  if (source === 'demo') {
+    return {
+      source,
+      label: 'Guided demo',
+      description: 'Sample catalog data for evaluating the brief-to-match workflow. It cannot create a license or settlement.',
+    };
+  }
+  if (source === 'authorized') {
+    return {
+      source,
+      label: 'Authorized program',
+      description: 'A version produced under an artist-authorized consent program. Consent and royalty splits are recorded per version.',
+    };
+  }
+  return {
+    source,
+    label: 'Live catalog',
+    description: 'Catalog data supplied for the live workflow. Rights clearance remains independently unverified unless evidenced.',
+  };
 }
 
 function buildLicenseAvailability(source: CatalogSource): BriefSearchRow['license_availability'] {
@@ -296,6 +313,16 @@ function buildLicenseAvailability(source: CatalogSource): BriefSearchRow['licens
       clearance: {
         status: 'unverified',
         reason: 'Demo catalog data does not include auditable rights-clearance evidence.',
+      },
+    };
+  }
+  if (source === 'authorized') {
+    return {
+      status: 'requestable',
+      reason: 'Artist-authorized version inside an active consent program; licensing is gated on the program remaining active and the version staying approved.',
+      clearance: {
+        status: 'cleared',
+        reason: 'Artist consent is recorded for this version under its authorized-version program (scope: the program consent policy).',
       },
     };
   }
@@ -325,6 +352,42 @@ function buildLicenseQuote(source: CatalogSource): BriefSearchRow['license_quote
 // decision aid. This must remain derived from actual catalog state: it never
 // upgrades a take to cleared or a quote to final merely because it ranked well.
 function buildLicensingEvidence(source: CatalogSource): BriefSearchRow['licensing_evidence'] {
+  if (source === 'demo') {
+    return {
+      status: 'sample_only',
+      summary: 'Guided-demo data contains no rights evidence; its schedule is illustrative only.',
+      outstanding: [
+        {
+          requirement: 'rights_authority' as const,
+          description: 'Confirm the authority to license every required right for this take.',
+        },
+        {
+          requirement: 'scope_and_restrictions' as const,
+          description: 'Record territory, term, media scope, and any restrictions or exclusions.',
+        },
+        {
+          requirement: 'final_quote' as const,
+          description: 'Issue a rights-aware final quote before treating the license as cleared.',
+        },
+      ],
+    };
+  }
+  if (source === 'authorized') {
+    // MODULAR: rights authority + scope are recorded in the program's consent
+    // policy, so only the final rights-aware quote remains outstanding. This
+    // must stay derived from program state — the license route re-checks the
+    // gate (program active + version approved) before a job can open.
+    return {
+      status: 'program_cleared',
+      summary: 'Artist consent and scope are recorded under this version\u2019s authorized program. A rights-aware final quote is still issued per license.',
+      outstanding: [
+        {
+          requirement: 'final_quote' as const,
+          description: 'Issue a rights-aware final quote before treating the license as cleared.',
+        },
+      ],
+    };
+  }
   const outstanding = [
     {
       requirement: 'rights_authority' as const,
@@ -339,17 +402,11 @@ function buildLicensingEvidence(source: CatalogSource): BriefSearchRow['licensin
       description: 'Issue a rights-aware final quote before treating the license as cleared.',
     },
   ];
-  return source === 'demo'
-    ? {
-        status: 'sample_only',
-        summary: 'Guided-demo data contains no rights evidence; its schedule is illustrative only.',
-        outstanding,
-      }
-    : {
-        status: 'rights_review_required',
-        summary: 'This live-catalog take is requestable, but rights authority, scope, and final terms still require review.',
-        outstanding,
-      };
+  return {
+    status: 'rights_review_required',
+    summary: 'This live-catalog take is requestable, but rights authority, scope, and final terms still require review.',
+    outstanding,
+  };
 }
 
 // ── Semantic search pure functions (Phase 4) ───────────
@@ -698,7 +755,35 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
         .from(legsTable)
         .where(eq(legsTable.submissionId, submissionId))
         .orderBy(legsTable.recipientRole, legsTable.id);
-      return { version, settlement_legs: legs };
+      // MODULAR: resolve the program gate for authorized versions. Two small
+      // indexed lookups (submission by PK, program by PK) — cheaper than a
+      // join and this path is per-license, not per-search.
+      let program: ProgramGate | null = null;
+      const [sub] = await db
+        .select({ programId: subsTable.programId, authorizationStatus: subsTable.authorizationStatus })
+        .from(subsTable)
+        .where(eq(subsTable.id, submissionId))
+        .limit(1);
+      if (sub?.programId) {
+        const [prog] = await db
+          .select({
+            id: vpTable.id,
+            status: vpTable.status,
+            rightsHolderWallet: vpTable.rightsHolderWallet,
+          })
+          .from(vpTable)
+          .where(eq(vpTable.id, sub.programId))
+          .limit(1);
+        if (prog) {
+          program = {
+            program_id: prog.id,
+            program_status: prog.status,
+            rights_holder_wallet: prog.rightsHolderWallet,
+            authorization_status: sub.authorizationStatus ?? null,
+          };
+        }
+      }
+      return { version, settlement_legs: legs, program };
     },
 
     async searchByBrief(args: BriefSearchArgs): Promise<BriefSearchResult> {
