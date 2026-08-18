@@ -164,6 +164,22 @@ export interface VersionLineage {
   notes?: string;
 }
 
+// Audio features extracted from the source audio for agent scoring.
+// Used to make agent ratings defensible — the agents evaluate actual
+// audio characteristics (tempo, energy, key, loudness, etc.) rather
+// than relying solely on creator-supplied metadata.
+export interface AudioFeatures {
+  tempo: number | null;          // BPM
+  key: string | null;            // e.g. "Am", "C#m", "Bb"
+  energy: number | null;         // 0-1 (high energy / low energy)
+  danceability: number | null;   // 0-1 (danceable / not)
+  acousticness: number | null;   // 0-1 (acoustic / electronic)
+  loudness: number | null;       // dB (typically -60 to 0)
+  instrumentalness: number | null; // 0-1 (instrumental / vocal)
+  valence: number | null;        // 0-1 (positive / negative mood)
+  _raw?: Record<string, unknown>; // ffmpeg probe data, for future processing
+}
+
 // Read-side gate for the license route: is this version still inside an
 // active, artist-approved program? Derived at read time so a program
 // revocation stops new licenses immediately without touching old rows.

@@ -247,4 +247,33 @@ export async function publishSubmission(
       distinctCurators,
     };
   }, { label: `publishSubmission:${submissionId}` });
+
+  // MODULAR: fire-and-forget audio feature extraction. If this submission
+  // has audio but no features, we extract them asynchronously. This does
+  // NOT block the publish transaction — it runs after the transaction
+  // commits. If extraction fails, the review pipeline still works with
+  // metadata-only input (agents get a note in the prompt).
+  // The extraction reads audioDurationSeconds from `sub` (snapshot from
+  // before the transaction), so it's safe to reference after the await.
+  if (!sub.audioFeatures) {
+    (async () => {
+      try {
+        const { extractAudioFeatures } = await import('../lib/audio-features');
+        const apiUrl = process.env.EMBEDDING_API_URL?.trim();
+        const features = await extractAudioFeatures(sub.audioPath, undefined, apiUrl || undefined);
+        await db
+          .update(submissionsTable)
+          .set({ audioFeatures: features })
+          .where(eq(submissionsTable.id, submissionId));
+        log.info('audio features extracted', { submissionId });
+      } catch (err) {
+        // Best-effort — don't block the publish. Agent review falls back
+        // to metadata-only (agents are prompted accordingly).
+        log.warn('audio feature extraction failed (review will use metadata only)', {
+          submissionId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
+  }
 }

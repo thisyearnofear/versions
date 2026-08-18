@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, text, integer, real, timestamp, index, unique, uniqueIndex, jsonb, boolean, customType, check } from 'drizzle-orm/pg-core';
-import type { AgentDetail, AuthorizationStatus, ConsentPolicy, ProgramStatus, RoyaltySplit, VersionLineage } from './types';
+import type { AgentDetail, AuthorizationStatus, AudioFeatures, ConsentPolicy, ProgramStatus, RoyaltySplit, VersionLineage } from './types';
 
 // MODULAR: pgvector custom column type. Stores a float array that
 // Postgres treats as a `vector(N)` column when the pgvector extension
@@ -71,6 +71,11 @@ export const submissions = pgTable('submissions', {
   authorizationStatus: text('authorization_status').$type<AuthorizationStatus | null>(), // pending_approval|approved|rejected
   authorizedAt: timestamp('authorized_at'),
   lineage: jsonb('lineage').$type<VersionLineage | null>(),
+  // Audio features extracted from the source audio for agent scoring.
+  // Populated at publish time by the feature extraction pipeline.
+  // Agents receive these features alongside metadata to make their
+  // "sync fit" ratings defensible (not just metadata guesses).
+  audioFeatures: jsonb('audio_features').$type<AudioFeatures | null>(),
   status: text('status').notNull().default('pending_payment'), // pending_payment|awaiting_curation|in_curation|published|rejected
   paymentTxHash: text('payment_tx_hash'),
   paymentVerifiedAt: timestamp('payment_verified_at'),

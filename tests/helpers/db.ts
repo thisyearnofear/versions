@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS submissions (
   authorization_status TEXT CHECK (authorization_status IN ('pending_approval', 'approved', 'rejected')),
   authorized_at TIMESTAMP,
   lineage JSONB,
+  audio_features JSONB,
   status TEXT NOT NULL DEFAULT 'pending_payment',
   payment_tx_hash TEXT,
   payment_verified_at TIMESTAMP,

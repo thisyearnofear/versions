@@ -28,7 +28,9 @@ export const AGENT_NAMES: AgentName[] = ['production', 'performance', 'market'];
 
 export const SYSTEM_PROMPTS: Record<AgentName, string> = {
   production: `You are a music production critic specializing in audio quality, mix, and mastering.
-Analyze the track metadata and provide a structured review.
+
+Analyze the track metadata and audio features. Use the audio features (tempo, energy, key, loudness, etc.) to make your rating — do not guess at audio characteristics from metadata alone.
+
 Output ONLY valid JSON with these exact fields:
 {
   "solo_intensity": <integer 1-10>,
@@ -39,7 +41,9 @@ Output ONLY valid JSON with these exact fields:
   "notes": "<2-3 sentences of production feedback>"
 }`,
   performance: `You are a performance critic specializing in vocal delivery, instrumental feel, and emotional impact.
-Analyze the track metadata and provide a structured review.
+
+Analyze the track metadata and audio features. Use the audio features (energy, danceability, valence, instrumentalness, etc.) to make your rating — do not guess at audio characteristics from metadata alone.
+
 Output ONLY valid JSON with these exact fields:
 {
   "solo_intensity": <integer 1-10>,
@@ -52,6 +56,8 @@ Output ONLY valid JSON with these exact fields:
   market: `You are a music industry analyst specializing in market fit, audience targeting, and placement strategy.
 
 Specifically, you are preparing a track's "inverse-search" profile: a film/TV supervisor pastes a brief in plain English, VERSIONS embeds the brief, and returns tracks whose placement_brief matches. Your job is to MAXIMIZE RECALL against supervisor briefs without sacrificing precision.
+
+Analyze the track metadata and audio features. Use the audio features (tempo, energy, key, danceability, instrumentalness, etc.) to calibrate your placement brief.
 
 Output ONLY valid JSON with these exact fields:
 {
@@ -92,7 +98,28 @@ export function buildUserPrompt(submission: {
   description: string | null;
   audio_duration_seconds: number | null;
   musicbrainz_id: string | null;
+  // MODULAR: audio features extracted from the source audio.
+  // Used by the three agents to make defensible ratings — when audio
+  // features are present, agents score the actual audio characteristics
+  // rather than guessing from metadata. When absent, agents fall back
+  // to metadata only (with a note to the supervisor that clearance is
+  // based on metadata, not audio).
+  audio_features: import('../lib/types').AudioFeatures | null;
 }): string {
+  const features = submission.audio_features;
+  const featureLine = features
+    ? `Audio features: ${[ 
+        features.tempo ? `${features.tempo} BPM` : null,
+        features.key ? `key ${features.key}` : null,
+        features.energy !== null ? `energy ${features.energy.toFixed(2)}` : null,
+        features.danceability !== null ? `danceability ${features.danceability.toFixed(2)}` : null,
+        features.acousticness !== null ? `acousticness ${features.acousticness.toFixed(2)}` : null,
+        features.loudness !== null ? `loudness ${features.loudness.toFixed(1)} dB` : null,
+        features.instrumentalness !== null ? `instrumentalness ${features.instrumentalness.toFixed(2)}` : null,
+        features.valence !== null ? `valence ${features.valence.toFixed(2)}` : null,
+      ].filter(Boolean).join(', ')}`
+    : 'Audio features not available (rating based on metadata only).';
+
   return `Review this track submission:
 
 Title: ${submission.title}
@@ -102,6 +129,7 @@ Genre: ${submission.genre || 'unspecified'}
 Mood: ${submission.mood || 'unspecified'}
 Description: ${submission.description || 'none provided'}
 Audio duration: ${submission.audio_duration_seconds || 'unknown'}s
+${featureLine}
 MusicBrainz ID: ${submission.musicbrainz_id || 'none'}
 
 Provide your structured review as JSON.`;
@@ -343,6 +371,7 @@ export function createAgentService({
             description: sub.description,
             audio_duration_seconds: sub.audioDurationSeconds,
             musicbrainz_id: sub.musicbrainzId,
+            audio_features: sub.audioFeatures ?? null,
           }),
           agentName,
           genre: sub.genre || 'rock',
