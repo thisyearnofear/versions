@@ -663,6 +663,11 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
     // the hybrid score reorders. Re-sort by hybrid score DESC, then
     // by publishDate DESC for stable tiebreaking.
     // MODULAR: write debug output to file for Next.js standalone
+    debugLines.push(`[DEBUG] Total scored: ${scored.length}`);
+    scored.forEach(s => {
+      const src = s.version.catalogSource === 'authorized' ? 'AUTH' : s.version.catalogSource;
+      debugLines.push(`  SCORED: ${src} ${s.version.submissionId} score=${s.score}`);
+    });
     try {
       appendFileSync('/tmp/feed-debug.log', debugLines.join('\n') + '\n');
     } catch {}
