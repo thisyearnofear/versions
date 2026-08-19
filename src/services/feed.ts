@@ -578,6 +578,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
         ratingCount: row.rating_count as number,
         catalogSource: row.catalog_source as string,
         aggregatedMoodTags: row.aggregated_mood_tags as string[] | null,
+        familyId: (row.family_id as string | null) ?? null,
         // MODULAR: raw db.execute returns `timestamp` columns as strings
         // (node-postgres), not Date objects — normalize so daysSince()
         // and the tiebreak sort's `.getTime()` don't throw.
@@ -658,6 +659,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
     status: ProgramStatus;
     rightsHolderWallet: string;
     authStatus: AuthorizationStatus | null;
+    authorizedAt: Date | null;
     consentPolicy: ConsentPolicy;
     splits: RoyaltySplit[];
     lineage: VersionLineage | null;
@@ -673,6 +675,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
         id: subsTable.id,
         programId: subsTable.programId,
         authStatus: subsTable.authorizationStatus,
+        authorizedAt: subsTable.authorizedAt,
         lineage: subsTable.lineage,
         audioFeatures: subsTable.audioFeatures,
       })
@@ -711,6 +714,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
         status: prog.status as ProgramStatus,
         rightsHolderWallet: prog.rightsHolderWallet,
         authStatus: sub.authStatus,
+        authorizedAt: sub.authorizedAt,
         consentPolicy: prog.consentPolicy as ConsentPolicy,
         splits: prog.splits as RoyaltySplit[],
         lineage: sub.lineage,
@@ -811,7 +815,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
           programStatus: prog.status,
           rightsHolderWallet: prog.rightsHolderWallet,
           authorizationStatus: prog.authStatus,
-          authorizedAt: null, // would need authorization timestamp from submissions table
+          authorizedAt: prog.authorizedAt?.toISOString?.() ?? null,
           consentPolicy: prog.consentPolicy,
           splits: prog.splits,
           lineage: prog.lineage,
@@ -955,6 +959,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
                 pv.audio_path, pv.cover_svg, pv.avg_solo_intensity,
                 pv.avg_vocal_quality, pv.energy_consensus, pv.tempo_consensus,
                 pv.rating_count, pv.catalog_source, pv.aggregated_mood_tags, pv.published_at,
+                pv.family_id,
                 pb.scene_tags, pb.instruments, pb.emotional_arcs,
                 pb.sync_comparables, pb.audience_summary,
                 COALESCE(1 - (ve.embedding <=> ${embStr}::vector), 0) AS similarity
