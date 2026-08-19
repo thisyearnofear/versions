@@ -1001,12 +1001,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
           .orderBy(desc(pvTable.publishedAt))
           .limit(500);
 
-        log.info('structured search candidates', {
-          total: candidates.length,
-          withBrief: candidates.filter(c => c.brief).length,
-          authorized: candidates.filter(c => c.version.catalogSource === 'authorized').length,
-          authorizedWithBrief: candidates.filter(c => c.version.catalogSource === 'authorized' && c.brief).length,
-        });
+        console.log('[DEBUG] structured search candidates:', candidates.length, 'total,', candidates.filter(c => c.brief).length, 'with brief,', candidates.filter(c => c.version.catalogSource === 'authorized').length, 'authorized');
 
         return await scoreStructuredResults(candidates, args, tokens, safeLimit, safeOffset);
       }, ['feed-update']);
