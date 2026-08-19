@@ -787,6 +787,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
         rating_count: s.version.ratingCount,
         aggregated_mood_tags: s.version.aggregatedMoodTags,
         published_at: s.version.publishedAt?.toISOString?.() ?? null,
+        family_id: s.version.familyId ?? undefined,
         catalog: buildCatalogProvenance(source),
         fit_score: Math.round(s.score * 100) / 100,
         why_fits: s.why_fits,

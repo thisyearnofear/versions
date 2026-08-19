@@ -252,6 +252,11 @@ export const publishedVersions = pgTable('published_versions', {
   // version program (see publish.ts).
   catalogSource: text('catalog_source').notNull().default('live'), // demo | live | authorized
   publishedAt: timestamp('published_at').notNull(),
+  // MODULAR: version family grouping for authorized derivative versions.
+  // When set, this submission is part of a version family (alternate takes,
+  // remixes, derivative versions of the same source song). Enables DiscoverView
+  // to group related versions together with expandable sibling panels.
+  familyId: text('family_id'),
 }, (table) => [
   index('idx_published_at').on(table.publishedAt),
   check('published_versions_catalog_source_check', sql`${table.catalogSource} IN ('demo', 'live', 'authorized')`),

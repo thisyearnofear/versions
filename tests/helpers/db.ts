@@ -172,7 +172,8 @@ CREATE TABLE IF NOT EXISTS published_versions (
   aggregated_mood_tags JSONB,
   rating_count INTEGER NOT NULL,
   catalog_source TEXT NOT NULL DEFAULT 'live' CHECK (catalog_source IN ('demo', 'live', 'authorized')),
-  published_at TIMESTAMP NOT NULL
+  published_at TIMESTAMP NOT NULL,
+  family_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_published_at ON published_versions(published_at);
 

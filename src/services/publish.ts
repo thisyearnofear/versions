@@ -128,6 +128,13 @@ export async function publishSubmission(
       catalogSource:
         sub.programId && sub.authorizationStatus === 'approved' ? 'authorized' : 'live',
       publishedAt: new Date(),
+      // MODULAR: inherit family_id from the source version in lineage.
+      // If this is a derivative version, we use the lineage's source_version_ids
+      // to group related takes together in the DiscoverView.
+      familyId:
+        sub.programId && sub.authorizationStatus === 'approved' && sub.lineage?.source_version_ids?.length
+          ? `${sub.lineage.source_version_ids![0].slice(0, 8)}-versions`
+          : null,
     };
 
     const inserted = await db
