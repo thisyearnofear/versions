@@ -24,6 +24,7 @@ import { AgentTrace } from "@/components/discovery/AgentTrace";
 import { SceneCard } from "@/components/discovery/SceneCard";
 import { AgentThinkingPulse, FitScorePop, SuccessCheck } from "@/components/discovery/motion";
 import { PipelineStepper } from "@/components/economy/PipelineStepper";
+import { ConsentLineagePanel } from "@/components/supervisor/ConsentLineage";
 
 const BRIEF_REFINEMENTS = [
   { id: "no-vocals", label: "no vocals", instruction: "no vocals, instrumental" },
@@ -390,6 +391,9 @@ function MatchSearch() {
                         familyId={best.family_id}
                         familyCount={familyCount}
                       />
+                      {best.program && (
+                        <ConsentLineagePanel data={best.program} />
+                      )}
                       {siblings.length > 0 && (
                         <VersionFamilySiblings
                           siblings={siblings}
@@ -425,6 +429,9 @@ function MatchSearch() {
                         isAuthenticated={isAuthenticated}
                         requireAuth={requireAuth}
                       />
+                      {r.program && (
+                        <ConsentLineagePanel data={r.program} />
+                      )}
                     </motion.div>,
                   );
                   idx++;

@@ -219,6 +219,26 @@ export interface BriefSearchRow {
     sync_comparables: Array<{ name: string; why: string }>;
     audience_summary: string;
   };
+  // MODULAR: pilot program data for authorized versions. Only populated when
+  // catalog.source === 'authorized'. Enables the consent lineage visualization.
+  program?: {
+    programId: string;
+    programStatus: ProgramStatus;
+    rightsHolderWallet: string;
+    authorizationStatus: AuthorizationStatus | null;
+    authorizedAt: string | null;
+    consentPolicy: ConsentPolicy;
+    splits: RoyaltySplit[];
+    lineage: VersionLineage | null;
+    audioFeatures: AudioFeatures | null;
+    agentScores: Array<{
+      agent: string;
+      detail: AgentDetail;
+      why_fits: string[];
+    }>;
+    licenseCount: number;
+    totalSettled: number;
+  };
 }
 
 export interface BriefSearchResponse {

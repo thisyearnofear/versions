@@ -42,7 +42,8 @@ import {
   LICENSE_USAGE_TYPES,
   licenseFeeUsdc,
 } from '../lib/pricing';
-import type { CatalogMode, CatalogSource, Energy, Tempo, BriefSearchRow, ProgramGate } from '../lib/types';
+import type { CatalogMode, CatalogSource, Energy, Tempo, BriefSearchRow, ProgramGate, ProgramStatus, AuthorizationStatus, ConsentPolicy, RoyaltySplit, VersionLineage, AgentDetail, AudioFeatures } from '../lib/types';
+import { agentReviews as reviewTable } from '../lib/schema';
 
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 100;
@@ -480,13 +481,13 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
   // MODULAR: extracted from the inline loop so both the fallback
   // path and the test suite can call it directly. Pure function
   // over already-fetched candidate rows.
-  function scoreStructuredResults(
+  async function scoreStructuredResults(
     candidates: Array<{ version: typeof pvTable.$inferSelect; brief: typeof briefsTable.$inferSelect | null }>,
     args: BriefSearchArgs,
     tokens: string[],
     safeLimit: number,
     safeOffset: number,
-  ): BriefSearchResult {
+  ): Promise<BriefSearchResult> {
     type Scored = {
       version: typeof pvTable.$inferSelect;
       brief: typeof briefsTable.$inferSelect;
@@ -535,7 +536,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
       const bTs = b.version.publishedAt?.getTime() ?? 0;
       return bTs - aTs;
     });
-    return buildResult(scored, safeLimit, safeOffset);
+    return await buildResult(scored, safeLimit, safeOffset);
   }
 
   // ── Hybrid semantic + structured-tag scorer (Phase 4) ──
@@ -544,13 +545,13 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
   // row so we get `why_fits` citations. The hybrid score combines
   // semantic similarity (primary) with structured-tag overlap
   // (secondary) + popularity/recency tiebreakers.
-  function scoreSemanticResults(
+  async function scoreSemanticResults(
     rows: Array<Record<string, unknown>>,
     args: BriefSearchArgs,
     tokens: string[],
     safeLimit: number,
     safeOffset: number,
-  ): BriefSearchResult {
+  ): Promise<BriefSearchResult> {
     type Scored = {
       version: typeof pvTable.$inferSelect;
       brief: typeof briefsTable.$inferSelect;
@@ -648,15 +649,106 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
       return bTs - aTs;
     });
 
-    return buildResult(scored, safeLimit, safeOffset);
+    return await buildResult(scored, safeLimit, safeOffset);
+  }
+
+  // ── Enrich authorized versions with program data ─────────
+  interface ProgramEnrichment {
+    id: string;
+    status: ProgramStatus;
+    rightsHolderWallet: string;
+    authStatus: AuthorizationStatus | null;
+    consentPolicy: ConsentPolicy;
+    splits: RoyaltySplit[];
+    lineage: VersionLineage | null;
+    audioFeatures: AudioFeatures | null;
+    reviews: Array<{ agentName: string; detail: AgentDetail }>;
+  }
+
+  async function fetchProgramData(submissionIds: string[]): Promise<Record<string, ProgramEnrichment>> {
+    if (submissionIds.length === 0) return {};
+
+    const subRows = await db
+      .select({
+        id: subsTable.id,
+        programId: subsTable.programId,
+        authStatus: subsTable.authorizationStatus,
+        lineage: subsTable.lineage,
+        audioFeatures: subsTable.audioFeatures,
+      })
+      .from(subsTable)
+      .where(sql`${subsTable.id} = ANY(${submissionIds})`);
+
+    const programIds = Array.from(new Set(subRows.map((s) => s.programId).filter(Boolean) as string[]));
+    let progRows: Array<{
+      id: string;
+      status: string;
+      rightsHolderWallet: string;
+      consentPolicy: unknown;
+      splits: unknown;
+    }> = [];
+    if (programIds.length > 0) {
+      progRows = await db
+        .select({
+          id: vpTable.id,
+          status: vpTable.status,
+          rightsHolderWallet: vpTable.rightsHolderWallet,
+          consentPolicy: vpTable.consentPolicy,
+          splits: vpTable.splits,
+        })
+        .from(vpTable)
+        .where(sql`${vpTable.id} = ANY(${programIds})`);
+    }
+
+    const progById = new Map(progRows.map((p) => [p.id, p]));
+    const enriched: Record<string, ProgramEnrichment> = {};
+
+    for (const sub of subRows) {
+      const prog = sub.programId ? progById.get(sub.programId) : null;
+      if (!prog) continue;
+      enriched[sub.id] = {
+        id: prog.id,
+        status: prog.status as ProgramStatus,
+        rightsHolderWallet: prog.rightsHolderWallet,
+        authStatus: sub.authStatus,
+        consentPolicy: prog.consentPolicy as ConsentPolicy,
+        splits: prog.splits as RoyaltySplit[],
+        lineage: sub.lineage,
+        audioFeatures: sub.audioFeatures as AudioFeatures | null,
+        reviews: [],
+      };
+    }
+
+    if (Object.keys(enriched).length > 0) {
+      const reviewRows = await db
+        .select({
+          submissionId: reviewTable.submissionId,
+          agentName: reviewTable.agentName,
+          detail: reviewTable.detail,
+        })
+        .from(reviewTable)
+        .where(sql`${reviewTable.submissionId} = ANY(${Object.keys(enriched)})`);
+
+      for (const r of reviewRows) {
+        const entry = enriched[r.submissionId];
+        if (entry) {
+          entry.reviews.push({
+            agentName: r.agentName,
+            detail: r.detail ?? { fit_score: 5, metric: 5, metric_label: '', note: '' },
+          });
+        }
+      }
+    }
+
+    return enriched;
   }
 
   // ── Shared result builder ──────────────────────────────
-  function buildResult(
+  async function buildResult(
     scored: Array<{ version: typeof pvTable.$inferSelect; brief: typeof briefsTable.$inferSelect; score: number; why_fits: string[] }>,
     safeLimit: number,
     safeOffset: number,
-  ): BriefSearchResult {
+  ): Promise<BriefSearchResult> {
     const total = scored.length;
     const demoResultCount = scored.filter((s) => catalogSourceFor(s.version) === 'demo').length;
     const liveResultCount = total - demoResultCount;
@@ -668,9 +760,20 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
           ? 'guided_demo'
           : 'mixed';
     const sliced = scored.slice(safeOffset, safeOffset + safeLimit);
+
+    // ── Enrich authorized versions with program data ──────────
+    const authorizedIds = sliced
+      .filter((s) => catalogSourceFor(s.version) === 'authorized')
+      .map((s) => s.version.submissionId);
+
+    let programMap: Record<string, ProgramEnrichment> = {};
+    if (authorizedIds.length > 0) {
+      programMap = await fetchProgramData(authorizedIds);
+    }
+
     const rows: BriefSearchRow[] = sliced.map((s) => {
       const source = catalogSourceFor(s.version);
-      return {
+      const row: BriefSearchRow = {
         submission_id: s.version.submissionId,
         title: s.version.title,
         artist_name: s.version.artistName,
@@ -698,6 +801,31 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
           audience_summary: s.brief.audienceSummary,
         },
       };
+
+      // Enrich with program data for authorized versions
+      if (source === 'authorized' && row.submission_id in programMap) {
+        const prog = programMap[row.submission_id];
+        row.program = {
+          programId: prog.id,
+          programStatus: prog.status,
+          rightsHolderWallet: prog.rightsHolderWallet,
+          authorizationStatus: prog.authStatus,
+          authorizedAt: null, // would need authorization timestamp from submissions table
+          consentPolicy: prog.consentPolicy,
+          splits: prog.splits,
+          lineage: prog.lineage,
+          audioFeatures: prog.audioFeatures,
+          agentScores: (prog.reviews ?? []).map((r) => ({
+            agent: r.agentName,
+            detail: r.detail ?? { fit_score: 5, metric: 5, metric_label: '', note: '' },
+            why_fits: s.why_fits.slice(0, 2),
+          })),
+          licenseCount: 0, // placeholder — can be enriched from settlement
+          totalSettled: 0,
+        };
+      }
+
+      return row;
     });
     return {
       total,
@@ -838,7 +966,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
             `);
 
             if (semanticCandidates.rows && semanticCandidates.rows.length > 0) {
-              return scoreSemanticResults(semanticCandidates.rows, args, tokens, safeLimit, safeOffset);
+              return await scoreSemanticResults(semanticCandidates.rows, args, tokens, safeLimit, safeOffset);
             }
           } catch (err) {
             // MODULAR: fail-open — log and fall through to the
@@ -865,7 +993,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
           .orderBy(desc(pvTable.publishedAt))
           .limit(500);
 
-        return scoreStructuredResults(candidates, args, tokens, safeLimit, safeOffset);
+        return await scoreStructuredResults(candidates, args, tokens, safeLimit, safeOffset);
       }, ['feed-update']);
     },
   };
