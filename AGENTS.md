@@ -180,12 +180,25 @@ Conventions when touching this surface:
   back to a cleaned label, never raw JSON. Record new events in
   `src/services/cases.ts` alongside the state transition that caused
   them — the thread must never narrate state it can't prove.
-- **Refresh is key-bump + gentle poll.** The parent bumps
+- **Refresh is key-bump + gentle poll + live SSE.** The parent bumps
   `threadRefreshKey` on search/shortlist/license; while expanded the
-  thread polls every 10s so async transitions (Arc settlement) land
-  in-thread. Don't add SSE here — the outbox already covers receipts.
+  thread polls every 10s; and the thread subscribes to the shared SSE
+  settlement stream so a split leg landing on Arc for a shortlisted
+  take flashes in-thread instantly (transient — the durable `settled`
+  case event is the permanent record; the outbox stays source of
+  truth). Don't add a second SSE route here.
 - **Guest-friendly.** Cases work wallet-free (guest pseudo-wallet via
   `resolveSupervisorIdentity`); the thread renders for any searcher.
+
+## A/B family compare (FamilyCompare)
+
+Version families with 2+ takes render a `FamilyCompare` transport
+(`src/components/discovery/FamilyCompare.tsx`) under the family group:
+the best match (A) and first sibling (B) share ONE player — play/pause,
+one position bar, and an A/B switch that preserves playback position so
+the supervisor hears the same moment under both takes. This is the
+authorized wedge's decision moment; keep it position-preserving and
+self-contained (two `<audio>` elements, no global state).
 
 ## Durable receipt outbox (outbox_events)
 

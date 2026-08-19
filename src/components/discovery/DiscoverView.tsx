@@ -846,6 +846,13 @@ function MatchRow({
     try {
       await apiClient.addInterest({ submissionId: row.submission_id }).catch(() => {});
       onShortlisted(row.submission_id);
+      // MODULAR: attach the licensed take to the EXPLICIT case so the
+      // case thread's live-settlement flash can match it by submissionId.
+      if (caseId) {
+        void apiClient
+          .addCaseShortlist({ caseId, submissionId: row.submission_id, fitScore: row.fit_score, rank })
+          .catch(() => {});
+      }
       const { license } = await apiClient.createLicense({
         submissionId: row.submission_id,
         briefHash: matchBriefHash(brief),
