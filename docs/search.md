@@ -68,6 +68,12 @@ signals (semantic weight 0.7; structured weight 0.3). OpenRouter embeds
 catalog text (title plus placement brief), not raw audio. Set
 `EMBEDDING_API_URL` for CLAP audio vectors.
 
+The semantic query LEFT JOINs `version_embeddings`, so versions without
+an embedding yet (newly published takes, authorized pilot data seeded
+before backfill) still surface: they receive similarity 0, sort last
+(`NULLS LAST`), and rank purely on their structured-tag score in the
+hybrid scorer. Backfill closes the gap:
+
 ```bash
 npm run db:pgvector
 curl -X POST http://localhost:3000/api/v1/embeddings/backfill

@@ -130,6 +130,22 @@ renders: consent → lineage → approval → audio features → agent scores �
 settlement waterfall. When `BriefSearchRow.program` is present, the panel
 is rendered below the MatchRow.
 
+### Wire-format gotchas (learned the hard way)
+
+- **Semantic search must LEFT JOIN `version_embeddings`.** Authorized
+  pilot versions seeded before embedding backfill have no embedding row;
+  an inner JOIN silently drops them from `/discover/brief`. Use
+  `COALESCE(similarity, 0)` + `ORDER BY ... NULLS LAST` so they rank by
+  structured-tag score instead.
+- **Never write `sql\`col = ANY(${array})\`` in Drizzle.** It renders as
+  `ANY(($1, $2))` — a row constructor, not an array — and throws at
+  runtime. Use `inArray(col, values)` from `drizzle-orm`. This bug was
+  latent in `fetchProgramData` and only fired once authorized versions
+  actually surfaced (empty arrays never executed the query).
+- The semantic path returns raw snake_case rows; keep `family_id` in the
+  SELECT list or version-family grouping silently breaks for authorized
+  rows.
+
 ## Durable receipt outbox (outbox_events)
 
 The in-process EventBus is fire-and-forget — it can drop a receipt if the
