@@ -16,7 +16,7 @@ export default function SupervisorPage() {
             <PageIntro
               eyebrow="Your workspace"
               title="The decisions that need you."
-              intro="Active briefs, shortlists, and licenses in one place. The agent does the legwork and brings you only the matches and approvals that need your judgment."
+              intro="Cases, shortlists, and licenses in one place — plus the library. The agent does the legwork and brings you only what needs your judgment."
             />
             <Suspense
               fallback={

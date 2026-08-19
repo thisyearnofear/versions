@@ -146,6 +146,20 @@ is rendered below the MatchRow.
   SELECT list or version-family grouping silently breaks for authorized
   rows.
 
+## Information architecture (three doors)
+
+The nav is organized around jobs, not modules — three doors:
+
+- **Search** (`/discover`) — the supervisor job: brief → ranked takes.
+- **Workspace** (`/supervisor`) — cases, shortlists, licenses, AND the
+  library as tabs (`?tab=library` embeds `FeedView`; decisions is the
+  default tab). `/feed` is a redirect to `/supervisor?tab=library` —
+  keep it alive for deep links, don't rebuild it as a page.
+- **For Artists** (`/submit`) — the supply side.
+
+`/agents` (system proof) is demoted out of the primary rail. When adding
+a surface, ask which door it belongs to before adding a fourth.
+
 ## Case thread (placement case as conversation)
 
 The supervisor job (brief → licensed track) renders as ONE continuous

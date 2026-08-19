@@ -11,7 +11,7 @@ export function SiteFooter() {
           <span className="text-[var(--color-ink-3)]">Jobs ·</span>
           <Link href="/supervisor" className="hover:text-[var(--color-rust)]">Workspace</Link>
           <Link href="/discover" className="hover:text-[var(--color-rust)]">New Brief</Link>
-          <Link href="/feed" className="hover:text-[var(--color-rust)]">Library</Link>
+          <Link href="/supervisor?tab=library" className="hover:text-[var(--color-rust)]">Library</Link>
           <Link href="/submit" className="hover:text-[var(--color-rust)]">For Artists</Link>
           <span className="text-[var(--color-ink-3)]">· System &amp; proof ·</span>
           <Link href="/agents" className="hover:text-[var(--color-rust)]">Agent activity</Link>

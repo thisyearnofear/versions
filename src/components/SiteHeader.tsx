@@ -6,15 +6,16 @@ import { track } from "@/lib/analytics";
 
 // Primary navigation is organised around jobs, not product modules. A user
 // should never ask "which tool do I use?" — only "what am I trying to get
-// done?". Public proof surfaces (agent activity, arc, github) are demoted
-// out of the primary rail.
-export type HeaderRoute = "workspace" | "brief" | "library" | "artists" | "agents";
+// done?". Three doors: Search (the supervisor job), Workspace (cases,
+// shortlists, licenses, and the library), Artists (supply). Public proof
+// surfaces (agent activity, arc, github) are demoted out of the primary
+// rail.
+export type HeaderRoute = "workspace" | "brief" | "artists" | "agents";
 
 export function SiteHeader({ active }: { active?: HeaderRoute }) {
   const jobs = [
-    { id: "workspace", label: "Workspace", href: "/supervisor", title: "Active briefs, shortlists, and decisions awaiting you" },
-    { id: "brief", label: "New Brief", href: "/discover", title: "Start a placement case" },
-    { id: "library", label: "Library", href: "/feed", title: "Tracks, briefs, and prior work" },
+    { id: "brief", label: "Search", href: "/discover", title: "Describe the scene — the agents rank the catalog" },
+    { id: "workspace", label: "Workspace", href: "/supervisor", title: "Cases, shortlists, licenses, and the library" },
     { id: "artists", label: "For Artists", href: "/submit", title: "Hand an alternate take to your Release Agent" },
   ] as const;
 

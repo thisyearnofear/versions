@@ -975,7 +975,7 @@ function MatchRow({
 
               <details className="mt-3" role="group" aria-label={`Match feedback for ${row.title}`}>
                 <summary className="cursor-pointer font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
-                  Help tune future matches
+                  Feedback
                 </summary>
                 <p className="mt-2 font-serif text-[13px] text-[var(--color-ink-2)]">Would you put this under the brief?</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -1113,7 +1113,7 @@ function MatchRow({
                   >
                     <div className="mt-3 pt-3 border-t border-[var(--color-hair)]">
                       <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] mb-2">
-                        Usage type · {isDemo ? 'sample guided-demo schedule' : 'indicative platform quote on Arc USDC'}
+                        Usage type
                       </p>
                       <div className="flex flex-wrap gap-1.5 mb-3">
                         {quoteOptions.map((option) => (

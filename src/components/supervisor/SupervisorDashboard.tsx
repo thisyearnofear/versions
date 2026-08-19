@@ -12,7 +12,9 @@ import { AgentStackPanel } from "@/components/supervisor/AgentStackPanel";
 import { LicensesSection } from "@/components/supervisor/LicensesSection";
 import { PlacementCasesPanel } from "@/components/supervisor/PlacementCasesPanel";
 import { MatchBenchmarkPanel } from "@/components/supervisor/MatchBenchmarkPanel";
+import { FeedView } from "@/components/feed/FeedView";
 import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
+import { cn } from "@/lib/utils";
 import { LICENSE_FEES, type LicenseUsageType } from "@/lib/pricing";
 import { matchBriefHash } from "@/lib/match-benchmark";
 
@@ -39,6 +41,16 @@ export function SupervisorDashboard() {
   const [recentSearchesTotal, setRecentSearchesTotal] = useState(0);
 
   const briefFromUrl = searchParams.get("brief")?.trim();
+  // MODULAR: IA consolidation — the Workspace absorbs the library as a
+  // tab (?tab=library) instead of a separate /feed room. /feed redirects
+  // here. Decisions is the default tab.
+  const tab = searchParams.get("tab") === "library" ? "library" : "decisions";
+  const setTab = (next: "decisions" | "library") => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "library") params.set("tab", "library");
+    else params.delete("tab");
+    router.replace(`/supervisor${params.toString() ? `?${params.toString()}` : ""}`, { scroll: false });
+  };
   const isBriefSaved = briefFromUrl
     ? savedBriefs.some((b) => b.brief_text.trim() === briefFromUrl)
     : true;
@@ -132,6 +144,32 @@ export function SupervisorDashboard() {
 
   return (
     <div className="flex flex-col gap-2">
+      {/* MODULAR: workspace tabs — Decisions (cases, shortlists, licenses)
+          and Library (the reviewed catalog, formerly /feed). */}
+      <div className="mb-4 flex items-center gap-1 border-b border-[var(--color-hair)]" role="tablist" aria-label="Workspace">
+        {(["decisions", "library"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
+            className={cn(
+              "px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] border-b-2 -mb-px transition-colors",
+              tab === t
+                ? "border-[var(--color-rust)] text-[var(--color-rust)]"
+                : "border-transparent text-[var(--color-ink-3)] hover:text-[var(--color-ink)]",
+            )}
+          >
+            {t === "decisions" ? "Decisions" : "Library"}
+          </button>
+        ))}
+      </div>
+
+      {tab === "library" ? (
+        <FeedView />
+      ) : (
+      <>
       {!isAuthenticated && (
         <div className="mb-6 border border-[var(--color-hair-strong)] rounded-sm p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3" role="note">
           <div>
@@ -299,6 +337,8 @@ export function SupervisorDashboard() {
         <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] py-4" role="status">
           Loading…
         </p>
+      )}
+      </>
       )}
     </div>
   );

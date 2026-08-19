@@ -18,7 +18,7 @@ export default function DiscoverPage() {
               <PageIntro
                 eyebrow="New brief"
                 title="Start a placement case."
-                intro="Tell VERSIONS what the picture needs. It ranks the alternate takes by fit and prepares the rights path — then brings you the decision."
+                intro="Describe the scene. The agents rank the catalog and bring you the decision."
               />
             </FadeIn>
             <FadeIn delay={0.1}>

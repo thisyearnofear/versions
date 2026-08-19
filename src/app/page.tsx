@@ -78,28 +78,6 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="border-b border-[var(--color-hair-strong)] px-6 py-14 md:py-20" aria-labelledby="scene-preview-title">
-          <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 flex-wrap">
-            <div>
-              <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-rust)]">
-                New · visual brief preview
-              </p>
-              <h2 id="scene-preview-title" className="font-serif text-2xl md:text-3xl font-black tracking-tight">
-                See the scene before you choose the take.
-              </h2>
-              <p className="mt-2 max-w-xl font-serif text-sm leading-snug text-[var(--color-ink-2)]">
-                Describe the picture in plain language. The brief becomes a quick storyboard, so you can judge whether the music is moving in the right direction before opening a full take.
-              </p>
-            </div>
-            <Link
-              href="/discover?brief=Tense%20neon-lit%20car%20chase%20at%20night%2C%20electronic%2C%20no%20vocals"
-              className="inline-flex shrink-0 bg-[var(--color-ink)] px-5 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-paper)] transition-colors hover:bg-[var(--color-rust)]"
-            >
-              Try the visual brief →
-            </Link>
-          </div>
-        </section>
-
         <section aria-label="Recent work published by the agents">
           <div className="px-6 pt-12 pb-4 text-center">
             <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]">
