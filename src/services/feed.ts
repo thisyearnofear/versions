@@ -944,6 +944,10 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
       const safeLimit = Math.min(BRIEF_MAX_LIMIT, Math.max(1, Number(args.limit) || DEFAULT_LIMIT));
       const safeOffset = Math.max(0, Number(args.offset) || 0);
       const key = briefCacheKey(args);
+      // MODULAR: debug - trace which search path is taken
+      try {
+        appendFileSync('/tmp/feed-debug.log', `[DEBUG brief] brief=${args.brief.slice(0,50)} mock=${embedding.mock} key=${key}\n`);
+      } catch {}
       return cached(key, FEED_CACHE_TTL_MS, async () => {
         const tokens = tokenize(args.brief);
         if (tokens.length === 0) {
