@@ -25,6 +25,7 @@
 //                        pgvector, no API key).
 
 import { and, eq, gte, lte, desc, sql, type SQL } from 'drizzle-orm';
+import { writeFileSync, appendFileSync } from 'fs';
 import { db } from '../lib/db';
 import {
   publishedVersions as pvTable,
@@ -567,6 +568,8 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
     };
 
     const scored: Scored[] = [];
+    const debugLines: string[] = [];
+    debugLines.push(`[DEBUG semantic] Processing ${rows.length} rows`);
     for (const row of rows) {
       // MODULAR: the pgvector query returns snake_case columns (raw
       // SQL, not Drizzle's camelCase mapping). Normalize into the
@@ -609,6 +612,11 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
       } as typeof briefsTable.$inferSelect;
 
       const similarity = row.similarity as number;
+
+      // MODULAR: debug - log authorized versions to file
+      if (row.catalog_source === 'authorized') {
+        debugLines.push(`[DEBUG] AUTH row: ${row.submission_id} similarity=${similarity} scene_tags=${JSON.stringify(row.scene_tags)}`);
+      }
 
       // Apply hard filters (same as structured path).
       if (args.sceneTags && args.sceneTags.length > 0) {
@@ -654,6 +662,11 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
     // MODULAR: already sorted by cosine distance from pgvector, but
     // the hybrid score reorders. Re-sort by hybrid score DESC, then
     // by publishDate DESC for stable tiebreaking.
+    // MODULAR: write debug output to file for Next.js standalone
+    try {
+      appendFileSync('/tmp/feed-debug.log', debugLines.join('\n') + '\n');
+    } catch {}
+
     scored.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
       const aTs = a.version.publishedAt?.getTime() ?? 0;
