@@ -38,6 +38,27 @@ VALUES
 ON CONFLICT (submission_id) DO UPDATE SET catalog_source = 'authorized', family_id = 'midnight-chromatics-family';
 
 -- 4. Agent reviews
+-- MODULAR: placement_briefs are required for the brief search to return rows.
+-- Create minimal briefs for authorized submissions.
+INSERT INTO placement_briefs (id, submission_id, agent_name, scene_tags, instruments, emotional_arcs, sync_comparables, audience_summary)
+VALUES
+  ('brief-auth-0001', 'sub-authorized-0001', 'market',
+   '["cinematic","ambient","dark mood","late night"]',
+   '["synth","ambient pads"]',
+   '["atmospheric build","spacious tension"]',
+   '[{"name":"Bon Iver — 22, A Million","why":"ambient studio textures"},{"name":"Hildur Guðnadóttur","why":"dark cinematic atmosphere"}]',
+   'Dark ambient for late-night cinematic scenes'),
+  ('brief-auth-0002', 'sub-authorized-0002', 'market',
+   '["cinematic","ambient","melancholic","spacious"]',
+   '["synth","ambient pads","droning"]',
+   '["introspective","melancholic build"]',
+   '[{"name":"Hammock","why":"melancholic ambient"},{"name":"Stars of the Lid","why":"spacious drone"}]',
+   'Melancholic ambient for introspective scenes')
+ON CONFLICT (submission_id) DO UPDATE SET
+  scene_tags = EXCLUDED.scene_tags,
+  instruments = EXCLUDED.instruments,
+  emotional_arcs = EXCLUDED.emotional_arcs,
+  audience_summary = EXCLUDED.audience_summary;
 INSERT INTO agent_reviews (id, submission_id, agent_name, curator_wallet, solo_intensity, vocal_quality, energy_vs_studio, tempo_feel, mood_tags, notes, raw_response, submitted_at)
 VALUES
   ('sub-authorized-0001-production', 'sub-authorized-0001', 'production', '${ARTIST_WALLET}', 7, 6, 'same', 'locked', '["dark","cinematic"]', 'Clean mix with good separation', '{}', NOW()),
