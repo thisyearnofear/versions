@@ -957,6 +957,11 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
             // (authorized pilot data, newly published takes) still
             // surface — they receive similarity 0 and fall back to
             // structured-tag ranking via the hybrid scorer.
+            // NOTE: the WHERE must handle NULL embeddings explicitly
+            // because NULL comparisons are always NULL (falsy).
+            const catalogSourceClause = args.catalogSource
+              ? sql`AND pv.catalog_source = ${args.catalogSource}`
+              : sql`AND (pv.catalog_source IS NULL OR pv.catalog_source != '')`;
             const semanticCandidates = await db.execute(sql`
               SELECT
                 pv.submission_id, pv.title, pv.artist_name, pv.version_type,
@@ -969,7 +974,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
               FROM published_versions pv
               LEFT JOIN version_embeddings ve ON ve.submission_id = pv.submission_id
               LEFT JOIN placement_briefs pb ON pb.submission_id = pv.submission_id
-              WHERE 1 - (ve.embedding <=> ${embStr}::vector) > -1
+              WHERE ve.embedding IS NOT NULL OR 1 = 1
               ${catalogSourceClause}
               ORDER BY ve.embedding <=> ${embStr}::vector NULLS LAST
               LIMIT 500
