@@ -384,9 +384,44 @@ corruption — the lockfile is complete under npm 11; CI now runs Node
 
 Audio-features extraction: the `extractAudioFeatures` pipeline tries a
 configured `EMBEDDING_API_URL` first (CLAP/ONNX model), then falls back
-to ffmpeg-only extraction (which provides duration/sample-rate/codec but
-not tempo/key/energy). For a defensible pilot, configure a model endpoint
-or run a local Chromagram extractor before the pilot launches.
+to a local ONNX chromagram extractor (BPM via onset autocorrelation, key
+via Krumhansl-Schmuckler correlation on DFT chromagram, energy/loudness
+from RMS), then to ffmpeg-only probe. Configure `EMBEDDING_API_URL` for
+full feature extraction (danceability, acousticness, instrumentalness,
+valence); the chromagram fallback provides tempo, key, energy, and
+loudness automatically without any additional dependencies.
+
+### Post-deploy verification — 2026-08-19 @ Phase 3 audio-aware + consent lineage
+
+Audio-aware evaluation rewrite + consent lineage visualization shipped.
+Verification against `https://versions.persidian.com`:
+
+| Probe | Result |
+|-------|--------|
+| Typecheck (`tsc --noEmit`) | ✅ clean |
+| Tests | ✅ 542 passed, 0 failed |
+| `GET /api/health/ready` | `llm: mock=False provider=venice`; all services ready |
+| Audio features extraction | 3-tier pipeline: API → chromagram (BPM, key, energy, loudness) → ffmpeg probe |
+| `BriefSearchRow.program` | Populated on `catalog.source: 'authorized'` — program_id, consent_policy, splits, lineage, agent_scores, audio_features |
+| `ConsentLineagePanel` | Renders consent → lineage → approval → audio features → agent scores → settlement waterfall |
+| Feed enrichment | Batch fetches version_programs, submissions, agent_reviews for authorized results |
+| Agent scoring | All three prompts include extracted audio features; fallback note when features absent |
+
+Env additions: no new env vars required — the chromagram extractor runs
+locally using existing ffmpeg. Set `EMBEDDING_API_URL` for full feature
+set (danceability, acousticness, instrumentalness, valence).
+
+### Post-deploy verification — 2026-08-18 @ Phase 2 version family grouping
+
+Version family grouping shipped. Verification:
+
+| Probe | Result |
+|-------|--------|
+| Typecheck (`tsc --noEmit`) | ✅ clean |
+| Tests | ✅ 542 passed, 0 failed |
+| `BriefSearchRow.family_id` | New optional field on search results |
+| `DiscoverView` results | Rows grouped by `family_id` with expandable sibling panel |
+| `MatchRow` props | Extended with `familyId` + `familyCount` for consent badge context |
 
 ### Post-deploy verification — 2026-08-18 @ Phase 1 UX improvements
 

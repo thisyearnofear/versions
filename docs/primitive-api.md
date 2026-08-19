@@ -58,7 +58,9 @@ provenance, a structured placement brief, `license_availability`,
 `license_quote`, and `licensing_evidence`. The response also has a `catalog`
 summary with its mode and live/demo result counts. `why_fits` is evidence from
 the available catalog-ranking signals; it is not an individual agent verdict or
-clearance claim.
+clearance claim. When `catalog.source` is `"authorized"`, the response also
+includes a `program` object with consent_policy, splits, lineage,
+audio_features, and agent_scores for the full consent lineage visualization.
 
 ```json
 { "success": true, "data": {
@@ -127,6 +129,17 @@ server-derived global platform schedule (currently worldwide for 12 months),
 not a negotiated, cleared, or final license offer. `licensing_evidence` turns
 that absence into an explicit decision checklist; its `outstanding` items are
 requirements, not claims that the evidence has been collected.
+
+`catalog.source: "authorized"` is a third catalog provenance, introduced for
+the artist-authorized version pilot. An authorized take publishes inside an
+active `version_program` with recorded consent policy, royalty splits, and
+artist approval. Its `clearance.status` is `"cleared"` (scope = program
+consent policy), `license_availability.status` is `"requestable"`, and a
+`program` object is included in the response with program_id, consent_policy,
+splits, lineage, agent_scores, and audio_features. The consent lineage is
+visualized in the DiscoverView with a `ConsentLineagePanel` component showing
+the full consent → lineage → approval → audio features → agent scores →
+settlement waterfall graph.
 
 ### 2. `POST /discover/brief/feedback` — record ground truth
 

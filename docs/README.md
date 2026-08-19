@@ -23,7 +23,7 @@ Guests search free. Shortlist and license need a wallet session.
 
 | Path | Role |
 |------|------|
-| `/discover` | Brief search (primary) |
+| `/discover` | Brief search (primary) — audio-aware agents, version family grouping, consent lineage |
 | `/supervisor` | Shortlist, licenses, treasury, agent stack |
 | `/submit` | Artist upload |
 | `/agents` | Live review queue — differentiated per-agent verdicts + sync-fit |

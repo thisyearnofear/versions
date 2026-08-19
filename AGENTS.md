@@ -108,6 +108,28 @@ field changes, update all of: `agent_reviews.detail` in `src/lib/schema.ts` (jso
 `src/components/curation/AgentMonitor.tsx`. Legacy rows without `detail` /
 `fit_score` must keep grading normally — gate UI rendering on field presence.
 
+## BriefSearchRow consent lineage and version families
+
+`BriefSearchRow` has three pilot additions that enable the authorized-version
+wedge:
+
+- **`family_id?: string`** — groups alternate takes / versions of the same
+  song. DiscoverView groups results by `family_id`; the best match renders as
+  the primary row, siblings are expandable via a chevron toggle.
+- **`program?: { programId, programStatus, rightsHolderWallet, ... }`** —
+  populated when `catalog.source === 'authorized'`. Contains the full
+  consent program data: consent_policy, splits, lineage, audio_features,
+  agent_scores. Renders as a `ConsentLineagePanel` below the match row in
+  DiscoverView.
+- **`audio_features: AudioFeatures | null`** on submissions — extracted at
+  publish time via the 3-tier pipeline (API → chromagram → ffmpeg).
+  Included in agent prompts for defensible audio-aware scoring.
+
+The `ConsentLineagePanel` component (src/components/supervisor/ConsentLineage.tsx)
+renders: consent → lineage → approval → audio features → agent scores →
+settlement waterfall. When `BriefSearchRow.program` is present, the panel
+is rendered below the MatchRow.
+
 ## Durable receipt outbox (outbox_events)
 
 The in-process EventBus is fire-and-forget — it can drop a receipt if the

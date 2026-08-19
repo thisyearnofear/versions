@@ -19,6 +19,17 @@ states:
 
 - **Match evidence:** `why_fits` identifies matching placement-brief metadata
   such as a scene, instrument, emotional arc, or audience-summary hit.
+  Inline `why_fits` chips (top 2) render below title/artist in the collapsed
+  row; hover-to-play (200ms debounced) auto-plays a snippet from the audio.
+- **Version families:** results sharing a `family_id` are grouped — the
+  best match renders as the primary row; siblings are expandable via a
+  chevron toggle showing "N versions in this family". Each sibling renders
+  a full MatchRow with snippet playback, scoring, shortlisting, and licensing.
+- **Agent scoring:** audio features (tempo, key, energy, loudness) are
+  extracted from each audio file at publish time and included in agent
+  prompts. Three-tier extraction: remote CLAP/ONNX endpoint → local ONNX
+  chromagram (BPM, key, energy, loudness) → ffmpeg probe. When features are
+  absent, the prompt notes: "rating based on metadata only."
 - **Human gate:** supervisors listen and confirm the opening, vocal space, and
   edit point against picture. VERSIONS does not manufacture a false
   creative-risk verdict when the scorer has not produced one.
@@ -33,6 +44,12 @@ states:
 - **Clearance disclosure:** every current result explicitly reports
   `clearance.status: "unverified"`. Publication, a wallet, a MusicBrainz ID,
   a placement brief, and curator-review counts are not rights clearance.
+- **Consent lineage (authorized versions):** when `catalog.source` is
+  `"authorized"`, a `ConsentLineagePanel` renders below the match row
+  showing the full consent → lineage → approval → audio features → agent
+  scores → settlement waterfall graph. This makes the moat visible: who
+  authorized what, what tools were used, what splits are in place, and what
+  the agents scored from actual audio.
 - **Ground truth:** a visible good-fit / wrong-direction judgment records the
   shown brief, rank, and score. That feedback feeds the match benchmark and
   later scorer tuning.
