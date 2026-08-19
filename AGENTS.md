@@ -146,6 +146,33 @@ is rendered below the MatchRow.
   SELECT list or version-family grouping silently breaks for authorized
   rows.
 
+## Case thread (placement case as conversation)
+
+The supervisor job (brief → licensed track) renders as ONE continuous
+surface: the durable placement case appears in-thread on `/discover`
+(`CaseThread` in `src/components/discovery/CaseThread.tsx`), collapsed
+to a status line, expanding into a chronological conversation — brief
+as the supervisor's opening message, every durable `case_events` row
+as a one-line agent reply.
+
+Conventions when touching this surface:
+
+- **Cases are keyed on the BASE brief.** Refinements ("darker", "no
+  vocals") re-run the search inside the SAME case — iteration, not a
+  new placement. `openCase` is idempotent per (supervisor, brief) via
+  the partial unique index on non-terminal statuses.
+- **Events are the source of truth for the thread.** Add new agent
+  voice lines in `eventMessage()` in CaseThread; unknown kinds fall
+  back to a cleaned label, never raw JSON. Record new events in
+  `src/services/cases.ts` alongside the state transition that caused
+  them — the thread must never narrate state it can't prove.
+- **Refresh is key-bump + gentle poll.** The parent bumps
+  `threadRefreshKey` on search/shortlist/license; while expanded the
+  thread polls every 10s so async transitions (Arc settlement) land
+  in-thread. Don't add SSE here — the outbox already covers receipts.
+- **Guest-friendly.** Cases work wallet-free (guest pseudo-wallet via
+  `resolveSupervisorIdentity`); the thread renders for any searcher.
+
 ## Durable receipt outbox (outbox_events)
 
 The in-process EventBus is fire-and-forget — it can drop a receipt if the
