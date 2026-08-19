@@ -341,26 +341,98 @@ function MatchSearch() {
           </div>
 
           <div role="list" aria-label="Match results" className="space-y-2">
-            {results.rows.map((r, i) => (
-              <motion.div
-                key={r.submission_id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: Math.min(i * 0.06, 0.4), duration: 0.3 }}
-              >
-                <MatchRow
-                  row={r}
-                  rank={i + 1}
-                  brief={effectiveBrief || brief}
-                  scoreDelay={Math.min(i * 0.06, 0.4) + 0.12}
-                  caseId={currentCaseId}
-                  isShortlisted={isAuthenticated && shortlistedIds.has(r.submission_id)}
-                  onShortlisted={markShortlisted}
-                  isAuthenticated={isAuthenticated}
-                  requireAuth={requireAuth}
-                />
-              </motion.div>
-            ))}
+            {(() => {
+              // Build family groups: rows sharing a family_id form a version family
+              // We preserve fit_score ranking: families appear where their best match would be
+              const familyGroups: Map<string, BriefSearchRow[]> = new Map();
+              results.rows.forEach((r) => {
+                if (r.family_id) {
+                  if (!familyGroups.has(r.family_id)) familyGroups.set(r.family_id, []);
+                  familyGroups.get(r.family_id)!.push(r);
+                }
+              });
+
+              const familySet = new Set(familyGroups.keys());
+              const renderedFamilies = new Set<string>();
+
+              // Walk results.rows in order, rendering each item or family group once
+              const items: React.ReactNode[] = [];
+              let idx = 0;
+              for (let i = 0; i < results.rows.length; i++) {
+                const r = results.rows[i];
+                const animDelay = Math.min(idx * 0.06, 0.4);
+                const rank = i + 1;
+
+                if (r.family_id && !renderedFamilies.has(r.family_id)) {
+                  renderedFamilies.add(r.family_id);
+                  const family = familyGroups.get(r.family_id)!;
+                  const best = family[0];
+                  const siblings = family.slice(1);
+                  const familyCount = family.length;
+
+                  items.push(
+                    <motion.div
+                      key={best.submission_id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: animDelay, duration: 0.3 }}
+                    >
+                      <MatchRow
+                        row={best}
+                        rank={rank}
+                        brief={effectiveBrief || brief}
+                        scoreDelay={animDelay + 0.12}
+                        caseId={currentCaseId}
+                        isShortlisted={isAuthenticated && shortlistedIds.has(best.submission_id)}
+                        onShortlisted={markShortlisted}
+                        isAuthenticated={isAuthenticated}
+                        requireAuth={requireAuth}
+                        familyId={best.family_id}
+                        familyCount={familyCount}
+                      />
+                      {siblings.length > 0 && (
+                        <VersionFamilySiblings
+                          siblings={siblings}
+                          brief={effectiveBrief || brief}
+                          scoreDelay={animDelay + 0.12}
+                          familyId={best.family_id!}
+                          familyCount={familyCount}
+                          shortlistedIds={shortlistedIds}
+                          onShortlisted={markShortlisted}
+                          isAuthenticated={isAuthenticated}
+                          requireAuth={requireAuth}
+                        />
+                      )}
+                    </motion.div>,
+                  );
+                  idx++;
+                } else {
+                  items.push(
+                    <motion.div
+                      key={r.submission_id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: animDelay, duration: 0.3 }}
+                    >
+                      <MatchRow
+                        row={r}
+                        rank={rank}
+                        brief={effectiveBrief || brief}
+                        scoreDelay={animDelay + 0.12}
+                        caseId={currentCaseId}
+                        isShortlisted={isAuthenticated && shortlistedIds.has(r.submission_id)}
+                        onShortlisted={markShortlisted}
+                        isAuthenticated={isAuthenticated}
+                        requireAuth={requireAuth}
+                      />
+                    </motion.div>,
+                  );
+                  idx++;
+                }
+              }
+
+              return items;
+            })()}
           </div>
 
           {caseSyncFailed && (
@@ -386,6 +458,85 @@ function MatchSearch() {
         </p>
       )}
     </section>
+  );
+}
+
+function VersionFamilySiblings({
+  siblings,
+  brief,
+  scoreDelay,
+  familyId,
+  familyCount,
+  shortlistedIds,
+  onShortlisted,
+  isAuthenticated,
+  requireAuth,
+}: {
+  siblings: BriefSearchRow[];
+  brief: string;
+  scoreDelay: number;
+  familyId: string;
+  familyCount: number;
+  shortlistedIds: Set<string>;
+  onShortlisted: (submissionId: string) => void;
+  isAuthenticated: boolean;
+  requireAuth: (returnTo?: string) => boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="ml-4 mt-1 pl-3 border-l border-[var(--color-hair)]">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="inline-flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
+        aria-expanded={expanded}
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          className={cn("transition-transform", expanded && "rotate-90")}
+          aria-hidden
+        >
+          <path d="M3.5 2l3 3-3 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        {siblings.length} version{siblings.length > 1 ? 's' : ''} in this family
+      </button>
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden mt-1 space-y-1"
+          >
+            {siblings.map((sibling, i) => (
+              <motion.div
+                key={sibling.submission_id}
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.04, duration: 0.2 }}
+              >
+                <MatchRow
+                  row={sibling}
+                  rank={0}
+                  brief={brief}
+                  scoreDelay={scoreDelay}
+                  isAuthenticated={isAuthenticated}
+                  requireAuth={requireAuth}
+                  onShortlisted={onShortlisted}
+                  isShortlisted={isAuthenticated && shortlistedIds.has(sibling.submission_id)}
+                  familyId={familyId}
+                  familyCount={familyCount}
+                />
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -431,6 +582,8 @@ function MatchRow({
   onShortlisted,
   isAuthenticated,
   requireAuth,
+  familyId,
+  familyCount,
 }: {
   row: BriefSearchRow;
   rank: number;
@@ -441,6 +594,8 @@ function MatchRow({
   onShortlisted: (submissionId: string) => void;
   isAuthenticated: boolean;
   requireAuth: (returnTo?: string) => boolean;
+  familyId?: string;
+  familyCount?: number;
 }) {
   const { showToast } = useToast();
   const [expanded, setExpanded] = useState(false);
@@ -455,6 +610,7 @@ function MatchRow({
   const quoteOptions = row.license_quote.usage_options.filter(({ usage_type }) => usage_type !== "other");
   const selectedQuote = row.license_quote.usage_options.find(({ usage_type }) => usage_type === usageType);
   const isDemo = row.catalog.source === 'demo';
+  const isAuthorized = row.catalog.source === 'authorized';
 
   // Hover-to-play snippet (10s)
   const snippetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -641,6 +797,18 @@ function MatchRow({
                 'font-mono text-[8px] uppercase tracking-[0.1em] px-1 py-0.5 rounded-sm',
                 isDemo ? 'bg-[var(--color-rust)] text-[var(--color-paper)]' : 'bg-[var(--color-paper-2)] text-[var(--color-ink-3)]',
               )}>{row.catalog.label}</span>
+              {/* Consent badge for authorized versions */}
+              {isAuthorized && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 bg-[var(--color-rust)]/10 border border-[var(--color-rust)]/40 cursor-help"
+                  title="Artist-authorized: rights holder consent recorded, splits defined, royalty waterfall active"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                    <path d="M5 0.5l1.2 2.5 2.7.4-2 1.9.5 2.7L5 6.2 2.6 8l.5-2.7-2-1.9 2.7-.4z" fill="var(--color-rust)" />
+                  </svg>
+                  <span className="font-mono text-[7px] uppercase tracking-[0.1em] text-[var(--color-rust)]">Authorized</span>
+                </span>
+              )}
             </div>
             {reason && (
               <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-ink-3)] truncate mt-0.5">
