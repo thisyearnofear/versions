@@ -24,15 +24,19 @@
 //   INGEST_ARTIST_PK   — artist wallet key; if unset, auto-generated
 //   INGEST_ARTIST_NAME — default "Demo Artist"
 
+// Load .env FIRST — tsx doesn't auto-load it, and db.ts throws if DATABASE_URL is missing
+import { config } from 'dotenv';
+config({ path: ['.env', '.env.local'] });
+
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { createPublicClient, http, type Address } from 'viem';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { eq, sql } from 'drizzle-orm';
-import { db } from './src/lib/db';
-import { submissions, publishedVersions, versionPrograms, agentReviews } from './src/lib/schema';
-import { extractAudioFeatures } from './src/lib/audio-features';
+import { db } from '../src/lib/db';
+import { submissions, publishedVersions, versionPrograms, agentReviews } from '../src/lib/schema';
+import { extractAudioFeatures } from '../src/lib/audio-features';
 
 // ── Constants ──────────────────────────────────────────────────
 

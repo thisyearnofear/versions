@@ -26,6 +26,7 @@
     "demo:signin": "tsx scripts/demo-signin.ts",
     "ingest:tracks": "tsx scripts/ingest-my-tracks.ts",
     "extract:features": "tsx scripts/extract-features.ts",
+    "seed:authorized-demo": "tsx scripts/seed-authorized-demo.ts",
     "check:arc": "tsx scripts/check-arc-live.ts",
     "benchmark": "tsx scripts/benchmark.ts",
     "primitive:demo": "tsx scripts/primitive-demo.ts",
