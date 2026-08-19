@@ -498,6 +498,13 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
     const scored: Scored[] = [];
     for (const c of candidates) {
       if (!c.brief) continue;
+      if (c.version.catalogSource === 'authorized') {
+        log.info('structured search: authorized candidate', {
+          id: c.version.submissionId?.slice(0, 12) || 'unknown',
+          briefSummary: c.brief.audienceSummary?.slice(0, 50),
+          scoreBreakdown: { scenes: c.brief.sceneTags?.length, instruments: c.brief.instruments?.length },
+        });
+      }
       const breakdown = scoreAgainstBrief(
         {
           sceneTags: c.brief.sceneTags,
@@ -993,6 +1000,13 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
           .leftJoin(briefsTable, eq(briefsTable.submissionId, pvTable.submissionId))
           .orderBy(desc(pvTable.publishedAt))
           .limit(500);
+
+        log.info('structured search candidates', {
+          total: candidates.length,
+          withBrief: candidates.filter(c => c.brief).length,
+          authorized: candidates.filter(c => c.version.catalogSource === 'authorized').length,
+          authorizedWithBrief: candidates.filter(c => c.version.catalogSource === 'authorized' && c.brief).length,
+        });
 
         return await scoreStructuredResults(candidates, args, tokens, safeLimit, safeOffset);
       }, ['feed-update']);
