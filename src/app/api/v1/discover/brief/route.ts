@@ -80,6 +80,7 @@ export async function GET(req: NextRequest) {
     const limit = parsePositiveIntParam(url.searchParams.get('limit'), BRIEF_DEFAULT_LIMIT, 50);
     const offset = parsePositiveIntParam(url.searchParams.get('offset'), 0);
 
+    console.log('[ROUTE DEBUG] Searching with brief:', briefRaw, 'limit:', limit);
     const result = await services().feed.searchByBrief({
       brief: briefRaw,
       sceneTags: splitCsv(url.searchParams.get('sceneTags')),
