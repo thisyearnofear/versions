@@ -22,6 +22,7 @@ import type { LicenseUsageType } from "@/lib/pricing";
 import { searchByBriefPaid, SCORE_FEE_USDC, type ScorePaymentReceipt } from "@/lib/x402-score-client";
 import { AgentTrace } from "@/components/discovery/AgentTrace";
 import { SceneCard } from "@/components/discovery/SceneCard";
+import { CaseThread } from "@/components/discovery/CaseThread";
 import { AgentThinkingPulse, FitScorePop, SuccessCheck } from "@/components/discovery/motion";
 import { PipelineStepper } from "@/components/economy/PipelineStepper";
 import { ConsentLineagePanel } from "@/components/supervisor/ConsentLineage";
@@ -75,6 +76,9 @@ function MatchSearch() {
   // sync failure instead of silently swallowing it.
   const [currentCaseId, setCurrentCaseId] = useState<string | null>(null);
   const [caseSyncFailed, setCaseSyncFailed] = useState(false);
+  // MODULAR: bumped on every case-relevant action (search, shortlist,
+  // license) so the CaseThread re-fetches its durable trail in place.
+  const [threadRefreshKey, setThreadRefreshKey] = useState(0);
 
   const runSearch = useCallback(async (text: string, opts?: { paid?: boolean; baseBrief?: string; logSearch?: boolean }) => {
     const trimmed = text.trim();
@@ -202,6 +206,7 @@ function MatchSearch() {
 
   const markShortlisted = useCallback((submissionId: string) => {
     setShortlistedIds((prev) => new Set(prev).add(submissionId));
+    setThreadRefreshKey((k) => k + 1);
   }, []);
 
   const applyRefinement = useCallback(
@@ -301,6 +306,13 @@ function MatchSearch() {
         <div>
           {showcasePilot && results.rows.some((r) => r.catalog.source === 'authorized') && (
             <ShowcaseRail />
+          )}
+          {currentCaseId && (
+            <CaseThread
+              caseId={currentCaseId}
+              briefText={effectiveBrief || brief}
+              refreshKey={threadRefreshKey}
+            />
           )}
           <AgentAnswer results={results} briefText={effectiveBrief || brief} />
 
