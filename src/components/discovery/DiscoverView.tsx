@@ -23,6 +23,7 @@ import { searchByBriefPaid, SCORE_FEE_USDC, type ScorePaymentReceipt } from "@/l
 import { AgentTrace } from "@/components/discovery/AgentTrace";
 import { SceneCard } from "@/components/discovery/SceneCard";
 import { CaseThread } from "@/components/discovery/CaseThread";
+import { FamilyCompare } from "@/components/discovery/FamilyCompare";
 import { AgentThinkingPulse, FitScorePop, SuccessCheck } from "@/components/discovery/motion";
 import { PipelineStepper } from "@/components/economy/PipelineStepper";
 import { ConsentLineagePanel } from "@/components/supervisor/ConsentLineage";
@@ -387,6 +388,24 @@ function MatchSearch() {
                       />
                       {best.program && (
                         <ConsentLineagePanel data={best.program} />
+                      )}
+                      {siblings.length > 0 && (
+                        <FamilyCompare
+                          a={{
+                            submissionId: best.submission_id,
+                            title: best.title,
+                            artistName: best.artist_name,
+                            audioSrc: `/api/v1/uploads/${best.audio_path?.split("/").pop() ?? ""}`,
+                            fitScore: best.fit_score,
+                          }}
+                          b={{
+                            submissionId: siblings[0].submission_id,
+                            title: siblings[0].title,
+                            artistName: siblings[0].artist_name,
+                            audioSrc: `/api/v1/uploads/${siblings[0].audio_path?.split("/").pop() ?? ""}`,
+                            fitScore: siblings[0].fit_score,
+                          }}
+                        />
                       )}
                       {siblings.length > 0 && (
                         <VersionFamilySiblings

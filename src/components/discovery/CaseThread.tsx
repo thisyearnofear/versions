@@ -11,9 +11,11 @@
 // While expanded it polls gently (10s) so async transitions — license
 // settlement on Arc — appear in-thread without a refresh.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiClient, type CaseEventRow, type PlacementCaseRow } from "@/lib/api-client";
+import { useSettlementEvents } from "@/lib/use-settlement-events";
+import type { SettlementEvent } from "@/lib/event-bus";
 import { cn } from "@/lib/utils";
 
 // MODULAR: event kind → agent voice. One line each, no paragraphs.
@@ -76,6 +78,10 @@ export function CaseThread({
   const [record, setRecord] = useState<{ case: PlacementCaseRow; events: CaseEventRow[] } | null>(null);
   const [failed, setFailed] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // MODULAR: live settlement flash — when a split leg lands on Arc for a
+  // take in this case, show it instantly instead of waiting for the poll.
+  const [liveSettlement, setLiveSettlement] = useState<SettlementEvent | null>(null);
 
   // MODULAR: fetch helper that only writes state inside promise
   // callbacks (never synchronously in an effect body — lint rule).
@@ -116,6 +122,37 @@ export function CaseThread({
     };
   }, [expanded, fetchInto]);
 
+  // MODULAR: live settlement via the shared SSE stream. A split leg whose
+  // submissionId belongs to this case's shortlist is the money moment —
+  // flash it in-thread immediately and refresh the durable trail.
+  const shortlistedIds = useMemo(
+    () => record?.case.evidence?.shortlisted?.map((s) => s.submissionId) ?? [],
+    [record],
+  );
+  const shortlistRef = useRef(shortlistedIds);
+  useEffect(() => {
+    shortlistRef.current = shortlistedIds;
+  }, [shortlistedIds]);
+
+  useSettlementEvents((event) => {
+    const inCase =
+      event.submissionId != null && shortlistRef.current.includes(event.submissionId);
+    if (!inCase) return;
+    setLiveSettlement(event);
+    const cancelled = { current: false };
+    fetchInto(cancelled);
+    // The flash is transient — the durable 'settled' event takes over.
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setLiveSettlement(null), 8_000);
+  });
+
+  // Clear any pending flash timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    };
+  }, []);
+
   if (failed && !record) return null;
 
   const c = record?.case;
@@ -139,6 +176,12 @@ export function CaseThread({
           {c && ` · ${c.ranked_count} ranked · ${c.shortlist_count} shortlisted`}
           {c?.license_id && " · license linked"}
         </span>
+        {liveSettlement && (
+          <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--color-rust)]">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-rust)] animate-pulse" aria-hidden="true" />
+            settled
+          </span>
+        )}
         <span className="shrink-0 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
           {expanded ? "Hide thread" : "Thread"}
         </span>
@@ -192,6 +235,21 @@ export function CaseThread({
                     Needs your judgment: {c.pending_decision}
                   </p>
                 </li>
+              )}
+              {/* MODULAR: live settlement flash — lands the moment a split
+                  leg settles on Arc for a take in this case. */}
+              {liveSettlement && (
+                <motion.li
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-start gap-2 border-t border-[var(--color-rust)]/40 pt-2"
+                >
+                  <span className="mt-0.5 shrink-0 font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--color-rust)] w-12">Agent</span>
+                  <p className="min-w-0 font-serif text-[13px] leading-snug text-[var(--color-rust)]">
+                    Settled on Arc — {liveSettlement.amountUsdc} USDC to {liveSettlement.recipientRole ?? "recipient"}
+                    {liveSettlement.txHash ? ` · ${liveSettlement.txHash.slice(0, 10)}…` : ""}
+                  </p>
+                </motion.li>
               )}
             </ol>
           </motion.div>
