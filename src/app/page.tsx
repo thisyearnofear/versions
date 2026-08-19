@@ -59,10 +59,10 @@ export default function Home() {
                   Start a brief →
                 </Link>
                 <Link
-                  href="/supervisor"
-                  className="border border-[var(--color-ink)] font-mono text-[10px] uppercase tracking-[0.16em] px-5 py-3 text-[var(--color-ink)] hover:bg-[var(--color-ink)] hover:text-[var(--color-paper)] transition-colors"
+                  href="/discover?brief=dark%20ambient%20cinematic&showcase=pilot"
+                  className="border border-[var(--color-rust)] font-mono text-[10px] uppercase tracking-[0.16em] px-5 py-3 text-[var(--color-rust)] hover:bg-[var(--color-rust)] hover:text-[var(--color-paper)] transition-colors"
                 >
-                  Open your workspace
+                  Watch the authorized pilot →
                 </Link>
               </div>
             </div>
@@ -201,7 +201,7 @@ function BriefSearchBar() {
         ))}
       </div>
       <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-        An agent opens your case · ranked in seconds · free to search · no sign-up
+        Free to search · no sign-up
       </p>
     </div>
   );

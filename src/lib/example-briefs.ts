@@ -15,6 +15,11 @@ export interface ExampleBrief {
 
 export const EXAMPLE_BRIEFS: ExampleBrief[] = [
   {
+    id: "pilot-authorized",
+    label: "Authorized pilot",
+    brief: "dark ambient cinematic",
+  },
+  {
     id: "neon-chase",
     label: "Neon chase",
     brief: "Tense neon-lit car chase at night, electronic, no vocals, building to a release around 1:30",

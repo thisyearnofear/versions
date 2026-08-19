@@ -4,7 +4,12 @@
 // Renders a timeline showing: consent → lineage → approval → agent scores →
 // licenses → settlement waterfall. Designed for the supervisor dashboard
 // and the /versions detail page.
+//
+// COMPACT: the panel defaults to a one-line summary (consent recorded ·
+// N-way split · authorized date) and expands into the full audit trail on
+// click. Outcome first, mechanism one click deep.
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type {
   ConsentPolicy,
@@ -40,41 +45,70 @@ export interface ConsentLineageData {
 // ── Public component ──────────────────────────────────────────
 
 export function ConsentLineagePanel({ data }: { data: ConsentLineageData }) {
+  const [expanded, setExpanded] = useState(false);
+  const walletShort = `${data.rightsHolderWallet.slice(0, 6)}…${data.rightsHolderWallet.slice(-4)}`;
+  const dateLabel = data.authorizedAt
+    ? new Date(data.authorizedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : null;
+
   return (
     <section
-      className="mt-6 border border-[var(--color-hair)] rounded-sm bg-[var(--color-paper)] overflow-hidden"
+      className="mt-2 border border-[var(--color-hair)] rounded-sm bg-[var(--color-paper)] overflow-hidden"
       aria-label="Consent lineage"
     >
-      <div className="px-4 py-2.5 border-b border-[var(--color-hair)] bg-[var(--color-paper-2)] flex items-center gap-2">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-          <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
-        <h3 className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-          Consent Lineage
-        </h3>
+      <button
+        type="button"
+        onClick={() => setExpanded((p) => !p)}
+        aria-expanded={expanded}
+        className="w-full px-3 py-2 flex items-center gap-2 text-left hover:bg-[var(--color-paper-2)] transition-colors"
+      >
+        <span className="text-[9px] leading-none text-[var(--color-rust)]" aria-hidden="true">◆</span>
+        <span className="flex-1 min-w-0 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-2)] truncate">
+          Consent recorded by {walletShort} · {data.splits.length}-way split
+          {dateLabel && ` · authorized ${dateLabel}`}
+        </span>
         <StatusBadge status={data.programStatus} />
-      </div>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          className={cn("shrink-0 text-[var(--color-ink-3)] transition-transform", expanded && "rotate-90")}
+          aria-hidden
+        >
+          <path d="M3.5 2l3 3-3 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
 
-      <div className="divide-y divide-[var(--color-hair)]">
-        {/* 1. Consent */}
-        <ConsentRow data={data} />
+      {expanded && (
+        <div className="border-t border-[var(--color-hair)]">
+          <div className="px-4 py-2 border-b border-[var(--color-hair)] bg-[var(--color-paper-2)] flex items-center gap-2">
+            <h3 className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+              Consent Lineage
+            </h3>
+          </div>
 
-        {/* 2. Lineage */}
-        <LineageRow data={data} />
+          <div className="divide-y divide-[var(--color-hair)]">
+            {/* 1. Consent */}
+            <ConsentRow data={data} />
 
-        {/* 3. Approval */}
-        <ApprovalRow data={data} />
+            {/* 2. Lineage */}
+            <LineageRow data={data} />
 
-        {/* 4. Audio features */}
-        <AudioFeaturesRow features={data.audioFeatures} />
+            {/* 3. Approval */}
+            <ApprovalRow data={data} />
 
-        {/* 5. Agent scores */}
-        <AgentScoresRow scores={data.agentScores} />
+            {/* 4. Audio features */}
+            <AudioFeaturesRow features={data.audioFeatures} />
 
-        {/* 6. Settlement */}
-        <SettlementRow splits={data.splits} settled={data.totalSettled} licenseCount={data.licenseCount} />
-      </div>
+            {/* 5. Agent scores */}
+            <AgentScoresRow scores={data.agentScores} />
+
+            {/* 6. Settlement */}
+            <SettlementRow splits={data.splits} settled={data.totalSettled} licenseCount={data.licenseCount} />
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -313,7 +347,7 @@ function SettlementRow({ splits, settled, licenseCount }: { splits: RoyaltySplit
                   style={{ width: `${pct}%` }}
                 />
               </div>
-              <span className="font-mono text-[8px] text-[var(--color-ink-3)] w-[50px] text-right">
+              <span className="font-mono text-[8px] text-[var(--color-ink-3)] w-[50px] text-right" title={amount > 0 ? `${amount.toFixed(4)} USDC` : undefined}>
                 {pct.toFixed(0)}%
               </span>
             </div>

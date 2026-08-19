@@ -222,6 +222,11 @@ function MatchSearch() {
   );
 
   const hasResults = results && results.rows.length > 0 && !loading;
+  // MODULAR: pilot showcase mode (?showcase=pilot) — a compact 3-beat rail
+  // that choreographs the authorized-version wedge: brief answered →
+  // compare the family → license & watch the waterfall. Keeps the demo
+  // focused instead of asking the audience to discover the panel.
+  const showcasePilot = searchParams.get('showcase') === 'pilot';
   const canPayAgents = isAuthenticated && isConnected && preferPaid;
   const effectiveBrief = [brief.trim(), ...refinements].filter(Boolean).join(" · ");
 
@@ -294,31 +299,12 @@ function MatchSearch() {
 
       {hasResults && (
         <div>
-          <ol
-            aria-label="Licensing workflow"
-            className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 border-y border-[var(--color-hair)] py-2 font-mono text-[9px] uppercase tracking-[0.12em]"
-          >
-            <li className="text-[var(--color-ink-3)]">1. Brief</li>
-            <li aria-hidden className="text-[var(--color-hair-strong)]">/</li>
-            <li aria-current="step" className="text-[var(--color-rust)]">2. Review takes</li>
-            <li aria-hidden className="text-[var(--color-hair-strong)]">/</li>
-            <li className="text-[var(--color-ink-3)]">3. Rights review</li>
-            <li aria-hidden className="text-[var(--color-hair-strong)]">/</li>
-            <li className="text-[var(--color-ink-3)]">4. License</li>
-          </ol>
-          <CatalogDisclosure catalog={results.catalog} />
-          <DecisionSummary row={results.rows[0]} total={results.total} />
-          <SceneCard
-            brief={results.rows[0].brief}
-            briefText={effectiveBrief || brief}
-            trackTitle={results.rows[0].title}
-            artistName={results.rows[0].artist_name}
-          />
-          <p className="mb-4 font-serif text-sm leading-snug text-[var(--color-ink-2)]">
-            Start with a preview. Open a take when you want to compare the fit or review its rights status.
-          </p>
+          {showcasePilot && results.rows.some((r) => r.catalog.source === 'authorized') && (
+            <ShowcaseRail />
+          )}
+          <AgentAnswer results={results} briefText={effectiveBrief || brief} />
 
-          <div className="flex flex-wrap items-center gap-2 mb-5" aria-label="Refine this brief">
+          <div className="flex flex-wrap items-center gap-2 mb-4" aria-label="Refine this brief">
             {refinements.map((a) => (
               <span
                 key={a}
@@ -353,7 +339,6 @@ function MatchSearch() {
                 }
               });
 
-              const familySet = new Set(familyGroups.keys());
               const renderedFamilies = new Set<string>();
 
               // Walk results.rows in order, rendering each item or family group once
@@ -369,7 +354,6 @@ function MatchSearch() {
                   const family = familyGroups.get(r.family_id)!;
                   const best = family[0];
                   const siblings = family.slice(1);
-                  const familyCount = family.length;
 
                   items.push(
                     <motion.div
@@ -388,8 +372,6 @@ function MatchSearch() {
                         onShortlisted={markShortlisted}
                         isAuthenticated={isAuthenticated}
                         requireAuth={requireAuth}
-                        familyId={best.family_id}
-                        familyCount={familyCount}
                       />
                       {best.program && (
                         <ConsentLineagePanel data={best.program} />
@@ -399,8 +381,6 @@ function MatchSearch() {
                           siblings={siblings}
                           brief={effectiveBrief || brief}
                           scoreDelay={animDelay + 0.12}
-                          familyId={best.family_id!}
-                          familyCount={familyCount}
                           shortlistedIds={shortlistedIds}
                           onShortlisted={markShortlisted}
                           isAuthenticated={isAuthenticated}
@@ -472,8 +452,6 @@ function VersionFamilySiblings({
   siblings,
   brief,
   scoreDelay,
-  familyId,
-  familyCount,
   shortlistedIds,
   onShortlisted,
   isAuthenticated,
@@ -482,8 +460,6 @@ function VersionFamilySiblings({
   siblings: BriefSearchRow[];
   brief: string;
   scoreDelay: number;
-  familyId: string;
-  familyCount: number;
   shortlistedIds: Set<string>;
   onShortlisted: (submissionId: string) => void;
   isAuthenticated: boolean;
@@ -535,8 +511,6 @@ function VersionFamilySiblings({
                   requireAuth={requireAuth}
                   onShortlisted={onShortlisted}
                   isShortlisted={isAuthenticated && shortlistedIds.has(sibling.submission_id)}
-                  familyId={familyId}
-                  familyCount={familyCount}
                 />
               </motion.div>
             ))}
@@ -547,36 +521,145 @@ function VersionFamilySiblings({
   );
 }
 
-function CatalogDisclosure({ catalog }: { catalog: BriefSearchResponse['catalog'] }) {
-  if (catalog.mode !== 'guided_demo') return null;
+// MODULAR: pilot showcase rail — three beats that choreograph the
+// authorized-version wedge for a live demo. Compact by design: one line
+// per beat, no paragraphs.
+function ShowcaseRail() {
+  const beats = [
+    { n: '1', label: 'Brief answered', hint: 'the agent ranked the catalog and named its pick' },
+    { n: '2', label: 'Compare the family', hint: 'expand the authorized versions — same song, artist-approved takes' },
+    { n: '3', label: 'License & settle', hint: 'open the license — the royalty waterfall splits on Arc' },
+  ];
   return (
-    <aside className="mb-4 border border-[var(--color-rust)] bg-[var(--color-paper-2)] px-4 py-3" aria-label="Guided demo catalog">
-      <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-rust)]">Guided demo catalog</p>
-      <p className="mt-1 font-serif text-sm leading-snug text-[var(--color-ink-2)]">
-        These sample takes let you test brief matching, listening, and feedback. License terms are illustrative only: no license job, payment, or settlement will be created.
-      </p>
-    </aside>
+    <ol
+      aria-label="Pilot showcase"
+      className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-y border-[var(--color-hair)] py-2"
+    >
+      {beats.map((b) => (
+        <li key={b.n} className="flex items-baseline gap-1.5">
+          <span className="font-mono text-[9px] text-[var(--color-rust)]">{b.n}.</span>
+          <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink)]">{b.label}</span>
+          <span className="hidden font-serif text-[11px] italic text-[var(--color-ink-3)] sm:inline">— {b.hint}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
-function DecisionSummary({ row, total }: { row: BriefSearchRow; total: number }) {
-  const evidence = row.why_fits.slice(0, 2).join(" · ");
+// MODULAR: the agent's answer to the brief. Replaces the old
+// stepper + disclosure + summary + scene-card + explainer stack with
+// one compact block: a sentence that answers the brief, then the
+// ranked takes. Scene card and demo disclosure move into progressive
+// disclosure. Outcome first, mechanism one click deep.
+function AgentAnswer({ results, briefText }: { results: BriefSearchResponse; briefText: string }) {
+  const top = results.rows[0];
+  const authorized = results.rows.filter((r) => r.catalog.source === 'authorized');
+  const families = new Set(authorized.map((r) => r.family_id).filter(Boolean));
+  const evidence = top.why_fits.slice(0, 2).join(' · ');
+  const isGuidedDemo = results.catalog.mode === 'guided_demo';
+
   return (
-    <section className="mb-4 border-l-2 border-[var(--color-rust)] bg-[var(--color-paper-2)] px-4 py-3" aria-label="Top recommendation">
-      <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-rust)]">Top recommendation</p>
-      <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <h2 className="font-serif text-lg font-semibold">{row.title}</h2>
-        <span className="font-serif text-sm text-[var(--color-ink-2)]">{row.artist_name}</span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">match score {row.fit_score}</span>
-      </div>
-      <p className="mt-1 font-serif text-sm leading-snug text-[var(--color-ink-2)]">
-        {evidence ? `Best available match on the returned catalog evidence: ${evidence}.` : "Best available match from the returned catalog evidence."}
+    <section className="mb-4 border-l-2 border-[var(--color-rust)] bg-[var(--color-paper-2)] px-4 py-3" aria-label="Agent answer">
+      <p className="font-serif text-[15px] leading-snug text-[var(--color-ink)]">
+        Best match: <span className="font-semibold">{top.title}</span>
+        <span className="text-[var(--color-ink-2)]"> · {top.artist_name}</span>
+        {evidence && <span className="text-[var(--color-ink-2)]"> — {evidence}.</span>}
       </p>
-      <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">
-        Human gate · listen for opening, dialogue space, and edit point · {total} matches considered
+      {authorized.length > 0 && (
+        <p className="mt-1 font-serif text-[13px] leading-snug text-[var(--color-rust)]">
+          {authorized.length} artist-authorized version{authorized.length > 1 ? 's' : ''}
+          {families.size === 1 ? ' from one version family' : ''} — consent recorded, splits defined, license-ready.
+        </p>
+      )}
+      <p className="mt-1.5 font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">
+        {results.total} matches considered
+        {isGuidedDemo && ' · guided-demo catalog — terms illustrative only'}
       </p>
+      <details className="mt-2">
+        <summary className="cursor-pointer font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
+          Scene card
+        </summary>
+        <div className="mt-2">
+          <SceneCard
+            brief={top.brief}
+            briefText={briefText}
+            trackTitle={top.title}
+            artistName={top.artist_name}
+          />
+        </div>
+      </details>
     </section>
   );
+}
+
+// MODULAR: one provenance mark per row, replacing the old stack of
+// catalog-label + authorized + requestable + evidence badges. Full
+// evidence schedule stays one click deep in the expanded row.
+function ProvenanceMark({ row }: { row: BriefSearchRow }) {
+  const source = row.catalog.source;
+  if (source === 'authorized') {
+    return (
+      <span
+        className="inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 bg-[var(--color-rust)]/10 border border-[var(--color-rust)]/40 cursor-help"
+        title="Artist-authorized: rights holder consent recorded, splits defined, royalty waterfall active"
+      >
+        <span className="text-[8px] leading-none text-[var(--color-rust)]" aria-hidden="true">◆</span>
+        <span className="font-mono text-[7px] uppercase tracking-[0.1em] text-[var(--color-rust)]">Authorized</span>
+      </span>
+    );
+  }
+  if (source === 'demo') {
+    return (
+      <span
+        className="inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 bg-[var(--color-paper-2)] border border-[var(--color-hair)] cursor-help"
+        title="Guided-demo catalog: terms illustrative only, no license job or settlement is created"
+      >
+        <span className="text-[8px] leading-none text-[var(--color-ink-3)]" aria-hidden="true">▧</span>
+        <span className="font-mono text-[7px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">Demo</span>
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 bg-[var(--color-paper-2)] border border-[var(--color-hair)] cursor-help"
+      title="Live catalog: requestable, but rights clearance is independently unverified"
+    >
+      <span className="text-[8px] leading-none text-[var(--color-ink-3)]" aria-hidden="true">○</span>
+      <span className="font-mono text-[7px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">Unverified</span>
+    </span>
+  );
+}
+
+// MODULAR: the row's second line is the best agent's verdict in its own
+// voice (per-agent AgentDetail.note), attributed — makes the three agents
+// read as distinct judges, not a scoring rubric. Falls back to the
+// structured why_fits citation when no agent verdict is attached.
+const AGENT_LABELS: Record<string, string> = {
+  production: 'Production',
+  performance: 'Performance',
+  market: 'Market',
+};
+
+function RowSubtitle({ row, reason }: { row: BriefSearchRow; reason: string | null }) {
+  const best = (row.program?.agentScores ?? [])
+    .slice()
+    .sort((a, b) => (b.detail?.fit_score ?? 0) - (a.detail?.fit_score ?? 0))[0];
+  if (best?.detail?.note) {
+    const label = AGENT_LABELS[best.agent] ?? best.agent;
+    return (
+      <p className="font-serif text-[12px] italic text-[var(--color-ink-2)] truncate mt-0.5">
+        {label} agent: “{best.detail.note}”
+      </p>
+    );
+  }
+  if (reason) {
+    return (
+      <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-ink-3)] truncate mt-0.5">
+        {reason}
+      </p>
+    );
+  }
+  return null;
 }
 
 function MatchRow({
@@ -589,8 +672,6 @@ function MatchRow({
   onShortlisted,
   isAuthenticated,
   requireAuth,
-  familyId,
-  familyCount,
 }: {
   row: BriefSearchRow;
   rank: number;
@@ -601,8 +682,6 @@ function MatchRow({
   onShortlisted: (submissionId: string) => void;
   isAuthenticated: boolean;
   requireAuth: (returnTo?: string) => boolean;
-  familyId?: string;
-  familyCount?: number;
 }) {
   const { showToast } = useToast();
   const [expanded, setExpanded] = useState(false);
@@ -617,7 +696,6 @@ function MatchRow({
   const quoteOptions = row.license_quote.usage_options.filter(({ usage_type }) => usage_type !== "other");
   const selectedQuote = row.license_quote.usage_options.find(({ usage_type }) => usage_type === usageType);
   const isDemo = row.catalog.source === 'demo';
-  const isAuthorized = row.catalog.source === 'authorized';
 
   // Hover-to-play snippet (10s)
   const snippetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -800,28 +878,9 @@ function MatchRow({
             <div className="flex items-baseline gap-2">
               <span className="font-serif text-[15px] font-semibold truncate">{row.title}</span>
               <span className="font-serif text-[13px] text-[var(--color-ink-2)] truncate">{row.artist_name}</span>
-              <span className={cn(
-                'font-mono text-[8px] uppercase tracking-[0.1em] px-1 py-0.5 rounded-sm',
-                isDemo ? 'bg-[var(--color-rust)] text-[var(--color-paper)]' : 'bg-[var(--color-paper-2)] text-[var(--color-ink-3)]',
-              )}>{row.catalog.label}</span>
-              {/* Consent badge for authorized versions */}
-              {isAuthorized && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 bg-[var(--color-rust)]/10 border border-[var(--color-rust)]/40 cursor-help"
-                  title="Artist-authorized: rights holder consent recorded, splits defined, royalty waterfall active"
-                >
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-                    <path d="M5 0.5l1.2 2.5 2.7.4-2 1.9.5 2.7L5 6.2 2.6 8l.5-2.7-2-1.9 2.7-.4z" fill="var(--color-rust)" />
-                  </svg>
-                  <span className="font-mono text-[7px] uppercase tracking-[0.1em] text-[var(--color-rust)]">Authorized</span>
-                </span>
-              )}
+              <ProvenanceMark row={row} />
             </div>
-            {reason && (
-              <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-ink-3)] truncate mt-0.5">
-                Evidence · {reason}
-              </p>
-            )}
+            <RowSubtitle row={row} reason={reason} />
             {/* Inline why_fits chips (top 2) */}
             {row.why_fits.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1.5">
@@ -847,19 +906,6 @@ function MatchRow({
 
           <FitScorePop score={row.fit_score} delay={scoreDelay} />
 
-          <span className="font-mono text-[8px] text-[var(--color-ink-3)] shrink-0 bg-[var(--color-paper-2)] px-1.5 py-0.5 rounded-sm">
-            {row.rating_count} review{row.rating_count === 1 ? "" : "s"}
-          </span>
-
-          <span className={cn(
-            "hidden shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.1em] sm:inline-flex",
-            row.licensing_evidence.status === "sample_only"
-              ? "bg-[var(--color-paper-2)] text-[var(--color-ink-3)]"
-              : "bg-[var(--color-rust)] text-[var(--color-paper)]",
-          )}>
-            {isDemo ? "Preview" : row.licensing_evidence.status === "sample_only" ? "Sample only" : "Requestable"}
-          </span>
-
           <span className={cn(
             "shrink-0 rounded-sm px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] transition-all duration-200",
             expanded
@@ -882,23 +928,17 @@ function MatchRow({
             className="overflow-hidden"
           >
             <div className="px-3 pb-3 pt-1 border-t border-[var(--color-hair)]">
-              {/* Pipeline stepper (live updates during agent review) */}
-              <PipelineStepper
-                status={row.status}
-                ratingCount={row.rating_count}
-              />
-
               <AudioPlayer
                 src={`/api/v1/uploads/${row.audio_path?.split("/").pop() ?? ""}`}
                 title={row.title}
                 by={row.artist_name}
               />
 
-              <div className="mt-3 border-t border-[var(--color-hair)] pt-2">
-                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
-                  Why this fits
-                </p>
-                {row.why_fits.length > 0 ? (
+              {row.why_fits.length > 1 && (
+                <div className="mt-3 border-t border-[var(--color-hair)] pt-2">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
+                    Why this fits
+                  </p>
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {row.why_fits.map((evidence, index) => (
                       <span key={`${evidence}-${index}`} className="bg-[var(--color-paper-2)] px-2 py-0.5 font-mono text-[9px] text-[var(--color-ink-2)] rounded-sm">
@@ -906,17 +946,20 @@ function MatchRow({
                       </span>
                     ))}
                   </div>
-                ) : (
-                  <p className="mt-2 font-serif text-[13px] text-[var(--color-ink-2)]">No citation was returned for this match.</p>
-                )}
-              </div>
+                </div>
+              )}
 
-              <div className="mt-3 border-l-2 border-[var(--color-hair-strong)] pl-2.5">
-                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">Human gate</p>
-                <p className="mt-0.5 font-serif text-[13px] leading-snug text-[var(--color-ink-2)]">
-                  Confirm the opening, dialogue space, and edit point against picture before licensing.
-                </p>
-              </div>
+              <details className="mt-3">
+                <summary className="cursor-pointer font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
+                  Evaluation pipeline
+                </summary>
+                <div className="pt-2">
+                  <PipelineStepper
+                    status={row.status}
+                    ratingCount={row.rating_count}
+                  />
+                </div>
+              </details>
 
               <details className="mt-3" role="group" aria-label={`Match feedback for ${row.title}`}>
                 <summary className="cursor-pointer font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
