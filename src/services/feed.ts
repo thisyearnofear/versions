@@ -24,8 +24,7 @@
 //                        when embeddings are absent (mock mode, no
 //                        pgvector, no API key).
 
-import { and, eq, gte, lte, desc, sql, type SQL } from 'drizzle-orm';
-import { writeFileSync, appendFileSync } from 'fs';
+import { and, eq, gte, lte, desc, inArray, sql, type SQL } from 'drizzle-orm';
 import { db } from '../lib/db';
 import {
   publishedVersions as pvTable,
@@ -499,13 +498,6 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
     const scored: Scored[] = [];
     for (const c of candidates) {
       if (!c.brief) continue;
-      if (c.version.catalogSource === 'authorized') {
-        log.info('structured search: authorized candidate', {
-          id: c.version.submissionId?.slice(0, 12) || 'unknown',
-          briefSummary: c.brief.audienceSummary?.slice(0, 50),
-          scoreBreakdown: { scenes: c.brief.sceneTags?.length, instruments: c.brief.instruments?.length },
-        });
-      }
       const breakdown = scoreAgainstBrief(
         {
           sceneTags: c.brief.sceneTags,
@@ -568,8 +560,6 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
     };
 
     const scored: Scored[] = [];
-    const debugLines: string[] = [];
-    debugLines.push(`[DEBUG semantic] Processing ${rows.length} rows`);
     for (const row of rows) {
       // MODULAR: the pgvector query returns snake_case columns (raw
       // SQL, not Drizzle's camelCase mapping). Normalize into the
@@ -613,11 +603,6 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
 
       const similarity = row.similarity as number;
 
-      // MODULAR: debug - log authorized versions to file
-      if (row.catalog_source === 'authorized') {
-        debugLines.push(`[DEBUG] AUTH row: ${row.submission_id} similarity=${similarity} scene_tags=${JSON.stringify(row.scene_tags)}`);
-      }
-
       // Apply hard filters (same as structured path).
       if (args.sceneTags && args.sceneTags.length > 0) {
         const ok = args.sceneTags.some((f) => brief.sceneTags.some((s) => s.toLowerCase().includes(f)));
@@ -630,11 +615,6 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
       if (args.catalogSource && catalogSourceFor(version) !== args.catalogSource) continue;
       if (args.energy && version.energyConsensus !== args.energy) continue;
       if (args.tempo && version.tempoConsensus !== args.tempo) continue;
-
-      // MODULAR: when similarity is 0 (no embedding), let the
-      // structured-tag score dominate the hybrid so brief-matched
-      // authorized versions still surface.
-      const clampedSimilarity = similarity > 0 ? similarity : 0;
 
       // Structured-tag score for why_fits citations.
       const breakdown = scoreAgainstBrief(
@@ -662,16 +642,6 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
     // MODULAR: already sorted by cosine distance from pgvector, but
     // the hybrid score reorders. Re-sort by hybrid score DESC, then
     // by publishDate DESC for stable tiebreaking.
-    // MODULAR: write debug output to file for Next.js standalone
-    debugLines.push(`[DEBUG] Total scored: ${scored.length}`);
-    scored.forEach(s => {
-      const src = s.version.catalogSource === 'authorized' ? 'AUTH' : s.version.catalogSource;
-      debugLines.push(`  SCORED: ${src} ${s.version.submissionId} score=${s.score}`);
-    });
-    try {
-      appendFileSync('/tmp/feed-debug.log', debugLines.join('\n') + '\n');
-    } catch {}
-
     scored.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
       const aTs = a.version.publishedAt?.getTime() ?? 0;
@@ -707,7 +677,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
         audioFeatures: subsTable.audioFeatures,
       })
       .from(subsTable)
-      .where(sql`${subsTable.id} = ANY(${submissionIds})`);
+      .where(inArray(subsTable.id, submissionIds));
 
     const programIds = Array.from(new Set(subRows.map((s) => s.programId).filter(Boolean) as string[]));
     let progRows: Array<{
@@ -727,7 +697,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
           splits: vpTable.splits,
         })
         .from(vpTable)
-        .where(sql`${vpTable.id} = ANY(${programIds})`);
+        .where(inArray(vpTable.id, programIds));
     }
 
     const progById = new Map(progRows.map((p) => [p.id, p]));
@@ -757,7 +727,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
           detail: reviewTable.detail,
         })
         .from(reviewTable)
-        .where(sql`${reviewTable.submissionId} = ANY(${Object.keys(enriched)})`);
+        .where(inArray(reviewTable.submissionId, Object.keys(enriched)));
 
       for (const r of reviewRows) {
         const entry = enriched[r.submissionId];
@@ -949,10 +919,6 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
       const safeLimit = Math.min(BRIEF_MAX_LIMIT, Math.max(1, Number(args.limit) || DEFAULT_LIMIT));
       const safeOffset = Math.max(0, Number(args.offset) || 0);
       const key = briefCacheKey(args);
-      // MODULAR: debug - trace which search path is taken
-      try {
-        appendFileSync('/tmp/feed-debug.log', `[DEBUG brief] brief=${args.brief.slice(0,50)} mock=${embedding.mock} key=${key}\n`);
-      } catch {}
       return cached(key, FEED_CACHE_TTL_MS, async () => {
         const tokens = tokenize(args.brief);
         if (tokens.length === 0) {
@@ -977,13 +943,12 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
             // MODULAR: pgvector cosine-distance query. LEFT JOIN
             // version_embeddings so versions without embeddings yet
             // (authorized pilot data, newly published takes) still
-            // surface — they receive similarity 0 and fall back to
-            // structured-tag ranking via the hybrid scorer.
-            // NOTE: the WHERE must handle NULL embeddings explicitly
-            // because NULL comparisons are always NULL (falsy).
+            // surface — they receive similarity 0 and rank by their
+            // structured-tag score in the hybrid scorer. Rows without
+            // embeddings sort last (NULLS LAST).
             const catalogSourceClause = args.catalogSource
               ? sql`AND pv.catalog_source = ${args.catalogSource}`
-              : sql`AND (pv.catalog_source IS NULL OR pv.catalog_source != '')`;
+              : sql``;
             const semanticCandidates = await db.execute(sql`
               SELECT
                 pv.submission_id, pv.title, pv.artist_name, pv.version_type,
@@ -996,7 +961,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
               FROM published_versions pv
               LEFT JOIN version_embeddings ve ON ve.submission_id = pv.submission_id
               LEFT JOIN placement_briefs pb ON pb.submission_id = pv.submission_id
-              WHERE ve.embedding IS NOT NULL OR 1 = 1
+              WHERE TRUE
               ${catalogSourceClause}
               ORDER BY ve.embedding <=> ${embStr}::vector NULLS LAST
               LIMIT 500
@@ -1029,8 +994,6 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
           .leftJoin(briefsTable, eq(briefsTable.submissionId, pvTable.submissionId))
           .orderBy(desc(pvTable.publishedAt))
           .limit(500);
-
-        console.log('[DEBUG] structured search candidates:', candidates.length, 'total,', candidates.filter(c => c.brief).length, 'with brief,', candidates.filter(c => c.version.catalogSource === 'authorized').length, 'authorized');
 
         return await scoreStructuredResults(candidates, args, tokens, safeLimit, safeOffset);
       }, ['feed-update']);
