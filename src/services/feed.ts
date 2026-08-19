@@ -623,6 +623,11 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
       if (args.energy && version.energyConsensus !== args.energy) continue;
       if (args.tempo && version.tempoConsensus !== args.tempo) continue;
 
+      // MODULAR: when similarity is 0 (no embedding), let the
+      // structured-tag score dominate the hybrid so brief-matched
+      // authorized versions still surface.
+      const clampedSimilarity = similarity > 0 ? similarity : 0;
+
       // Structured-tag score for why_fits citations.
       const breakdown = scoreAgainstBrief(
         {
@@ -947,14 +952,11 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
           try {
             const briefEmb = await embedding.embedText(args.brief);
             const embStr = `[${briefEmb.embedding.map((v) => v.toFixed(6)).join(',')}]`;
-            // MODULAR: pgvector cosine-distance query. Joins
-            // version_embeddings → published_versions → placement_briefs
-            // in one round-trip. The `<=>` operator is cosine distance;
-            // `1 - distance` is cosine similarity. Filter similarity > 0
-            // so zero-overlap rows don't pollute the candidate set.
-            const catalogSourceClause = args.catalogSource
-              ? sql`AND pv.catalog_source = ${args.catalogSource}`
-              : sql``;
+            // MODULAR: pgvector cosine-distance query. LEFT JOIN
+            // version_embeddings so versions without embeddings yet
+            // (authorized pilot data, newly published takes) still
+            // surface — they receive similarity 0 and fall back to
+            // structured-tag ranking via the hybrid scorer.
             const semanticCandidates = await db.execute(sql`
               SELECT
                 pv.submission_id, pv.title, pv.artist_name, pv.version_type,
@@ -963,13 +965,13 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
                 pv.rating_count, pv.catalog_source, pv.aggregated_mood_tags, pv.published_at,
                 pb.scene_tags, pb.instruments, pb.emotional_arcs,
                 pb.sync_comparables, pb.audience_summary,
-                1 - (ve.embedding <=> ${embStr}::vector) AS similarity
+                COALESCE(1 - (ve.embedding <=> ${embStr}::vector), 0) AS similarity
               FROM published_versions pv
-              JOIN version_embeddings ve ON ve.submission_id = pv.submission_id
+              LEFT JOIN version_embeddings ve ON ve.submission_id = pv.submission_id
               LEFT JOIN placement_briefs pb ON pb.submission_id = pv.submission_id
-              WHERE 1 - (ve.embedding <=> ${embStr}::vector) > 0
+              WHERE 1 - (ve.embedding <=> ${embStr}::vector) > -1
               ${catalogSourceClause}
-              ORDER BY ve.embedding <=> ${embStr}::vector
+              ORDER BY ve.embedding <=> ${embStr}::vector NULLS LAST
               LIMIT 500
             `);
 
