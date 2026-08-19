@@ -96,16 +96,24 @@ export default function Home() {
 function Hero() {
   return (
     <section className="py-16 text-center max-w-2xl mx-auto md:py-24">
+      <motion.p
+        className="mb-4 font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-rust)]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4 }}
+      >
+        For music supervisors &amp; sync agents
+      </motion.p>
       <motion.h1
         className="font-serif text-5xl md:text-6xl lg:text-7xl font-black leading-[0.95] tracking-tight mb-4"
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        Tell VERSIONS
+        Finding the right take
         <br />
         <span className="italic font-normal text-[var(--color-rust)]">
-          what the picture needs.
+          shouldn&apos;t take weeks.
         </span>
       </motion.h1>
       <motion.p
@@ -114,8 +122,10 @@ function Hero() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
       >
-        It ranks the alternate takes by fit, prepares the rights path, and
-        brings you only the decisions that need a human.
+        You lose days digging catalogs and weeks clearing rights for one sync.
+        Describe the scene — VERSIONS ranks artist-authorized versions by fit
+        and prepares the rights path, so you make one decision instead of a
+        hundred emails.
       </motion.p>
       <motion.div
         initial={{ opacity: 0, y: 8 }}

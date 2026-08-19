@@ -6,7 +6,6 @@
 // wallet selection UX + chain switching. This component is the
 // single drop-in for any page that wants a Connect button.
 
-import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useChainId, useDisconnect, useSignMessage } from "wagmi";
 import { useSession } from "next-auth/react";
@@ -60,29 +59,10 @@ export function WagmiConnectButton({ variant = "default", children, showGlossary
     prevConnected.current = isConnected;
   }, [isConnected, variant, sessionStatus, signInWithWallet]);
 
-  const links =
-    isConnected && address ? (
-      <>
-        <Link
-          href={`/artists/${address}`}
-          className="font-mono text-[11px] uppercase tracking-[0.18em] hover:text-[var(--color-rust)] transition-colors"
-        >
-          Artist
-        </Link>
-        <Link
-          href={`/curators/${address}`}
-          className="font-mono text-[11px] uppercase tracking-[0.18em] hover:text-[var(--color-rust)] transition-colors"
-        >
-          Curator
-        </Link>
-        <Link
-          href={`/listeners/${address}`}
-          className="font-mono text-[11px] uppercase tracking-[0.18em] hover:text-[var(--color-rust)] transition-colors"
-        >
-          Listener
-        </Link>
-      </>
-    ) : null;
+  // MODULAR: IA consolidation — the per-wallet Artist/Curator/Listener
+  // dashboards are NOT primary jobs, so they stay out of the header nav
+  // (they remain reachable by direct URL). The header is the three doors
+  // + system proof + wallet chip only.
 
   const button = (
     <ConnectButton
@@ -185,7 +165,6 @@ export function WagmiConnectButton({ variant = "default", children, showGlossary
   return (
     <div className="flex flex-col items-end gap-0">
       <div className="flex items-center gap-3">
-        {links}
         {control}
         {children}
       </div>
