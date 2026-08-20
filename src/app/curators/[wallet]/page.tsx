@@ -1,37 +1,17 @@
-import { Suspense } from "react";
-import { SiteHeader } from "@/components/SiteHeader";
-import { SiteFooter } from "@/components/SiteFooter";
-import { CuratorDashboard } from "@/components/curator/CuratorDashboard";
-import { ToastProvider } from "@/components/ui/Toast";
+import { redirect } from "next/navigation";
 
-// MODULAR: Curator dashboard page. Server component that renders
-// the client-side dashboard for a given curator wallet address.
-// The wallet param comes from the URL path — e.g. /curators/0x1234...
-
+// MODULAR: IA consolidation — human curation was replaced by the three AI
+// agents (the only writer of curator ratings is src/services/agents.ts), so
+// the per-wallet Curator Dashboard is vestigial and contradicts the "three
+// distinct agent lenses" story. /curators/[wallet] stays alive as a redirect
+// to the system-proof page so deep links and bookmarks keep working. The
+// /api/v1/curators/* read endpoints remain available if a future surface
+// needs them.
 export default async function CuratorPage({
   params,
 }: {
   params: Promise<{ wallet: string }>;
 }) {
-  const { wallet } = await params;
-
-  return (
-    <ToastProvider>
-      <div className="flex flex-col flex-1">
-        <SiteHeader />
-        <main className="flex-1 px-6 md:px-12 py-12 max-w-5xl">
-          <Suspense
-            fallback={
-              <div className="py-16 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
-                Loading…
-              </div>
-            }
-          >
-            <CuratorDashboard wallet={wallet} />
-          </Suspense>
-        </main>
-      </div>
-      <SiteFooter />
-    </ToastProvider>
-  );
+  await params;
+  redirect("/agents");
 }

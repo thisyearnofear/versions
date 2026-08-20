@@ -160,6 +160,21 @@ The nav is organized around jobs, not modules — three doors:
 `/agents` (system proof) is demoted out of the primary rail. When adding
 a surface, ask which door it belongs to before adding a fourth.
 
+Per-wallet dashboards (`/artists/[wallet]`, `/curators/[wallet]`,
+`/listeners/[wallet]`) are NOT nav items — they're reached in context:
+
+- **Artist dashboard** — linked from the `/submit` success state
+  ("Track your release case →"). It's the artist half of the wedge
+  (Release Cases + earnings), so keep it reachable, just not in the rail.
+- **Curator dashboard** — RETIRED. Human curation was replaced by the
+  three AI agents (only writer of curator ratings is `src/services/agents.ts`),
+  so the page was vestigial and contradicted the "three distinct agent
+  lenses" story. `/curators/[wallet]` redirects to `/agents`; the
+  `/api/v1/curators/*` read endpoints remain. Don't rebuild the page.
+- **Listener dashboard** — still live (plays/reputation/badges accrue via
+  the AR flow) but currently orphaned; decide per-surface whether to link
+  it in context or retire it.
+
 ## Case thread (placement case as conversation)
 
 The supervisor job (brief → licensed track) renders as ONE continuous
