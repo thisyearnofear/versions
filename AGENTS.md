@@ -165,15 +165,22 @@ Per-wallet dashboards (`/artists/[wallet]`, `/curators/[wallet]`,
 
 - **Artist dashboard** — linked from the `/submit` success state
   ("Track your release case →"). It's the artist half of the wedge
-  (Release Cases + earnings), so keep it reachable, just not in the rail.
+  (Release Cases + earnings). After submission, `ensureForSubmission()`
+  creates a release case in the DB; `ReleaseCasesPanel` re-derives the
+  visual state from the submission's live status (payment → curation →
+  outcome). No drift: the card shows exactly what the submission holds.
 - **Curator dashboard** — RETIRED. Human curation was replaced by the
   three AI agents (only writer of curator ratings is `src/services/agents.ts`),
   so the page was vestigial and contradicted the "three distinct agent
   lenses" story. `/curators/[wallet]` redirects to `/agents`; the
   `/api/v1/curators/*` read endpoints remain. Don't rebuild the page.
-- **Listener dashboard** — still live (plays/reputation/badges accrue via
-  the AR flow) but currently orphaned; decide per-surface whether to link
-  it in context or retire it.
+- **Listener dashboard** — consumer beachhead; not the business model.
+  Wired into `FeedView`: when a wallet is connected, every expanded feed
+  row shows a small badge (`"Explorer · 42 plays"`) linking to
+  `/listeners/[wallet]`. Reputation levels (Listener → Explorer → Curator →
+  Tastemaker) match `ListenerDashboard`'s `REP_LEVELS`. Plays accrue via
+  the AR flow; badges/streaks are engagement, not the wedge. Keep reachable
+  as a deep link, not a nav door.
 
 ## Case thread (placement case as conversation)
 
