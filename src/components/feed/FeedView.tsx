@@ -6,10 +6,12 @@
 // hit the API with URL params and re-render the list.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useAccount } from "wagmi";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { TasteGraphMini } from "@/components/curation/TasteGraph";
 import { useToast } from "@/components/ui/Toast";
-import { apiClient, type FeedRow } from "@/lib/api-client";
+import { apiClient, type FeedRow, type ListenerProfileResponse } from "@/lib/api-client";
 import { parseMoodTags } from "@/lib/format";
 import { energyToNumber, tempoToNumber, valenceToNumber } from "@/lib/snap";
 import { deriveValence } from "@/services/taste-graph";
@@ -29,13 +31,49 @@ interface Filters {
 
 const EMPTY_FILTERS: Filters = { mood: "", energy: "", tempo: "", minSolo: "" };
 
+// MODULAR: listener reputation levels — shared with ListenerDashboard.
+// Kept here so the feed row badge can derive the level from score.
+const REP_LEVELS = [
+  { min: 500, label: "Tastemaker" },
+  { min: 200, label: "Curator" },
+  { min: 50, label: "Explorer" },
+  { min: 0, label: "Listener" },
+];
+function repLevelFor(score: number) {
+  for (const l of REP_LEVELS) {
+    if (score >= l.min) return l.label;
+  }
+  return REP_LEVELS[REP_LEVELS.length - 1].label;
+}
+
 export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
   const { showToast } = useToast();
+  const { address, isConnected } = useAccount();
+  const [listenerProfile, setListenerProfile] = useState<ListenerProfileResponse | null>(null);
   const [rows, setRows] = useState<FeedRow[]>(initialRows);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [loading, setLoading] = useState(false);
   const [feedError, setFeedError] = useState(false);
   const [sseConnected, setSseConnected] = useState(true);
+
+  // MODULAR: IA consolidation — wire the listener dashboard into the
+  // play surface so the consumer beachhead is reachable in context.
+  // Fetch once when a wallet connects.
+  const prevConnected = useRef(false);
+  useEffect(() => {
+    const wasConnected = prevConnected.current;
+    if (isConnected && !wasConnected && address) {
+      // first connect: fire off fetch outside render cycle
+      apiClient
+        .getListenerProfile(address)
+        .then((res) => setListenerProfile(res))
+        .catch(() => setListenerProfile(null));
+    } else if (!isConnected && wasConnected) {
+      // disconnected: clear profile
+      setListenerProfile(null);
+    }
+    prevConnected.current = isConnected;
+  }, [isConnected, address]);
 
   const fetchRows = useCallback(
     async (f: Filters) => {
@@ -259,7 +297,7 @@ export function FeedView({ initialRows = [] }: { initialRows?: FeedRow[] }) {
       ) : (
         <ul className="flex flex-col">
           {rows.map((v, i) => (
-            <FeedRowItem key={v.submission_id} row={v} animationDelay={Math.min(i * 0.08, 0.6)} />
+            <FeedRowItem key={v.submission_id} row={v} animationDelay={Math.min(i * 0.08, 0.6)} listenerProfile={listenerProfile} walletAddress={address ? address as string : null} />
           ))}
         </ul>
       )}
@@ -289,7 +327,17 @@ function FeedSkeleton({ count = 5 }: { count?: number }) {
   );
 }
 
-function FeedRowItem({ row, animationDelay = 0 }: { row: FeedRow; animationDelay?: number }) {
+function FeedRowItem({
+  row,
+  animationDelay = 0,
+  listenerProfile,
+  walletAddress,
+}: {
+  row: FeedRow;
+  animationDelay?: number;
+  listenerProfile: ListenerProfileResponse | null;
+  walletAddress: string | null;
+}) {
   const [expanded, setExpanded] = useState(false);
   const playingKey = usePlayingTrackKey();
   const spinning = playingKey === row.submission_id;
@@ -400,6 +448,19 @@ function FeedRowItem({ row, animationDelay = 0 }: { row: FeedRow; animationDelay
                 {tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-4" dangerouslySetInnerHTML={{ __html: tagMarkup }} />
                 )}
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-2)]">
+                    Plays
+                  </span>
+                  {listenerProfile && walletAddress && (
+                    <Link
+                      href={`/listeners/${walletAddress}`}
+                      className="font-mono text-[10px] text-[var(--color-rust)] hover:opacity-80 transition-opacity"
+                    >
+                      {repLevelFor(listenerProfile.reputationScore)} · {listenerProfile.totalPlays} plays
+                    </Link>
+                  )}
+                </div>
                 <AudioPlayer src={audioUrl} title={row.title} by={row.artist_name} trackKey={row.submission_id} />
               </div>
               <div className="flex items-start justify-center md:justify-end">
