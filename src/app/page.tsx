@@ -41,15 +41,15 @@ export default function Home() {
           <div className="mx-auto grid max-w-5xl gap-12 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
             <div>
               <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-rust)]">
-                A placement case · open, owned by an agent
+                One case, one decision
               </p>
               <h2 id="placement-case-title" className="font-serif text-3xl font-black tracking-tight md:text-4xl">
-                Owned by an agent. Held open for one human decision.
+                Held open. Waiting for your call.
               </h2>
               <p className="mt-4 max-w-lg font-serif text-base leading-snug text-[var(--color-ink-2)]">
-                Describe the scene. Agents interpret the brief, rank every eligible take by
-                sync-fit, and prepare the evidence. You make the creative call — the rest
-                settles on Arc.
+                Describe the scene. Agents rank every eligible take by sync-fit, surface
+                consent lineage, and prepare the license on Arc. The case stays open
+                until you make the creative call — the rest settles on-chain.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
@@ -81,7 +81,7 @@ export default function Home() {
         <section aria-label="Recent work published by the agents">
           <div className="px-6 pt-12 pb-4 text-center">
             <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]">
-              Recent work — click a cover to listen
+              From the catalog · click to listen
             </p>
           </div>
           <WaveformGallery />
