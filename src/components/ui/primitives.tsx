@@ -23,7 +23,7 @@ export function Container({
   size?: "narrow" | "default" | "wide";
 }) {
   return (
-    <div className={cn("mx-auto w-full px-6 md:px-8", size === "narrow" && "max-w-2xl", size === "default" && "max-w-3xl", size === "wide" && "max-w-5xl", className)}>
+    <div className={cn("mx-auto w-full px-4 sm:px-6 md:px-8", size === "narrow" && "max-w-2xl", size === "default" && "max-w-3xl", size === "wide" && "max-w-5xl", className)}>
       {children}
     </div>
   );
@@ -58,7 +58,7 @@ export function Section({
   id?: string;
 }) {
   return (
-    <section id={id} className={cn(divider && "border-t border-[var(--color-hair)]", "py-10", className)}>
+    <section id={id} className={cn(divider && "border-t border-[var(--color-hair)]", "py-8 sm:py-10", className)}>
       {eyebrow && <Eyebrow className="mb-3">{eyebrow}</Eyebrow>}
       {title && <h2 className="mb-1 font-serif text-2xl font-black tracking-tight md:text-3xl">{title}</h2>}
       {intro && <p className="mb-5 font-serif text-sm leading-snug text-[var(--color-ink-2)]">{intro}</p>}
@@ -67,9 +67,24 @@ export function Section({
   );
 }
 
-export function Card({ children, className }: { children: ReactNode; className?: string }) {
+export function Card({
+  children,
+  className,
+  interactive = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Adds the hover lift affordance — use only when the whole card is a target. */
+  interactive?: boolean;
+}) {
   return (
-    <div className={cn("border border-[var(--color-hair-strong)] p-5", className)}>
+    <div
+      className={cn(
+        "card-surface p-5",
+        interactive && "card-surface--interactive",
+        className,
+      )}
+    >
       {children}
     </div>
   );

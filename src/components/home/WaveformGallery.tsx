@@ -335,7 +335,7 @@ export function WaveformGallery() {
 
       {/* Section label + play hint */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 text-center pointer-events-none">
-        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-ink-3)]">
+        <p className="kicker">
           {loaded ? (playingId ? "Now playing · click again to pause" : "From the catalog · click a cover to play") : "Loading…"}
         </p>
       </div>

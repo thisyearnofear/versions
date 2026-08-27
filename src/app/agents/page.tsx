@@ -11,7 +11,7 @@ export default function AgentsPage() {
     <ToastProvider>
       <div className="flex flex-col flex-1">
         <SiteHeader active="agents" />
-        <main className="flex-1 px-6 md:px-12 py-12 max-w-5xl mx-auto w-full">
+        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 md:px-12 md:py-12">
           <FadeIn>
             <PageIntro
               eyebrow="System · agent activity"

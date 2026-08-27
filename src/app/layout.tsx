@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -14,6 +14,15 @@ const jetbrains = JetBrains_Mono({
   subsets: ["latin"],
   display: "swap",
 });
+
+// Mobile-first viewport: cover the notch, pinch-zoom stays allowed
+// (accessibility), browser chrome picks up the paper tone.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f4efe5",
+};
 
 export const metadata: Metadata = {
   title: "VERSIONS — briefs become licensed tracks",

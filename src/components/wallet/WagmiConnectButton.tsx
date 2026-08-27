@@ -98,7 +98,7 @@ export function WagmiConnectButton({ variant = "default", children, showGlossary
                 <button
                   type="button"
                   onClick={openConnectModal}
-                  className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
+                  className="flex min-h-[44px] items-center px-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] transition-colors hover:text-[var(--color-rust)]"
                   title="Search is free — sign in to shortlist and license"
                 >
                   Sign in
@@ -116,7 +116,7 @@ export function WagmiConnectButton({ variant = "default", children, showGlossary
                     })
                   }
                   disabled={signingIn}
-                  className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] hover:opacity-80 transition-opacity disabled:opacity-50"
+                  className="flex min-h-[44px] items-center gap-2 px-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] transition-opacity hover:opacity-80 disabled:opacity-50"
                   title="Approve a signature to finish sign in — no gas"
                 >
                   {identity?.avatar ? (
@@ -136,7 +136,7 @@ export function WagmiConnectButton({ variant = "default", children, showGlossary
                 <button
                   type="button"
                   onClick={openAccountModal}
-                  className="flex items-center gap-2 border border-[var(--color-hair-strong)] px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-ink)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
+                  className="flex min-h-[44px] items-center gap-2 rounded-full border border-[var(--color-hair-strong)] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]"
                 >
                   {identity?.avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element

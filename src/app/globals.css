@@ -3,22 +3,180 @@
 @theme inline {
   --color-paper: #f4efe5;
   --color-paper-2: #ebe3d6;
+  --color-cream: #faf6ec;
   --color-ink: #1a1a1a;
   --color-ink-2: #4a4a4a;
   --color-ink-3: #8a8a8a;
   --color-rust: #c84a1f;
   --color-rust-dark: #a33818;
+  --color-rust-soft: rgba(200, 74, 31, 0.08);
   --color-hair: rgba(26, 26, 26, 0.10);
   --color-hair-strong: rgba(26, 26, 26, 0.24);
 
   --font-serif: "Fraunces", "Iowan Old Style", "Apple Garamond", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Elevated surface tokens — soft ambient shadows, warm never gray-blue */
+  --shadow-soft: 0 1px 2px rgba(26, 26, 26, 0.05), 0 2px 8px rgba(26, 26, 26, 0.04);
+  --shadow-lift: 0 2px 4px rgba(26, 26, 26, 0.06), 0 12px 28px -8px rgba(26, 26, 26, 0.16);
+  --shadow-press: inset 0 1px 2px rgba(26, 26, 26, 0.08);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* Motion language — one ease curve everywhere (matches FadeIn) */
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 body {
   background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-serif);
+  /* Mobile polish: no flash on tap, no awkward text inflation */
+  -webkit-tap-highlight-color: transparent;
+  text-size-adjust: 100%;
+}
+
+/* iOS safe-area: content never hides behind the home indicator */
+@supports (padding: env(safe-area-inset-bottom)) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* One visible, on-brand focus style everywhere (keyboard nav) */
+:focus-visible {
+  outline: 2px solid var(--color-rust);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--color-rust);
+  color: var(--color-paper);
+}
+
+/* ── Elevated design primitives ─────────────────────── */
+/* Buttons: one rhythm (44px touch target), one ease, radius-md.
+   Use these instead of hand-rolled px/py mono classes on new UI. */
+.btn-primary,
+.btn-secondary,
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.7rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  transition:
+    background-color 0.18s var(--ease-out-expo),
+    color 0.18s var(--ease-out-expo),
+    border-color 0.18s var(--ease-out-expo),
+    box-shadow 0.18s var(--ease-out-expo),
+    transform 0.18s var(--ease-out-expo);
+  user-select: none;
+}
+.btn-primary {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  box-shadow: var(--shadow-soft);
+}
+.btn-primary:hover {
+  background: var(--color-rust);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-soft);
+}
+.btn-primary:disabled {
+  opacity: 0.4;
+  transform: none;
+  box-shadow: none;
+}
+.btn-secondary {
+  border: 1px solid var(--color-rust);
+  color: var(--color-rust);
+  background: transparent;
+}
+.btn-secondary:hover {
+  background: var(--color-rust);
+  color: var(--color-paper);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  border: 1px solid var(--color-hair-strong);
+  color: var(--color-ink-2);
+  background: transparent;
+}
+.btn-ghost:hover {
+  border-color: var(--color-rust);
+  color: var(--color-rust);
+}
+
+/* The ONE micro-label. Two steps up from the old 9px caps so it stays
+   legible on small screens while keeping the editorial mono flavour. */
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--color-ink-3);
+}
+.kicker--accent {
+  color: var(--color-rust);
+}
+
+/* Elevated surface: radius + warm shadow + hover lift for interactive
+   cards. Static panels use it without the hover affordance. */
+.card-surface {
+  background: var(--color-cream);
+  border: 1px solid var(--color-hair);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+.card-surface--interactive {
+  transition:
+    box-shadow 0.22s var(--ease-out-expo),
+    transform 0.22s var(--ease-out-expo),
+    border-color 0.22s var(--ease-out-expo);
+}
+.card-surface--interactive:hover {
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-2px);
+  border-color: var(--color-hair-strong);
+}
+
+/* Chip / pill — example briefs, refinement tags */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--color-hair-strong);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-ink-2);
+  transition:
+    border-color 0.15s var(--ease-out-expo),
+    color 0.15s var(--ease-out-expo),
+    background-color 0.15s var(--ease-out-expo);
+}
+.chip:hover {
+  border-color: var(--color-rust);
+  color: var(--color-rust);
+  background: var(--color-rust-soft);
 }
 
 /* Page atmosphere — grain + vignette */
@@ -62,10 +220,6 @@ body {
 }
 
 /* ── Accessibility: honor prefers-reduced-motion ──── */
-/* MotionConfig in providers.tsx handles framer-motion components;
-   this rule covers the rest (Tailwind transition-* utilities,
-   .skel keyframe pulse, AudioPlayer's animate-wave) so users
-   with reduced-motion enabled in their OS get a fully calm UI. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
