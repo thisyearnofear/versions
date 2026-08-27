@@ -239,7 +239,7 @@ function MatchSearch() {
   return (
     <section>
       <div className="max-w-2xl mb-4">
-        <div className="flex items-stretch border border-[var(--color-ink)] bg-[var(--color-paper)] rounded-sm overflow-hidden">
+        <div className="card-surface flex items-stretch overflow-hidden transition-shadow focus-within:shadow-[var(--shadow-lift)]">
           <textarea
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
@@ -261,7 +261,7 @@ function MatchSearch() {
               }
             }}
             disabled={loading || brief.trim().length < 3}
-            className="self-end bg-[var(--color-ink)] px-5 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-paper)] hover:bg-[var(--color-rust)] transition-colors disabled:opacity-40"
+            className="btn-primary m-2 self-end"
           >
             {loading ? "..." : canPayAgents ? `Match · $${SCORE_FEE_USDC}` : "Match"}
           </button>
@@ -284,15 +284,13 @@ function MatchSearch() {
         )}
         {!hasResults && (
           <div className="flex flex-wrap items-center gap-2 mt-3">
-            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-              Try:
-            </span>
+            <span className="kicker">Try:</span>
             {EXAMPLE_BRIEFS.slice(0, 4).map((e) => (
               <button
                 key={e.id}
                 type="button"
                 onClick={() => { setBrief(e.brief); void runSearch(e.brief, { paid: false, baseBrief: e.brief }); }}
-                className="border border-[var(--color-hair-strong)] px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide text-[var(--color-ink-2)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors"
+                className="chip"
               >
                 {e.label}
               </button>
@@ -321,7 +319,7 @@ function MatchSearch() {
             {refinements.map((a) => (
               <span
                 key={a}
-                className="inline-flex items-center gap-1 bg-[var(--color-rust)] text-[var(--color-paper)] px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide rounded-sm"
+                className="inline-flex items-center gap-1 rounded-full bg-[var(--color-rust)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-[var(--color-paper)]"
               >
                 {a}
                 <button type="button" onClick={() => removeRefinement(a)} className="opacity-70 hover:opacity-100" aria-label={`Remove: ${a}`}>×</button>
@@ -333,7 +331,7 @@ function MatchSearch() {
                 type="button"
                 onClick={() => applyRefinement(o.instruction)}
                 disabled={loading}
-                className="border border-[var(--color-hair-strong)] px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide text-[var(--color-ink-3)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] transition-colors disabled:opacity-40 rounded-sm"
+                className="chip disabled:opacity-40"
               >
                 {o.label}
               </button>
@@ -503,7 +501,7 @@ function VersionFamilySiblings({
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="inline-flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)] transition-colors"
+        className="inline-flex min-h-[32px] items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] transition-colors hover:text-[var(--color-rust)]"
         aria-expanded={expanded}
       >
         <svg
@@ -602,12 +600,12 @@ function AgentAnswer({ results, briefText }: { results: BriefSearchResponse; bri
           {families.size === 1 ? ' from one version family' : ''} — consent recorded, splits defined, license-ready.
         </p>
       )}
-      <p className="mt-1.5 font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">
+      <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">
         {results.total} matches considered
         {isGuidedDemo && ' · guided-demo catalog — terms illustrative only'}
       </p>
       <details className="mt-2">
-        <summary className="cursor-pointer font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
+        <summary className="cursor-pointer py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
           Scene card
         </summary>
         <div className="mt-2">
@@ -884,8 +882,8 @@ function MatchRow({
     <article
       role="listitem"
       className={cn(
-        "border border-[var(--color-hair)] rounded-sm transition-all duration-200 hover:border-[var(--color-ink-3)] hover:shadow-sm",
-        expanded && "border-[var(--color-ink)] shadow-sm",
+        "card-surface card-surface--interactive",
+        expanded && "border-[var(--color-ink)] shadow-[var(--shadow-lift)]",
         justShortlisted && "border-[var(--color-rust)]",
       )}
     >
@@ -925,7 +923,7 @@ function MatchRow({
                 {row.why_fits.slice(0, 2).map((fit, idx) => (
                   <span
                     key={`${fit}-${idx}`}
-                    className="bg-[var(--color-paper-2)] border border-[var(--color-hair)] px-1.5 py-0.3 font-mono text-[8px] uppercase tracking-wide text-[var(--color-ink-2)] rounded-sm truncate max-w-[220px]"
+                    className="max-w-[220px] truncate rounded-full border border-[var(--color-hair)] bg-[var(--color-paper-2)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]"
                     title={fit}
                   >
                     {fit.length > 48 ? `${fit.slice(0, 45)}…` : fit}
@@ -937,7 +935,7 @@ function MatchRow({
             {snippetPlaying && (
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-rust)] animate-pulse" />
-                <span className="font-mono text-[8px] text-[var(--color-ink-3)]">Snippet playing</span>
+                <span className="font-mono text-[10px] text-[var(--color-ink-3)]">Snippet playing</span>
               </div>
             )}
           </div>
@@ -945,7 +943,7 @@ function MatchRow({
           <FitScorePop score={row.fit_score} delay={scoreDelay} />
 
           <span className={cn(
-            "shrink-0 rounded-sm px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] transition-all duration-200",
+            "shrink-0 rounded-full px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.1em] transition-all duration-200",
             expanded
               ? "bg-[var(--color-ink)] text-[var(--color-paper)]"
               : "bg-[var(--color-paper-2)] text-[var(--color-ink-3)] group-hover:bg-[var(--color-rust)] group-hover:text-[var(--color-paper)]",

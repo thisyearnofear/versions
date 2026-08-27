@@ -353,7 +353,7 @@ export function LiveDemoButton() {
         type="button"
         onClick={run}
         disabled={phase === "running"}
-        className="inline-flex items-center gap-3 border border-[var(--color-ink)] font-mono text-[11px] uppercase tracking-[0.18em] px-8 py-4 hover:bg-[var(--color-ink)] hover:text-[var(--color-paper)] transition-colors disabled:opacity-50 disabled:cursor-wait"
+        className="inline-flex min-h-[44px] items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-ink)] px-6 py-3.5 font-mono text-[11px] uppercase tracking-[0.18em] shadow-[var(--shadow-soft)] transition-all hover:bg-[var(--color-ink)] hover:text-[var(--color-paper)] hover:shadow-[var(--shadow-lift)] disabled:cursor-wait disabled:opacity-50 sm:px-8"
       >
         {phase === "running" ? (
           <>
@@ -366,7 +366,7 @@ export function LiveDemoButton() {
           <>▶ Watch the agents work — live</>
         )}
       </button>
-      <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] mt-3">
+      <p className="kicker mt-3">
         Creates a demo submission · 3 AI agents review it · USDC settles · sound on
       </p>
 
