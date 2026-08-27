@@ -165,6 +165,14 @@ body {
   color: var(--color-rust);
 }
 
+/* Desktop-only hint — hidden on touch devices where there is no
+   cursor to move (the spectrum orb is pointer-reactive only). */
+@media (hover: none) {
+  .hover-hint {
+    display: none;
+  }
+}
+
 /* Elevated surface: radius + warm shadow + hover lift for interactive
    cards. Static panels use it without the hover affordance. */
 .card-surface {

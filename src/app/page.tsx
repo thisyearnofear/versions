@@ -266,7 +266,10 @@ function BriefSearchBar() {
           </Link>
         ))}
       </div>
-      <p className="kicker mt-4">Free to search · no sign-up · move your cursor over the spectrum →</p>
+      <p className="kicker mt-4">
+        Free to search · no sign-up
+        <span className="hover-hint"> · move your cursor over the spectrum →</span>
+      </p>
     </div>
   );
 }

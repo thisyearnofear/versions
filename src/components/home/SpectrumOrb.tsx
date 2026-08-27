@@ -155,21 +155,30 @@ export function SpectrumOrb({ className }: { className?: string }) {
     };
   }, [reduce]);
 
+  // Reduced-motion: a static glow ring. (A <span> inside <canvas> is
+  // fallback content browsers ignore once canvas is supported, so the
+  // still render must be a real element, not canvas children.)
+  if (reduce) {
+    return (
+      <div
+        aria-hidden="true"
+        className={className}
+        style={{
+          borderRadius: "9999px",
+          background:
+            "radial-gradient(circle, rgba(200,74,31,0.14) 0%, rgba(200,74,31,0.05) 55%, transparent 72%)",
+          border: "1px solid rgba(26,26,26,0.10)",
+        }}
+      />
+    );
+  }
+
   return (
     <canvas
       ref={canvasRef}
       aria-hidden="true"
       className={className}
-      // Static render for reduced-motion: a centered glowing ring.
-      style={
-        reduce
-          ? undefined
-          : { touchAction: "none" }
-      }
-    >
-      {reduce && (
-        <span className="block h-full w-full rounded-full bg-[var(--color-rust-soft)]" />
-      )}
-    </canvas>
+      style={{ touchAction: "none" }}
+    />
   );
 }
