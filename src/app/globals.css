@@ -27,6 +27,36 @@
 
   /* Motion language — one ease curve everywhere (matches FadeIn) */
   --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ── Energy: vivid gradients + glow (music-app vibrancy) ── */
+  --grad-ember: linear-gradient(135deg, #c84a1f 0%, #e8762a 45%, #f0a04b 100%);
+  --grad-ink: linear-gradient(160deg, #1a1a1a 0%, #2b2b2b 100%);
+  --grad-hero: linear-gradient(110deg, #1a1a1a 0%, #c84a1f 55%, #e8762a 100%);
+  --glow-rust: 0 0 24px rgba(200, 74, 31, 0.35);
+  --glow-rust-strong: 0 0 40px rgba(200, 74, 31, 0.5);
+}
+
+/* Gradient text helper — clip the gradient to the type. */
+.text-gradient {
+  background: var(--grad-hero);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.glow-rust {
+  box-shadow: var(--glow-rust);
+}
+
+/* Tilt card: perspective context for the 3D hover primitive. */
+.tilt-wrap {
+  perspective: 1000px;
+}
+.tilt-inner {
+  transition: transform 0.25s var(--ease-out-expo);
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
 body {
@@ -207,30 +237,6 @@ body {
   z-index: 3;
 }
 
-/* ── Skeleton loading animation ───────────────────── */
-@keyframes skeleton-pulse {
-  0% { opacity: 0.06; }
-  40% { opacity: 0.14; }
-  100% { opacity: 0.06; }
-}
-
-.skel {
-  animation: skeleton-pulse 1.6s ease-in-out infinite;
-  background: var(--color-ink);
-}
-
-/* ── Accessibility: honor prefers-reduced-motion ──── */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
 /* ── Ambient EQ bars (hero backdrop) ──────────────── */
 /* Slow, low-opacity equaliser drift — the "sound" of the catalog
    behind the hero. aria-hidden always; the reduced-motion rule
@@ -251,4 +257,32 @@ body {
 }
 .float-y {
   animation: float-y 5s ease-in-out infinite;
+}
+
+/* ── Skeleton loading animation ───────────────────── */
+@keyframes skeleton-pulse {
+  0% { opacity: 0.06; }
+  40% { opacity: 0.14; }
+  100% { opacity: 0.06; }
+}
+
+.skel {
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+  background: var(--color-ink);
+}
+
+/* ── Accessibility: honor prefers-reduced-motion ──── */
+/* MotionConfig in providers.tsx handles framer-motion components;
+   this rule covers the rest (Tailwind transition-* utilities,
+   .skel keyframe pulse, AudioPlayer's animate-wave) so users
+   with reduced-motion enabled in their OS get a fully calm UI. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -11,8 +11,10 @@ import { track } from "@/lib/analytics";
 import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { EconomyTicker } from "@/components/economy/EconomyTicker";
-import { Reveal, EASE_OUT } from "@/components/ui/motion";
+import { Reveal, EASE_OUT, Tilt } from "@/components/ui/motion";
 import { WedgeDiagram } from "@/components/home/WedgeDiagram";
+import { SpectrumOrb } from "@/components/home/SpectrumOrb";
+import { playNoteAt, resumeAudio } from "@/lib/audio-feedback";
 
 // PERF: below-the-fold sections are client-only dynamic chunks. They
 // fetch their own data on mount anyway, so keeping them out of the
@@ -77,12 +79,16 @@ export default function Home() {
                 </Link>
               </div>
             </Reveal>
-            <Reveal delay={0.1} className="card-surface p-5 sm:p-6">
-              <p className="kicker mb-4">Live · system proof</p>
-              <LiveDemoButton />
-              <div className="mt-5 border-t border-[var(--color-hair)] pt-5">
-                <EconomyTicker limit={6} />
-              </div>
+            <Reveal delay={0.1}>
+              <Tilt max={6} className="h-full">
+                <div className="card-surface h-full p-5 sm:p-6">
+                  <p className="kicker mb-4">Live · system proof</p>
+                  <LiveDemoButton />
+                  <div className="mt-5 border-t border-[var(--color-hair)] pt-5">
+                    <EconomyTicker limit={6} />
+                  </div>
+                </div>
+              </Tilt>
             </Reveal>
           </div>
         </section>
@@ -105,6 +111,11 @@ export default function Home() {
 function Hero() {
   return (
     <section className="relative mx-auto max-w-2xl overflow-visible py-10 text-center sm:py-14 md:py-20">
+      {/* The orb sits behind the headline as the hero's energy source.
+          Mouse-reactive spectrum — visitors play it as they read. */}
+      <div className="pointer-events-none absolute left-1/2 top-6 -z-10 h-[360px] w-[360px] -translate-x-1/2 sm:h-[440px] sm:w-[440px] md:h-[520px] md:w-[520px]">
+        <SpectrumOrb className="pointer-events-auto h-full w-full opacity-90" />
+      </div>
       <AmbientBars />
       <motion.p
         className="kicker kicker--accent relative mb-3"
@@ -120,7 +131,7 @@ function Hero() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: EASE_OUT }}
       >
-        Finding the right take
+        <span className="text-gradient">Finding the right take</span>
         <br />
         <span className="relative inline-block font-normal italic text-[var(--color-rust)]">
           shouldn&apos;t take weeks.
@@ -238,18 +249,24 @@ function BriefSearchBar() {
       </form>
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
         <span className="kicker">Try:</span>
-        {EXAMPLE_BRIEFS.slice(0, 4).map((e) => (
+        {EXAMPLE_BRIEFS.slice(0, 4).map((e, idx) => (
           <Link
             key={e.id}
             href={`/discover?brief=${encodeURIComponent(e.brief)}`}
             onClick={() => track("hero_brief_example", { label: e.label })}
+            onMouseEnter={() => {
+              resumeAudio();
+              // Musical interaction: each chip sings a different note
+              // down the scale as you browse — the search itself has a melody.
+              playNoteAt(1 - (idx / Math.max(1, EXAMPLE_BRIEFS.slice(0, 4).length - 1)));
+            }}
             className="chip"
           >
             {e.label}
           </Link>
         ))}
       </div>
-      <p className="kicker mt-4">Free to search · no sign-up</p>
+      <p className="kicker mt-4">Free to search · no sign-up · move your cursor over the spectrum →</p>
     </div>
   );
 }
