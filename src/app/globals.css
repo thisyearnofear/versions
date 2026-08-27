@@ -230,3 +230,25 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Ambient EQ bars (hero backdrop) ──────────────── */
+/* Slow, low-opacity equaliser drift — the "sound" of the catalog
+   behind the hero. aria-hidden always; the reduced-motion rule
+   below stills it. */
+@keyframes eq-drift {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+.eq-bar {
+  transform-origin: bottom;
+  animation: eq-drift 3.8s ease-in-out infinite;
+}
+
+/* ── Gentle float for illustrative elements ─────────── */
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.float-y {
+  animation: float-y 5s ease-in-out infinite;
+}
