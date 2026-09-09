@@ -7,18 +7,18 @@ export type Valence = 'bright' | 'neutral' | 'dark';
 export type SubmissionStatus = 'pending_payment' | 'awaiting_curation' | 'in_curation' | 'published' | 'rejected';
 export type SettlementStatus = 'pending' | 'settled' | 'failed';
 export type AgentName = 'production' | 'performance' | 'market';
-export type RecipientRole = 'curator' | 'platform' | 'musicbrainz';
+export type RecipientRole = 'curator' | 'platform' | 'musicbrainz' | 'supplier' | 'channel';
 
-// Catalog provenance describes where a take came from. It is intentionally
-// separate from version type, ranking quality, and rights clearance.
-// 'authorized' = published from a submission inside an artist-authorized
-// version program (pilot) — the one source where pre-clearance is a fact
-// (consent recorded per version) rather than an assumption.
-export type CatalogSource = 'demo' | 'live' | 'authorized';
+// Catalog provenance describes where a listing came from. It is intentionally
+// separate from kind, ranking quality, and rights clearance. 'demo' = seeded
+// illustrative rows (never served for money); 'live' = a real supplier listing.
+// The old 'authorized' source (artist-authorized version programs) was removed
+// in the marketplace pivot — there are no per-program consent records anymore.
+export type CatalogSource = 'demo' | 'live';
 export type CatalogMode = 'guided_demo' | 'live_catalog' | 'mixed';
 export interface CatalogProvenance {
   source: CatalogSource;
-  label: 'Guided demo' | 'Live catalog' | 'Authorized program';
+  label: 'Guided demo' | 'Live catalog';
   description: string;
 }
 
@@ -95,12 +95,13 @@ export interface SettlementLeg {
 // `why_fits` citations). See src/services/feed.ts.
 export interface BriefSearchLicenseAvailability {
   // Demo tracks are intentionally preview-only; live tracks can enter the
-  // authenticated workflow. Authorized-program tracks are the only state
-  // where clearance is recorded per version ('cleared').
+  // authenticated workflow. The old 'cleared' state (per-version consent
+  // records) was removed in the marketplace pivot — there is no per-track
+  // clearance anymore, only a blanket ToS for free use.
   status: 'demo_preview' | 'requestable';
   reason: string;
   clearance: {
-    status: 'unverified' | 'cleared';
+    status: 'unverified';
     reason: string;
   };
 }
@@ -121,7 +122,7 @@ export interface BriefSearchLicenseQuote {
 // the specific evidence still required for a final license explicit so a
 // supervisor can distinguish a requestable workflow from a cleared outcome.
 export interface BriefSearchLicensingEvidence {
-  status: 'sample_only' | 'rights_review_required' | 'program_cleared';
+  status: 'sample_only' | 'rights_review_required';
   summary: string;
   outstanding: Array<{
     requirement: 'rights_authority' | 'scope_and_restrictions' | 'final_quote';
@@ -129,39 +130,135 @@ export interface BriefSearchLicensingEvidence {
   }>;
 }
 
-// ── Authorized version programs (pilot) ────────────────
-// MODULAR: the consent record + royalty waterfall for an artist-authorized
-// version program. The concierge pilot mirrors ONE lawyer-drafted agreement
-// per program; these shapes are the structured slice of that agreement that
-// the platform needs to gate, evidence, and settle. Canonical definitions —
-// schema.jsonb and services both consume these.
-export type ProgramStatus = 'active' | 'revoked' | 'completed';
-export type AuthorizationStatus = 'pending_approval' | 'approved' | 'rejected';
+// ── Marketplace (dual-vertical placement) types ─────────
+// MODULAR: the pivot. VERSIONS is a marketplace where AI-run distribution
+// channels browse a feed of music + product placements, pick what fits their
+// content's ethos, and use it — free (attribution required) or paid (flat fee
+// / CPM, "sponsor slot"). No per-track licensing negotiation: one blanket ToS
+// covers all free usage. These shapes are the canonical definitions; schema
+// jsonb columns and services both consume them.
 
-export interface ConsentPolicy {
-  allowed_transformations: string[]; // e.g. ['alt_vocals', 'remix', 'mood_flip']
-  prohibited: string[];
-  territories: string[]; // ['worldwide'] or ISO codes
-  term_months: number;
-  revocable: boolean;
-  model_training_allowed: boolean;
-  notes?: string; // free-text summary of the signed agreement
-  agreement_ref?: string; // pointer to the signed document (path/URL)
+// A listing is the unified supply primitive. `kind` discriminates the two
+// catalogs (music vs product placement); everything else is shared so both
+// embed into the same vector space as a channel's ethos.
+export type ListingKind = 'music' | 'placement';
+export type FreeOrPaid = 'free' | 'paid';
+export type PricingModel = 'flat' | 'cpm';
+
+// A distribution channel (the demand side). A channel connects a real
+// distribution surface (YouTube URL at minimum) and we pull REAL subscriber /
+// view numbers via the platform's public API — never self-reported stats.
+export type ChannelPlatform = 'youtube' | 'tiktok' | 'other';
+export type ChannelStatus = 'pending_verification' | 'verified' | 'rejected';
+
+// Verified distribution stats pulled from a platform public API (or the
+// deterministic mock). `source` records where the numbers came from so a
+// channel can never claim self-reported reach.
+export interface ChannelVerification {
+  source: 'youtube_data_api' | 'manual' | 'mock';
+  platform: ChannelPlatform;
+  platformUrl: string;
+  subscriberCount: number;
+  viewCount: number;
+  videoCount: number;
+  verifiedAt: string;
+  statsSnapshot: Record<string, unknown>;
 }
 
-// One leg of the per-use royalty waterfall. share_bps is basis points; legs
-// must sum to exactly 10000 (100%).
-export interface RoyaltySplit {
+export interface ChannelRow {
+  id: string;
   wallet: string;
-  label: string; // 'artist' | 'creator' | 'publisher' | 'platform' | ...
-  share_bps: number;
+  name: string;
+  handle: string;
+  platform: ChannelPlatform;
+  platformUrl: string;
+  status: ChannelStatus;
+  // The ethos embedding input: the channel's own content description/history
+  // (recent video titles/descriptions, stated genre/niche).
+  ethos: string | null;
+  ethosTags: string[];
+  subscriberCount: number | null;
+  viewCount: number | null;
+  videoCount: number | null;
+  verification: ChannelVerification | null;
+  // One blanket ToS click-through at channel-registration time.
+  tosAcceptedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-// Derivative-version provenance: how this version was made and from what.
-export interface VersionLineage {
-  creator_tools: string[]; // tool-agnostic labels, e.g. ['suno', 'manual_mix']
-  source_version_ids: string[]; // upstream versions/stems used, if any
-  notes?: string;
+// The unified listing row surfaced in the channel feed. Both kinds embed into
+// the same vector space as channel ethos; `target_ethos`/`mood_tags` are the
+// structured tags that back the matching when embeddings are unavailable.
+export interface ListingRow {
+  submission_id: string;
+  kind: ListingKind;
+  title: string; // track title (music) or listing title (placement)
+  supplier_name: string; // artist (music) or brand/product (placement)
+  free_or_paid: FreeOrPaid;
+  pricing_model: PricingModel | null;
+  flat_fee_usdc: string | null;
+  cpm_usdc: string | null;
+  campaign_budget_usdc: string | null;
+  campaign_spent_usdc: string | null;
+  brand_name: string | null;
+  pitch: string | null;
+  target_ethos: string[];
+  image_path: string | null;
+  audio_path: string | null;
+  audio_features: AudioFeatures | null;
+  genre: string | null;
+  mood_tags: MoodTagsEnvelope;
+  attribution_string: string | null;
+  disclosure_marker: string | null;
+  status: string;
+  created_at: string;
+  published_at: string | null;
+}
+
+// Free-tier usage instrumentation — the data flywheel. Every free usage logs
+// which channel used which listing, when, and where (video URL if available).
+export type UsageKind = 'free' | 'paid';
+
+export interface UsageEventRow {
+  id: string;
+  submission_id: string;
+  channel_id: string | null;
+  kind: UsageKind;
+  video_url: string | null;
+  attribution_string: string | null;
+  paid_slot_id: string | null;
+  tracking_code: string | null;
+  used_at: string;
+}
+
+// A paid slot ("sponsor slot") — the ad-infra contract. A channel or brand
+// creates/accepts a paid slot, sets budget, picks flat-fee or CPM, and checks
+// out via the existing Arc/x402 rails. Each slot carries a unique trackable
+// attribution code and a disclosure marker (FTC/platform sponsored-content
+// requirements apply to AI-run channels same as human ones).
+export type PaidSlotStatus = 'draft' | 'pending_payment' | 'active' | 'completed' | 'paused' | 'cancelled';
+
+export interface PaidSlotRow {
+  id: string;
+  submission_id: string;
+  kind: ListingKind;
+  // Who is paying for this slot: the channel (buying a music placement) or
+  // the supplier/brand (buying a product placement into a channel's content).
+  buyer_wallet: string;
+  buyer_role: 'channel' | 'supplier';
+  channel_id: string | null;
+  pricing_model: PricingModel;
+  price_usdc: string; // flat fee (flat) or CPM rate (cpm)
+  budget_usdc: string;
+  spent_usdc: string;
+  status: PaidSlotStatus;
+  attribution_code: string; // unique trackable identifier
+  disclosure_marker: string; // e.g. "Sponsored" / "Paid promotion"
+  payment_tx_hash: string | null;
+  settled_status: SettlementStatus;
+  created_at: string;
+  updated_at: string;
 }
 
 // Audio features extracted from the source audio for agent scoring.
@@ -178,16 +275,6 @@ export interface AudioFeatures {
   instrumentalness: number | null; // 0-1 (instrumental / vocal)
   valence: number | null;        // 0-1 (positive / negative mood)
   _raw?: Record<string, unknown>; // ffmpeg probe data, for future processing
-}
-
-// Read-side gate for the license route: is this version still inside an
-// active, artist-approved program? Derived at read time so a program
-// revocation stops new licenses immediately without touching old rows.
-export interface ProgramGate {
-  program_id: string;
-  program_status: ProgramStatus;
-  rights_holder_wallet: string;
-  authorization_status: AuthorizationStatus | null;
 }
 
 export interface BriefSearchRow {
@@ -218,26 +305,6 @@ export interface BriefSearchRow {
     emotional_arcs: string[];
     sync_comparables: Array<{ name: string; why: string }>;
     audience_summary: string;
-  };
-  // MODULAR: pilot program data for authorized versions. Only populated when
-  // catalog.source === 'authorized'. Enables the consent lineage visualization.
-  program?: {
-    programId: string;
-    programStatus: ProgramStatus;
-    rightsHolderWallet: string;
-    authorizationStatus: AuthorizationStatus | null;
-    authorizedAt: string | null;
-    consentPolicy: ConsentPolicy;
-    splits: RoyaltySplit[];
-    lineage: VersionLineage | null;
-    audioFeatures: AudioFeatures | null;
-    agentScores: Array<{
-      agent: string;
-      detail: AgentDetail;
-      why_fits: string[];
-    }>;
-    licenseCount: number;
-    totalSettled: number;
   };
 }
 

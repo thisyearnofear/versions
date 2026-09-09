@@ -8,28 +8,31 @@
 | [primitive-api.md](./primitive-api.md) | Brief → license HTTP contract |
 | [search.md](./search.md) | Discover, embeddings, pgvector |
 | [guided-demo-and-billing.md](./guided-demo-and-billing.md) | Catalog provenance, guided demo, subscription and relayer seams |
-| [beachhead.md](./beachhead.md) | Ground-truth labels + benchmark |
+| [beachhead.md](./beachhead.md) | Distribution-side adoption + usage instrumentation moat |
 | [deploy.md](./deploy.md) | Git-only production deploy and guarded schema operations |
 
 Agent conventions (mood tags, feed shape, NFT traces): [../AGENTS.md](../AGENTS.md).
 
 ## Loop
 
-Artist submits (0.50 USDC) → three agents review in parallel → publish + split settlement → supervisor searches by brief → license as an ERC-8183 job → Arc USDC.
-
-Guests search free. Shortlist and license need a wallet session.
+Channel registers → verifies (real reach via public API) → ethos embedded →
+browses a feed of music + product placements → free use with attribution OR a
+paid sponsor slot → attribution tracked + flat 3-way settlement on Arc.
 
 ## Routes
 
 | Path | Role |
 |------|------|
-| `/discover` | Brief search (primary) — audio-aware agents, version family grouping, consent lineage |
-| `/supervisor` | Shortlist, licenses, treasury, agent stack |
-| `/submit` | Artist upload |
-| `/agents` | Live review queue — differentiated per-agent verdicts + sync-fit |
-| `/feed` | Published catalog |
+| `/discover` | Listings feed (primary) — ethos-matched `music` + `placement` listings |
+| `/supervisor` | Channel workspace — shortlists, paid slots, treasury |
+| `/submit` | Supplier upload — one flow, two kinds (music / product placement) |
+| `/agents` | Ethos-fit review — per-channel verdicts |
+| `/feed` | Published listings |
 | `/auth/signin` | Connect + EIP-191 sign-in |
 | `/api/health/ready` | Adapter mock/live flags |
+
+Channel onboarding + verification lives in the channel workspace; paid slots
+are created/accepted there and settle via Arc.
 
 ## Local
 

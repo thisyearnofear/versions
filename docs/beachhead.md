@@ -1,15 +1,31 @@
 # Beachhead
 
-Turn the moat from code into **labeled data**: real supervisors marking
-`(brief → take)` as good/wrong fit.
+Turn the moat from code into **verified distribution + labeled usage data**:
+real AI-run distribution channels browsing a feed and using listings, with every
+free use instrumented as the data flywheel.
 
-Slice to win first: **tense / thriller** (car chase, no vocals, ~120 bpm).
-Seed 20–50 coherent takes. Recruit 3–5 people who actually run briefs.
+**Distribution-side adoption wedge:** recruit a first cohort of real AI-run
+distribution channels (YouTube automation, radio-style feeds) that connect a
+real distribution surface. We pull real subscriber/view numbers via public API
+— never self-reported. Slice to win first: a niche where channels are plentiful
+and placements are scarce (e.g. ambient/lofi radio-style feeds, or a vertical
+like "study/relax" automation).
 
-**In-app:** Good fit / Wrong fit on Discover → `/api/v1/discover/brief/feedback`.  
-**Batch:** `npm run seed` then
-`npm run curate -- --set scripts/labels/beachhead-starter.labels.json`.
+**Supply:** seed a first set of `music` + `placement` listings with clear ethos
+tags and free/paid flags.
 
-Success: ≥3 external labelers, ≥100 labels across ≥5 briefs, and a
-benchmark you can move month-over-month (`npm run benchmark` — watch MRR
-and precision@1). Strategy: [STRATEGY.md](../STRATEGY.md) §6.
+**Free tier = labeled-data moat:** every free use is instrumented (which
+channel used which listing, when, where) with attribution required. That usage
+data is the ground truth that improves ethos matching and becomes the **sales
+proof** ("this catalog was used X times this month").
+
+**Path to paid:** instrumented free usage proves demand; then the self-serve
+paid slot (flat fee / CPM, budget cap, Arc settlement, flat 3-way split) is the
+conversion rail. Watch free→paid conversion.
+
+**In-app:** free/paid use on the listings feed; paid slots settle on Arc.
+
+Success: ≥N real channels onboarded with verified reach, ≥N music + product
+listings live, free uses instrumented and attributed, and **a channel picks a
+VERSIONS listing for its content over its usual source** (the thesis in
+miniature) — then ≥1 paid slot per side. Strategy: [STRATEGY.md](../STRATEGY.md) §6.

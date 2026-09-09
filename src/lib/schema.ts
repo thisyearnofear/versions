@@ -1,6 +1,16 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, text, integer, real, timestamp, index, unique, uniqueIndex, jsonb, boolean, customType, check } from 'drizzle-orm/pg-core';
-import type { AgentDetail, AuthorizationStatus, AudioFeatures, ConsentPolicy, ProgramStatus, RoyaltySplit, VersionLineage } from './types';
+import type {
+  AgentDetail,
+  AudioFeatures,
+  ChannelVerification,
+  ListingKind,
+  PaidSlotStatus,
+  PaidSlotRow,
+  UsageEventRow,
+  FreeOrPaid,
+  PricingModel,
+} from './types';
 
 // MODULAR: pgvector custom column type. Stores a float array that
 // Postgres treats as a `vector(N)` column when the pgvector extension
@@ -31,7 +41,13 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-// ── Submissions ────────────────────────────────────────
+// ── Submissions (unified listings) ─────────────────────
+// MODULAR: the marketplace pivot generalized `submissions` into the unified
+// listing table. `kind` discriminates the two supply catalogs: 'music'
+// (audio file, audio features, mood/genre tags, free-or-paid flag, flat fee)
+// and 'placement' (brand/product name, image(s), short pitch, target ethos
+// tags, CPM or flat fee, campaign budget/cap). No per-track licensing
+// negotiation — one blanket ToS (tos_accepted_at) covers all free usage.
 
 export const submissions = pgTable('submissions', {
   id: text('id').primaryKey(),
@@ -40,14 +56,15 @@ export const submissions = pgTable('submissions', {
   musicbrainzId: text('musicbrainz_id'),
   title: text('title').notNull(),
   artistName: text('artist_name').notNull(),
-  versionType: text('version_type').notNull(), // demo|live|acoustic|remix|remaster|studio|other
+  versionType: text('version_type').notNull().default('other'), // demo|live|acoustic|remix|remaster|studio|other
   genre: text('genre'),
   artistMood: text('artist_mood'),
   description: text('description'),
-  audioPath: text('audio_path').notNull(),
+  // Nullable for placement listings (no audio file).
+  audioPath: text('audio_path'),
   audioDurationSeconds: integer('audio_duration_seconds'),
-  audioSizeBytes: integer('audio_size_bytes').notNull(),
-  contentType: text('content_type').notNull(),
+  audioSizeBytes: integer('audio_size_bytes'),
+  contentType: text('content_type'),
   // MODULAR: dedup key for retried IPFS uploads. Captured at the
   // route boundary (sha256 of the raw audio bytes) and stored
   // alongside the artist_wallet so a retry from the SAME wallet
@@ -61,16 +78,26 @@ export const submissions = pgTable('submissions', {
 
   feeQuoteUsdc: text('fee_quote_usdc').notNull(),
   coverSvg: text('cover_svg'),
-  // MODULAR: authorized-version program lineage (pilot). When set, this
-  // submission is a derivative version produced under an artist-authorized
-  // consent program. authorizationStatus is the artist's per-version gate:
-  // only 'approved' versions publish as catalog_source 'authorized' (and
-  // therefore carry pre-clearance). lineage records derivative provenance
-  // (tools + upstream versions) for audit. NULL on all non-program takes.
-  programId: text('program_id').references(() => versionPrograms.id),
-  authorizationStatus: text('authorization_status').$type<AuthorizationStatus | null>(), // pending_approval|approved|rejected
-  authorizedAt: timestamp('authorized_at'),
-  lineage: jsonb('lineage').$type<VersionLineage | null>(),
+
+  // ── Dual-vertical listing fields ─────────────────────
+  kind: text('kind').notNull().default('music').$type<ListingKind>(), // music|placement
+  // Free tier (attribution required) vs paid tier (flat fee / CPM slot).
+  freeOrPaid: text('free_or_paid').notNull().default('free').$type<FreeOrPaid>(), // free|paid
+  pricingModel: text('pricing_model').$type<PricingModel | null>(), // flat|cpm
+  flatFeeUsdc: text('flat_fee_usdc'), // flat fee if paid (both kinds)
+  cpmUsdc: text('cpm_usdc'), // CPM rate if paid (placement)
+  campaignBudgetUsdc: text('campaign_budget_usdc'), // spend cap for paid placement
+  brandName: text('brand_name'), // placement: brand/product name
+  pitch: text('pitch'), // placement: short pitch
+  imagePath: text('image_path'), // placement: image(s) (single path v1)
+  targetEthos: jsonb('target_ethos').$type<string[]>().notNull().default([]), // structured ethos tags for matching (both kinds)
+  // Attribution + compliance: generated at listing-creation time for free
+  // placements (attribution_string) and at paid-slot purchase (disclosure
+  // marker built into the paid-listing data model from day one).
+  attributionString: text('attribution_string'),
+  disclosureMarker: text('disclosure_marker'),
+  // One blanket ToS click-through at listing-creation time.
+  tosAcceptedAt: timestamp('tos_accepted_at'),
   // Audio features extracted from the source audio for agent scoring.
   // Populated at publish time by the feature extraction pipeline.
   // Agents receive these features alongside metadata to make their
@@ -86,6 +113,7 @@ export const submissions = pgTable('submissions', {
 }, (table) => [
   index('idx_submissions_status').on(table.status, table.submittedAt),
   index('idx_submissions_artist').on(table.artistWallet),
+  index('idx_submissions_kind').on(table.kind, table.status),
   // MODULAR: dedup contract at the DB boundary. The route computes
   // sha256(audioBytes) and the service does lookup-first + insert
   // with .onConflictDoNothing(target=[audioSha256, artistWallet]).
@@ -95,32 +123,8 @@ export const submissions = pgTable('submissions', {
   // double-click race in case the lookup SELECT misses (rare but
   // possible across parallel workers in the same cold-start).
   unique('uq_audio_sha256_wallet').on(table.audioSha256, table.artistWallet),
-]);
-
-// ── Authorized Version Programs (pilot) ───────────────
-// MODULAR: one row per artist-authorized version program — the consent
-// record + royalty waterfall for a pilot. A submission links to a program
-// via submissions.program_id; when it publishes with authorizationStatus
-// 'approved', published_versions.catalog_source becomes 'authorized' (the
-// one source where pre-clearance is a recorded fact, not an assumption).
-// The concierge pilot mirrors ONE lawyer-drafted agreement per program; the
-// jsonb columns are the structured slice of that agreement the platform
-// needs to gate, evidence, and settle. Canonical shapes: src/lib/types.ts.
-export const versionPrograms = pgTable('version_programs', {
-  id: text('id').primaryKey(),
-  rightsHolderWallet: text('rights_holder_wallet').notNull(),
-  sourceTitle: text('source_title').notNull(),
-  sourceArtist: text('source_artist').notNull(),
-  musicbrainzId: text('musicbrainz_id'),
-  consentPolicy: jsonb('consent_policy').notNull().$type<ConsentPolicy>(),
-  splits: jsonb('splits').notNull().$type<RoyaltySplit[]>(),
-  status: text('status').notNull().default('active').$type<ProgramStatus>(), // active|revoked|completed
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => [
-  index('idx_version_programs_rights_holder').on(table.rightsHolderWallet),
-  check('version_programs_status_check', sql`${table.status} IN ('active', 'revoked', 'completed')`),
-  check('version_programs_splits_check', sql`jsonb_array_length(${table.splits}) >= 1`),
+  check('submissions_kind_check', sql`${table.kind} IN ('music', 'placement')`),
+  check('submissions_free_or_paid_check', sql`${table.freeOrPaid} IN ('free', 'paid')`),
 ]);
 
 // ── Curator Claims ─────────────────────────────────────
@@ -247,19 +251,18 @@ export const publishedVersions = pgTable('published_versions', {
   ratingCount: integer('rating_count').notNull(),
   // Catalog provenance is independent of version_type and rights clearance.
   // Default live so newly published artist submissions cannot silently inherit
-  // the guided-demo behavior used by deterministic seed data. 'authorized'
-  // is set only when publishing an approved submission inside an active
-  // version program (see publish.ts).
-  catalogSource: text('catalog_source').notNull().default('live'), // demo | live | authorized
+  // the guided-demo behavior used by deterministic seed data. The old
+  // 'authorized' source (program consent records) was removed in the pivot.
+  catalogSource: text('catalog_source').notNull().default('live'), // demo | live
   publishedAt: timestamp('published_at').notNull(),
-  // MODULAR: version family grouping for authorized derivative versions.
+  // MODULAR: version family grouping for multiple takes of the same song.
   // When set, this submission is part of a version family (alternate takes,
   // remixes, derivative versions of the same source song). Enables DiscoverView
   // to group related versions together with expandable sibling panels.
   familyId: text('family_id'),
 }, (table) => [
   index('idx_published_at').on(table.publishedAt),
-  check('published_versions_catalog_source_check', sql`${table.catalogSource} IN ('demo', 'live', 'authorized')`),
+  check('published_versions_catalog_source_check', sql`${table.catalogSource} IN ('demo', 'live')`),
 ]);
 
 // ── A&R Playlists ──────────────────────────────────────
@@ -436,8 +439,112 @@ export const versionEmbeddings = pgTable('version_embeddings', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// ── Channels (distribution, demand side) ─────────────────
+// MODULAR: the marketplace pivot. One row per AI-run distribution channel.
+// A channel connects a real distribution surface (platform_url) and we pull
+// REAL subscriber/view numbers via the platform's public API — never
+// self-reported stats (see adapters/platform-stats). `ethos` is the channel's
+// own content description/history — the input to the ethos embedding that
+// drives matching; `verification` records where the pulled numbers came from.
+// `tos_accepted_at` is the one blanket ToS click-through at registration.
+
+export const channels = pgTable('channels', {
+  id: text('id').primaryKey(),
+  wallet: text('wallet').notNull(),
+  name: text('name').notNull(),
+  handle: text('handle').notNull(),
+  platform: text('platform').notNull().default('youtube'), // youtube|tiktok|other
+  platformUrl: text('platform_url').notNull(),
+  status: text('status').notNull().default('pending_verification'), // pending_verification|verified|rejected
+  ethos: text('ethos'),
+  ethosTags: jsonb('ethos_tags').$type<string[]>().notNull().default([]),
+  subscriberCount: integer('subscriber_count'),
+  viewCount: integer('view_count'),
+  videoCount: integer('video_count'),
+  verification: jsonb('verification').$type<ChannelVerification | null>(),
+  tosAcceptedAt: timestamp('tos_accepted_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_channels_wallet').on(table.wallet),
+  index('idx_channels_status').on(table.status),
+]);
+
+// One ethos vector per channel — embed the channel's content description /
+// history into the same space as listing embeddings for cosine matching.
+export const channelEmbeddings = pgTable('channel_embeddings', {
+  channelId: text('channel_id').primaryKey().references(() => channels.id),
+  embedding: vector('embedding', { dimensions: 512 }).notNull(),
+  model: text('model').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// One vector per listing (music + placement) in the same ethos space.
+// Separate from version_embeddings (which stays the legacy music-brief
+// index) so listings can be re-embedded without touching the old table.
+export const listingEmbeddings = pgTable('listing_embeddings', {
+  submissionId: text('submission_id').primaryKey().references(() => submissions.id),
+  embedding: vector('embedding', { dimensions: 512 }).notNull(),
+  model: text('model').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// ── Paid slots (the ad infra) ────────────────────────────
+// MODULAR: a sponsorship contract between a buyer (channel or
+// supplier/brand) and a listing. Every paid placement carries a unique
+// trackable attribution code + disclosure marker (FTC/platform sponsored-
+// content requirements apply to AI-run channels same as human ones).
+// Budget/spend caps stop the slot serving once spent.
+
+export const paidSlots = pgTable('paid_slots', {
+  id: text('id').primaryKey(),
+  submissionId: text('submission_id').notNull().references(() => submissions.id),
+  buyerWallet: text('buyer_wallet').notNull(),
+  buyerRole: text('buyer_role').notNull(), // channel|supplier
+  channelId: text('channel_id').references(() => channels.id),
+  pricingModel: text('pricing_model').notNull(), // flat|cpm
+  priceUsdc: text('price_usdc').notNull(), // flat fee (flat) or CPM rate (cpm)
+  budgetUsdc: text('budget_usdc').notNull(),
+  spentUsdc: text('spent_usdc').notNull().default('0'),
+  status: text('status').notNull().default('draft').$type<PaidSlotStatus>(), // draft|pending_payment|active|completed|paused|cancelled
+  attributionCode: text('attribution_code').notNull().unique(),
+  disclosureMarker: text('disclosure_marker').notNull().default('Sponsored'),
+  paymentTxHash: text('payment_tx_hash'),
+  settledStatus: text('settled_status').notNull().default('pending'), // pending|settled|failed
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_paid_slots_submission').on(table.submissionId),
+  index('idx_paid_slots_buyer').on(table.buyerWallet, table.status),
+  index('idx_paid_slots_channel').on(table.channelId),
+  check('paid_slots_pricing_model_check', sql`${table.pricingModel} IN ('flat', 'cpm')`),
+  check('paid_slots_status_check', sql`${table.status} IN ('draft', 'pending_payment', 'active', 'completed', 'paused', 'cancelled')`),
+]);
+
+// ── Usage events (free + paid instrumentation) ───────────
+// MODULAR: the data flywheel. Every use of a listing is logged — which
+// channel used which listing, when, and where (video URL if available).
+// Free usage (attribution required) and paid usage (attribution code) both
+// land here; paid rows also bump the slot's spend and drive the spend cap.
+
+export const usageEvents = pgTable('usage_events', {
+  id: text('id').primaryKey(),
+  submissionId: text('submission_id').notNull().references(() => submissions.id),
+  channelId: text('channel_id').references(() => channels.id),
+  kind: text('kind').notNull().default('free'), // free|paid
+  videoUrl: text('video_url'),
+  attributionString: text('attribution_string'),
+  paidSlotId: text('paid_slot_id').references(() => paidSlots.id),
+  trackingCode: text('tracking_code'),
+  usedAt: timestamp('used_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_usage_events_submission').on(table.submissionId, table.usedAt),
+  index('idx_usage_events_channel').on(table.channelId, table.usedAt),
+  index('idx_usage_events_kind').on(table.kind, table.usedAt),
+  index('idx_usage_events_paid_slot').on(table.paidSlotId),
+]);
+
 // ── Supervisor Profiles ─────────────────────────────────
-// B2B sync-first: music supervisors, A&R teams, and sync houses.
 
 export const supervisorProfiles = pgTable('supervisor_profiles', {
   wallet: text('wallet').primaryKey().references(() => users.walletAddress),
@@ -514,10 +621,8 @@ export const matchFeedback = pgTable('match_feedback', {
   briefText: text('brief_text').notNull(),
   submissionId: text('submission_id').notNull().references(() => publishedVersions.submissionId),
   // Snapshot the source at feedback time so later catalog edits cannot mix
-  // guided-demo judgments into the production ranking benchmark. Includes
-  // 'authorized' — supervisor verdicts on artist-authorized versions are
-  // the highest-value ground-truth rows for the outcome graph.
-  catalogSource: text('catalog_source').notNull().default('live'), // demo | live | authorized
+  // guided-demo judgments into the production ranking benchmark.
+  catalogSource: text('catalog_source').notNull().default('live'), // demo | live
   fitScoreShown: real('fit_score_shown').notNull(),
   rankShown: integer('rank_shown'),
   verdict: text('verdict').notNull(), // good_fit | wrong_fit
@@ -527,7 +632,7 @@ export const matchFeedback = pgTable('match_feedback', {
   unique('uq_match_feedback_super_brief_sub').on(table.supervisorWallet, table.briefHash, table.submissionId),
   index('idx_match_feedback_brief_hash').on(table.briefHash),
   index('idx_match_feedback_verdict_created').on(table.verdict, table.createdAt),
-  check('match_feedback_catalog_source_check', sql`${table.catalogSource} IN ('demo', 'live', 'authorized')`),
+  check('match_feedback_catalog_source_check', sql`${table.catalogSource} IN ('demo', 'live')`),
 ]);
 
 // ── Licenses ────────────────────────────────────────────
