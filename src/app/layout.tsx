@@ -25,9 +25,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "VERSIONS — briefs become licensed tracks",
+  title: "VERSIONS — music & product placements for distribution channels",
   description:
-    "Tell VERSIONS what the picture needs. It ranks the alternate takes by fit, prepares the rights path, and brings you only the decisions that need a human — settling approved licenses in USDC on Arc.",
+    "A marketplace where distribution channels browse music and product placements, pick what fits their ethos, and use it — free with attribution or paid as a sponsor slot. Matching, attribution tracking, and USDC settlement on Arc.",
 };
 
 export default function RootLayout({

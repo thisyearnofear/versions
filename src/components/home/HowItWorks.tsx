@@ -13,8 +13,8 @@ const RUST = "var(--color-rust)";
 const STEPS = [
   {
     num: "01",
-    title: "Hand it over",
-    body: "Paste a brief or upload a take.",
+    title: "List it",
+    body: "One agreement, live immediately — a track or a product.",
     icon: (
       <g stroke={INK} strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 3v10m0 0l-4-4m4 4l4-4" />
@@ -24,8 +24,8 @@ const STEPS = [
   },
   {
     num: "02",
-    title: "Agents rank it",
-    body: "Three lenses score every take by fit.",
+    title: "Matched by ethos",
+    body: "Listings surface where a channel's vibe already lives.",
     icon: (
       <g stroke={INK} strokeWidth="1.6" fill="none" strokeLinecap="round">
         <circle cx="10" cy="10" r="6" />
@@ -35,8 +35,8 @@ const STEPS = [
   },
   {
     num: "03",
-    title: "You make the call",
-    body: "Creative direction stays human.",
+    title: "Free or paid",
+    body: "Free with attribution; paid as flat or CPM with a cap.",
     icon: (
       <g stroke={INK} strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="4" />
@@ -46,8 +46,8 @@ const STEPS = [
   },
   {
     num: "04",
-    title: "Settled on Arc",
-    body: "USDC splits, attributed per take.",
+    title: "Tracked & settled",
+    body: "Tracking code, disclosure, 60/30/10 on Arc.",
     icon: (
       <g stroke={INK} strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="8" />
@@ -87,7 +87,7 @@ export function HowItWorks() {
           ))}
         </Stagger>
         <p className="kicker mt-8 text-center">
-          Artists submit alternate takes — the same agents publish the strong ones.
+          Unified supply — a slot in a feed, matched by ethos, free or paid. The data flywheel starts the first time a channel reports where it ran.
         </p>
       </details>
     </section>

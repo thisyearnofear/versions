@@ -47,7 +47,14 @@ export type AnalyticsEvent =
   | "hero_brief_search"
   | "hero_brief_example"
   | "demo_run"
-  | "ar_rationale_expand";
+  | "ar_rationale_expand"
+  | "cta_browse"
+  | "cta_supply"
+  | "cta_channels"
+  | "channel_registered"
+  | "slot_intent"
+  | "slot_purchased"
+  | "supply_created";
 
 export interface AnalyticsProps {
   [key: string]: string | number | boolean | null | undefined;

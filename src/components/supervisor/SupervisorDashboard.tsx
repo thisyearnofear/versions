@@ -13,6 +13,7 @@ import { LicensesSection } from "@/components/supervisor/LicensesSection";
 import { PlacementCasesPanel } from "@/components/supervisor/PlacementCasesPanel";
 import { MatchBenchmarkPanel } from "@/components/supervisor/MatchBenchmarkPanel";
 import { FeedView } from "@/components/feed/FeedView";
+import { UsageReporter } from "@/components/usage/UsageReporter";
 import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
 import { cn } from "@/lib/utils";
 import { LICENSE_FEES, type LicenseUsageType } from "@/lib/pricing";
@@ -208,19 +209,19 @@ export function SupervisorDashboard() {
       <PlacementCasesPanel />
 
       <section aria-labelledby="supervisor-workspace-title" className="order-0 mb-4 border-l-2 border-[var(--color-rust)] bg-[var(--color-paper-2)] px-4 py-3">
-        <Eyebrow className="mb-1 text-[var(--color-rust)]">Supervisor workspace</Eyebrow>
+        <Eyebrow className="mb-1 text-[var(--color-rust)]">Workspace — placements &amp; proof</Eyebrow>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 id="supervisor-workspace-title" className="font-serif text-xl font-semibold">Your next decisions</h2>
             <p className="mt-1 font-serif text-sm text-[var(--color-ink-2)]">
-              Review shortlisted takes, progress active license requests, or start a new brief.
+              Shortlists, licenses, and live placements — plus usage proof. Browse is where supply finds your channel; this is where it settles.
             </p>
           </div>
           <Link
             href="/discover"
             className="shrink-0 bg-[var(--color-ink)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-paper)] transition-colors hover:bg-[var(--color-rust)]"
           >
-            Find tracks →
+            Browse supply →
           </Link>
         </div>
       </section>
@@ -322,7 +323,27 @@ export function SupervisorDashboard() {
         <LicensesSection isAuthenticated={isAuthenticated} requireAuth={requireAuth} />
       </div>
 
-      <details className="order-6 border-t border-[var(--color-hair)] py-4">
+      <div className="order-6 mt-4 grid gap-4 md:grid-cols-2">
+        <UsageReporter />
+        <div>
+          <p className="kicker mb-2">Proof &amp; links</p>
+          <div className="card-surface p-4">
+            <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-3)]">Every paid placement carries</p>
+            <ul className="mt-2 space-y-1 font-serif text-sm leading-snug text-[var(--color-ink-2)]">
+              <li>• a <span className="font-semibold">tracking code</span> + <span className="font-semibold">/t/:code</span> redirect</li>
+              <li>• the listing&apos;s <span className="font-semibold">disclosure</span> (e.g. #ad) baked into the served attribution</li>
+              <li>• a <span className="font-semibold">budget cap</span> — serving stops atomically at the cap</li>
+              <li>• a <span className="font-semibold">flat 60/30/10</span> settlement on Arc (supplier/channel/platform)</li>
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a href="/channels" className="rounded-full border border-[var(--color-hair)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]">Channels →</a>
+              <a href="/legal/agreement" className="rounded-full border border-[var(--color-hair)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]">Agreement →</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <details className="order-7 border-t border-[var(--color-hair)] py-4">
         <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)] hover:text-[var(--color-rust)]">
           Budget, system &amp; match-quality details
         </summary>

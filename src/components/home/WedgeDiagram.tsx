@@ -24,11 +24,11 @@ interface Node {
 }
 
 const NODES: Node[] = [
-  { x: 92, y: 120, label: "the brief", delay: 0.0, glyph: "brief" },
-  { x: 316, y: 48, label: "production", delay: 0.25, glyph: "mix" },
-  { x: 316, y: 120, label: "performance", delay: 0.35, glyph: "wave" },
-  { x: 316, y: 192, label: "market", delay: 0.45, glyph: "target" },
-  { x: 520, y: 120, label: "best fit", delay: 0.7, accent: true, glyph: "match" },
+  { x: 92, y: 120, label: "supply", delay: 0.0, glyph: "brief" },
+  { x: 316, y: 48, label: "music", delay: 0.25, glyph: "wave" },
+  { x: 316, y: 120, label: "placement", delay: 0.35, glyph: "target" },
+  { x: 316, y: 192, label: "channel", delay: 0.45, glyph: "mix" },
+  { x: 520, y: 120, label: "fit", delay: 0.7, accent: true, glyph: "match" },
   { x: 668, y: 120, label: "settled · USDC", delay: 0.95, glyph: "coin" },
 ];
 
@@ -105,7 +105,7 @@ export function WedgeDiagram() {
   const reduce = useReducedMotion();
   return (
     <div className="card-surface mx-auto w-full max-w-3xl px-2 py-4 sm:px-6" role="img"
-      aria-label="Diagram: a placement brief is scored by three agent lenses — production, performance, market — converging on the best-fitting take, then settled in USDC on Arc."
+      aria-label="Diagram: music and product supply converge with a channel's ethos, the best fit is surfaced, then the placement is settled in USDC on Arc."
     >
       <svg viewBox="0 0 720 240" className="h-auto w-full" aria-hidden="true">
         {/* Connectors draw themselves in order */}

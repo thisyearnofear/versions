@@ -8,29 +8,29 @@ import { useRouter } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { track } from "@/lib/analytics";
-import { EXAMPLE_BRIEFS } from "@/lib/example-briefs";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { EconomyTicker } from "@/components/economy/EconomyTicker";
 import { Reveal, EASE_OUT, Tilt } from "@/components/ui/motion";
 import { WedgeDiagram } from "@/components/home/WedgeDiagram";
 import { SpectrumOrb } from "@/components/home/SpectrumOrb";
 import { playNoteAt, resumeAudio } from "@/lib/audio-feedback";
+import { AGREEMENT_VERSION } from "@/lib/agreement";
 
-// PERF: below-the-fold sections are client-only dynamic chunks. They
-// fetch their own data on mount anyway, so keeping them out of the
-// initial HTML + main page chunk shortens the critical path for the
-// hero (the actual LCP). EconomyTicker stays eager — it's in the
-// first viewport.
 const WaveformGallery = dynamic(
   () => import("@/components/home/WaveformGallery").then((m) => m.WaveformGallery),
   { ssr: false, loading: () => <div className="min-h-[260px] md:min-h-[340px]" aria-hidden="true" /> },
 );
-// One-button live demo (submit → pay on Arc → agent review → publish → tip).
-// Client-only: it builds wallets in the browser and drives public APIs.
 const LiveDemoButton = dynamic(
   () => import("@/components/home/LiveDemoButton").then((m) => m.LiveDemoButton),
   { ssr: false, loading: () => <div className="min-h-[120px]" aria-hidden="true" /> },
 );
+
+const SUPPLY_EXAMPLES: Array<{ label: string; brief: string }> = [
+  { label: "lo-fi night drive", brief: "lo-fi night drive, warm, instrumental" },
+  { label: "cold brew ad", brief: "bright morning routine, coffee, upbeat" },
+  { label: "thriller tension", brief: "tense car chase, no vocals, ~120 bpm" },
+  { label: "cozy study stream", brief: "cozy study beats, soft, low energy" },
+];
 
 export default function Home() {
   return (
@@ -41,43 +41,44 @@ export default function Home() {
           <Hero />
         </div>
 
-        {/* The wedge, illustrated: brief → agents → match → settlement.
-            One diagram replaces what used to be paragraphs of mechanism. */}
-        <section className="px-4 pb-4 sm:px-6" aria-label="How a brief becomes a license">
+        <section className="px-4 pb-4 sm:px-6" aria-label="How supply finds its channel">
           <Reveal>
             <WedgeDiagram />
           </Reveal>
         </section>
 
-        {/* Compact proof band: the pitch and the live system side by side. */}
         <section
           className="border-y border-[var(--color-hair-strong)] bg-[var(--color-paper-2)] px-4 py-10 sm:px-6 md:py-14"
-          aria-labelledby="placement-case-title"
+          aria-labelledby="marketplace-proof-title"
         >
           <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
             <Reveal>
-              <p className="kicker kicker--accent mb-3">One case, one decision</p>
-              <h2
-                id="placement-case-title"
-                className="font-serif text-2xl font-black tracking-tight sm:text-3xl md:text-4xl"
-              >
-                Held open. Waiting for your call.
+              <p className="kicker kicker--accent mb-3">Music + product placements</p>
+              <h2 id="marketplace-proof-title" className="font-serif text-2xl font-black tracking-tight sm:text-3xl md:text-4xl">
+                Free with credit. Paid when it pays.
               </h2>
               <p className="mt-3 max-w-md font-serif text-base leading-snug text-[var(--color-ink-2)]">
-                The case stays open until you make the creative call —
-                everything else settles on-chain.
+                Same primitive, two catalogs. Free use under the blanket agreement carries a generated attribution you render
+                unmodified; paid placements are flat-fee or CPM with a tracking code, disclosure, and budget cap — self-serve.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <Link href="/discover" className="btn-primary">
-                  Start a brief →
+                <Link href="/discover" className="btn-primary" onClick={() => track("cta_browse", { from: "landing" })}>
+                  Browse supply →
+                </Link>
+                <Link href="/submit" className="btn-secondary" onClick={() => track("cta_supply", { from: "landing" })}>
+                  List a track or product →
                 </Link>
                 <Link
-                  href="/discover?brief=dark%20ambient%20cinematic&showcase=pilot"
+                  href="/channels"
                   className="btn-secondary"
+                  onClick={() => track("cta_channels", { from: "landing" })}
                 >
-                  Watch the authorized pilot →
+                  Connect a channel →
                 </Link>
               </div>
+              <p className="kicker mt-4">
+                Agreement {AGREEMENT_VERSION} · settled in USDC on Arc · <Link href="/legal/agreement" className="underline decoration-[var(--color-hair-strong)] hover:text-[var(--color-rust)]">read the terms</Link>
+              </p>
             </Reveal>
             <Reveal delay={0.1}>
               <Tilt max={6} className="h-full">
@@ -93,7 +94,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section aria-label="Recent work published by the agents">
+        <section aria-label="Supply on VERSIONS">
           <div className="px-6 pb-2 pt-8 text-center">
             <p className="kicker">From the catalog · click to listen</p>
           </div>
@@ -106,24 +107,15 @@ export default function Home() {
   );
 }
 
-/* ── Hero ─────────────────────────────────────────────── */
-
 function Hero() {
   return (
     <section className="relative mx-auto max-w-2xl overflow-visible py-10 text-center sm:py-14 md:py-20">
-      {/* The orb sits behind the headline as the hero's energy source.
-          Mouse-reactive spectrum — visitors play it as they read. */}
       <div className="pointer-events-none absolute left-1/2 top-6 -z-10 h-[360px] w-[360px] -translate-x-1/2 sm:h-[440px] sm:w-[440px] md:h-[520px] md:w-[520px]">
         <SpectrumOrb className="pointer-events-auto h-full w-full opacity-90" />
       </div>
       <AmbientBars />
-      <motion.p
-        className="kicker kicker--accent relative mb-3"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.4 }}
-      >
-        For music supervisors &amp; sync agents
+      <motion.p className="kicker kicker--accent relative mb-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
+        A marketplace for music &amp; product placements
       </motion.p>
       <motion.h1
         className="relative mb-4 font-serif text-4xl font-black leading-[0.98] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl"
@@ -131,10 +123,10 @@ function Hero() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: EASE_OUT }}
       >
-        <span className="text-gradient">Finding the right take</span>
+        <span className="text-gradient">Supply that fits</span>
         <br />
         <span className="relative inline-block font-normal italic text-[var(--color-rust)]">
-          shouldn&apos;t take weeks.
+          your channel&apos;s ethos.
           <UnderlineDraw />
         </span>
       </motion.h1>
@@ -144,31 +136,20 @@ function Hero() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1, ease: EASE_OUT }}
       >
-        Describe the scene — the agents rank artist-authorized versions by
-        fit and prepare the rights path. You make one call.
+        Channels browse a feed of tracks and products, pick what fits, and use it — free with attribution or paid as a sponsor
+        slot. We match, track, and settle (60/30/10 on Arc).
       </motion.p>
-      <motion.div
-        className="relative"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.2, ease: EASE_OUT }}
-      >
+      <motion.div className="relative" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2, ease: EASE_OUT }}>
         <BriefSearchBar />
       </motion.div>
     </section>
   );
 }
 
-/** Hand-drawn underline that sketches itself under the hero punchline. */
 function UnderlineDraw() {
   const reduce = useReducedMotion();
   return (
-    <svg
-      viewBox="0 0 300 14"
-      aria-hidden="true"
-      className="absolute -bottom-2 left-0 h-3 w-full"
-      preserveAspectRatio="none"
-    >
+    <svg viewBox="0 0 300 14" aria-hidden="true" className="absolute -bottom-2 left-0 h-3 w-full" preserveAspectRatio="none">
       <motion.path
         d="M4 10 C 70 3, 180 13, 296 5"
         fill="none"
@@ -183,16 +164,11 @@ function UnderlineDraw() {
   );
 }
 
-/** Ambient equaliser bars drifting behind the hero — the catalog, felt
-    rather than listed. Deterministic heights, zero layout cost. */
 const BAR_HEIGHTS = [26, 44, 62, 38, 70, 30, 52, 66, 34, 48, 58, 28, 64, 40, 54, 32, 68, 36, 50, 60, 26, 46, 56, 42];
 
 function AmbientBars() {
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 -bottom-2 flex h-[76px] items-end justify-between gap-1 opacity-70"
-    >
+    <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -bottom-2 flex h-[76px] items-end justify-between gap-1 opacity-70">
       {BAR_HEIGHTS.map((h, i) => (
         <span
           key={i}
@@ -222,8 +198,6 @@ function BriefSearchBar() {
 
   return (
     <div className="mx-auto max-w-xl">
-      {/* Elevated search: rounded, soft shadow, lifts on focus-within.
-          Stacks on mobile so the CTA keeps a 44px touch target. */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -234,31 +208,25 @@ function BriefSearchBar() {
         <input
           value={brief}
           onChange={(e) => setBrief(e.target.value)}
-          placeholder="e.g. tense car chase, no vocals, ~120 bpm"
-          aria-label="Describe the scene you are syncing"
+          placeholder="e.g. lo-fi night drive, or coffee for a morning routine…"
+          aria-label="Describe the vibe your channel needs"
           enterKeyHint="search"
           className="min-h-[44px] min-w-0 flex-1 rounded-[var(--radius-md)] bg-transparent px-4 py-3 font-serif text-base text-[var(--color-ink)] placeholder:text-[var(--color-ink-3)] focus:outline-none"
         />
-        <button
-          type="submit"
-          disabled={brief.trim().length < 3}
-          className="btn-primary w-full sm:w-auto"
-        >
-          Start a brief
+        <button type="submit" disabled={brief.trim().length < 3} className="btn-primary w-full sm:w-auto">
+          Browse
         </button>
       </form>
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
         <span className="kicker">Try:</span>
-        {EXAMPLE_BRIEFS.slice(0, 4).map((e, idx) => (
+        {SUPPLY_EXAMPLES.slice(0, 4).map((e, idx) => (
           <Link
-            key={e.id}
+            key={e.label}
             href={`/discover?brief=${encodeURIComponent(e.brief)}`}
             onClick={() => track("hero_brief_example", { label: e.label })}
             onMouseEnter={() => {
               resumeAudio();
-              // Musical interaction: each chip sings a different note
-              // down the scale as you browse — the search itself has a melody.
-              playNoteAt(1 - (idx / Math.max(1, EXAMPLE_BRIEFS.slice(0, 4).length - 1)));
+              playNoteAt(1 - idx / Math.max(1, SUPPLY_EXAMPLES.length - 1));
             }}
             className="chip"
           >
@@ -267,7 +235,7 @@ function BriefSearchBar() {
         ))}
       </div>
       <p className="kicker mt-4">
-        Free to search · no sign-up
+        Free to browse · no sign-up
         <span className="hover-hint"> · move your cursor over the spectrum →</span>
       </p>
     </div>

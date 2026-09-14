@@ -6,18 +6,15 @@ import { AnimatePresence, motion } from "framer-motion";
 import { WagmiConnectButton } from "@/components/wallet/WagmiConnectButton";
 import { track } from "@/lib/analytics";
 
-// Primary navigation is organised around jobs, not product modules. A user
-// should never ask "which tool do I use?" — only "what am I trying to get
-// done?". Three doors: Search (the supervisor job), Workspace (cases,
-// shortlists, licenses, and the library), Artists (supply). Public proof
-// surfaces (agent activity, arc, github) are demoted out of the primary
-// rail.
-export type HeaderRoute = "workspace" | "brief" | "artists" | "agents";
+// Three doors, one marketplace: Browse (discover supply for your channel),
+// Supply (list a track or product), Channels (connect and verify distribution).
+// Workspace (cases/licenses) and proof (agents) stay reachable but demoted.
+export type HeaderRoute = "browse" | "supply" | "channels" | "workspace" | "brief" | "artists" | "agents";
 
 const JOBS = [
-  { id: "brief", label: "Search", href: "/discover", title: "Describe the scene — the agents rank the catalog" },
-  { id: "workspace", label: "Workspace", href: "/supervisor", title: "Cases, shortlists, licenses, and the library" },
-  { id: "artists", label: "For Artists", href: "/submit", title: "Hand an alternate take to your Release Agent" },
+  { id: "browse", label: "Browse", href: "/discover", title: "Music & placements matched to your channel's ethos" },
+  { id: "supply", label: "Supply", href: "/submit", title: "List a track or a product — live immediately under the blanket agreement" },
+  { id: "channels", label: "Channels", href: "/channels", title: "Connect a distribution surface — verified reach unlocks paid placements" },
 ] as const;
 
 export function SiteHeader({ active }: { active?: HeaderRoute }) {
@@ -72,17 +69,17 @@ export function SiteHeader({ active }: { active?: HeaderRoute }) {
             ))}
           </nav>
           <Link
-            href="/agents"
-            title="System proof — live agent activity across the platform"
-            aria-current={active === "agents" ? "page" : undefined}
-            onClick={() => track("nav_click", { to: "/agents", source: "site_header_system" })}
+            href="/supervisor"
+            title="Workspace — cases, licenses, library"
+            aria-current={active === "workspace" ? "page" : undefined}
+            onClick={() => track("nav_click", { to: "/supervisor", source: "site_header_system" })}
             className={`hidden whitespace-nowrap px-3 py-2 font-mono text-[9px] uppercase tracking-[0.16em] transition-colors md:inline ${
-              active === "agents"
+              active === "workspace"
                 ? "text-[var(--color-rust)]"
                 : "text-[var(--color-ink-3)] hover:text-[var(--color-rust)]"
             }`}
           >
-            System · agent activity
+            Workspace
           </Link>
           <WagmiConnectButton variant="quiet" />
         </div>
@@ -136,6 +133,15 @@ export function SiteHeader({ active }: { active?: HeaderRoute }) {
                   <span aria-hidden="true" className="text-[var(--color-ink-3)]">→</span>
                 </Link>
               ))}
+              <Link
+                href="/supervisor"
+                aria-current={active === "workspace" ? "page" : undefined}
+                onClick={() => closeAndTrack("/supervisor", "site_header_mobile")}
+                className="flex min-h-[48px] items-center justify-between font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--color-ink-3)]"
+              >
+                Workspace
+                <span aria-hidden="true">→</span>
+              </Link>
               <Link
                 href="/agents"
                 aria-current={active === "agents" ? "page" : undefined}

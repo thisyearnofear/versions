@@ -14,9 +14,9 @@ export default function SupervisorPage() {
         <main className="flex-1">
           <Container className="py-10" size="default">
             <PageIntro
-              eyebrow="Your workspace"
-              title="The decisions that need you."
-              intro="Cases, shortlists, and licenses in one place — plus the library. The agent does the legwork and brings you only what needs your judgment."
+              eyebrow="Workspace"
+              title="Cases, placements, and proof."
+              intro="Shortlists, licenses, and live placements in one place — plus the catalog and your usage proof. For channels, pair this with Channels to see supply filtered by your verified ethos."
             />
             <Suspense
               fallback={

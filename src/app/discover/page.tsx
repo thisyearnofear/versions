@@ -3,6 +3,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { DiscoverView } from "@/components/discovery/DiscoverView";
+import { MarketplaceBrowse } from "@/components/discovery/MarketplaceBrowse";
 import { FadeIn } from "@/components/ui/FadeIn";
 import { ToastProvider } from "@/components/ui/Toast";
 import { Container } from "@/components/ui/primitives";
@@ -11,15 +12,18 @@ export default function DiscoverPage() {
   return (
     <ToastProvider>
       <div className="flex flex-col flex-1">
-        <SiteHeader active="brief" />
+        <SiteHeader active="browse" />
         <main className="flex-1">
           <Container className="py-10">
             <FadeIn>
               <PageIntro
-                eyebrow="New brief"
-                title="Start a placement case."
-                intro="Describe the scene. The agents rank the catalog and bring you the decision."
+                eyebrow="Browse"
+                title="Music & placements, matched to your channel."
+                intro="Describe the vibe you need — we surface tracks and sponsor slots that fit. Free use carries attribution; paid placements are a flat fee or CPM with a live budget cap."
               />
+            </FadeIn>
+            <FadeIn delay={0.06}>
+              <MarketplaceBrowse />
             </FadeIn>
             <FadeIn delay={0.1}>
               <Suspense fallback={<DashboardFallback />}>
