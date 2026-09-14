@@ -60,39 +60,141 @@ curl -sf http://127.0.0.1:3000/api/health/ready
 curl -sf https://versions.persidian.com/api/health/ready
 ```
 
-### Marketplace additive tables (2026-08 — pivot)
+### Marketplace additive tables (2026-08 — pivot, prod = `b925a3b5`)
 
-The pivot is **additive** at the DB layer so `db:prod:push` stays safe to run
-guarded. The sync-licensing legal surface (`version_programs` +
-`submissions.program_id / authorization_status / lineage`) was retired via
-`scripts/retire-authorized-provenance.{preview,apply}.sql`; the marketplace
-adds **no new migration ledger** — just `push`-managed tables:
+The pivot was landed **additively** so `deploy.sh` never needed a risky DDL.
+Data rewrite already done, DDL not yet — deliberate:
 
-- `listings` + `listing_embeddings` — unified supply (`music | placement`),
-  free/paid tier, pricing, disclosure, attribution, blanket agreement stamp.
-- `channels` + `channel_embeddings` — distribution side (YouTube channel
-  verification, subscriber/view counts, ethos profile).
-- `slots` + `slot_legs` — paid placement: one active slot per
-  (listing, channel), tracking code, disclosure copied at purchase, flat
-  60/30/10 settlement legs (separate table from `settlement_legs` so the
-  publish-fee invariants stay untouched).
-- `usage_events` — every use logged (organic vs sponsored, attribution code,
-  video URL, impressions/clicks, spend).
+- **Done (2026-09-14):** `published_versions`/`match_feedback` rows with
+  `catalog_source = 'authorized'` relabelled to `'live'` via
+  `scripts/retire-authorized-provenance.{preview,apply}.sql` (`UPDATE 2`, now
+  `0` remaining — `demo|live` only). Verified with `psql "$DATABASE_URL"
+  -f scripts/retire-authorized-provenance.preview.sql`.
+- **Done (2026-09-14):** 6 new pivot tables created idempotently via
+  `CREATE TABLE IF NOT EXISTS` (no `drizzle-kit push`): `listings` +
+  `listing_embeddings`, `channels` + `channel_embeddings`, `slots` +
+  `slot_legs`, `usage_events` — all `0` rows, indexes + CHECKs live.
+  Probed: `GET /api/v1/listings → []`, `GET /api/v1/usage → summary 0`,
+  `GET /api/health/ready → ready`.
+- **Deferred (intentional):** destructive DDL — `DROP TABLE version_programs`
+  (1 row `pilot-demo-0001 | Elena Voss | Midnight Chromatics` still present)
+  + `ALTER TABLE submissions DROP COLUMN program_id, authorization_status,
+  authorized_at, lineage` + narrowing the `catalog_source` CHECKs from
+  `IN ('demo','live','authorized')` to `IN ('demo','live')`. Code at
+  `b925a3b5` already omits these from `src/lib/schema.ts`; prod DB still
+  carries them. No code path reads them any more.
 
-All are additive and independently `push`-able. Verify after any push with
-`db:prod:status` + `curl /api/health/ready` and a quick probe of the new
-surfaces:
+The code ↔ DB drift is **benign for reads/writes** — Drizzle selects only
+columns declared in `schema.ts`, extra nullable columns are ignored, and the
+extra table is never queried. The marketplace (listings/channels/slots/usage)
+is fully live without this cleanup.
+
+#### Deferred destructive cleanup — what it means + two ways to run it
+
+> The line you asked about — *"want the destructive `DROP version_programs` /
+> column cleanup — that one wants an explicit `expect`-wrapped
+> `drizzle-kit push` or manual `ALTER TABLE` review"* — is expanded here.
+
+**Why it was deferred.** `drizzle-kit push --strict --verbose` at
+`1.0.0-rc.4` prompts `promptNamedWithSchemasConflict` and requires a TTY
+(`process.stdin.isTTY`). Over plain `ssh … "npx drizzle-kit push"` it fails
+with `Interactive prompts require a TTY terminal` even with `--force` or
+`VERSIONS_DB_APPLY=1`. A plain `ssh -t`/`script -q -c` wrapper doesn't
+allocate a real TTY for Node's `readline`. So `db:prod:push` (which is just
+`npx drizzle-kit push --strict --verbose`) is currently blocked for any
+**destructive** diff. Additive diffs were worked around with direct
+`CREATE TABLE IF NOT EXISTS`.
+
+**Ramifications of leaving it (current state — safe default).**
+
+- ✅ Zero risk to marketplace — writes to `submissions` omit the legacy
+  columns (they stay `NULL` on new rows), reads never request them.
+- ✅ Fully reversible without a restore — `version_programs` row + lineage
+audit trail remain for the Elena Voss pilot if counsel ever asks.
+- ⚠️ Schema drift: `db:prod:status` is fine, but any future `push` will keep
+  proposing the same destructive diff, and future devs see a table in prod
+  that `schema.ts` says doesn't exist. Low confusion, not a bug.
+- No `pg_dump`/`restore-drill` penalty — extra table/columns dump and restore
+  fine (latest verified backup `146947 bytes` at
+  `versions-before-schema-20260914T131841Z.dump`).
+
+**Ramifications of dropping it (one-way, needs a backup).**
+
+- ✅ Prod matches code — no drift, `push` becomes a no-op, pivot legally
+  complete (no per-program consent surface to confuse a diligence review).
+- ❌ Irreversible without a restore — `DROP TABLE version_programs` deletes
+  the single pilot row + its FK history; `DROP COLUMN` on `submissions`
+  deletes `program_id`/`authorization_status`/`authorized_at`/`lineage` for the
+  2 submissions that carried them. You get them back only via
+  `npm run db:prod:restore-drill` from the pre-drop dump.
+- ⚠️ Must run in a maintenance window after `db:prod:backup` — `DROP TABLE`
+  takes `ACCESS EXCLUSIVE` on the table (sub-ms for 1 row, but blocks
+  concurrent writes to it).
+- ⚠️ If any raw SQL / script still references `version_programs` or those
+  columns (e.g. `scripts/sql-seed.js` does), it will start failing after the
+  drop — that's intentional, but grep first.
+
+**Path A — `expect`-wrapped `drizzle-kit push` (authoritative diff).** Drizzle
+computes the diff, prints `--verbose` SQL, and asks `y/n` with `--strict`.
+Needs a TTY emulator:
 
 ```bash
-curl -sf https://versions.persidian.com/api/v1/listings | head
-curl -sf https://versions.persidian.com/api/v1/channels | head
-curl -sf https://versions.persidian.com/api/v1/usage | head
+ssh nuncio-vultr "cd /home/linuxuser/versions
+  # fresh backup first
+  npm run db:prod:backup
+  # interactive push via expect (unbuffer is an alternative)
+  DATABASE_URL=\"\$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' versions \
+    | awk -F= '/^DATABASE_URL=/{sub(/^[^=]*=/, \"\"); print; exit}')\" \
+  expect -c '
+    set timeout 120
+    spawn -noecho env VERSIONS_DB_APPLY=1 npx drizzle-kit push --strict --verbose
+    expect "Do you want to push" { send \"y\\r\"; exp_continue }
+    expect eof
+  '
+  # verify
+  psql \"\$DATABASE_URL\" -XAtc \"SELECT to_regclass(\\'public.version_programs\\') IS NULL AS dropped;\"\
+  curl -sf http://127.0.0.1:3000/api/health/ready | jq .data.status
+"
 ```
 
-Channel verification needs `YOUTUBE_API_KEY` in server `.env` for live
-subscriber/view pulls; when absent the adapter stays in mock mode
-(`pending` + mock stats, `can_buy_slots = false`) — by design, no self-reported
-reach is ever accepted.
+Pros: single source of truth — what `schema.ts` says is what runs.
+Cons: `expect`/`unbuffer` must be installed on the VPS; harder to
+pre-review the exact SQL in a PR.
+
+**Path B — manual `ALTER TABLE` (explicit, PR-reviewable).** Write the DDL
+once, review it, run it with host `psql` (no TTY needed):
+
+```bash
+ssh nuncio-vultr "cd /home/linuxuser/versions
+  npm run db:prod:backup
+  DATABASE_URL=\"\$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' versions \
+    | awk -F= '/^DATABASE_URL=/{sub(/^[^=]*=/, \"\"); print; exit}')\" \
+  psql \"\$DATABASE_URL\" -v ON_ERROR_STOP=1 <<'SQL'
+    -- idempotent drops — re-runnable
+    DROP TABLE IF EXISTS \"version_programs\";
+    ALTER TABLE \"submissions\" DROP COLUMN IF EXISTS \"program_id\";
+    ALTER TABLE \"submissions\" DROP COLUMN IF EXISTS \"authorization_status\";
+    ALTER TABLE \"submissions\" DROP COLUMN IF EXISTS \"authorized_at\";
+    ALTER TABLE \"submissions\" DROP COLUMN IF EXISTS \"lineage\";
+    -- CHECKs are already narrow in code; if prod still has the wide form,
+    -- drizzle will recreate them on next push — or add explicit:
+    -- ALTER TABLE \"published_versions\" DROP CONSTRAINT IF EXISTS
+    --   \"published_versions_catalog_source_check\";
+    -- ALTER TABLE \"published_versions\" ADD CONSTRAINT
+    --   \"published_versions_catalog_source_check\"
+    --   CHECK (\"catalog_source\" IN ('demo','live'));
+SQL
+  npm run db:prod:status; curl -sf http://127.0.0.1:3000/api/health/ready | jq .data.status
+"
+```
+
+Pros: SQL is diffable in Git, no TTY hack, easy to gate on backup.
+Cons: you must keep the manual DDL in sync with `schema.ts` (miss a
+constraint and `push` will still propose a diff).
+
+**Recommended:** Path B for this one-off, preceded by `retire-authorized-
+provenance.preview` (already `0`) + `db:prod:backup` + a `restore-drill` after.
+Either path requires `VERSIONS_DB_APPLY=1` / explicit approval — never `--force`.
 
 ### Applied schema changes — `0008_nasty_calypso.sql` and `0009_furry_colonel_america.sql`
 
