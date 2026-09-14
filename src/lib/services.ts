@@ -36,6 +36,7 @@ import { createChannelsService, type ChannelsService } from '../services/channel
 import { createListingsService, type ListingsService } from '../services/listings';
 import { createSlotsService, type SlotsService } from '../services/slots';
 import { createUsageService, type UsageService } from '../services/usage';
+import { createMarketplaceService, type MarketplaceService } from '../services/marketplace';
 import { createChannelProbeAdapter } from '../adapters/youtube';
 import { log } from './logger';
 
@@ -67,6 +68,7 @@ export interface ServiceRegistry {
   listings: ListingsService;
   slots: SlotsService;
   usage: UsageService;
+  marketplace: MarketplaceService;
   audioLimiter: RateLimiter;
   generalLimiter: RateLimiter;
   ipfs: PinataClient;
@@ -215,6 +217,8 @@ function build(): ServiceRegistry {
   // delivery accrues through the single place that enforces the budget cap —
   // a usage report can never write a spend figure of its own.
   const usage = createUsageService(slots);
+  // MODULAR: marketplace search — listings + channel ethos share one vector space.
+  const marketplace = createMarketplaceService({ embedding: embeddingAdapter });
   const sweeper = createSweeper({ settlement, tips });
   const ipfs = createIpfsFromEnv();
 
@@ -250,6 +254,7 @@ function build(): ServiceRegistry {
     listings,
     slots,
     usage,
+    marketplace,
     sweeper,
     audioLimiter,
     generalLimiter,

@@ -114,5 +114,8 @@ export async function POST(req: NextRequest) {
   if (!result.ok) {
     return errorResponse(requestId, STATUS_FOR_FAILURE[result.code], result.code, result.message);
   }
+  // Fire-and-forget marketplace embedding (same space as channel ethos) so the
+  // listing is rankable by semantic search on the next Browse without a backfill.
+  void services().embeddings.embedListing(result.listing.id).catch(() => {});
   return successResponse(201, { listing: result.listing }, requestId);
 }

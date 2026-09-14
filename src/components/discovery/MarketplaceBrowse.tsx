@@ -26,15 +26,21 @@ type Listing = {
   attribution_url: string;
   attribution_slug: string;
   status: string;
+  fit_score?: number;
+  why_fits?: string[];
+  similarity?: number | null;
 };
 
-type ChannelLite = { id: string; name: string; can_buy_slots: boolean; verification_status: string };
+type ChannelLite = { id: string; name: string; can_buy_slots: boolean; verification_status: string; niche?: string | null };
 
 export function MarketplaceBrowse() {
   const { showToast } = useToast();
   const [kind, setKind] = useState<"all" | "music" | "placement">("all");
+  const [tier, setTier] = useState<"all" | "free" | "paid">("all");
   const [q, setQ] = useState("");
+  const [channelId, setChannelId] = useState("");
   const [listings, setListings] = useState<Listing[]>([]);
+  const [mode, setMode] = useState<string>("recent");
   const [loading, setLoading] = useState(false);
   const [channels, setChannels] = useState<ChannelLite[]>([]);
   const [usageSummary, setUsageSummary] = useState<{ total_events: number; spend_usdc: string; by_reporter: Record<string, number> } | null>(null);
@@ -48,28 +54,38 @@ export function MarketplaceBrowse() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set("limit", "24");
+      params.set("limit", "20");
       if (kind !== "all") params.set("kind", kind);
-      const res = await fetch(`/api/v1/listings?${params}`, { credentials: "same-origin" });
-      const json = (await res.json()) as { data?: { listings?: Listing[] } };
-      setListings(json.data?.listings ?? []);
+      if (tier !== "all") params.set("tier", tier);
+      const hasQuery = q.trim().length >= 2 || channelId;
+      if (hasQuery) {
+        if (q.trim()) params.set("q", q.trim());
+        if (channelId) params.set("channelId", channelId);
+        const res = await fetch(`/api/v1/marketplace/search?${params}`, { credentials: "same-origin" });
+        const json = (await res.json()) as { success?: boolean; data?: { rows?: Listing[]; mode?: string } };
+        setListings(json.data?.rows ?? []);
+        setMode(json.data?.mode ?? "recent");
+      } else {
+        const res = await fetch(`/api/v1/listings?${params}`, { credentials: "same-origin" });
+        const json = (await res.json()) as { success?: boolean; data?: { listings?: Listing[] } };
+        setListings((json.data?.listings ?? []) as Listing[]);
+        setMode("recent");
+      }
     } catch {
       showToast("Could not load supply.", "error");
     } finally {
       setLoading(false);
     }
-  }, [kind, showToast]);
+  }, [kind, tier, q, channelId, showToast]);
 
   const loadChannels = useCallback(async () => {
     try {
-      const res = await fetch("/api/v1/channels?limit=10", { credentials: "same-origin" });
+      const res = await fetch("/api/v1/channels?limit=20", { credentials: "same-origin" });
       if (!res.ok) return;
       const json = (await res.json()) as { data?: { channels?: ChannelLite[] } };
       setChannels(json.data?.channels ?? []);
       if (json.data?.channels?.[0] && !buyChannelId) setBuyChannelId(json.data.channels[0].id);
-    } catch {
-      // silent
-    }
+    } catch {}
   }, [buyChannelId]);
 
   const loadUsage = useCallback(async () => {
@@ -77,19 +93,19 @@ export function MarketplaceBrowse() {
       const res = await fetch("/api/v1/usage", { credentials: "same-origin" });
       const json = (await res.json()) as { data?: { summary?: typeof usageSummary } };
       if (json.data?.summary) setUsageSummary(json.data.summary as never);
-    } catch {
-      // silent
-    }
+    } catch {}
   }, []);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { void loadChannels(); void loadUsage(); }, [loadChannels, loadUsage]);
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return listings;
-    return listings.filter((l) => [l.title, l.supplier_name, l.summary ?? "", l.tags.join(" ")].join(" ").toLowerCase().includes(needle));
-  }, [listings, q]);
+  // Debounced search on q/channel change — avoid firing on every keystroke
+  const [debouncedQ, setDebouncedQ] = useState(q);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q), 350);
+    return () => clearTimeout(t);
+  }, [q]);
+  useEffect(() => { void load(); }, [debouncedQ, channelId, kind, tier]); // re-trigger via debounced
 
   const startBuy = useCallback((id: string) => { setBuyFor(id); track("slot_intent", { listingId: id }); }, []);
 
@@ -103,10 +119,7 @@ export function MarketplaceBrowse() {
       const slotId = createJson.data!.slot.id;
       const payRes = await fetch(`/api/v1/slots/${slotId}/pay`, { method: "POST", credentials: "same-origin" });
       const payJson = (await payRes.json()) as { success: boolean; error?: { message: string } };
-      if (!payRes.ok || !payJson.success) {
-        // Slot exists in pending_payment — surface the checkout step.
-        throw new Error(payJson.error?.message ?? `Created ${slotId.slice(0, 8)} — now pay: POST /api/v1/slots/${slotId}/pay`);
-      }
+      if (!payRes.ok || !payJson.success) throw new Error(payJson.error?.message ?? `Created ${slotId.slice(0, 8)} — now pay: POST /api/v1/slots/${slotId}/pay`);
       track("slot_purchased", { listingId, channelId: buyChannelId });
       showToast("Placement active — tracking code minted. Report where it ran under Usage.", "success", 5000);
       setBuyFor(null);
@@ -122,6 +135,8 @@ export function MarketplaceBrowse() {
     try { await navigator.clipboard.writeText(text); showToast(`${label} copied.`, "success", 2000); } catch { showToast(text, "info", 4000); }
   }, [showToast]);
 
+  const modeLabel = mode === "semantic" ? "ethos" : mode === "tag" ? "tag match" : "recent";
+
   return (
     <section className="mt-4 space-y-4" aria-label="Marketplace supply">
       <div className="flex flex-wrap items-center gap-2">
@@ -130,9 +145,24 @@ export function MarketplaceBrowse() {
             <button key={k} type="button" onClick={() => setKind(k)} className={cn("rounded-full px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide", kind === k ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : "text-[var(--color-ink-2)] hover:text-[var(--color-rust)]")}>{k}</button>
           ))}
         </div>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by title, brand, or tag…" className="min-w-[220px] flex-1 rounded-full border border-[var(--color-hair)] bg-transparent px-4 py-2 font-serif text-sm placeholder:text-[var(--color-ink-3)] focus:outline-none focus:border-[var(--color-rust)]" />
-        <span className="font-mono text-[10px] text-[var(--color-ink-3)]">{loading ? "…" : `${filtered.length} live`}</span>
+        <div className="flex rounded-full border border-[var(--color-hair)] p-1">
+          {(["all", "free", "paid"] as const).map((t) => (
+            <button key={t} type="button" onClick={() => setTier(t)} className={cn("rounded-full px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide", tier === t ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : "text-[var(--color-ink-2)] hover:text-[var(--color-rust)]")}>{t}</button>
+          ))}
+        </div>
+        {channels.length > 0 && (
+          <select value={channelId} onChange={(e) => setChannelId(e.target.value)} className="rounded-full border border-[var(--color-hair)] bg-transparent px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">
+            <option value="">All channels</option>
+            {channels.map((c) => (<option key={c.id} value={c.id}>{c.name.slice(0,28)} · {c.niche ?? c.verification_status}</option>))}
+          </select>
+        )}
       </div>
+      <div className="flex gap-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Describe the vibe — lo-fi night drive, study focus, thriller tension…" className="min-w-[220px] flex-1 rounded-full border border-[var(--color-hair)] bg-transparent px-4 py-2 font-serif text-sm placeholder:text-[var(--color-ink-3)] focus:outline-none focus:border-[var(--color-rust)]" />
+        <span className="self-center font-mono text-[10px] text-[var(--color-ink-3)]">{loading ? "…" : `${listings.length} · ${modeLabel}`}</span>
+      </div>
+      {channelId && mode === "semantic" && <p className="font-mono text-[10px] text-[var(--color-rust)]">Personalized by channel ethos + search terms — semantic ranking.</p>}
+      {channelId && mode === "tag" && <p className="font-mono text-[10px] text-[var(--color-ink-3)]">Ranked by tag overlap with your channel ethos.</p>}
 
       {usageSummary && usageSummary.total_events > 0 && (
         <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-3)]">
@@ -140,14 +170,14 @@ export function MarketplaceBrowse() {
         </p>
       )}
 
-      {filtered.length === 0 ? (
+      {listings.length === 0 ? (
         <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-hair-strong)] p-8 text-center">
-          <p className="font-serif text-sm text-[var(--color-ink-2)]">{loading ? "Loading supply…" : "No live supply for that filter. Try All, or list something on the Supply page."}</p>
+          <p className="font-serif text-sm text-[var(--color-ink-2)]">{loading ? "Loading supply…" : q.trim() || channelId ? "No supply fits that vibe. Try a broader search or All channels." : "No live supply for that filter. Try All, or list something on the Supply page."}</p>
           <Link href="/submit" className="mt-3 inline-flex rounded-full border border-[var(--color-hair-strong)] px-4 py-2 font-mono text-[10px] uppercase tracking-wide hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]">Go to Supply →</Link>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {filtered.map((l) => (
+          {listings.map((l) => (
             <article key={l.id} className="card-surface overflow-hidden p-0">
               <div className="p-4">
                 <div className="flex items-start justify-between gap-2">
@@ -162,8 +192,11 @@ export function MarketplaceBrowse() {
                     <span key={t} className="rounded-full bg-[var(--color-paper-2)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">{t}</span>
                   ))}
                 </div>
+                {(l.why_fits?.length || l.fit_score) ? (
+                  <p className="mt-2 font-mono text-[10px] text-[var(--color-rust)]">{l.why_fits?.join(" · ")}{typeof l.fit_score === "number" && l.fit_score > 0 ? ` · score ${l.fit_score}` : ""}</p>
+                ) : null}
                 {l.tier === "paid" && (
-                  <p className="mt-2 font-mono text-[10px] text-[var(--color-ink-3)]">
+                  <p className="mt-1 font-mono text-[10px] text-[var(--color-ink-3)]">
                     {l.budget_remaining_usdc != null ? `Remaining: ${l.budget_remaining_usdc} USDC` : "Uncapped"} · {l.disclosure ? `${l.disclosure.label} disclosure included` : ""}
                   </p>
                 )}

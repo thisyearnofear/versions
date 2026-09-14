@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
   if (!result.ok) {
     return errorResponse(requestId, STATUS_FOR_FAILURE[result.code], result.code, result.message);
   }
-
+  void services().embeddings.embedChannel(result.channel.id).catch(() => {});
   return successResponse(
     result.alreadyRegistered ? 200 : 201,
     { channel: result.channel, alreadyRegistered: result.alreadyRegistered },

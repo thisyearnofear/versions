@@ -45,6 +45,20 @@ export async function POST(req: NextRequest) {
   const rid = requestIdFor(req);
   const svc = services();
   try {
+    const { searchParams } = new URL(req.url);
+    const scope = searchParams.get('scope');
+    if (scope === 'marketplace') {
+      const result = await svc.embeddings.embedAllMarketplace();
+      return successResponse(200, result, rid);
+    }
+    // ?scope=all covers both legacy + marketplace in one call
+    if (scope === 'all') {
+      const [legacy, marketplace] = await Promise.all([
+        svc.embeddings.embedAllPublished(),
+        svc.embeddings.embedAllMarketplace(),
+      ]);
+      return successResponse(200, { legacy, marketplace }, rid);
+    }
     const result = await svc.embeddings.embedAllPublished();
     return successResponse(200, {
       embedded: result.embedded,

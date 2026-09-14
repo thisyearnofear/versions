@@ -41,12 +41,20 @@ negotiation — Browse is the product, not the contract.
   platformDescription + `recent: title` lines into the embedding input.
   Verified channels unlock paid placements everywhere.
 - **Matching** — listings and channel ethos share the same vector space
-  (`listing_embeddings` / `channel_embeddings`, pgvector 512). The legacy
-  `brief → rank` path (`placement_briefs`, `version_embeddings`, 0.7/0.3
-  hybrid) still runs on `/discover` for supervisor workflows; channel-
-  ethos ranking reuses the same embedding adapter (one vector space,
+  (`listing_embeddings` / `channel_embeddings`, pgvector 512). Browse is
+  now channel-ethos personalized: `GET /api/v1/marketplace/search?q=&channelId=`
+  ranks either catalog by cosine closeness to the channel's ethos text
+  (niche + platform description + recent titles) blended with tag overlap
+  (70/30 hybrid), with `mode: semantic|tag|recent` in the response.
+  Free-text `q` adds to the channel vector so `?channelId=&q=lo-fi night drive`
+  refines it. The legacy `brief → rank` path (`placement_briefs`,
+  `version_embeddings`, 0.7/0.3 hybrid) still runs on `/discover` for
+  supervisor workflows; it shares the same adapter (one vector space,
   single provider: OpenRouter by default; Venice opt-in via
-  `VENICE_EMBED_ENABLE=1` + re-embed).
+  `VENICE_EMBED_ENABLE=1` + re-embed). New listings and channels are
+  embedded fire-and-forget at creation so they are rankable without a
+  backfill; `POST /api/v1/embeddings/backfill?scope=marketplace|all`
+  covers the rest.
 - **Catalog provenance** — `catalog.source` is `demo | live` on legacy
   brief results. `authorized` is retired (see deploy notes). Listings
   have `status: draft | active | paused | exhausted | archived` and a
@@ -71,14 +79,15 @@ negotiation — Browse is the product, not the contract.
 ## Routes (marketplace)
 
 ```
+GET  /api/v1/marketplace/search[?q&channelId&kind& tier &limit&offset]  public, personalized ranking (semantic→tag→recent, mode in response, why_fits citations)
 GET  /api/v1/listings[?kind=music|placement&limit&offset]    public, live supply
 GET  /api/v1/listings?mine=1&limit                          caller-scoped
-POST /api/v1/listings                                        supplier, agreement required
+POST /api/v1/listings                                        supplier, agreement required — fire-and-forget listing embedding
 
 GET  /api/v1/channels[?limit]                                caller-scoped
-POST /api/v1/channels                                        caller, agreement required
+POST /api/v1/channels                                        caller, agreement required — fire-and-forget channel embedding
 GET  /api/v1/channels/:id                                    public if verified else owner-only
-POST /api/v1/channels/:id/verify                            owner, re-probe
+POST /api/v1/channels/:id/verify                            owner, re-probe — re-embeds channel ethos
 GET  /api/v1/channels/:id/slots                             pending once probe is live
 
 POST /api/v1/slots                                           verified channel buys paid listing
@@ -97,11 +106,14 @@ GET  /t/:code                                                302 → attribution
 ## Progression
 
 1. **Now:** browseable supply (music + placements), verifiable channels,
-   self-serve slots with tracking + disclosure + cap, and reportable
-   usage — all wired in the UI with empty states that sell the loop.
-2. **Next:** channel-personalized ranking (embed channel ethos → surface
-   either kind in one ranked feed), unreported-use nudges, and a
-   verified-delivery ingestion path alongside channel-reported events.
+   self-serve slots with tracking + disclosure + cap, reportable usage,
+   and **personalized Browse** — pick a channel + type "lo-fi night drive"
+   and the feed re-ranks by ethos closeness (semantic when pgvector is
+   live, tag overlap in mock/PGlite). Beachhead seed
+   `npm run seed:marketplace` provisions a coherent `focus/night drive`
+   slice (32 listings + 4 channels) so the first query already feels tight.
+2. **Next:** unreported-use nudges and a verified-delivery ingestion path
+   alongside channel-reported events.
 3. **Then:** campaign analytics that are actually useful (spend vs
    delivery curve, budget headroom per campaign, reproducible reporter
    split).

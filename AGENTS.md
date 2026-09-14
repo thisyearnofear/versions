@@ -241,7 +241,7 @@ npm run verify        # typecheck + tests + lint (the CI gate)
 npm run build         # next build . --experimental-build-mode compile
 npx eslint src/ tests/ --max-warnings 0  # strict lint (see CI note)
 npm run db:push       # drizzle-kit push (schema → DB)
-npm run db:pgvector   # enable pgvector + create version_embeddings table
+npm run db:pgvector   # enable pgvector + create version_embeddings + marketplace embedding tables
 npm run db:rename-briefs  # rename legacy placement_briefs columns
 npm run db:purge:preview  # dry-run legacy brief purge
 npm run db:purge:apply    # apply legacy brief purge
@@ -260,19 +260,38 @@ via `GET /api/health/ready` — it reports `arc.mock`, `llm.mock`,
 `llm.provider`, `embedding.mock`, `embedding.provider`, `gateway.mock`,
 and `ipfs.configured`.
 
+## Marketplace search (ethos-personalized)
+
+Browse ranking is now personalized: `GET /api/v1/marketplace/search?q=&channelId=&kind=&tier=`.
+
+- **Input:** free-text `q` (vibe) and/or `channelId` (ethos). `q` and channel ethos combine —
+  `q=lo-fi night drive` refines the channel vector.
+- **Vector space:** listings + channels share one pgvector space (512 via
+  `listing_embeddings` / `channel_embeddings`, text via `buildListingEmbedText` /
+  `buildChannelEmbedText` in `src/lib/catalog-embed-text.ts`).`embeddings` backfills both;
+  new rows fire-and-forget an embedding at creation (`listings`/`channels` routes) so
+  browse ranks without an extra backfill.
+- **Ranking:** semantic (cosine vs `listing_embeddings`, 70%) + tag overlap (30%) →
+  `mode: semantic`, else tag overlap → `mode: tag`, else recency → `mode: recent`.
+  Mock/PGlite have no pgvector, so they degrade gracefully to tag.
+  Each row carries `fit_score` + `why_fits` citations; the UI shows them inline.
+- **Backfill:** `POST /api/v1/embeddings/backfill?scope=marketplace` (or `all`).
+  Beachhead demo data: `npm run seed:marketplace` (or `seed:all`) is idempotent and also
+  embeds + mints one paid slot + usage proof so the paid side is already sellable.
+
 ## Service registry
 
 Services are accessed via `services()` from `src/lib/services.ts`. The
 registry is a singleton (cached on first call). It exposes:
 `submissions`, `curation`, `feed`, `settlement`, `agents`, `ar`,
-`tasteGraph`, `embeddings`, and `config` (mock flags, upload dir, etc.).
+`tasteGraph`, `embeddings`, `marketplace`, `channels`, `listings`, `slots`, `usage`, and `config` (mock flags, upload dir, etc.).
 
 ## Integration tests
 
 Integration tests live in `tests/integration/` and call services
 directly (not via HTTP). They use the same PGlite test DB as unit
 tests but don't mock the service registry — they exercise the full
-service chain. The `version_embeddings` table uses TEXT (not vector)
+service chain. The `*_embeddings` tables (pgvector in prod) use TEXT (not vector)
 in PGlite since pgvector isn't available.
 
 

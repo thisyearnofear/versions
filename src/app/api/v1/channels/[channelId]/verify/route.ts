@@ -49,6 +49,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ channelId:
   if (!result.ok) {
     return errorResponse(requestId, STATUS_FOR_FAILURE[result.code], result.code, result.message);
   }
-
+  void svc.embeddings.embedChannel(result.channel.id).catch(() => {});
   return successResponse(200, { channel: result.channel }, requestId);
 }

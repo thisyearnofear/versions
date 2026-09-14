@@ -50,6 +50,19 @@ append-only.
 Query: `?kind=music|placement&limit&offset` (public). Or `?mine=1` for
 caller-scoped (requires auth). Returns `{ listings: ListingRecord[] }`.
 
+### `GET /marketplace/search` — ethos-personalized ranking
+
+Query: `?q` (vibe) `&channelId` (personalize) `&kind=music|placement`
+`&tier=free|paid` `&limit&offset` — public, guest-friendly.
+- `q` is free-text (e.g. `lo-fi night drive`); `channelId` pulls the
+  store's ethos (niche + platform description + recent titles) so the feed
+  ranks by that channel. Both together combine: `q` refines the channel vector.
+- Returns `{ rows: ListingRecord[] & { fit_score, why_fits, similarity }, total, limit, offset, mode }`
+  where `mode` is `semantic` (cosine vs `listing_embeddings`, 70/30 hybrid with tags),
+  `tag` (tag-overlap only, e.g. in PGlite/mock), or `recent` (no query/channel).
+  `why_fits` cites the matching tags; `similarity` is 0..1 when `mode: semantic`.
+- Invalid `channelId` is ignored (falls back to `q`-only ranking) rather than 404.
+
 ### `POST /listings` — create supply
 
 Body (strict):

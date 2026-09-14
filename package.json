@@ -31,6 +31,8 @@
     "primitive:demo": "tsx scripts/primitive-demo.ts",
     "curate": "tsx scripts/curate.ts",
     "seed": "tsx scripts/seed-catalog.ts",
+    "seed:marketplace": "tsx scripts/seed-marketplace.ts",
+    "seed:all": "tsx scripts/seed-catalog.ts && tsx scripts/seed-marketplace.ts",
     "typecheck": "tsc --noEmit",
     "verify": "npm run typecheck && npm test && npm run lint"
   },
