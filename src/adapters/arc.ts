@@ -138,7 +138,7 @@ export function createArcAdapter({
   /** lowercase address → 0x private key; lets agents sign their own sends */
   signers?: Record<string, `0x${string}`>;
   requestTimeoutMs?: number;
-}): ArcAdapter {
+} = {}): ArcAdapter {
   const useMock = !rpcUrl;
   let cachedChainId: string | null = null;
   let cachedUsdcDecimals: number | null = null;
