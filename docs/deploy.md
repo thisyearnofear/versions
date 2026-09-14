@@ -121,6 +121,55 @@ foundation is clean. No drift, no deferred DDL, no vestigial legal surface.
   If you ever need to re-seed demo data, seed through the marketplace primitives
   (`POST /api/v1/listings`, `POST /api/v1/channels`) instead of legacy SQL.
 
+### Beachhead wedge — channel-ethos ranking + living supply (`79f71ec` → `db2b1ac` · 2026-09-14)
+
+One coherent slice (`lo-fi night drive / study / focus`) so browse feels tight
+before the catalog scatters — 32 listings across both kinds now back the
+personalized feed.
+
+- **`79f71ec` beachhead:** `src/lib/catalog-embed-text.ts` (`buildListingEmbedText` /
+  `buildChannelEmbedText`), `src/services/embeddings.ts` (`embedListing`,
+  `embedChannel`, `embedAllMarketplace`), `src/services/marketplace.ts`
+  (`GET /api/v1/marketplace/search` — semantic 70/30 tag hybrid, graceful
+  fallback to `tag → recent`), fire-and-forget embeddings on
+  `listings.create` / `channels.register|verify`,
+  `GET /api/v1/embeddings/backfill?scope=marketplace|all`,
+  `scripts/seed-marketplace.ts` (service-layer, idempotent — works against
+  PGlite + Neon; 18 music + 14 placement + 4 channels + mock-verified paid
+  slot + usage proof).
+- **`db2b1ac` arc-adapter fix:** `src/adapters/arc.ts` `createArcAdapter({} = {})`
+  — `createArcAdapter()` (no-arg, mock mode) threw
+  `Cannot destructure property 'rpcUrl' of 'undefined'` and broke `seed:marketplace`
+  on prod without `ARC_RPC_URL`. Now both `createArcAdapter()` and
+  `createArcAdapter({})` are safe; aligns with `createChannelProbeAdapter()`.
+
+**Prod deploy + seed verification (2026-09-14 17:45 UTC, `db2b1ac`):**
+
+```bash
+git push origin master              # 79f71ec → db2b1ac
+./scripts/deploy-remote.sh          # build 95.4s, Ready ✓ (venice + openrouter, channelProbe mock:true)
+DATABASE_URL="$(docker inspect …)" npm run seed:marketplace
+```
+
+- Seed: `32 listings` (18 music + 14 placement), `32 listing_embeddings`,
+  `4 channels` (`pending`/`mock` — `YOUTUBE_API_KEY` unset) +
+  `4 channel_embeddings`, `1 slot` (`flat`, budget 50) + `3 slot_legs`,
+  `2 usage_events` (1 sponsored + 1 organic). Idempotent — second run skips 0.
+- Probes (via Traefik `https://versions.persidian.com`):
+  `GET /api/health/ready → ready` (Arc live `0x4cef52`, `llm venice-uncensored`,
+  `embedding openrouter`, `channelProbe mock:true/canVerifyChannels:false`),
+  `GET /api/v1/listings?limit=3 → 200`,
+  `GET /api/v1/marketplace/search?q=night+drive&limit=5 → 200 mode:semantic` +
+  `GET /api/v1/marketplace/search?q=lo-fi%20study → 200 mode:semantic`,
+  `GET /api/v1/usage → { total_events:2, organic:1, sponsored:1, by_reporter:{channel:2}}`.
+- Not yet: a `verified` external channel (`can_buy_slots:true` needs
+  `YOUTUBE_API_KEY`) — channel-reported `usage_events` remain the only delivery
+  proof until `platform_api` ingestion ships.
+
+Rerun anytime: `DATABASE_URL="$(docker inspect …)" npm run seed:marketplace`
+(or `npm run seed:all` for legacy + marketplace). Widen next with a second
+ethos (e.g. thriller tension / morning routine) rather than scattering tags.
+
 ### Applied schema changes — `0008_nasty_calypso.sql` and `0009_furry_colonel_america.sql`
 
 These additive changes were applied in production on 2026-08-17 after the
