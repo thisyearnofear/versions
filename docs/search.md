@@ -1,131 +1,112 @@
-# Supervisor Decision Workspace
+# Browse, supply & channel ethos
 
-VERSIONS search is not a catalog browser. It is the supervisor-facing start
-of the autonomous **brief → licensed-track** primitive: a person describes a
-scene, receives an accountable recommendation with supporting evidence, makes
-the approval decision, and can open the appropriate license workflow.
+VERSIONS is a **marketplace of slots in a feed**, not a catalog browser.
+Browse surfaces **two catalogs — music + product placements** — as the
+same primitive (`listings`), matched to a **channel's ethos** in the same
+vector space, free with attribution or paid as a sponsor slot. Search
+remains guest-friendly; a wallet is required only to list, connect a
+channel, buy a slot, or log where it ran.
 
-Search remains guest-friendly. A wallet is never required to receive useful
-matches or contribute match feedback; it is required only for authenticated
-shortlisting and licensing.
+## The primitive
+
+| Concept | Table | What |
+|---------|-------|------|
+| **Listing** | `listings` | `music` (track, features, mood/genre tags) or `placement` (brand, images, pitch, target ethos tags). Both `free | paid`, paid is `flat | cpm` with optional `budget_cap_usdc`. Embeddings shared with channels. |
+| **Channel** | `channels` | A verified distribution surface (YouTube). Niche + ethos summary + platform-pulled recent content → `channel_embeddings`. Only `verified` channels can buy. |
+| **Slot** | `slots` | A **paid placement** of a listing on a channel (self-serve, tracking code + disclosure, flat 60/30/10 `slot_legs`, budget cap). |
+| **Usage** | `usage_events` | Every use (free or paid) logged: who, what, when, where (`videoUrl` when available). The flywheel and the paid-side proof. |
+
+One blanket agreement (`src/lib/agreement.ts`, `marketplace-1.0.0`, stamped
+on every listing and channel row) covers all free use. No per-listing
+negotiation — Browse is the product, not the contract.
 
 ## Current experience
 
-A brief is 3–500 characters. `GET /api/v1/discover/brief` returns ranked
-published takes with a `fit_score` and up to three `why_fits` citations.
-`DiscoverView` presents the top result as a recommendation, keeps a compact
-list for supervisor comparison, and exposes these current, evidence-backed
-states:
+- **Browse (`/discover`)** — unified feed above the legacy brief search.
+  Kind filter (`all | music | placement`), text filter over title/brand/
+  summary/tags, tier badge (`free · attribution` / `paid · flat|CPM`),
+  tag chips, audio player or image grid, attribution block with disclosure
+  (`#ad`), buy sheet (pick a verified channel, set budget, `POST /slots`
+  → `/pay`), and a usage proof rollup (`by_reporter` split).
+- **Supply (`/submit`)** — one card, two kinds (toggle). Title/brand +
+  pitch + tags, track picker (music, ownership-checked) or image URLs
+  (placement), tier, model, fee/CPM, optional budget cap, live
+  attribution preview, agreement terms + acceptance. `POST /api/v1/listings`
+  is live immediately — matching ranks for discovery, it does not gate
+  publication.
+- **Channel ethos (`/channels`, `ethosText`)** — channel connects a real
+  YouTube URL (`platform_url`), the probe pulls `subscriberCount`/
+  `viewCount`/`videoCount` + description + recent titles (`recentContent`),
+  and `buildChannelEthosText` joins niche + ethosSummary +
+  platformDescription + `recent: title` lines into the embedding input.
+  Verified channels unlock paid placements everywhere.
+- **Matching** — listings and channel ethos share the same vector space
+  (`listing_embeddings` / `channel_embeddings`, pgvector 512). The legacy
+  `brief → rank` path (`placement_briefs`, `version_embeddings`, 0.7/0.3
+  hybrid) still runs on `/discover` for supervisor workflows; channel-
+  ethos ranking reuses the same embedding adapter (one vector space,
+  single provider: OpenRouter by default; Venice opt-in via
+  `VENICE_EMBED_ENABLE=1` + re-embed).
+- **Catalog provenance** — `catalog.source` is `demo | live` on legacy
+  brief results. `authorized` is retired (see deploy notes). Listings
+  have `status: draft | active | paused | exhausted | archived` and a
+  campaign spend counter (`budget_spent_usdc`). Slots have
+  `pending_payment | active | paused | exhausted | completed | cancelled`.
 
-- **Match evidence:** `why_fits` identifies matching placement-brief metadata
-  such as a scene, instrument, emotional arc, or audience-summary hit.
-  Inline `why_fits` chips (top 2) render below title/artist in the collapsed
-  row; hover-to-play (200ms debounced) auto-plays a snippet from the audio.
-- **Version families:** results sharing a `family_id` are grouped — the
-  best match renders as the primary row; siblings are expandable via a
-  chevron toggle showing "N versions in this family". Each sibling renders
-  a full MatchRow with snippet playback, scoring, shortlisting, and licensing.
-- **Agent scoring:** audio features (tempo, key, energy, loudness) are
-  extracted from each audio file at publish time and included in agent
-  prompts. Three-tier extraction: remote CLAP/ONNX endpoint → local ONNX
-  chromagram (BPM, key, energy, loudness) → ffmpeg probe. When features are
-  absent, the prompt notes: "rating based on metadata only."
-- **Human gate:** supervisors listen and confirm the opening, vocal space, and
-  edit point against picture. VERSIONS does not manufacture a false
-  creative-risk verdict when the scorer has not produced one.
-- **Catalog provenance:** every result identifies `catalog.source` as
-  `demo` or `live`, while the response reports the returned-catalog mode and
-  result counts. Current seed data is a **guided demo**: its sample takes are
-  for evaluating matching and feedback, not rights offers.
-- **Requestability and quote:** live-catalog takes may be
-  `license_availability.status: "requestable"` and carry a server-derived,
-  `indicative` global schedule. Demo takes are `demo_preview` with a `sample`
-  schedule only; they never open a license job, payment, or settlement.
-- **Clearance disclosure:** every current result explicitly reports
-  `clearance.status: "unverified"`. Publication, a wallet, a MusicBrainz ID,
-  a placement brief, and curator-review counts are not rights clearance.
-- **Consent lineage (authorized versions):** when `catalog.source` is
-  `"authorized"`, a `ConsentLineagePanel` renders below the match row
-  showing the full consent → lineage → approval → audio features → agent
-  scores → settlement waterfall graph. This makes the moat visible: who
-  authorized what, what tools were used, what splits are in place, and what
-  the agents scored from actual audio.
-- **Ground truth:** a visible good-fit / wrong-direction judgment records the
-  shown brief, rank, and score. That feedback feeds the match benchmark and
-  later scorer tuning.
+## Required invariants (do not regress)
 
-`rating_count` is a count of curator reviews. It is never presented as a
-three-agent consensus.
+- **No self-reported reach.** `ChannelRegisterSchema` has no stats field;
+  stats are written only by `src/adapters/youtube.ts`. `can_buy_slots`
+  is `verified && active` — the single predicate every buy path checks.
+- **No spend from the request body.** `POST /api/v1/usage` ignores
+  `spendUsdc`; spend comes only from `slots.accrue` via the guarded
+  atomic `UPDATE … WHERE spent+delta <= cap`.
+- **Disclosure travels with the creative.** Paid listings carry
+  `disclosure` (`sponsored`, `#ad`) and every slot copies it at purchase
+  — the channel cannot drop it by editing the listing.
+- **Caps are atomic.** `listings.budget_spent_usdc` and `slots.spent_usdc`
+  move with `SET col = col + delta WHERE col + delta <= cap` in the same
+  statement that increments — concurrent delivers cannot double-spend.
 
-## Honest ranking and licensing evidence
+## Routes (marketplace)
 
-**Always on:** structured-tag matching over scene, instruments, emotional
-arcs, and audience summary.
+```
+GET  /api/v1/listings[?kind=music|placement&limit&offset]    public, live supply
+GET  /api/v1/listings?mine=1&limit                          caller-scoped
+POST /api/v1/listings                                        supplier, agreement required
 
-**When embeddings are live** (`OPENROUTER_API_KEY` or
-`EMBEDDING_API_URL`): pgvector cosine neighbors combined with structured
-signals (semantic weight 0.7; structured weight 0.3). OpenRouter embeds
-catalog text (title plus placement brief), not raw audio. Set
-`EMBEDDING_API_URL` for CLAP audio vectors.
+GET  /api/v1/channels[?limit]                                caller-scoped
+POST /api/v1/channels                                        caller, agreement required
+GET  /api/v1/channels/:id                                    public if verified else owner-only
+POST /api/v1/channels/:id/verify                            owner, re-probe
+GET  /api/v1/channels/:id/slots                             pending once probe is live
 
-The semantic query LEFT JOINs `version_embeddings`, so versions without
-an embedding yet (newly published takes, authorized pilot data seeded
-before backfill) still surface: they receive similarity 0, sort last
-(`NULLS LAST`), and rank purely on their structured-tag score in the
-hybrid scorer. Backfill closes the gap:
+POST /api/v1/slots                                           verified channel buys paid listing
+GET  /api/v1/slots[?channelId|listingId]                    caller-scoped
+POST /api/v1/slots/:id/pay                                   pay & activate (flat settles here; CPM escrows)
+POST /api/v1/slots/:id/complete                              CPM settle accrued + refund remainder
+PATCH /api/v1/slots/:id  {action: pause|resume}              either party
 
-```bash
-npm run db:pgvector
-curl -X POST http://localhost:3000/api/v1/embeddings/backfill
+POST /api/v1/usage                                           channel owner logs where it ran
+GET  /api/v1/usage[?listingId|channelId|slotId|since]       scoped list or catalog summary
+
+GET  /listings/:id                                           public attribution page
+GET  /t/:code                                                302 → attributionUrl (tracking code)
 ```
 
-If pgvector, embeddings, or the embedding provider are unavailable, search
-fails open to structured-tag ranking.
+## Progression
 
-The current result contract includes a real workflow state and quote schedule:
-`requestable` means the take is published and accepted by the existing
-`POST /licenses` workflow; `indicative` means the platform generated the
-schedule from its server-side pricing source. It still has no rights-holder,
-opt-in authority, chain-of-title, scope restriction, revocation, or
-clearance-proof record. The UI therefore calls its disclosure **ranking
-evidence**, labels rights as **unverified**, and never says “pre-cleared” or
-“license-ready.”
+1. **Now:** browseable supply (music + placements), verifiable channels,
+   self-serve slots with tracking + disclosure + cap, and reportable
+   usage — all wired in the UI with empty states that sell the loop.
+2. **Next:** channel-personalized ranking (embed channel ethos → surface
+   either kind in one ranked feed), unreported-use nudges, and a
+   verified-delivery ingestion path alongside channel-reported events.
+3. **Then:** campaign analytics that are actually useful (spend vs
+   delivery curve, budget headroom per campaign, reproducible reporter
+   split).
 
-## Required contract for the full agentic workspace
-
-Before named-agent or verified-clearance states can appear, a future version
-of the match contract must return auditable result-level fields:
-
-- `ranking_run`: run ID, scorer/model version, elapsed time, and the ranking
-  mechanisms actually used;
-- `agent_verdicts`: only for agents that actually ran — per-agent score,
-  confidence, evidence, and an objection or trade-off where available;
-- a verified `clearance`: rights status, scope, restrictions, and a stable
-  proof or reference that can replace today’s `unverified` state;
-- a `license_quote` with a quote source, per-track override or negotiated
-  terms, and a final/expired state when applicable; and
-- `alternate_take_relationship`: how a selected take differs from related
-  masters or alternate performances.
-
-With those fields, the experience can group **recommended / strong
-alternatives / needs human review** and show outcome-backed agent decisions.
-It must never infer them from a generic rank, elapsed browser time, or a
-curator-review count.
-
-## Product progression
-
-1. **Now:** a provenance-aware recommendation, evidence, human gate, demo
-   feedback capture, and a non-binding guided demo. Live takes can expose
-   requestability plus an indicative server-derived quote, always with an
-   explicit unverified-clearance disclosure.
-2. **Next:** actual per-result agent decision records, rights attestations,
-   verification, and quote evidence; show ranking movement when a supervisor
-   refines the brief.
-3. **Then:** supervisor-configured approval thresholds, budget, and rights
-   policies so the system can prepare the correct license job autonomously
-   while the human retains the consequential approval.
-
-Ground-truth taps (`good_fit` / `wrong_fit`) feed the benchmark:
-`npm run benchmark`. The versioned external primitive is documented in
+Ground-truth taps (`good_fit` / `wrong_fit`) still feed the benchmark
+(`npm run benchmark`). The versioned external contract is in
 [primitive-api.md](./primitive-api.md); the strategic rationale is in
 [`STRATEGY.md`](../STRATEGY.md).

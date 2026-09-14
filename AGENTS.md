@@ -13,29 +13,34 @@ Before touching product or UI code, hold the strategic frame. Full thesis:
 
 The short version:
 
-- **We are** the consent, curation, and settlement layer for **derivative
-  music versions**. Wedge: *one rights-controlled song → a portfolio of
-  artist-authorized versions (alt takes today; approved AI derivatives as
-  the growth path) → ranked against real briefs → paid placements*, with
-  per-version attribution and micro-settlement on Arc USDC. We are **not**
-  a generation platform and **not** a consumer remix feed — Spotify/UMG
-  own the on-platform fan-cover lane since May 2026. We own the
-  cross-platform commercial conversion rail they won't build.
-- **Supervisor-first on the demand side.** The primary *buyer* is the music
-  supervisor/A&R; the primary action is searching versions by brief.
-  Search is guest-friendly — no wallet required. Artists are the
-  supply-side partners (opt-in consent programs), not the business model.
-  The consumer catalog/feed/tips are beachhead and distribution, **not**
-  the business model.
-- **Keep the outcome we sell clear in the UI.** Lead with the supervisor
-  job (brief → ranked, license-ready versions); treat the agent economy and
-  wallet as the proof/rail underneath, not the headline. Don't regress the
-  supervisor-first framing or put the wallet back at the front door.
-- **Claim discipline.** "Pre-cleared" applies only to versions inside an
-  authorized-version program; legacy/demo catalog results stay labeled
-  rights-unverified. "Settled" applies only to uses VERSIONS tracks and
-  controls. Agents currently score metadata, not audio — don't claim they
-  listened until audio-aware evaluation ships.
+- **We are** the matching, attribution, and settlement layer for
+  **distribution channels**. Wedge: *one unified listing primitive
+  (music + product placements) → matched to a channel's ethos →
+  used free with attribution or paid as a sponsor slot → tracked →
+  settled flat 60/30/10 on Arc USDC.* Model: **NCS** (free-with-
+  attribution wedge, paid gate as the business). We are **not** a
+  generation platform, **not** a per-track licensing desk, and **not**
+  a consumer remix feed. We own the cross-channel commercial conversion
+  rail incumbents won't build.
+- **Two catalogs, one primitive.** A listing is a slot in a feed,
+  matched by ethos, free or paid — whether the inventory is a track or
+  a product. Don't rebuild them as two products.
+- **Free tier is the wedge, paid is the business.** The free tier is
+  distribution/adoption and the data flywheel; paid ("ad infra") must
+  feel as easy as buying a podcast ad slot, not a sync negotiation.
+- **Verified reach only.** A channel's subscriber/view numbers come
+  from the platform API — self-reported reach is never accepted and
+  never unlocks `can_buy_slots`. Mock stays `pending`; it can populate
+  a demo but never a paid slot.
+- **Keep the outcome we sell clear in the UI.** Lead with Browse →
+  pick → use/buy; treat the agent economy and wallet as the proof/rail
+  underneath, not the headline. Don't regress the channel-first framing
+  or put the wallet back at the front door.
+- **Claim discipline.** "Free with attribution" means the generated
+  `attribution_text` must be rendered unmodified; "verified" reach
+  means `stats_source = 'platform_api'`; "settled" means a `slot_leg`
+  on Arc. Aggregates over `usage_events` must show the `by_reporter`
+  split — never launder `channel`-reported delivery into "verified."
 
 ## Mood-tag wire-format convention
 
@@ -150,15 +155,15 @@ is rendered below the MatchRow.
 
 The nav is organized around jobs, not modules — three doors:
 
-- **Search** (`/discover`) — the supervisor job: brief → ranked takes.
-- **Workspace** (`/supervisor`) — cases, shortlists, licenses, AND the
-  library as tabs (`?tab=library` embeds `FeedView`; decisions is the
-  default tab). `/feed` is a redirect to `/supervisor?tab=library` —
-  keep it alive for deep links, don't rebuild it as a page.
-- **For Artists** (`/submit`) — the supply side.
+- **Browse** (`/discover`) — supply matched to a channel's ethos: music + product placements.
+- **Supply** (`/submit`) — list a track or a product (one card, kind toggle; live immediately under the blanket agreement).
+- **Channels** (`/channels`) — connect a distribution surface (YouTube) and verify reach; verified channels unlock paid placements.
 
-`/agents` (system proof) is demoted out of the primary rail. When adding
-a surface, ask which door it belongs to before adding a fourth.
+Demoted but kept: **Workspace** (`/supervisor`, cases/shortlists/licenses + library tab `?tab=library`), **System** (`/agents`). `/feed` redirects to `/supervisor?tab=library` for deep links.
+
+**Case thread, family compare, and durable receipt outbox** conventions
+below still apply to the retained brief→license surfaces on `/discover`
+and `/supervisor` (they share settlement rails with `slot_legs`).
 
 Per-wallet dashboards (`/artists/[wallet]`, `/curators/[wallet]`,
 `/listeners/[wallet]`) are NOT nav items — they're reached in context:

@@ -1,39 +1,51 @@
-# Guided demo, live catalog, and billing seams
+# Guided demo, usage proof & billing seams
 
-## Current product boundary
+## Current product boundaries
 
-The catalog is explicitly sourced per published take:
+### Brief→license (legacy, kept)
 
-- `demo` is deterministic guided-demo data. It is for testing the brief → ranked match, listening, refinements, and fit feedback loop.
-- `live` is catalog data intended for the live supervisor workflow. This source marker does **not** assert clearance, ownership, authority, or a final license offer.
+- `demo` is guided-demo seed for brief→rank→feedback. `live` is catalog for the supervisor workflow. Demo cannot create licenses/jobs/settlements. This marker does **not** assert clearance.
 
-Search returns row-level `catalog` provenance and a response-level `catalog` summary (`guided_demo`, `live_catalog`, or `mixed`). Demo matches display an illustrative usage schedule and a non-binding license-flow preview. They cannot create licensing interests, licenses, ERC-8183 jobs, Arc USDC payments, or settlements. The server enforces this boundary as well as the UI.
+### Marketplace (the wedge)
 
-Feedback records the source snapshot alongside each verdict. The production match benchmark only uses `live` feedback, while demo feedback remains available for product/UX analysis without training or measuring the live catalog ranking.
+- `listings`: `music` (requires an owned `submission`) or `placement` (own images). `tier: free | paid`, paid `flat | cpm`, optional `budget_cap_usdc`, `disclosure` mandatory on paid / forbidden on free, `attribution_text`/`attribution_url` generated.
+- `channels`: real distribution only. `verification_status: pending | verified | failed`, `stats_source: platform_api | mock`. Only `verified && active` → `can_buy_slots`.
+- `slots`: paid placements (`pending_payment → active → exhausted|completed`); flat settles 3-leg `60/30/10` at pay, CPM escrows budget and settles accrued spend at `complete` with refund.
+- `usage_events`: every use logged. `reported_by: channel | platform_api | manual` — aggregates must show the split; `spend_usdc` written only by `slots.accrue`.
 
 ## Settlement safety
 
-A license settlement has an owner-bound claim before ERC-8183 or Arc work begins. A second click cannot take over that claim, and a failed request does not automatically reopen it: an external executor may already have accepted a job or payout. A `settling` row should be refreshed before any retry; if it persists, operations must reconcile the job and transfer receipts, then either finalize the original claim or prove no external side effect occurred before releasing it. This is intentionally fail-closed against duplicate payouts until durable executor idempotency and an operator reconciliation workflow are implemented.
+Both settlement rails (legacy licenses + slot legs) share the same
+fail-closed pattern: **claim before money moves** via `settlement_lease_id`
+(`pending_payment → settling` guarded by `WHERE lease IS NULL`, second
+caller gets 409, a thrown payment leaves the lease held for explicit
+reconciliation). Campaign spend (`listings.budget_spent_usdc`) is
+reserved/released atomically; delivery spend (`slots.spent_usdc` via
+`accrue`) is capped atomically in the `WHERE` clause — no spend from
+the request body, no channel writing `spendUsdc`, no self-reported reach
+unlocking `can_buy_slots`.
 
-## Subscription hypothesis
+Retention (`POST /api/cron/sweep`, `RETENTION_*_DAYS`) never touches money tables or unprocessed outbox rows.
 
-The first pricing question is whether a supervisor will pay for faster, more confident decisions—not whether they will pay to click through a wallet prompt. A plausible tier test is:
+## Subscription / billing hypothesis
+
+The paid side is **ad infra** — revenue is paid placements against the
+free wedge. The first pricing question is whether a channel will pay a
+flat fee/CPM that actually settles to all three parties, not whether a
+supervisor will pay to click. A plausible tier test:
 
 | Tier | Intended value |
 |---|---|
-| Guided demo | Free matching, listening, refinements, and demo feedback |
-| Team subscription | A monthly allowance for live-catalog search/scoring, shared briefs/shortlists, and workflow reporting |
-| Usage overage | Clearly priced, supervisor-approved operations beyond the included allowance |
+| Free supply | Browse, use with attribution, every use logged |
+| Paid placement | Flat or CPM, tracking code, disclosure, budget cap, 60/30/10 settlement |
+| Campaign (future) | Rolling cap across a supplier's listings with pooled spend |
 
-Pricing, allowances, tax treatment, and which actions are chargeable remain product decisions. A subscription must not be described as buying rights clearance or guaranteeing a license.
+Pricing, cap windows, tax treatment, and which catalog charges what remain product decisions. Paid placement must not be described as buying rights clearance.
 
 ## Future relayer seam
 
-When product evidence supports it, a relayer can remove repetitive wallet prompts without taking custody:
-
-1. A supervisor approves a bounded authorization for a specific operation class, budget cap, expiry, and catalog/rights policy.
-2. The application records the approved intent and submits eligible work to a relayer or account-abstraction sponsor.
-3. The relayer batches or sponsors execution only within that authorization; anything outside it requires fresh supervisor approval.
-4. The ordinary receipt remains attached to the license/job outcome: approved intent, final terms, transaction or sponsored-operation reference, and settlement state.
-
-This is deliberately a seam rather than an implementation today. It needs a concrete pricing decision, jurisdictional/compliance review, revocation and spend-limit semantics, idempotency, and a provider selection. The platform should remain noncustodial: it must never hold a supervisor’s assets or present a sponsored operation as an executed license without the appropriate authorization and result-level rights evidence.
+When usage evidence supports it, a relayer can remove repetitive wallet
+prompts without custody — a bounded authorization (operation class, cap,
+expiry, policy), sponsor-bound execution, and the same receipt. Needs a
+pricing decision, compliance review, revocation semantics, and idempotency.
+The platform stays noncustodial.

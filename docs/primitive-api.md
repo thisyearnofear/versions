@@ -1,13 +1,11 @@
-# VERSIONS Primitive API — v1
+# VERSIONS Primitive API — v1 (+ marketplace wedge)
 
-The **primitive’s target outcome** is *a brief → a cleared, attributed,
-micro-settled license.* This document specifies the versioned contract that
-external catalogs, labels, and DSPs (who are structurally disincentivized to
-build it themselves) can consume. The current v1 match response truthfully
-exposes a take’s workflow requestability and the platform’s indicative quote;
-it does **not** assert rights clearance. Typed shapes live in
-[`src/lib/primitive-contract.ts`](../src/lib/primitive-contract.ts); the
-reference implementation is the app's own routes under `/api/v1`.
+Two surfaces live under the same `/api/v1` base path: the **original
+brief → licensed-version pipeline** (kept, surfaces still use it) and
+the new **marketplace wedge** — unified listings, verified channels,
+paid placements (slots), and usage tracking. External consumers should
+treat the marketplace contract as the forward path; the brief pipeline
+remains documented below for completeness.
 
 Version: **`v1`** (`X-Primitive-Version: v1`, optional header).
 Base path: `/api/v1`.
@@ -16,9 +14,9 @@ Base path: `/api/v1`.
 
 ## Conventions
 
-**Auth.** Search is guest-friendly (`x-supervisor-guest` or no identity).
-Feedback accepts a guest identity. Shortlist and license require a NextAuth
-wallet session. Settlement on live Arc broadcasts real USDC transfers.
+**Auth.** Browse + listing/channel reads are public. Creating a listing,
+registering a channel, buying a slot, and logging usage require a
+NextAuth wallet session. Real money moves on live Arc only.
 
 **Response envelope.**
 ```json
@@ -26,215 +24,116 @@ wallet session. Settlement on live Arc broadcasts real USDC transfers.
 { "success": false, "error": { "code": "…", "message": "…", "requestId": "…" } }
 ```
 
-**Error codes.** `INVALID_BRIEF` (400) · `INVALID_BODY` (400) ·
-`INVALID_VERDICT`/`INVALID_LICENSE` (400) · `UNAUTHORIZED` (401) ·
-`VERSION_NOT_FOUND` (404) · `DEMO_CATALOG_ONLY`/`SETTLEMENT_IN_PROGRESS`/
-`SETTLEMENT_CLAIM_LOST` (409) · `NOT_FOUND` (404) · `RATE_LIMITED` (429) ·
-`INTERNAL` (500).
+**Error codes.** `INVALID_BODY` (400) · `INVALID_LISTING`/`INVALID_CHANNEL`/
+`INVALID_SLOT`/`INVALID_USAGE` (400) · `UNAUTHORIZED` (401) ·
+`LISTING_NOT_FOUND`/`CHANNEL_NOT_FOUND`/`SLOT_NOT_FOUND` (404) ·
+`CHANNEL_UNVERIFIED`/`CAMPAIGN_EXHAUSTED`/`BUDGET_BELOW_FEE` (403/409) ·
+`SETTLEMENT_IN_PROGRESS`/`SETTLEMENT_CLAIM_LOST` (409) ·
+`RATE_LIMITED` (429) · `INTERNAL` (500).
 
-**Rate limits.** Brief matching is limited per-IP to 60 requests per 60
-seconds by default.
+**Rate limits.** Standard IP-based limiter (60/60s). Slot `pay`/`complete`
+take a fail-closed lease (`settlement_lease_id`) — a second caller gets
+409 without double-spending.
 
-**Idempotency.** Verdicts and licenses upsert on `(operator, brief_hash,
-submission_id)`; resending an outcome-defining call does not duplicate it.
-Settlement is idempotent once a license is paid. Before external work starts, a
-pending license is atomically claimed by one lease owner; a `settling` claim is
-never automatically reclaimed because a prior executor may have broadcast a
-job or payout. Persistent `settling` rows require receipt reconciliation before
-an operator can finalize or release them.
+**Idempotency.** Listing creation is not deduped. Slot creation is
+deduped per `(listing_id, channel_id)` for live statuses (`pending_payment
+| active | paused`) via `uq_slots_active_listing_channel` — a second POST
+returns the existing row (`alreadyExisted: true`). Usage logging is
+append-only.
 
-## Endpoints
+---
+
+## Marketplace endpoints
+
+### `GET /listings` — browse live supply
+
+Query: `?kind=music|placement&limit&offset` (public). Or `?mine=1` for
+caller-scoped (requires auth). Returns `{ listings: ListingRecord[] }`.
+
+### `POST /listings` — create supply
+
+Body (strict):
+```json
+{
+  "kind": "music | placement",
+  "title": "string (1–200)",
+  "supplierName": "string (1–120)",
+  "summary": "string? (≤1000)",
+  "tags": ["string (1–40, 1–12 items)"],
+  "images": ["string (≤2000, ≤8)"] ,
+  "submissionId": "string? (music requires an owned submission)",
+  "tier": "free | paid",
+  "pricing": { "model": "flat", "flatFeeUsdc": "25" } | { "model": "cpm", "cpmUsdc": "4.50" } | null,
+  "budgetCapUsdc": "string? (paid only; null = uncapped)",
+  "agreementVersion": "marketplace-1.0.0"
+}
+```
+- `tier: paid` requires `pricing` and mints `disclosure` (`sponsored`, `#ad`).
+- `tier: free` must have no `pricing`/`disclosure`.
+- Response `201 { listing }` — `status: 'active'`, `attribution_text`/`attribution_url`/`attribution_slug` generated (NCS-style), `pricing`/`disclosure` baked in.
+
+### `GET /listings/:id` / `PATCH /listings/:id`
+
+- `GET` public. `PATCH { status }` owner-only (`paused|archived|active`).
+
+### Public pages
+
+- `GET /listings/:id` (HTML) — attribution page.
+- `GET /t/:code` — `302` tracking redirect → `attribution_url`.
+
+### `POST /channels` / `GET /channels` / `GET /channels/:id`
+
+- `POST { platformUrl, niche?, ethosSummary?, agreementVersion }` (strict, **no stats field** — a 400 for `subscriberCount` is by design). Probes YouTube; without `YOUTUBE_API_KEY` returns `pending` + `stats_source: 'mock'` (cannot buy). With live probe → `verified` + `stats_source: 'platform_api'` and `can_buy_slots: true` only when `verified && active`.
+- `GET /channels/:id/verify` re-probes a pending channel (owner-only).
+
+### `POST /slots` — buy a placement
+
+```json
+{ "listingId": "string", "channelId": "string (owned, verified)", "budgetUsdc": "string? (CPM requires; flat optional as cap)" }
+```
+Guards: listing must be `active` + `paid`, channel must be `verified`, CPM budget clamped to campaign headroom. Returns `201 { slot }` (or `200` if the live slot already exists).
+
+### `POST /slots/:id/pay` / `POST /slots/:id/complete`
+
+- `/pay` collects the gross (flat fee or CPM escrow), reserves campaign spend atomically, settles flat `60/30/10` `slot_legs` via `insertSlotLegsAtomic` → `settleSlotLegsAsync`, emits the durable receipt (`slot` source). Locks `settlement_lease_id`.
+- `/complete` settles CPM accrued spend (`spend_usdc` only from `slots.accrue`) and refunds unspent escrow; flat is idempotent.
+
+### `POST /usage` / `GET /usage`
+
+```json
+{ "listingId": "string", "channelId": "string (owned)", "slotId": "string? (paid requires; omitted resolves the channel's latest slot)", "videoUrl": "string?", "impressions": 0, "clicks": 0, "attributionCode": "string?", "externalContentId": "string?", "occurredAt": "ISO?" }
+```
+- No `reportedBy` or `spendUsdc` in the body — `reported_by` is recorded (default `channel`; only the platform probe may write `platform_api`) and spend comes from `slots.accrue`'s capped atomic increment.
+- `GET /usage[?listingId|channelId|slotId|since]` → scoped rows or `{ summary: { total_events, by_reporter, spend_usdc, … } }` and `attributionCompliance(listingId)`. Aggregates must quote the `by_reporter` split alongside any total.
+
+---
+
+## Legacy: brief → licensed take (kept)
+
+These endpoints remain for `/discover` supervisor workflows and share settlement rails with the slot path.
 
 ### 1. `GET /discover/brief` — brief → ranked takes
 
-Ranked alternate takes for a plain-English brief.
+`?brief` (3–500 chars, required) · `?limit` (≤50) · `?offset` · filters `sceneTags`, `instruments`, `energy`, `tempo` → `{ rows: BriefSearchRow[], total, catalog: { mode, demo_result_count, live_result_count } }`. Rows carry `fit_score`/`why_fits`/`catalog`/`license_availability`/`license_quote`/`licensing_evidence`.
 
-- `?brief` (3–500 chars, required) · `?limit` (≤50) · `?offset`
-- Optional filters: `sceneTags`, `instruments`, `energy`, `tempo`
-- Response `data`: `{ rows: BriefSearchRow[], total, limit, offset }`
+### 2. `POST /discover/brief/feedback` — label a shown match
 
-Each v1 row contains `fit_score`, `why_fits`, track metadata, `catalog`
-provenance, a structured placement brief, `license_availability`,
-`license_quote`, and `licensing_evidence`. The response also has a `catalog`
-summary with its mode and live/demo result counts. `why_fits` is evidence from
-the available catalog-ranking signals; it is not an individual agent verdict or
-clearance claim. When `catalog.source` is `"authorized"`, the response also
-includes a `program` object with consent_policy, splits, lineage,
-audio_features, and agent_scores for the full consent lineage visualization.
+`{ briefText, briefHash, submissionId, fitScoreShown, rankShown?, verdict }`.
 
-```json
-{ "success": true, "data": {
-  "rows": [{
-    "submission_id": "sub_abc",
-    "title": "Run Scene 3 (take 2)",
-    "artist_name": "M. Rivera",
-    "fit_score": 0.87,
-    "why_fits": ["scene: car chase", "instrument: synth"],
-    "catalog": {
-      "source": "live",
-      "label": "Live catalog",
-      "description": "Catalog data supplied for the live workflow. Rights clearance remains independently unverified unless evidenced."
-    },
-    "license_availability": {
-      "status": "requestable",
-      "reason": "Published takes can enter the current platform license-request workflow.",
-      "clearance": {
-        "status": "unverified",
-        "reason": "No auditable rights-clearance record exists for this take."
-      }
-    },
-    "license_quote": {
-      "status": "indicative",
-      "territory": "worldwide",
-      "term_months": 12,
-      "usage_options": [
-        { "usage_type": "sync_ad", "fee_usdc": "1.00" },
-        { "usage_type": "sync_tv_film", "fee_usdc": "1.00" },
-        { "usage_type": "sync_digital", "fee_usdc": "1.00" },
-        { "usage_type": "other", "fee_usdc": "1.00" }
-      ]
-    },
-    "licensing_evidence": {
-      "status": "rights_review_required",
-      "summary": "This live-catalog take is requestable, but rights authority, scope, and final terms still require review.",
-      "outstanding": [
-        { "requirement": "rights_authority", "description": "Confirm the authority to license every required right for this take." },
-        { "requirement": "scope_and_restrictions", "description": "Record territory, term, media scope, and any restrictions or exclusions." },
-        { "requirement": "final_quote", "description": "Issue a rights-aware final quote before treating the license as cleared." }
-      ]
-    },
-    "brief": {
-      "scene_tags": ["car chase"],
-      "instruments": ["synth"],
-      "emotional_arcs": ["tension"],
-      "audience_summary": "…"
-    }
-  }],
-  "catalog": { "mode": "live_catalog", "demo_result_count": 0, "live_result_count": 42 },
-  "total": 42,
-  "limit": 20,
-  "offset": 0
-}}
-```
+### 3. `POST /licenses` — open a license
 
-`catalog.source: "demo"` is guided-demo data. Its availability is
-`"demo_preview"` and its quote is a `"sample"`; `POST /licenses` returns
-`DEMO_CATALOG_ONLY` (409) and never opens a job, payment, or settlement.
-`catalog.source: "live"` may be `"requestable"`, which means only that the
-matched published take can enter the existing authenticated `POST /licenses`
-workflow. `clearance.status: "unverified"` is deliberate: v1 has no persisted
-rights-holder, authority, restriction, chain-of-title, revocation, or
-clearance-proof record. `license_quote.status: "indicative"` is the
-server-derived global platform schedule (currently worldwide for 12 months),
-not a negotiated, cleared, or final license offer. `licensing_evidence` turns
-that absence into an explicit decision checklist; its `outstanding` items are
-requirements, not claims that the evidence has been collected.
+`{ submissionId, briefHash, briefText, usageType }` → `{ license }` `pending_payment` (+ ERC-8183 job).
 
-`catalog.source: "authorized"` is a third catalog provenance, introduced for
-the artist-authorized version pilot. An authorized take publishes inside an
-active `version_program` with recorded consent policy, royalty splits, and
-artist approval. Its `clearance.status` is `"cleared"` (scope = program
-consent policy), `license_availability.status` is `"requestable"`, and a
-`program` object is included in the response with program_id, consent_policy,
-splits, lineage, agent_scores, and audio_features. The consent lineage is
-visualized in the DiscoverView with a `ConsentLineagePanel` component showing
-the full consent → lineage → approval → audio features → agent scores →
-settlement waterfall graph.
+### 4. `POST /licenses/:id` — settle / `GET /licenses/:id` — receipt · `GET /discover/benchmark`
 
-### 2. `POST /discover/brief/feedback` — record ground truth
+Unchanged. See the prior spec revision for shapes.
 
-Label a shown match as a good fit or wrong fit. The label feeds the benchmark
-and future scorer tuning.
+## Why this marketplace wedge
 
-- Body: `{ briefText, briefHash, submissionId, fitScoreShown, rankShown?, verdict: "good_fit"|"wrong_fit" }`
-- Response `data`: `{ row: MatchFeedbackRow }`
-
-### 3. `POST /licenses` — open a license for a matched take
-
-- Body: `{ submissionId, briefHash, briefText, usageType }`, where
-  `usageType ∈ { sync_ad, sync_tv_film, sync_digital, other }`
-- The fee is derived server-side. Response `data`:
-  `{ license: LicenseRow }`, with `status: "pending_payment"` and an
-  ERC-8183 license job when available.
-
-Opening a job requires the supervisor’s approval and does not convert an
-unverified result into a clearance claim. A v1 search result may say
-**requestable** and **indicative quote available**; it must not say
-**pre-cleared** or **license-ready** without auditable, result-level clearance
-and final-quote evidence.
-
-### 4. `POST /licenses/:id` — settle on Arc
-
-Settle a pending license (platform-brokered, mock-first). Idempotent.
-Response `data` includes `{ license, settled }`, with transaction and
-ERC-8183 job receipt fields where available.
-
-### 5. `GET /licenses/:id` — the receipt
-
-Returns `{ license: LicenseRow }`, including status, fee, settlement time,
-payment transaction, and license-job receipt fields.
-
-### 6. `GET /discover/benchmark` — match-quality report
-
-Aggregates labeled verdicts into the online benchmark:
-`queryCount`, `judgmentCount`, good/wrong fit counts, MRR, precision@k,
-nDCG, and score discrimination.
-
-## Contract evolution: decision evidence
-
-The v1 contract intentionally does not promise a simulated agent trace or
-rights clearance. The new requestability and indicative-quote fields make the
-current workflow inspectable, but they are not substitutes for verification.
-
-**Audio-aware evaluation:** agents now receive audio features (tempo, key,
-energy, danceability, acousticness, loudness, instrumentalness, valence)
-when available — extracted from the audio file at publish time and included
-in the prompt. When features are absent, the prompt includes: `"Audio
-features not available (rating based on metadata only)."` This makes the
-scoring basis transparent: agents score from actual audio when present,
-and the supervisor can see the limitation.
-
-Before a future version exposes named agent verdicts or a `clearance.status`
-other than `unverified`, a ranked row needs auditable fields such as:
-
-```ts
-{
-  ranking_run: { id: string; mechanisms: string[]; scorer_version: string },
-  agent_verdicts: Array<{
-    agent: "production" | "performance" | "market";
-    score: number;
-    confidence: number;
-    evidence: string[];
-    objection?: string;
-  }>,
-  clearance: {
-    status: "cleared" | "needs_review";
-    scope: string;
-    restrictions: string[];
-    proof: string;
-  },
-  license_quote: {
-    status: "final";
-    usage_type: string;
-    territory: string;
-    term_months: number;
-    fee_usdc: string;
-    source: string;
-  }
-}
-```
-
-Those fields enable a supervisor decision workspace: a recommendation,
-inspectable evidence and trade-offs, a human approval gate, and an executable
-license state. They must be derived from actual runs and rights records—not
-from generic rank, timing, or curator-review counts. The product expression
-and staged UX are documented in [search.md](./search.md).
-
-## Why a catalog would adopt this
-
-Catalogs are disincentivized to build autonomous long-tail clearance and
-micro-settlement because it cannibalizes their curation premium and human sync
-model. VERSIONS can provide the workflow and a compounding ground-truth
-dataset now, while building toward auditable cleared, attributed,
-micro-settled licenses rather than merely claiming that outcome. See
-[`STRATEGY.md`](../STRATEGY.md).
+Supply (music + products) and distribution (verified channels) are two
+sides of the same feed. One blanket agreement, one attribution format,
+one tracking code, one flat split — instead of bespoke, per-track legal
+surface that the founder explicitly asked to drop. Money rails reuse
+`settlement.ts` patterns with fewer, simpler legs; the durability
+machinery (`outbox`, `settlement-sweeper`) is unchanged, just with
+simpler inputs.

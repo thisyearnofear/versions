@@ -60,6 +60,40 @@ curl -sf http://127.0.0.1:3000/api/health/ready
 curl -sf https://versions.persidian.com/api/health/ready
 ```
 
+### Marketplace additive tables (2026-08 — pivot)
+
+The pivot is **additive** at the DB layer so `db:prod:push` stays safe to run
+guarded. The sync-licensing legal surface (`version_programs` +
+`submissions.program_id / authorization_status / lineage`) was retired via
+`scripts/retire-authorized-provenance.{preview,apply}.sql`; the marketplace
+adds **no new migration ledger** — just `push`-managed tables:
+
+- `listings` + `listing_embeddings` — unified supply (`music | placement`),
+  free/paid tier, pricing, disclosure, attribution, blanket agreement stamp.
+- `channels` + `channel_embeddings` — distribution side (YouTube channel
+  verification, subscriber/view counts, ethos profile).
+- `slots` + `slot_legs` — paid placement: one active slot per
+  (listing, channel), tracking code, disclosure copied at purchase, flat
+  60/30/10 settlement legs (separate table from `settlement_legs` so the
+  publish-fee invariants stay untouched).
+- `usage_events` — every use logged (organic vs sponsored, attribution code,
+  video URL, impressions/clicks, spend).
+
+All are additive and independently `push`-able. Verify after any push with
+`db:prod:status` + `curl /api/health/ready` and a quick probe of the new
+surfaces:
+
+```bash
+curl -sf https://versions.persidian.com/api/v1/listings | head
+curl -sf https://versions.persidian.com/api/v1/channels | head
+curl -sf https://versions.persidian.com/api/v1/usage | head
+```
+
+Channel verification needs `YOUTUBE_API_KEY` in server `.env` for live
+subscriber/view pulls; when absent the adapter stays in mock mode
+(`pending` + mock stats, `can_buy_slots = false`) — by design, no self-reported
+reach is ever accepted.
+
 ### Applied schema changes — `0008_nasty_calypso.sql` and `0009_furry_colonel_america.sql`
 
 These additive changes were applied in production on 2026-08-17 after the
@@ -234,8 +268,8 @@ settlement sweeper, the authoritative outbox drain, and retention pruning
 `RETENTION_OUTBOX_DAYS` (14, processed rows only),
 `RETENTION_TELEMETRY_DAYS` (30), `RETENTION_SEARCHES_DAYS` (90),
 `RETENTION_AUDIT_DAYS` (365 — x402 proofs, play/listen events). Money
-state (`settlement_legs`, `licenses`, unprocessed outbox rows) is never
-pruned.
+state (`settlement_legs`, `slot_legs`, `licenses`, unprocessed outbox rows)
+is never pruned.
 
 **Protect the sweep endpoint.** Set `CRON_SECRET` in the server `.env` and
 have the cron job send it as the `x-cron-secret` header:
@@ -457,6 +491,10 @@ Env-only (no code): edit server `.env`, then
 ```bash
 curl -sf https://versions.persidian.com/api/health/ready
 curl -sf -X POST https://versions.persidian.com/api/v1/embeddings/backfill
+# Marketplace probes
+curl -sf https://versions.persidian.com/api/v1/listings | head
+curl -sf https://versions.persidian.com/api/v1/channels | head
+curl -sf https://versions.persidian.com/api/v1/slots | head
 ```
 
 Monitor: `scripts/monitor-versions.sh` (cron). Rollback: `git revert` on

@@ -4,50 +4,46 @@
 |-----|------|
 | [../STRATEGY.md](../STRATEGY.md) | Why we win (moat, incumbents, wedge) |
 | [../POSITIONING.md](../POSITIONING.md) | One-pager |
-| [arc.md](./arc.md) | USDC, x402, ERC-8183/8004, App Kit |
-| [primitive-api.md](./primitive-api.md) | Brief → license HTTP contract |
-| [search.md](./search.md) | Discover, embeddings, pgvector |
-| [guided-demo-and-billing.md](./guided-demo-and-billing.md) | Catalog provenance, guided demo, subscription and relayer seams |
-| [beachhead.md](./beachhead.md) | Ground-truth labels + benchmark |
+| [arc.md](./arc.md) | USDC, x402, ERC-8183/8004, App Kit + slot settlement |
+| [primitive-api.md](./primitive-api.md) | Marketplace HTTP contract (listings / channels / slots / usage) + legacy brief→license |
+| [search.md](./search.md) | Browse, supply, matching, channel ethos |
+| [guided-demo-and-billing.md](./guided-demo-and-billing.md) | Catalog provenance, usage proof, settlement safety |
+| [beachhead.md](./beachhead.md) | How to get to liquidity |
 | [deploy.md](./deploy.md) | Git-only production deploy and guarded schema operations |
 
 Agent conventions (mood tags, feed shape, NFT traces): [../AGENTS.md](../AGENTS.md).
 
-## Loop
+## Marketplace loop (dual catalog)
 
-Artist submits (0.50 USDC) → three agents review in parallel → publish + split settlement → supervisor searches by brief → license as an ERC-8183 job → Arc USDC.
+Supply lists a **music** track or a **placement** product (`POST /api/v1/listings`, live immediately, one blanket agreement) → **Channel** connects and verifies a distribution surface (`POST /api/v1/channels`, platform-pulled stats, `can_buy_slots` only when `verified`) → **Browse** surfaces either kind against ethos (`GET /api/v1/listings` + `GET /api/v1/discover/brief`) → **Free** use renders attribution (`/listings/:id`, `/t/:code`) → **Paid** slot bought self-serve (`POST /api/v1/slots` → `/pay`, flat 60/30/10 on Arc, tracking code + disclosure, budget cap) → **Every use logged** (`POST /api/v1/usage`, channel-reported by default; `by_reporter` split visible) → settlement legs cap spend atomically.
 
-Guests search free. Shortlist and license need a wallet session.
+Guests browse and read. Creating supply, connecting a channel, buying a slot, and logging usage require a wallet session. Free tier is the wedge; paid is ad infra (podcast-ad-slot simple).
 
 ## Routes
 
 | Path | Role |
 |------|------|
-| `/discover` | Brief search (primary) — audio-aware agents, version family grouping, consent lineage |
-| `/supervisor` | Shortlist, licenses, treasury, agent stack |
-| `/submit` | Artist upload |
-| `/agents` | Live review queue — differentiated per-agent verdicts + sync-fit |
-| `/feed` | Published catalog |
-| `/auth/signin` | Connect + EIP-191 sign-in |
-| `/api/health/ready` | Adapter mock/live flags |
+| `/discover` | **Browse** — unified music + placements feed, brief search, usage ticker |
+| `/submit` | **Supply** — music ↔ placement toggle, tier/pricing/cap, agreement click-through |
+| `/channels` | **Channels** — connect + verify a distribution surface |
+| `/supervisor` | Workspace — cases/shortlists/licenses + library tab + usage reporter |
+| `/listings/:id` | Public attribution page |
+| `/t/:code` | Tracking redirect → listing |
+| `/legal/agreement` | Blanket ToS (versioned, stamped on every row) |
+| `/agents` | Live review / system proof (demoted) |
+| `/feed` | Redirect → `/supervisor?tab=library` |
+| `/api/health/ready` | Adapter mock/live flags (incl. `channelProbe`) |
 
 ## Local
 
 ```bash
 npm install
 npm run db:push
-npm run seed          # optional demo catalog
+npm run db:pgvector
 npm run verify        # typecheck + tests + lint (the CI gate)
 npm run dev
 ```
 
-`GET /api/health/ready` reports `arc` / `llm` / `embedding` mock flags.
-Inference runs a provider fallback chain so one rate limit never silently
-mocks the agents: LLM is Venice → HF Qwen → TokenRouter (DeepSeek) →
-OpenRouter → mock; set `VENICE_API_KEY` (primary), `HF_QWEN_API_URL`,
-`TOKENROUTER_API_KEY` + `TOKENROUTER_API_URL`, and/or `OPENROUTER_API_KEY`.
-Embeddings stay single-provider to keep one vector space (OpenRouter by
-default; Venice bge-m3 is opt-in via `VENICE_EMBED_ENABLE=1` + a
-re-embed). Arc: `ARC_RPC_URL` + platform wallet key.
-Embeddings backfill: `POST /api/v1/embeddings/backfill` (needs pgvector:
-`npm run db:pgvector`).
+`GET /api/health/ready` reports `arc` / `llm` / `embedding` / `channelProbe` mock flags.
+Inference keeps a provider fallback chain for LLM (Venice → HF Qwen → TokenRouter → OpenRouter → mock); set `VENICE_API_KEY` / `HF_QWEN_API_URL` / `TOKENROUTER_API_KEY` + `TOKENROUTER_API_URL` / `OPENROUTER_API_KEY`. Channel verification needs `YOUTUBE_API_KEY` to reach `verified`; without it, onboarding still works but stays `pending` (mock source, cannot buy).
+Arc: `ARC_RPC_URL` + platform wallet key. Embeddings backfill: `POST /api/v1/embeddings/backfill` (needs pgvector: `npm run db:pgvector`).

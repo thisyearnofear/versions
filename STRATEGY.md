@@ -1,224 +1,202 @@
 # VERSIONS — Strategy & Positioning
 
-**Thesis.** VERSIONS is the **consent, curation, and settlement layer for
-derivative music versions**. We win from a **wedge — one agentic primitive** —
-positioned as **picks-and-shovels for the commercial end of AI music**:
-*one rights-controlled song → a portfolio of artist-authorized versions →
-ranked against real briefs → paid placements*, with per-version attribution
-and micro-settlement on Arc USDC. Our moat is the compounding
-**consent → lineage → fit → license → waterfall graph** + settlement
-liquidity + zero-marginal-cost ranking scale.
+**Thesis.** VERSIONS is the **matching, attribution, and settlement layer
+for distribution channels**. We win from a **wedge — one unified primitive**
+positioned as **ad infra for the AI distribution wave**:
+*a marketplace where channels (YouTube automation, radio-style feeds,
+etc.) browse a feed of music and product placements, pick what fits
+their content's ethos, and use it — free with attribution or paid as
+a sponsor slot — with matching, attribution tracking, and flat USDC
+settlement on Arc taking a cut of every paid transaction.*
 
 > **Positioning statement**
-> VERSIONS turns one rights-controlled song into a portfolio of authorized
-> versions — ranked by agents against commercial briefs, approved by the
-> artist, licensed with a complete rights package, and settled per version
-> in micro-payments on Arc — and owns the cross-platform outcome graph no
-> incumbent is building, because their money is in creation and streaming,
-> not in the sync schlep.
+> VERSIONS turns any channel's ethos into shoppable supply — music and
+> products as the same primitive (a slot in a feed, matched by ethos,
+> free or paid) — and owns the cross-platform match → use → proof →
+> settlement graph no incumbent is building, because their money is in
+> creation and streaming, not in making AI distribution monetizable.
 
 ---
 
 ## 1. What we are — and are not
 
-- **We are** the automation of the sync *schlep* for **versions**: turning
-  rights-controlled songs into ranked, license-ready version portfolios,
-  and clearing, matching, and micro-attributing takes that human sync
-  teams can't reach at cost.
+- **We are** a marketplace with two supply catalogs and one demand
+  surface: **music + product placements** as the same primitive, matched
+  against a verified channel's ethos, with the attribution and
+  settlement rail underneath. Model: **NCS** (NoCopyrightSounds) —
+  free-with-attribution for organic use, a separate paid/commercial
+  gate for monetized or sponsored use, ~500B plays, single blanket
+  agreement instead of bespoke contracts.
+- **We are not** a per-track licensing negotiation shop. No bespoke
+  consent policies, no territory-by-territory rights tracking, no
+  AI-training consent flags, no lawyer-drafted-per-program agreements.
+  One blanket ToS covers all free usage.
 - **We are not** a generation platform. Creation tools stay external and
   tool-agnostic — we never compete with the model layer.
 - **We are not** a consumer remix feed. Since May 2026, Spotify/UMG own
   "fans make licensed AI covers, consumed on-platform." That lane is
   occupied; we don't enter it.
-- **We are not** a catalog competing on library size. Size is an
-  incumbents' game; we build the differentiated supply (authorized
-  versions) and the conversion rail they won't.
+- **We are not** a catalog competing on library size. The wedge is the
+  matching + attribution + settlement rail, not the size of the shelf.
 
-## 2. The wedge: one agentic primitive, two supply paths
+## 2. The wedge: one primitive, two catalogs, two tiers
 
-The primitive is the *autonomous brief → licensed-version pipeline*:
+The primitive is the **listing** — a slot in a feed that a channel can
+pick up — and the **channel** that picks it:
 
-- paste a plain-English brief,
-- three AI agents score versions by fit (Production / Performance /
-  Market), producing an explainable `why_fits` verdict per take, with a
-  configurable human gate,
-- per-use micro-settlement on Arc USDC (x402 / ERC-8183 jobs, batched)
-  with deterministic per-version attribution.
+- **Listings** (`listings`): `music` (audio, features, mood/genre tags)
+  or `placement` (brand/product name, images, short pitch, target ethos
+  tags). Both carry `tier: free | paid`, and when paid `pricing: flat |
+  cpm` + optional `budget_cap_usdc`. Both are embedded into the same
+  vector space as channel ethos, so Browse can surface either kind.
+- **Channels** (`channels`): a real distribution surface (YouTube at
+  minimum for v1). We pull subscriber/view numbers from the platform's
+  own API — no self-reported stats. Channel profile = the ethos
+  embedding input (recent titles/descriptions, stated niche/genre).
+  Only a `verified` channel can buy a paid slot.
+- **Free tier** — one blanket click-through at listing creation (supplier)
+  and at channel registration (channel). Every free use must render a
+  generated `attribution_text` + link (`/listings/:id`) unmodified.
+  Every use — free or paid — is logged (`usage_events`: who, what,
+  when, where). This is the data flywheel and the future sales proof
+  ("our catalog gets used X times/month") for the paid side.
+- **Paid tier — the ad infra** — self-serve buy flow: set budget, pick
+  flat/CPM, checkout on existing Arc/x402 rails. Every paid placement
+  mints a unique `tracking_code`/`tracking_url` (`/t/:code` → listing)
+  so delivery is attributable from day one. Flat settlement split:
+  **60/30/10 supplier / channel / platform** via `slot_legs`; no
+  waterfall. Campaign/budget cap enforced by a guarded atomic
+  `UPDATE … WHERE spent+delta <= cap` at both slot (`accrue`) and
+  campaign (`listings.budget_spent_usdc`) levels. Paid listings carry a
+  `disclosure` (`#ad` / `Paid promotion`) baked into the attribution
+  the channel must render — FTC/platform sponsored-content rules apply
+  to AI-run channels exactly as to human ones.
 
-**Supply path A (running today):** catalog alternate takes — the original
-long-tail story. Proven end-to-end on prod (brief search → license →
-ERC-8183 job → USDC settlement), but dependent on catalog partners for
-differentiated inventory, and rights remain unverified on this path.
+We sell the **outcome** — a matched, attributable, settled placement —
+not a similarity API, not a sync-negotiation service, not a streaming
+surface.
 
-**Supply path B (the new wedge):** artist-authorized versions — an artist
-opts in with one rights-controlled song (master + composition), invited
-creators produce derivatives under an explicit consent policy
-(transformations, territories, term, splits, revocation), the artist
-approves each take, agents + humans score, supervisors license. VERSIONS
-owns the consent→lineage→approval→fit→license→waterfall graph for every
-version. This path makes "pre-cleared" *actually true* — consent is
-recorded per version before it can reach a brief.
+### Honest capability gaps
 
-We sell the **outcome** — pre-cleared, attributed, micro-settled licenses —
-not a raw similarity API, not a creation tool, not a streaming surface.
+- **Matching is still structured + text embedding.** Audio features
+  still help music↔channel fit, but channel-ethos matching is an
+  embedding problem that compounds only once usage data accumulates.
+- **Usage reporting is channel-reported by default.** The `reported_by`
+  field (`channel | platform_api | manual`) must stay visible in every
+  aggregate — we do not launder self-reported delivery into "verified."
+  Platform-verified delivery is a future ingestion path, not a shipped
+  one.
+- **No per-track bespoke terms.** By design — but it means we cannot
+  promise a negotiated price, territory carve-out, or training opt-out
+  per listing.
 
-### Honest capability gaps (pilot workstreams)
+### Product expression
 
-- **Agents currently score metadata, not audio** (`src/services/agents.ts`
-  prompt: title/genre/mood/description). With AI-derived versions,
-  creator-supplied metadata is untrustworthy input. Audio-aware
-  evaluation (CLAP-style embeddings via `EMBEDDING_API_URL`, or extracted
-  features fed to the agents) is a gating pilot workstream, not a
-  follow-up.
-- **Consent/policy schema is concierge-first.** The pilot runs on one
-  lawyer-drafted agreement mirrored as a DB record + manual approval
-  gates. The general schema (allowed transformations, territories,
-  revocation, provenance, splits) is codified from that artifact.
-- **No external virality ingestion yet.** "Verified audience response
-  improves commercial matching" is the pilot hypothesis to test, not a
-  shipped feature.
+The browse and supply surfaces must feel like **one marketplace**, not
+"music here, products there." Browse filters by kind/tag/budget;
+Supply uses one card with a kind toggle; Channels connects once and
+unlocks the paid tier everywhere. The wallet and settlement rail remain
+proof and execution infrastructure — never the front door.
 
-### Product expression: the supervisor decision workspace
+Trust is part of the product. We show verification source (`platform_api`
+vs `mock`), disclosure, and budget-remaining exactly where the money
+decision happens, and every aggregate carries its reporter split.
 
-The supervisor surface must present a **decision and an executable next
-step**, not a catalog list with a score. For every recommendation, make the
-matching evidence, the human approval gate, and the relevant license terms
-legible in the workflow. The wallet and settlement rail remain proof and
-execution infrastructure — never the front door.
-
-Trust is part of the product. We show named agent verdicts, clearance
-claims, and settlement status only when the corresponding result-level
-evidence exists and is auditable. **Claim discipline:** "pre-cleared"
-applies only to versions inside an authorized-version program; legacy
-catalog results stay labeled rights-unverified. UI copy must not claim the
-agents listened to audio until they do.
-
-## 3. Why incumbents are disincentivized (updated for the post-May-2026 landscape)
-
-The creation lane changed: **Spotify + UMG announced licensed fan-made
-AI covers/remixes (2026-05-21)** — consent, credit, compensation,
-discovery, on-platform. That validates the category and kills any thesis
-built on "incumbents won't allow AI versions." It also tells us exactly
-where NOT to compete.
-
-What no incumbent is building — and why:
+## 3. Why incumbents are disincentivized
 
 - **DSPs (incl. Spotify's new product):** consumer creation → on-platform
-  consumption. Cross-platform **commercial conversion** (which authorized
-  version fits this ad/trailer/game brief, packaged rights, per-use
-  settlement) is a rights-heavy *schlep* outside the ad/sub model, and
-  surfacing per-use royalty physics conflicts with streaming economics.
-  → disincentivized to build downstream.
-- **Labels / production-music catalogs:** derivative-version programs
-  commoditize the curation premium and the human sync teams that justify
-  the department; AI policy is internally contested. → under-invest.
-- **Creation-tool vendors (Suno, ElevenLabs, …):** their incentive is
-  generation volume; licensing correctness and auditability are costs,
-  and they don't hold the artist/sync relationships. → won't build the
-  conversion rail.
+  consumption. Cross-platform **monetization of AI distribution** (which
+  track or product fits this automated channel, who gets paid, how the
+  sponsor disclosure travels) is outside the ad/sub model. → disincentivized.
+- **Labels / production-music catalogs:** derivative distribution
+  commoditizes the curation premium and the human sync model. →
+  under-invest in zero-marginal matching + micro-settlement.
+- **Creation-tool vendors (Suno, ElevenLabs, …):** incentive is generation
+  volume; attribution enforcement and budget-capped settlement are costs.
+  → won't build the conversion rail.
+- **Ad networks:** won't build the supply-side marketplace (music as
+  inventory, disclosure-aware attribution) because their inventory is
+  impressions, not content slots.
 
-Graham's *schlep blindness* still applies from the startup side: the
-unglamorous rights-packaging + commercial-matching work is why the vacuum
-persists — even now that creation is commoditizing.
+The vacuum is the **unglamorous matching + attribution + budget rail**
+for AI-run distribution — exactly what makes paid AI distribution
+trustworthy to a brand.
 
 ## 4. The moat (Thiel's four, applied)
 
 | Moat | Strength | Our edge |
 |---|---|---|
-| Proprietary tech | Weak → real but not primary | AI models commoditize in months; generation is someone else's game. Don't bet on them. |
-| Economies of scale | Strong | Marginal cost to rank version #N ≈ 0 → we dominate long-tail version portfolios, where human sync teams can't operate at cost. |
-| Network effects | **Strongest** | The **consent → lineage → fit → license → waterfall graph**: which versions were permitted, which fit briefs, which actually licensed and settled — cross-platform, cross-artist. Two-sided: more artists → differentiated supply → more supervisors → better ground truth. Incumbents can't assemble it because each sees only one side (creation OR streaming OR catalog). |
-| Brand | Secondary | As infrastructure, trust & claim discipline — not consumer brand — is what matters. |
+| Proprietary tech | Weak → real but not primary | Embeddings + matching commoditize; keep it, don't bet on it. |
+| Economies of scale | Strong | Marginal cost to match listing #N ≈ 0 → we dominate the long tail of supply×channels. |
+| Network effects | **Strongest** | The **listing → match → use → spend → settlement** graph per channel: who used what, where, how much delivery cost, which ethos actually converted. Two-sided: more suppliers → more channels → more logged uses → better matching → more paid placements. No single platform sees both sides. |
+| Brand | Secondary | As infrastructure: trust = verified reach, non-forgeable attribution, atomic budget caps, and never double-spending a campaign. |
 
-**The bet to place:** becoming *the memory of what was consented, what fit,
-and what licensed and settled — per version, per use.* The rights package
-itself is a data asset: every pilot agreement becomes a template; the
-waterfall engine becomes the standard for authorized-version economics.
+**The bet to place:** becoming *the memory of what was matched, what
+was used where, and what settled — per listing, per placement, per
+impression.* The blanket agreement + attribution format + flat split are
+the product standards a competitor would have to re-negotiate listing by
+listing.
 
 ## 5. Build distribution into the product (Thiel)
 
-- **The supervisor surface is beachhead + distribution + pricing
-  leverage** — it is how we win a niche, generate ground-truth, and brand
-  the outcome.
-- **Artist opt-in is the supply channel.** Each signed artist is both
-  inventory and a reference; campaign results are marketing.
-- **Settlement is a brand moment (Stripe-style).** Every x402 tip, payout,
-  license job, and per-use royalty is a visible, verifiable event —
-  proof-of-life that doubles as marketing.
-- **Each integration is a channel.** Any catalog, label, sync tool, or
-  creation tool that consumes the outcome (or feeds versions into it)
-  becomes a distribution node.
-- **We are the best operator, not network-neutral.** Don't wait for rivals
-  to plug into "neutral" rails. Win our own pilots, make the outcome
-  valuable and cheap, and let incumbents consume it.
+- **Browse is beachhead + distribution + pricing leverage** — how we win
+  a niche ethos, generate logged uses, and prove demand to suppliers.
+- **Supply is the flywheel input.** Each listing is both inventory and a
+  proof point; each logged use (video URL when available) is marketing.
+- **Channels are distribution nodes.** Any channel that connects once is
+  a recurring buyer; its ethos embedding improves every future match.
+- **Settlement is a brand moment (Stripe-style).** Every `slot_leg`
+  settled and every `usage_event` with spend is a verifiable receipt.
+- **We are the best operator, not network-neutral.** Win our own
+  marketplace liquidity first; let others consume the rail later.
 
-## 6. Beachhead → expand (wedge to picks-and-shovels)
+## 6. Beachhead → expand
 
-1. **Beachhead pilot (4–6 weeks, concierge — do not build the platform
-   first):** one independent artist with a meaningful audience and one
-   song where they control master + composition (no uncleared samples);
-   8–15 invited creators using external tools; 3–5 working supervisors /
-   creative directors evaluating against real briefs; one clean
-   rights package; one paid use if possible. Generation stays external;
-   VERSIONS verifies provenance/policy, records approvals, ranks, matches,
-   settles. Go/no-go by evidence on each side, not impressions:
-   - *Supply:* ≥10 policy-compliant versions, ≥30% artist-approved,
-     artist would repeat.
-   - *Demand:* ≥2 versions shortlisted against real briefs; ≥1 paid
-     license/quote/procurement-level commitment; **a supervisor picks a
-     VERSIONS version over their usual catalog choice** (the thesis in
-     miniature).
-   - *Ops:* complete lineage + signed permissions per version; rights
-     review fast enough for commercial workflow; no disputes/takedowns;
-     waterfall computable before money moves.
-   Interpretation: artists engage but supervisors don't → fan-campaign
-   business (different company). Supervisors engage but artists won't
-   fund campaigns → authorized creation as catalog acquisition, monetize
-   downstream. Both → proceed with the combined wedge. Neither → the
-   narrative has attention value but not market pull.
-2. **Picks-and-shovels:** repeatable artist campaigns, then sell the
-   primitive as an *outcome* to catalogs/labels/sync tools that are
-   profitably mining but disincentivized to build — pre-cleared,
-   attributed, micro-settled version licenses.
-3. **Expand (optional compaction of the rail):** abstract the
-   settlement + attribution + verification rail beyond music — every
-   agentic business needs micro-settlement. Different, bigger company;
-   earn the beachhead before abstraction.
+1. **Beachhead (weeks, not quarters — move fast):** tens of suppliers
+   across both catalogs (music + placements) with free-with-attribution
+   supply that actually fits a few target channel niches (lo-fi, study,
+   morning-routine, thriller tension); a handful of real YouTube channels
+   verified and browsing; a working paid placement that settles 60/30/10
+   and logs usage where it ran. Go/no-go by evidence:
+   - *Supply:* ≥50 listings across both catalogs, ≥1 tag that actually
+     discriminates (not "music"), ≥1 paid listing with cap+disclosure.
+   - *Demand:* ≥3 verified channels; ≥1 paid slot bought self-serve;
+     ≥1 channel reports where it ran (video URL) without being chased.
+   - *Ops:* every paid listing shows `remaining_budget`; every spend
+     event resolves to a slot leg; no spend without a slot; no self-
+     reported reach ever unlocks `can_buy_slots`.
+2. **Picks-and-shovels:** originate repeatable supply (artists +
+   brands) and repeatable demand (automation operators). Sell the
+   **matched placement** as the outcome.
+3. **Expand (optional compaction):** abstract the attribution +
+   tracking + capped settlement rail beyond music — every agentic
+   distribution business needs it. Different, bigger company; earn the
+   marketplace before abstraction.
 
 ## 7. Honest risks / caveats
 
-- **Creation-lane incumbents extend downstream.** Spotify/UMG could push
-  from on-platform covers into commercial licensing of fan versions.
-  Mitigation: move fast on the cross-platform conversion graph; own the
-  relationships (artists + supervisors) they route around.
-- **Audio-aware evaluation gap.** Agents judge metadata today; until they
-  hear audio, "ranked by fit" on AI-generated versions is a weaker claim.
-  Pilot workstream, gating for scale.
-- **Rights complexity.** Voice/persona, composition, and master are
-  separate rights with separate clearance paths. Pilot agreements must be
-  counsel-drafted; the public story stays high-level, the contracts don't.
-- **Claim honesty.** "Every play settles" is only true for uses VERSIONS
-  tracks and controls; "pre-cleared" only inside authorized programs.
-  Overclaiming is an existential trust risk in a rights-heavy market.
-- **Commodity-API trap.** Selling raw brief→match recall is a commodity;
-  always sell the *outcome* and the *graph*.
-- **Three-sided marketplace cold start.** Pilot deliberately avoids open
-  consumer uploads: invited creators only, one song, human approval gates.
-  Moderation/fraud/impersonation become real problems only at open scale —
-  earn the right to them.
-- **Focus.** "Rail for the whole agentic economy" is absent focus today.
-  Win the authorized-version sync beachhead first.
+- **Trust without verification.** Until platform APIs confirm delivery,
+  `usage_events` are channel-reported. Aggregates must always show the
+  `by_reporter` split — over-claiming verification is existential.
+- **Blanket agreement risk.** One ToS is the product — but it means a
+  single legal challenge touches every listing. Keep the agreement
+  versioned (`marketplace-1.0.0` stamped on every row) and auditable.
+- **Two-sided cold start.** Invited supply + invited channels only at
+  first; open supply without channel verification invites fraud.
+- **Claim honesty.** "Settled" only for uses VERSIONS tracks and caps;
+  "verified reach" only for `stats_source = 'platform_api'`. Never
+  upgrade a `mock` or `channel`-reported row in copy.
+- **Commodity matching trap.** Selling raw recall is commodity; sell the
+  *placed and settled outcome* and the *channel ethos graph*.
 
 ---
 
-*History: the 2026-08 predecessor of this document framed the wedge as
-"autonomous curation of the long tail of alternate takes" for sync. Weak
-market pull at the Arc Demos & Meetup (supervisors found search without
-dependable clearance/partial solution) plus the Spotify/UMG fan-covers
-announcement (2026-05-21) drove the supply-wedge retarget above. The
-primitive (brief → ranked version → license → Arc settlement) and all
-shipping rails are unchanged; the demo catalog (17 ccMixter `demo` takes +
-2 licensable `live` takes) remains the running proof of path A.*
+*History: the 2026-08 predecessor framed the wedge as "consent, curation,
+and settlement for artist-authorized versions" (STRATEGY.md @ 2026-08).
+Weak demand for per-program bespoke licensing + the need for a
+distribution-side monetization wedge drove the 2026-09 pivot to a
+dual-vertical marketplace with NCS as the model. The settlement, Arc,
+and embedding rails are unchanged; the thesis and supply primitive are.*
 
 *This file is the source of truth for product strategy. Do not duplicate
 the reasoning in README.md — link here. Implementation: [docs/README.md](./docs/README.md).*

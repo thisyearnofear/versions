@@ -6,61 +6,70 @@
 
 ## The one-liner
 
-**VERSIONS turns one rights-controlled song into a portfolio of authorized
-versions, ranks them against commercial briefs, and converts the strongest
-takes into paid placements — settled per version on Arc.**
+**VERSIONS is a marketplace where distribution channels browse music and
+product placements, pick what fits their ethos, and use it — free with
+attribution or paid as a sponsor slot — with matching, attribution
+tracking, and settlement on Arc.**
 
 ## The problem
 
-Music supervisors need the right track for a scene — fast, cleared, and
-affordable. Today that means digging through bloated catalogs, negotiating
-rights piecemeal, and paying premium prices for a handful of "safe" choices.
-Meanwhile, artists sit on under-monetized catalogs and fans are creating
-unauthorized AI versions with no way to consent, credit, or pay them.
+AI-run distribution (YouTube automation, radio-style feeds) is scaling
+fast, but monetizing it is stuck in two broken modes: free music with
+no credit, and sponsorships negotiated as one-off deals. Suppliers have
+tracks and products that *should* be inventory, channels have niche
+audiences that *should* be shoppable, and no rail turns a good fit into
+a verifiable, budget-capped placement.
 
-## The solution — one agentic primitive
+## The solution — one primitive, two catalogs
 
-An **autonomous brief → licensed-version pipeline**:
+A **unified listing** — a slot in a feed, matched by ethos, free or paid:
 
-1. **Artist opts in** with a rights-controlled song and sets the consent
-   policy (allowed transformations, splits, territories).
-2. **Creators produce versions** using external tools; VERSIONS verifies
-   provenance and policy compliance.
-3. **Three AI agents** (Production, Performance, Market) score each version
-   by sync-fit, with explainable rationale and a human approval gate.
-4. **Supervisors search by brief**, pick a version, and license it.
-5. **Per-use micro-settlement on Arc USDC** — attributed per version,
-   batched, verifiable on-chain.
+1. **Supplier lists** a track (linked to an uploaded submission) or a
+   product (brand, images, pitch) — one blanket agreement covers all
+   free use.
+2. **Channel connects** a real distribution surface (YouTube). We verify
+   reach against the platform; self-reported numbers never unlock paid.
+3. **Browse** surfaces either kind against the channel's ethos in the
+   same ranked feed.
+4. **Use it free** by rendering the generated attribution unmodified, **or
+   buy a paid slot** self-serve (flat fee or CPM, budget cap, checkout
+   on Arc — no sales call).
+5. **Every use is logged** (who, what, when, where) and every paid
+   impression is capped atomically; **settlement is flat 60/30/10**
+   supplier/channel/platform on Arc, per placement.
 
-We sell the **outcome** — pre-cleared, attributed, micro-settled licenses —
-not a similarity API, not a generation tool, not a streaming service.
+We sell the **placed, trackable outcome** — not a similarity API, not a
+bespoke license, not a streaming surface.
 
 ## Why we win
 
-- **Incumbents can't follow.** Spotify/UMG own the creation lane; labels
-  own the catalog lane. Neither builds the cross-platform commercial
-  conversion + settlement layer because it cannibalizes their core model.
-- **The graph compounds.** Every version evaluated, every brief matched,
-  every license settled adds to a proprietary dataset:
-  consent → lineage → fit → license → waterfall. No one else is
-  assembling this cross-artist, cross-platform.
-- **Zero marginal cost to rank version N.** Scale favors us; it hurts
-  human-curated sync houses.
+- **Incumbents can't follow.** DSPs, labels, creation tools, and ad
+  networks each own one side of the problem; none builds the cross-
+  platform match → use → proof → settlement graph because it conflicts
+  with their core model.
+- **The graph compounds.** Every listing, every match, every logged use
+  and settled impression makes the next match cheaper and more accurate.
+  No single platform sees both supply and distribution.
+- **Zero marginal cost to match listing N.** Scale favors us; bespoke
+  negotiation and human curation don't.
 
 ## Market & wedge
 
-**Beachhead:** one artist, one song, invited creators, real briefs —
-prove the full loop from consent to cash. Then expand artist-by-artist.
+**Beachhead:** tens of listings (music + products), a few verified
+channels in a tight niche, one paid placement that settles and logs
+where it ran. **Expansion:** repeatable supply (artists + brands) +
+repeatable demand (automation operators) at marketplace liquidity.
 
-**Expansion:** sell the primitive as an outcome to catalogs, labels, and
-sync tools. Optionally abstract the settlement rail beyond music.
+**Free tier is the wedge.** It's the distribution/adoption flywheel and
+the data that makes the paid side sellable — not a loss leader to
+ignore. Paid ("ad infra") is where revenue comes from and must feel as
+easy as buying a podcast ad slot.
 
 ## The ask
 
-One rights-controlled song from an independent artist, plus 3–5
-supervisors willing to evaluate against real briefs. That's the pilot.
-Everything else — the agents, the settlement rail, the graph — is
-already running.
+A track or product we can list under the blanket terms, or a YouTube
+channel we can verify. That's the marketplace — everything else (matching,
+attribution, tracking, settlement) is already running.
 
 ---
 
