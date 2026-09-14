@@ -921,6 +921,51 @@ export const apiClient = {
   getMatchBenchmark(): Promise<{ report: MatchBenchmarkReport }> {
     return api.get<{ report: MatchBenchmarkReport }>("/api/v1/discover/benchmark");
   },
+  // marketplace
+  getListings(opts?: { kind?: "music" | "placement"; mine?: boolean; limit?: number; offset?: number }): Promise<{ listings: Array<Record<string, unknown>> }> {
+    const p = new URLSearchParams();
+    if (opts?.kind) p.set("kind", opts.kind);
+    if (opts?.mine) p.set("mine", "1");
+    if (opts?.limit != null) p.set("limit", String(opts.limit));
+    if (opts?.offset != null) p.set("offset", String(opts.offset));
+    const qs = p.toString();
+    return api.get<{ listings: Array<Record<string, unknown>> }>(`/api/v1/listings${qs ? `?${qs}` : ""}`);
+  },
+  createListing(body: Record<string, unknown>): Promise<{ listing: Record<string, unknown> }> {
+    return api.post<{ listing: Record<string, unknown> }>("/api/v1/listings", body);
+  },
+  getListing(id: string): Promise<{ listing: Record<string, unknown> }> {
+    return api.get<{ listing: Record<string, unknown> }>(`/api/v1/listings/${encodeURIComponent(id)}`);
+  },
+  getSlots(opts?: { channelId?: string; listingId?: string; limit?: number }): Promise<{ slots: Array<Record<string, unknown>> }> {
+    const p = new URLSearchParams();
+    if (opts?.channelId) p.set("channelId", opts.channelId);
+    if (opts?.listingId) p.set("listingId", opts.listingId);
+    if (opts?.limit != null) p.set("limit", String(opts.limit));
+    const qs = p.toString();
+    return api.get<{ slots: Array<Record<string, unknown>> }>(`/api/v1/slots${qs ? `?${qs}` : ""}`);
+  },
+  createSlot(body: { listingId: string; channelId: string; budgetUsdc?: string | null }): Promise<{ slot: Record<string, unknown>; alreadyExisted?: boolean }> {
+    return api.post<{ slot: Record<string, unknown>; alreadyExisted?: boolean }>("/api/v1/slots", body);
+  },
+  paySlot(slotId: string): Promise<{ slot: Record<string, unknown>; charged_usdc: string; tx_hash: string | null; mock: boolean }> {
+    return api.post(`/api/v1/slots/${encodeURIComponent(slotId)}/pay`);
+  },
+  completeSlot(slotId: string): Promise<{ slot: Record<string, unknown>; charged_usdc: string }> {
+    return api.post(`/api/v1/slots/${encodeURIComponent(slotId)}/complete`);
+  },
+  getUsageSummary(): Promise<{ summary: { total_events: number; total_impressions: number; spend_usdc: string; by_reporter: Record<string, number> } }> {
+    return api.get(`/api/v1/usage`);
+  },
+  logUsage(body: { listingId: string; channelId: string; slotId?: string | null; videoUrl?: string | null; impressions?: number; clicks?: number }): Promise<{ usage: Record<string, unknown> }> {
+    return api.post(`/api/v1/usage`, body);
+  },
+  getChannels(): Promise<{ channels: Array<Record<string, unknown>> }> {
+    return api.get(`/api/v1/channels`);
+  },
+  registerChannel(body: { platformUrl: string; niche?: string | null; ethosSummary?: string | null; agreementVersion: string }): Promise<{ channel: Record<string, unknown> }> {
+    return api.post(`/api/v1/channels`, body);
+  },
 };
 
 async function handleFetch<T>(res: Response): Promise<T> {

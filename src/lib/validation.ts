@@ -220,4 +220,54 @@ export const ChannelRegisterSchema = z
   .strict();
 export type ChannelRegisterValidated = z.infer<typeof ChannelRegisterSchema>;
 
+// ── Listing validation (unified marketplace supply) ─────
+
+export const LISTING_KINDS = ['music', 'placement'] as const;
+export const LISTING_TIERS = ['free', 'paid'] as const;
+export const PRICING_MODELS = ['flat', 'cpm'] as const;
+export const LISTING_STATUSES = ['draft', 'active', 'paused', 'exhausted', 'archived'] as const;
+
+export const ListingPricingSchema = z
+  .object({
+    model: z.enum(PRICING_MODELS),
+    flatFeeUsdc: z.string().trim().min(1).max(32).optional().nullable(),
+    cpmUsdc: z.string().trim().min(1).max(32).optional().nullable(),
+  })
+  .strict();
+
+export const ListingCreateSchema = z
+  .object({
+    kind: z.enum(LISTING_KINDS),
+    title: z.string().trim().min(1).max(200),
+    supplierName: z.string().trim().min(1).max(120),
+    summary: z.string().trim().max(1000).optional().nullable(),
+    tags: z.array(z.string().trim().min(1).max(40)).min(1).max(12),
+    images: z.array(z.string().trim().min(1).max(2000)).max(8).optional().nullable(),
+    submissionId: z.string().trim().min(1).max(200).optional().nullable(),
+    tier: z.enum(LISTING_TIERS),
+    pricing: ListingPricingSchema.optional().nullable(),
+    budgetCapUsdc: z.string().trim().min(1).max(32).optional().nullable(),
+    agreementVersion: z.string().trim().min(1).max(64),
+  })
+  .strict();
+export type ListingCreateValidated = z.infer<typeof ListingCreateSchema>;
+
+export const ListingStatusUpdateSchema = z
+  .object({
+    status: z.enum(LISTING_STATUSES),
+  })
+  .strict();
+export type ListingStatusUpdateValidated = z.infer<typeof ListingStatusUpdateSchema>;
+
+// ── Slot validation (paid tier — ad infra) ────────────
+
+export const SlotCreateSchema = z
+  .object({
+    listingId: z.string().trim().min(1),
+    channelId: z.string().trim().min(1),
+    budgetUsdc: z.string().trim().min(1).max(32).optional().nullable(),
+  })
+  .strict();
+export type SlotCreateValidated = z.infer<typeof SlotCreateSchema>;
+
 export type { VersionType, Energy, Tempo };
