@@ -55,7 +55,7 @@ function fakeProbeResult(mock: boolean) {
     name: 'Lo-Fi Automation',
     description: 'Twenty-four hour lo-fi study streams, generated and scheduled.',
     subscriberCount: 120_000,
-    viewCount: 9_000_000,
+    viewCount: '9000000',
     videoCount: 340,
     recentContent: ['lofi beat to study to — 3 hour mix', 'night drive ambient set'],
     mock,

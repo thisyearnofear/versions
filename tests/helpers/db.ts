@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS channels (
   verification_status TEXT NOT NULL DEFAULT 'pending',
   verification_error TEXT,
   subscriber_count INTEGER,
-  view_count INTEGER,
+  view_count TEXT,
   video_count INTEGER,
   stats_source TEXT CHECK (stats_source IN ('platform_api', 'mock')),
   stats_verified_at TIMESTAMP,

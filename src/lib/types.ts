@@ -174,7 +174,7 @@ export type StatsSource = 'platform_api' | 'mock';
 
 export interface ChannelStats {
   subscriberCount: number;
-  viewCount: number;
+  viewCount: string;
   videoCount: number;
   source: StatsSource;
   verifiedAt: string | null;

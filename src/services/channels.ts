@@ -41,7 +41,7 @@ import type {
 
 export interface ChannelStatsRecord {
   subscriber_count: number | null;
-  view_count: number | null;
+  view_count: string | null;
   video_count: number | null;
   /** 'platform_api' only when the numbers were pulled from the platform. */
   source: StatsSource | null;

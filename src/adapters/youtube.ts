@@ -46,7 +46,7 @@ export interface PlatformChannelProbe {
   name: string;
   description: string;
   subscriberCount: number;
-  viewCount: number;
+  viewCount: string;
   videoCount: number;
   /** Recent upload titles + descriptions — the channel-ethos embedding input. */
   recentContent: string[];
@@ -169,6 +169,11 @@ function toCount(value: string | undefined): number {
   return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : 0;
 }
 
+function toCountString(value: string | undefined): string {
+  const raw = (value ?? '').trim();
+  return raw && /^\d+$/.test(raw) ? raw.replace(/^0+(?=\d)/, '') || '0' : '0';
+}
+
 /** Deterministic stand-in profile so the whole onboarding flow runs offline. */
 function mockProbe(url: string, probedAt: string): PlatformChannelProbe {
   const hash = createHash('sha256').update(url.toLowerCase()).digest();
@@ -181,7 +186,7 @@ function mockProbe(url: string, probedAt: string): PlatformChannelProbe {
     name,
     description: `Offline demo profile for ${url}. Set YOUTUBE_API_KEY to pull real distribution numbers.`,
     subscriberCount: at(0, 900_000, 1_000),
-    viewCount: at(4, 90_000_000, 100_000),
+    viewCount: String(at(4, 90_000_000, 100_000)),
     videoCount: at(8, 800, 10),
     recentContent: [
       `${name} — lo-fi study stream recap (demo)`,
@@ -291,7 +296,7 @@ export function createChannelProbeAdapter(
         name: channel.snippet?.title || channelId,
         description: channel.snippet?.description || '',
         subscriberCount: toCount(stats.subscriberCount),
-        viewCount: toCount(stats.viewCount),
+        viewCount: toCountString(stats.viewCount),
         videoCount: toCount(stats.videoCount),
         recentContent,
         mock: false,

@@ -224,7 +224,7 @@ export const channels = pgTable('channels', {
   verificationError: text('verification_error'),
 
   subscriberCount: integer('subscriber_count'),
-  viewCount: integer('view_count'),
+  viewCount: text('view_count'),
   videoCount: integer('video_count'),
   statsSource: text('stats_source').$type<StatsSource | null>(),
   statsVerifiedAt: timestamp('stats_verified_at'),

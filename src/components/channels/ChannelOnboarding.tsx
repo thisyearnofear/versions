@@ -14,7 +14,7 @@ type Channel = {
   platform_channel_id: string | null;
   verification_status: "pending" | "verified" | "failed";
   verification_error: string | null;
-  stats: { subscriber_count: number | null; view_count: number | null; video_count: number | null; source: string | null; verified_at: string | null };
+  stats: { subscriber_count: number | null; view_count: string | null; video_count: number | null; source: string | null; verified_at: string | null };
   niche: string | null;
   ethos_summary: string | null;
   recent_content: string[];
@@ -148,7 +148,7 @@ export function ChannelOnboarding() {
               </div>
               <p className="mt-1 break-all font-mono text-[11px] text-[var(--color-ink-3)]">{c.platform_url}</p>
               <p className="mt-1 font-mono text-[11px] text-[var(--color-ink-2)]">
-                {c.stats.subscriber_count != null ? `${c.stats.subscriber_count.toLocaleString()} subs` : "—"} · {c.stats.view_count != null ? `${c.stats.view_count.toLocaleString()} views` : "—"} · {c.stats.video_count ?? "—"} videos · <span className="text-[var(--color-ink-3)]">{c.stats.source ?? "—"}</span>
+                {c.stats.subscriber_count != null ? `${c.stats.subscriber_count.toLocaleString()} subs` : "—"} · {c.stats.view_count != null ? `${Number(c.stats.view_count).toLocaleString()} views` : "—"} · {c.stats.video_count ?? "—"} videos · <span className="text-[var(--color-ink-3)]">{c.stats.source ?? "—"}</span>
                 {c.niche ? ` · niche: ${c.niche}` : ""}
               </p>
               {c.verification_error && <p className="mt-1 font-mono text-[10px] text-[var(--color-rust)]">{c.verification_error}</p>}
