@@ -94,10 +94,11 @@ const PLACEMENT_LISTINGS: SeedListing[] = [
 ];
 
 const CHANNEL_DEFS = [
-  { url: 'https://www.youtube.com/@lofi-night-drive', niche: 'lo-fi night drive / study streams', ethos: '12-hour lo-fi night drive streams, study-with-me loops, analog tape visuals, midnight focus sessions' },
-  { url: 'https://www.youtube.com/@midnight-study-club', niche: 'study & focus', ethos: 'Study vlogs, pomodoro sessions, ambient room tones, lo-fi beats for deep work' },
-  { url: 'https://www.youtube.com/@analog-hours', niche: 'analog & ambient', ethos: 'Analog gear demos, tape loops, ambient textures, chill room recordings' },
-  { url: 'https://www.youtube.com/channel/UC1234567890123456789012', niche: 'night drive radio', ethos: 'Night drive radio, highway ambient, synthwave at midnight, city lights' },
+  { url: 'https://www.youtube.com/@LofiGirl', niche: 'lo-fi night drive / study streams', ethos: '24/7 lo-fi night drive streams, study beats, chillhop, midnight focus' },
+  { url: 'https://www.youtube.com/@ChillhopMusic', niche: 'chillhop & study beats', ethos: 'Chillhop seasonal compilations, lo-fi study music, vinyl aesthetics, ambient focus' },
+  { url: 'https://www.youtube.com/@MyAnalogJournal', niche: 'analog & vinyl', ethos: 'Vinyl digs, analog gear, crate-digging sessions, jazz / soul / ambient textures' },
+  { url: 'https://www.youtube.com/@NewRetroWave', niche: 'synthwave / night drive', ethos: 'Night drive radio, synthwave at midnight, neon highways, retro-future visuals' },
+  { url: 'https://www.youtube.com/@CollegeMusic', niche: 'study & focus', ethos: 'Study music, lo-fi chill, focus beats, late-night homework streams' },
 ];
 
 async function ensureUser(wallet: string, name: string) {
@@ -194,7 +195,7 @@ async function main() {
   const embRes = await embeddings.embedAllMarketplace();
   console.log(`    listings: ${embRes.listings} embedded, channels pending, skipped ${embRes.skipped}, mock=${embRes.mock}`);
 
-  // Channels — mock-verified in CI (no YOUTUBE_API_KEY → mock + pending), verified when key present
+  // Channels — verified when YOUTUBE_API_KEY is set, mock-verified in CI
   console.log('\n  Creating channels...');
   const channelIds: string[] = [];
   for (const def of CHANNEL_DEFS) {
@@ -210,7 +211,8 @@ async function main() {
       continue;
     }
     channelIds.push(res.channel.id);
-    console.log(`    + ${res.channel.name} (${res.channel.verification_status}, ${res.channel.stats.source}) — ${res.channel.id.slice(0,8)} ${res.alreadyRegistered ? '(existing)' : ''}`);
+    const liveBadge = res.channel.verification_status === 'verified' ? 'verified/platform_api ✓' : `${res.channel.verification_status}/${res.channel.stats.source}`;
+    console.log(`    + ${res.channel.name} (${liveBadge} ${res.channel.stats.subscriber_count?.toLocaleString?.() ?? ''} subs) — ${res.channel.id.slice(0,8)} ${res.alreadyRegistered ? '(existing)' : ''}`);
   }
   const chEmb = await embeddings.embedAllMarketplace();
   console.log(`    channels embedded: ${chEmb.channels}, skipped ${chEmb.skipped}`);
@@ -224,14 +226,16 @@ async function main() {
     let paidListing = created.find((c) => c.tier === 'paid');
     if (paidListing) {
       console.log('\n  Demo: paid slot + usage proof...');
-      // Ensure the buying channel is verified for the seed demo when running against
-      // a real DB without a YouTube key — patch status to verified so the slot gate passes.
-      // This is seed-only; the verification predicate (canBuySlots) is not bypassed in app code.
+      // In prod the first channel is live-verified (Lofi Girl ~15.8M) so the slot gate
+      // passes honestly — no patch. In CI without a key the channel is pending/mock; the
+      // seed tolerates it and patches once to exercise the paid flow. That patch is seed-only.
       const { channels } = await import('../src/lib/schema');
       const [chRow] = await db.select().from(channels).where(eq(channels.id, channelIds[0])).limit(1);
       if (chRow && chRow.verificationStatus !== 'verified') {
         await db.update(channels).set({ verificationStatus: 'verified', statsSource: 'mock', status: 'active' } as never).where(eq(channels.id, channelIds[0]));
-        console.log('    (patched channel to verified for demo — mock numbers)');
+        console.log('    (patched channel to verified for demo — mock numbers, CI without YOUTUBE_API_KEY)');
+      } else if (chRow) {
+        console.log(`    (live verified channel: ${chRow.name} — ${chRow.subscriberCount?.toLocaleString?.() ?? ''} subs, no patch)`);
       }
       const slotRes = await slotsSvc.create({ listingId: paidListing.id, channelId: channelIds[0], buyerWallet: WALLETS.buyer, budgetUsdc: '50' });
       if (!slotRes.ok) {
