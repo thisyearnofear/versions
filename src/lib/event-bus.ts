@@ -69,11 +69,19 @@ export interface TipReceivedEvent {
 // identity, USDC amounts, and ArcScan links. All fields JSON-safe; only
 // `kind` and `timestamp` are required.
 export interface EconomyEvent {
-  kind: 'review' | 'tip' | 'tip_batch_settled' | 'leg_settled' | 'license_settled' | 'play';
+  kind:
+    | 'review'
+    | 'tip'
+    | 'tip_batch_settled'
+    | 'leg_settled'
+    | 'license_settled'
+    | 'play'
+    | 'slot_leg_settled';
   settlementId?: string;
   timestamp: string;
   // context
   submissionId?: string;
+  slotId?: string;
   title?: string | null;
   artistName?: string | null;
   agentName?: string;
@@ -104,7 +112,7 @@ export interface EconomyEvent {
 // receive the same shape for licenses, tips, payout splits, and plays.
 export interface SettlementEvent {
   type: 'settled';
-  source: 'license' | 'tip' | 'split' | 'play';
+  source: 'license' | 'tip' | 'split' | 'play' | 'slot';
   settlementId: string;
   timestamp: string;
   amountUsdc: string;
@@ -114,6 +122,7 @@ export interface SettlementEvent {
   artistWallet?: string;
   tipperWallet?: string;
   submissionId?: string;
+  slotId?: string;
   versionId?: string;
   title?: string | null;
   artistName?: string | null;
@@ -122,17 +131,20 @@ export interface SettlementEvent {
   settledCount?: number;
 }
 
+// Exhaustive by construction: a new `source` arm fails typecheck here until it
+// is mapped, instead of silently falling through to 'play'.
+const SETTLEMENT_SOURCE_TO_KIND: Record<SettlementEvent['source'], EconomyEvent['kind']> = {
+  license: 'license_settled',
+  tip: 'tip_batch_settled',
+  split: 'leg_settled',
+  play: 'play',
+  slot: 'slot_leg_settled',
+};
+
 /** Normalize the shared settlement stream into the ticker/stats shape. */
 export function settlementToEconomyEvent(event: SettlementEvent): EconomyEvent {
   return {
-    kind:
-      event.source === 'license'
-        ? 'license_settled'
-        : event.source === 'tip'
-          ? 'tip_batch_settled'
-          : event.source === 'split'
-            ? 'leg_settled'
-            : 'play',
+    kind: SETTLEMENT_SOURCE_TO_KIND[event.source],
     settlementId: event.settlementId,
     timestamp: event.timestamp,
     amountUsdc: event.amountUsdc,
@@ -141,6 +153,7 @@ export function settlementToEconomyEvent(event: SettlementEvent): EconomyEvent {
     toWallet: event.toWallet ?? event.artistWallet,
     fromWallet: event.tipperWallet,
     submissionId: event.submissionId,
+    slotId: event.slotId,
     versionId: event.versionId,
     title: event.title,
     artistName: event.artistName,

@@ -63,6 +63,15 @@ export async function GET(req: NextRequest): Promise<Response> {
             mock: svc.config.ccmixterMock,
             configured: !svc.config.ccmixterMock,
           },
+          // Distribution-surface verification. A mock probe resolves channel
+          // numbers deterministically from the URL and holds verification at
+          // 'pending', so it can never unlock a paid slot — the paid tier is
+          // unreachable until YOUTUBE_API_KEY is set.
+          channelProbe: {
+            mock: svc.config.channelProbeMock,
+            configured: !svc.config.channelProbeMock,
+            canVerifyChannels: !svc.config.channelProbeMock,
+          },
         },
       },
     },

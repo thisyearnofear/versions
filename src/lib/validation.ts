@@ -167,4 +167,57 @@ export const LicenseCreateSchema = z.object({
 });
 export type LicenseCreateValidated = z.infer<typeof LicenseCreateSchema>;
 
+// ── Usage reporting validation ────────────────────────
+
+// SAFE: `.strict()`, and two fields are conspicuously absent.
+//
+// There is no `reportedBy`. Provenance is decided by how a report arrived
+// (a channel calling the self-serve API is always 'channel'; only the
+// platform probe path may write 'platform_api') — never by what the reporter
+// says about itself. Letting a body assert its own provenance is how a
+// self-reported number ends up wearing a verified label.
+//
+// There is no `spendUsdc`. Spend is written only from what the slots service
+// actually moved against a slot's capped budget, so a reporter cannot claim
+// money that was never collected.
+export const UsageReportSchema = z
+  .object({
+    listingId: z.string().trim().min(1),
+    channelId: z.string().trim().min(1),
+    /** Omit to resolve the channel's live slot for this listing. */
+    slotId: z.string().trim().min(1).optional().nullable(),
+    attributionCode: z.string().trim().max(200).optional().nullable(),
+    videoUrl: z.string().trim().max(2000).optional().nullable(),
+    externalContentId: z.string().trim().max(200).optional().nullable(),
+    impressions: z.number().int().min(0).max(100_000_000).optional(),
+    clicks: z.number().int().min(0).max(100_000_000).optional(),
+    occurredAt: z.string().trim().datetime({ offset: true }).optional().nullable(),
+  })
+  .strict();
+export type UsageReportValidated = z.infer<typeof UsageReportSchema>;
+
+// ── Channel registration validation ───────────────────
+
+export const CHANNEL_PLATFORMS = ['youtube'] as const;
+
+// SAFE: `.strict()` is deliberate, and the absence of a stats field is the
+// point. There is no subscriberCount / viewCount / videoCount here — those
+// columns are written only by the platform probe in src/adapters/youtube.ts.
+// An attempt to self-report reach is rejected loudly rather than silently
+// dropped, because invented distribution numbers are the fraud that
+// undermines an ad marketplace.
+//
+// `platformUrl` is a bounded string, not `z.string().url()`: the adapter also
+// accepts a bare `@handle` or `UC…` id and does the real host validation.
+export const ChannelRegisterSchema = z
+  .object({
+    platformUrl: z.string().trim().min(1).max(500),
+    platform: z.enum(CHANNEL_PLATFORMS).optional(),
+    niche: z.string().trim().max(120).optional().nullable(),
+    ethosSummary: z.string().trim().max(1000).optional().nullable(),
+    agreementVersion: z.string().trim().min(1).max(64),
+  })
+  .strict();
+export type ChannelRegisterValidated = z.infer<typeof ChannelRegisterSchema>;
+
 export type { VersionType, Energy, Tempo };

@@ -269,6 +269,14 @@ function rowToInterest(
   };
 }
 
+// catalog_source is untyped text in the schema, so narrow it in one place.
+// A legacy 'authorized' row (retired version-program pilot) reads as live
+// supply — those were real submissions, not demo data.
+function toCatalogSource(value: string | null | undefined): CatalogSource {
+  if (!value) return 'demo';
+  return value === 'demo' ? 'demo' : 'live';
+}
+
 function rowToMatchFeedback(row: typeof matchFeedbackTable.$inferSelect): MatchFeedbackRow {
   return {
     id: row.id,
@@ -276,9 +284,7 @@ function rowToMatchFeedback(row: typeof matchFeedbackTable.$inferSelect): MatchF
     brief_hash: row.briefHash,
     brief_text: row.briefText,
     submission_id: row.submissionId,
-    // MODULAR: preserve the full CatalogSource — 'authorized' feedback is
-    // the highest-value ground-truth row for the outcome graph.
-    catalog_source: row.catalogSource === 'authorized' ? 'authorized' : row.catalogSource === 'live' ? 'live' : 'demo',
+    catalog_source: toCatalogSource(row.catalogSource),
     fit_score_shown: row.fitScoreShown,
     rank_shown: row.rankShown,
     verdict: row.verdict as MatchFeedbackVerdict,
@@ -536,9 +542,7 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
     async recordMatchFeedback(input) {
       await ensureProfile(input.supervisorWallet);
       const version = await getVersionRow(input.submissionId);
-      const catalogSource: CatalogSource = version?.catalogSource === 'authorized'
-        ? 'authorized'
-        : version?.catalogSource === 'live' ? 'live' : 'demo';
+      const catalogSource = toCatalogSource(version?.catalogSource);
       const now = new Date();
       const [row] = await db
         .insert(matchFeedbackTable)

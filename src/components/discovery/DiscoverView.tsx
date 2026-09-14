@@ -26,7 +26,6 @@ import { CaseThread } from "@/components/discovery/CaseThread";
 import { FamilyCompare } from "@/components/discovery/FamilyCompare";
 import { AgentThinkingPulse, FitScorePop, SuccessCheck } from "@/components/discovery/motion";
 import { PipelineStepper } from "@/components/economy/PipelineStepper";
-import { ConsentLineagePanel } from "@/components/supervisor/ConsentLineage";
 
 const BRIEF_REFINEMENTS = [
   { id: "no-vocals", label: "no vocals", instruction: "no vocals, instrumental" },
@@ -229,9 +228,9 @@ function MatchSearch() {
 
   const hasResults = results && results.rows.length > 0 && !loading;
   // MODULAR: pilot showcase mode (?showcase=pilot) — a compact 3-beat rail
-  // that choreographs the authorized-version wedge: brief answered →
-  // compare the family → license & watch the waterfall. Keeps the demo
-  // focused instead of asking the audience to discover the panel.
+  // that choreographs the wedge: brief answered → compare the family →
+  // license & watch the split land. Gated on the results actually holding a
+  // version family, so the rail never promises a beat the page can't show.
   const showcasePilot = searchParams.get('showcase') === 'pilot';
   const canPayAgents = isAuthenticated && isConnected && preferPaid;
   const effectiveBrief = [brief.trim(), ...refinements].filter(Boolean).join(" · ");
@@ -303,7 +302,7 @@ function MatchSearch() {
 
       {hasResults && (
         <div>
-          {showcasePilot && results.rows.some((r) => r.catalog.source === 'authorized') && (
+          {showcasePilot && results.rows.some((r) => r.family_id) && (
             <ShowcaseRail />
           )}
           {currentCaseId && (
@@ -384,9 +383,6 @@ function MatchSearch() {
                         isAuthenticated={isAuthenticated}
                         requireAuth={requireAuth}
                       />
-                      {best.program && (
-                        <ConsentLineagePanel data={best.program} />
-                      )}
                       {siblings.length > 0 && (
                         <FamilyCompare
                           a={{
@@ -438,9 +434,6 @@ function MatchSearch() {
                         isAuthenticated={isAuthenticated}
                         requireAuth={requireAuth}
                       />
-                      {r.program && (
-                        <ConsentLineagePanel data={r.program} />
-                      )}
                     </motion.div>,
                   );
                   idx++;
@@ -551,13 +544,13 @@ function VersionFamilySiblings({
 }
 
 // MODULAR: pilot showcase rail — three beats that choreograph the
-// authorized-version wedge for a live demo. Compact by design: one line
+// marketplace wedge for a live demo. Compact by design: one line
 // per beat, no paragraphs.
 function ShowcaseRail() {
   const beats = [
     { n: '1', label: 'Brief answered', hint: 'the agent ranked the catalog and named its pick' },
-    { n: '2', label: 'Compare the family', hint: 'expand the authorized versions — same song, artist-approved takes' },
-    { n: '3', label: 'License & settle', hint: 'open the license — the royalty waterfall splits on Arc' },
+    { n: '2', label: 'Compare the family', hint: 'expand the version family — alternate takes of the same work' },
+    { n: '3', label: 'License & settle', hint: 'open the license — the split lands on Arc' },
   ];
   return (
     <ol
@@ -582,8 +575,7 @@ function ShowcaseRail() {
 // disclosure. Outcome first, mechanism one click deep.
 function AgentAnswer({ results, briefText }: { results: BriefSearchResponse; briefText: string }) {
   const top = results.rows[0];
-  const authorized = results.rows.filter((r) => r.catalog.source === 'authorized');
-  const families = new Set(authorized.map((r) => r.family_id).filter(Boolean));
+  const families = new Set(results.rows.map((r) => r.family_id).filter(Boolean));
   const evidence = top.why_fits.slice(0, 2).join(' · ');
   const isGuidedDemo = results.catalog.mode === 'guided_demo';
 
@@ -594,10 +586,9 @@ function AgentAnswer({ results, briefText }: { results: BriefSearchResponse; bri
         <span className="text-[var(--color-ink-2)]"> · {top.artist_name}</span>
         {evidence && <span className="text-[var(--color-ink-2)]"> — {evidence}.</span>}
       </p>
-      {authorized.length > 0 && (
+      {families.size > 0 && (
         <p className="mt-1 font-serif text-[13px] leading-snug text-[var(--color-rust)]">
-          {authorized.length} artist-authorized version{authorized.length > 1 ? 's' : ''}
-          {families.size === 1 ? ' from one version family' : ''} — consent recorded, splits defined, license-ready.
+          {families.size} version famil{families.size === 1 ? 'y' : 'ies'} in these results — expand one to A/B alternate takes of the same work.
         </p>
       )}
       <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">
@@ -626,17 +617,6 @@ function AgentAnswer({ results, briefText }: { results: BriefSearchResponse; bri
 // evidence schedule stays one click deep in the expanded row.
 function ProvenanceMark({ row }: { row: BriefSearchRow }) {
   const source = row.catalog.source;
-  if (source === 'authorized') {
-    return (
-      <span
-        className="inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 bg-[var(--color-rust)]/10 border border-[var(--color-rust)]/40 cursor-help"
-        title="Artist-authorized: rights holder consent recorded, splits defined, royalty waterfall active"
-      >
-        <span className="text-[8px] leading-none text-[var(--color-rust)]" aria-hidden="true">◆</span>
-        <span className="font-mono text-[7px] uppercase tracking-[0.1em] text-[var(--color-rust)]">Authorized</span>
-      </span>
-    );
-  }
   if (source === 'demo') {
     return (
       <span
@@ -657,38 +637,6 @@ function ProvenanceMark({ row }: { row: BriefSearchRow }) {
       <span className="font-mono text-[7px] uppercase tracking-[0.1em] text-[var(--color-ink-3)]">Unverified</span>
     </span>
   );
-}
-
-// MODULAR: the row's second line is the best agent's verdict in its own
-// voice (per-agent AgentDetail.note), attributed — makes the three agents
-// read as distinct judges, not a scoring rubric. Falls back to the
-// structured why_fits citation when no agent verdict is attached.
-const AGENT_LABELS: Record<string, string> = {
-  production: 'Production',
-  performance: 'Performance',
-  market: 'Market',
-};
-
-function RowSubtitle({ row, reason }: { row: BriefSearchRow; reason: string | null }) {
-  const best = (row.program?.agentScores ?? [])
-    .slice()
-    .sort((a, b) => (b.detail?.fit_score ?? 0) - (a.detail?.fit_score ?? 0))[0];
-  if (best?.detail?.note) {
-    const label = AGENT_LABELS[best.agent] ?? best.agent;
-    return (
-      <p className="font-serif text-[12px] italic text-[var(--color-ink-2)] truncate mt-0.5">
-        {label} agent: “{best.detail.note}”
-      </p>
-    );
-  }
-  if (reason) {
-    return (
-      <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-ink-3)] truncate mt-0.5">
-        {reason}
-      </p>
-    );
-  }
-  return null;
 }
 
 function MatchRow({
@@ -721,7 +669,6 @@ function MatchRow({
   const [justShortlisted, setJustShortlisted] = useState(false);
   const [feedback, setFeedback] = useState<"good_fit" | "wrong_fit" | null>(null);
   const [sendingFeedback, setSendingFeedback] = useState(false);
-  const reason = row.why_fits[0] ?? null;
   const quoteOptions = row.license_quote.usage_options.filter(({ usage_type }) => usage_type !== "other");
   const selectedQuote = row.license_quote.usage_options.find(({ usage_type }) => usage_type === usageType);
   const isDemo = row.catalog.source === 'demo';
@@ -916,7 +863,6 @@ function MatchRow({
               <span className="font-serif text-[13px] text-[var(--color-ink-2)] truncate">{row.artist_name}</span>
               <ProvenanceMark row={row} />
             </div>
-            <RowSubtitle row={row} reason={reason} />
             {/* Inline why_fits chips (top 2) */}
             {row.why_fits.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1.5">

@@ -24,14 +24,12 @@
 //                        when embeddings are absent (mock mode, no
 //                        pgvector, no API key).
 
-import { and, eq, gte, lte, desc, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, eq, gte, lte, desc, sql, type SQL } from 'drizzle-orm';
 import { db } from '../lib/db';
 import {
   publishedVersions as pvTable,
   settlementLegs as legsTable,
   placementBriefs as briefsTable,
-  submissions as subsTable,
-  versionPrograms as vpTable,
 } from '../lib/schema';
 import { cached } from '../lib/cache';
 import { createEmbeddingAdapter, type EmbeddingAdapter } from '../adapters/embedding';
@@ -42,8 +40,7 @@ import {
   LICENSE_USAGE_TYPES,
   licenseFeeUsdc,
 } from '../lib/pricing';
-import type { CatalogMode, CatalogSource, Energy, Tempo, BriefSearchRow, ProgramGate, ProgramStatus, AuthorizationStatus, ConsentPolicy, RoyaltySplit, VersionLineage, AgentDetail, AudioFeatures } from '../lib/types';
-import { agentReviews as reviewTable } from '../lib/schema';
+import type { CatalogMode, CatalogSource, Energy, Tempo, BriefSearchRow } from '../lib/types';
 
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 100;
@@ -82,10 +79,6 @@ export interface FeedListResult {
 export interface FeedVersionResult {
   version: typeof pvTable.$inferSelect;
   settlement_legs: Array<typeof legsTable.$inferSelect>;
-  // MODULAR: pilot gate for authorized versions — the live program state
-  // behind the version's consent (null for non-program takes). Read at
-  // request time so a revocation stops new licenses immediately.
-  program: ProgramGate | null;
 }
 
 export interface FeedService {
@@ -276,12 +269,12 @@ export function normalizeTimestamp(value: unknown): Date | null {
 
 // MODULAR: licensing and catalog source are related operational states, but
 // distinct facts. A demo take can be useful for guided evaluation without
-// being able to create a license, job, or settlement. 'authorized' is the
-// third, rights-recorded source — an approved version inside an active
-// artist-authorized program.
+// being able to create a license, job, or settlement. The column is untyped
+// text, so this is the single place that narrows it — a legacy 'authorized'
+// row (from the retired version-program pilot) reads as live supply, which
+// is what it always was.
 function catalogSourceFor(version: typeof pvTable.$inferSelect): CatalogSource {
-  if (version.catalogSource === 'authorized') return 'authorized';
-  return version.catalogSource === 'live' ? 'live' : 'demo';
+  return version.catalogSource === 'demo' ? 'demo' : 'live';
 }
 
 function buildCatalogProvenance(source: CatalogSource): BriefSearchRow['catalog'] {
@@ -290,13 +283,6 @@ function buildCatalogProvenance(source: CatalogSource): BriefSearchRow['catalog'
       source,
       label: 'Guided demo',
       description: 'Sample catalog data for evaluating the brief-to-match workflow. It cannot create a license or settlement.',
-    };
-  }
-  if (source === 'authorized') {
-    return {
-      source,
-      label: 'Authorized program',
-      description: 'A version produced under an artist-authorized consent program. Consent and royalty splits are recorded per version.',
     };
   }
   return {
@@ -314,16 +300,6 @@ function buildLicenseAvailability(source: CatalogSource): BriefSearchRow['licens
       clearance: {
         status: 'unverified',
         reason: 'Demo catalog data does not include auditable rights-clearance evidence.',
-      },
-    };
-  }
-  if (source === 'authorized') {
-    return {
-      status: 'requestable',
-      reason: 'Artist-authorized version inside an active consent program; licensing is gated on the program remaining active and the version staying approved.',
-      clearance: {
-        status: 'cleared',
-        reason: 'Artist consent is recorded for this version under its authorized-version program (scope: the program consent policy).',
       },
     };
   }
@@ -366,22 +342,6 @@ function buildLicensingEvidence(source: CatalogSource): BriefSearchRow['licensin
           requirement: 'scope_and_restrictions' as const,
           description: 'Record territory, term, media scope, and any restrictions or exclusions.',
         },
-        {
-          requirement: 'final_quote' as const,
-          description: 'Issue a rights-aware final quote before treating the license as cleared.',
-        },
-      ],
-    };
-  }
-  if (source === 'authorized') {
-    // MODULAR: rights authority + scope are recorded in the program's consent
-    // policy, so only the final rights-aware quote remains outstanding. This
-    // must stay derived from program state — the license route re-checks the
-    // gate (program active + version approved) before a job can open.
-    return {
-      status: 'program_cleared',
-      summary: 'Artist consent and scope are recorded under this version\u2019s authorized program. A rights-aware final quote is still issued per license.',
-      outstanding: [
         {
           requirement: 'final_quote' as const,
           description: 'Issue a rights-aware final quote before treating the license as cleared.',
@@ -653,100 +613,6 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
     return await buildResult(scored, safeLimit, safeOffset);
   }
 
-  // ── Enrich authorized versions with program data ─────────
-  interface ProgramEnrichment {
-    id: string;
-    status: ProgramStatus;
-    rightsHolderWallet: string;
-    authStatus: AuthorizationStatus | null;
-    authorizedAt: Date | null;
-    consentPolicy: ConsentPolicy;
-    splits: RoyaltySplit[];
-    lineage: VersionLineage | null;
-    audioFeatures: AudioFeatures | null;
-    reviews: Array<{ agentName: string; detail: AgentDetail }>;
-  }
-
-  async function fetchProgramData(submissionIds: string[]): Promise<Record<string, ProgramEnrichment>> {
-    if (submissionIds.length === 0) return {};
-
-    const subRows = await db
-      .select({
-        id: subsTable.id,
-        programId: subsTable.programId,
-        authStatus: subsTable.authorizationStatus,
-        authorizedAt: subsTable.authorizedAt,
-        lineage: subsTable.lineage,
-        audioFeatures: subsTable.audioFeatures,
-      })
-      .from(subsTable)
-      .where(inArray(subsTable.id, submissionIds));
-
-    const programIds = Array.from(new Set(subRows.map((s) => s.programId).filter(Boolean) as string[]));
-    let progRows: Array<{
-      id: string;
-      status: string;
-      rightsHolderWallet: string;
-      consentPolicy: unknown;
-      splits: unknown;
-    }> = [];
-    if (programIds.length > 0) {
-      progRows = await db
-        .select({
-          id: vpTable.id,
-          status: vpTable.status,
-          rightsHolderWallet: vpTable.rightsHolderWallet,
-          consentPolicy: vpTable.consentPolicy,
-          splits: vpTable.splits,
-        })
-        .from(vpTable)
-        .where(inArray(vpTable.id, programIds));
-    }
-
-    const progById = new Map(progRows.map((p) => [p.id, p]));
-    const enriched: Record<string, ProgramEnrichment> = {};
-
-    for (const sub of subRows) {
-      const prog = sub.programId ? progById.get(sub.programId) : null;
-      if (!prog) continue;
-      enriched[sub.id] = {
-        id: prog.id,
-        status: prog.status as ProgramStatus,
-        rightsHolderWallet: prog.rightsHolderWallet,
-        authStatus: sub.authStatus,
-        authorizedAt: sub.authorizedAt,
-        consentPolicy: prog.consentPolicy as ConsentPolicy,
-        splits: prog.splits as RoyaltySplit[],
-        lineage: sub.lineage,
-        audioFeatures: sub.audioFeatures as AudioFeatures | null,
-        reviews: [],
-      };
-    }
-
-    if (Object.keys(enriched).length > 0) {
-      const reviewRows = await db
-        .select({
-          submissionId: reviewTable.submissionId,
-          agentName: reviewTable.agentName,
-          detail: reviewTable.detail,
-        })
-        .from(reviewTable)
-        .where(inArray(reviewTable.submissionId, Object.keys(enriched)));
-
-      for (const r of reviewRows) {
-        const entry = enriched[r.submissionId];
-        if (entry) {
-          entry.reviews.push({
-            agentName: r.agentName,
-            detail: r.detail ?? { fit_score: 5, metric: 5, metric_label: '', note: '' },
-          });
-        }
-      }
-    }
-
-    return enriched;
-  }
-
   // ── Shared result builder ──────────────────────────────
   async function buildResult(
     scored: Array<{ version: typeof pvTable.$inferSelect; brief: typeof briefsTable.$inferSelect; score: number; why_fits: string[] }>,
@@ -765,19 +631,9 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
           : 'mixed';
     const sliced = scored.slice(safeOffset, safeOffset + safeLimit);
 
-    // ── Enrich authorized versions with program data ──────────
-    const authorizedIds = sliced
-      .filter((s) => catalogSourceFor(s.version) === 'authorized')
-      .map((s) => s.version.submissionId);
-
-    let programMap: Record<string, ProgramEnrichment> = {};
-    if (authorizedIds.length > 0) {
-      programMap = await fetchProgramData(authorizedIds);
-    }
-
     const rows: BriefSearchRow[] = sliced.map((s) => {
       const source = catalogSourceFor(s.version);
-      const row: BriefSearchRow = {
+      return {
         submission_id: s.version.submissionId,
         title: s.version.title,
         artist_name: s.version.artistName,
@@ -806,31 +662,6 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
           audience_summary: s.brief.audienceSummary,
         },
       };
-
-      // Enrich with program data for authorized versions
-      if (source === 'authorized' && row.submission_id in programMap) {
-        const prog = programMap[row.submission_id];
-        row.program = {
-          programId: prog.id,
-          programStatus: prog.status,
-          rightsHolderWallet: prog.rightsHolderWallet,
-          authorizationStatus: prog.authStatus,
-          authorizedAt: prog.authorizedAt?.toISOString?.() ?? null,
-          consentPolicy: prog.consentPolicy,
-          splits: prog.splits,
-          lineage: prog.lineage,
-          audioFeatures: prog.audioFeatures,
-          agentScores: (prog.reviews ?? []).map((r) => ({
-            agent: r.agentName,
-            detail: r.detail ?? { fit_score: 5, metric: 5, metric_label: '', note: '' },
-            why_fits: s.why_fits.slice(0, 2),
-          })),
-          licenseCount: 0, // placeholder — can be enriched from settlement
-          totalSettled: 0,
-        };
-      }
-
-      return row;
     });
     return {
       total,
@@ -888,35 +719,7 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
         .from(legsTable)
         .where(eq(legsTable.submissionId, submissionId))
         .orderBy(legsTable.recipientRole, legsTable.id);
-      // MODULAR: resolve the program gate for authorized versions. Two small
-      // indexed lookups (submission by PK, program by PK) — cheaper than a
-      // join and this path is per-license, not per-search.
-      let program: ProgramGate | null = null;
-      const [sub] = await db
-        .select({ programId: subsTable.programId, authorizationStatus: subsTable.authorizationStatus })
-        .from(subsTable)
-        .where(eq(subsTable.id, submissionId))
-        .limit(1);
-      if (sub?.programId) {
-        const [prog] = await db
-          .select({
-            id: vpTable.id,
-            status: vpTable.status,
-            rightsHolderWallet: vpTable.rightsHolderWallet,
-          })
-          .from(vpTable)
-          .where(eq(vpTable.id, sub.programId))
-          .limit(1);
-        if (prog) {
-          program = {
-            program_id: prog.id,
-            program_status: prog.status,
-            rights_holder_wallet: prog.rightsHolderWallet,
-            authorization_status: sub.authorizationStatus ?? null,
-          };
-        }
-      }
-      return { version, settlement_legs: legs, program };
+      return { version, settlement_legs: legs };
     },
 
     async searchByBrief(args: BriefSearchArgs): Promise<BriefSearchResult> {

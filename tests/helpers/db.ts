@@ -21,20 +21,6 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS version_programs (
-  id TEXT PRIMARY KEY,
-  rights_holder_wallet TEXT NOT NULL,
-  source_title TEXT NOT NULL,
-  source_artist TEXT NOT NULL,
-  musicbrainz_id TEXT,
-  consent_policy JSONB NOT NULL,
-  splits JSONB NOT NULL,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked', 'completed')),
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_version_programs_rights_holder ON version_programs(rights_holder_wallet);
-
 CREATE TABLE IF NOT EXISTS submissions (
   id TEXT PRIMARY KEY,
   artist_wallet TEXT NOT NULL,
@@ -53,10 +39,6 @@ CREATE TABLE IF NOT EXISTS submissions (
   content_type TEXT NOT NULL,
   fee_quote_usdc TEXT NOT NULL,
   cover_svg TEXT,
-  program_id TEXT REFERENCES version_programs(id),
-  authorization_status TEXT CHECK (authorization_status IN ('pending_approval', 'approved', 'rejected')),
-  authorized_at TIMESTAMP,
-  lineage JSONB,
   audio_features JSONB,
   status TEXT NOT NULL DEFAULT 'pending_payment',
   payment_tx_hash TEXT,
@@ -69,6 +51,172 @@ CREATE TABLE IF NOT EXISTS submissions (
 CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions(status, submitted_at);
 CREATE INDEX IF NOT EXISTS idx_submissions_artist ON submissions(artist_wallet);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_audio_sha256_wallet ON submissions(audio_sha256, artist_wallet);
+
+-- MODULAR: unified marketplace supply. ONE primitive, TWO catalogs — a
+-- music listing links to a submission, a placement listing carries its
+-- own brand/product fields. Both are embedded into the same vector space as
+-- channel ethos and both settle through the same flat three-leg split.
+CREATE TABLE IF NOT EXISTS listings (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('music', 'placement')),
+  supplier_wallet TEXT NOT NULL,
+  submission_id TEXT REFERENCES submissions(id),
+  title TEXT NOT NULL,
+  supplier_name TEXT NOT NULL,
+  summary TEXT,
+  tags JSONB NOT NULL,
+  images JSONB NOT NULL,
+  cover_svg TEXT,
+  audio_path TEXT,
+  audio_features JSONB,
+  tier TEXT NOT NULL CHECK (tier IN ('free', 'paid')),
+  pricing JSONB,
+  budget_cap_usdc TEXT,
+  budget_spent_usdc TEXT NOT NULL DEFAULT '0',
+  disclosure JSONB,
+  attribution_text TEXT NOT NULL,
+  attribution_url TEXT NOT NULL,
+  attribution_slug TEXT NOT NULL UNIQUE,
+  agreement_version TEXT NOT NULL,
+  agreement_accepted_at TIMESTAMP NOT NULL,
+  status TEXT NOT NULL DEFAULT 'draft',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  -- A paid listing must be priceable; a free listing must not be.
+  CHECK ((tier = 'paid') = (pricing IS NOT NULL)),
+  -- Disclosure is mandatory on paid supply and forbidden on free supply.
+  CHECK ((tier = 'paid') = (disclosure IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_listings_kind_status ON listings(kind, status);
+CREATE INDEX IF NOT EXISTS idx_listings_supplier ON listings(supplier_wallet);
+CREATE INDEX IF NOT EXISTS idx_listings_tier ON listings(tier, status);
+
+-- PGlite has no pgvector, so embedding is TEXT here (see version_embeddings).
+CREATE TABLE IF NOT EXISTS listing_embeddings (
+  listing_id TEXT PRIMARY KEY REFERENCES listings(id),
+  embedding TEXT NOT NULL,
+  model TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- MODULAR: the distribution side. A channel connects a REAL surface and the
+-- numbers come from the platform's own API — stats_source deliberately has no
+-- 'self_reported' arm, because invented reach is the fraud that undermines
+-- ad marketplaces.
+CREATE TABLE IF NOT EXISTS channels (
+  id TEXT PRIMARY KEY,
+  owner_wallet TEXT NOT NULL,
+  name TEXT NOT NULL,
+  platform TEXT NOT NULL CHECK (platform IN ('youtube', 'other')),
+  platform_url TEXT NOT NULL,
+  platform_channel_id TEXT,
+  verification_status TEXT NOT NULL DEFAULT 'pending',
+  verification_error TEXT,
+  subscriber_count INTEGER,
+  view_count INTEGER,
+  video_count INTEGER,
+  stats_source TEXT CHECK (stats_source IN ('platform_api', 'mock')),
+  stats_verified_at TIMESTAMP,
+  niche TEXT,
+  ethos_summary TEXT,
+  platform_description TEXT,
+  recent_content JSONB NOT NULL,
+  agreement_version TEXT NOT NULL,
+  agreement_accepted_at TIMESTAMP NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_channels_platform_channel ON channels(platform, platform_channel_id);
+CREATE INDEX IF NOT EXISTS idx_channels_owner ON channels(owner_wallet);
+CREATE INDEX IF NOT EXISTS idx_channels_verification ON channels(verification_status);
+
+CREATE TABLE IF NOT EXISTS channel_embeddings (
+  channel_id TEXT PRIMARY KEY REFERENCES channels(id),
+  embedding TEXT NOT NULL,
+  model TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- MODULAR: the paid tier. Self-serve by design; every slot mints a unique
+-- tracking code at creation so impressions are attributable from day one.
+CREATE TABLE IF NOT EXISTS slots (
+  id TEXT PRIMARY KEY,
+  listing_id TEXT NOT NULL REFERENCES listings(id),
+  channel_id TEXT NOT NULL REFERENCES channels(id),
+  buyer_wallet TEXT NOT NULL,
+  pricing_model TEXT NOT NULL CHECK (pricing_model IN ('flat', 'cpm')),
+  flat_fee_usdc TEXT,
+  cpm_usdc TEXT,
+  budget_usdc TEXT,
+  spent_usdc TEXT NOT NULL DEFAULT '0',
+  impressions_delivered INTEGER NOT NULL DEFAULT 0,
+  clicks_delivered INTEGER NOT NULL DEFAULT 0,
+  tracking_code TEXT NOT NULL UNIQUE,
+  tracking_url TEXT NOT NULL,
+  disclosure JSONB NOT NULL,
+  attribution_text TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending_payment',
+  payment_tx_hash TEXT,
+  payment_mock BOOLEAN NOT NULL DEFAULT FALSE,
+  settlement_lease_id TEXT,
+  settled_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_slots_active_listing_channel
+  ON slots(listing_id, channel_id)
+  WHERE status IN ('pending_payment', 'active', 'paused');
+CREATE INDEX IF NOT EXISTS idx_slots_channel ON slots(channel_id, status);
+CREATE INDEX IF NOT EXISTS idx_slots_listing ON slots(listing_id, status);
+CREATE INDEX IF NOT EXISTS idx_slots_buyer ON slots(buyer_wallet);
+
+-- MODULAR: paid-slot money. Deliberately SEPARATE from settlement_legs so the
+-- publish-fee leg-count invariants and uq_legs_submission_wallet_role stay
+-- byte-for-byte intact. Simpler contract: EXACTLY three flat legs —
+-- supplier, channel, platform — no waterfall. All three unique-key columns
+-- are NOT NULL so duplicate-insert protection actually holds.
+CREATE TABLE IF NOT EXISTS slot_legs (
+  id TEXT PRIMARY KEY,
+  slot_id TEXT NOT NULL REFERENCES slots(id),
+  recipient_wallet TEXT NOT NULL,
+  recipient_role TEXT NOT NULL CHECK (recipient_role IN ('supplier', 'channel', 'platform')),
+  amount_usdc TEXT NOT NULL,
+  tx_hash TEXT,
+  settled_at TIMESTAMP,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_slot_legs_slot_wallet_role ON slot_legs(slot_id, recipient_wallet, recipient_role);
+CREATE INDEX IF NOT EXISTS idx_slot_legs_slot ON slot_legs(slot_id);
+CREATE INDEX IF NOT EXISTS idx_slot_legs_recipient ON slot_legs(recipient_wallet, status);
+
+-- MODULAR: the data flywheel. Every use of every listing is logged, with
+-- reported_by recorded rather than assumed so a channel-reported row is never
+-- indistinguishable from a platform-verified one.
+CREATE TABLE IF NOT EXISTS usage_events (
+  id TEXT PRIMARY KEY,
+  listing_id TEXT NOT NULL REFERENCES listings(id),
+  channel_id TEXT NOT NULL REFERENCES channels(id),
+  slot_id TEXT REFERENCES slots(id),
+  kind TEXT NOT NULL CHECK (kind IN ('organic', 'sponsored')),
+  attribution_code TEXT,
+  video_url TEXT,
+  external_content_id TEXT,
+  impressions INTEGER NOT NULL DEFAULT 1,
+  clicks INTEGER NOT NULL DEFAULT 0,
+  spend_usdc TEXT NOT NULL DEFAULT '0',
+  reported_by TEXT NOT NULL CHECK (reported_by IN ('channel', 'platform_api', 'manual')),
+  status TEXT NOT NULL DEFAULT 'logged',
+  occurred_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  -- Sponsored usage must name the slot it was served under.
+  CHECK ((kind = 'sponsored') = (slot_id IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_usage_listing ON usage_events(listing_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_usage_channel ON usage_events(channel_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_usage_slot ON usage_events(slot_id);
+CREATE INDEX IF NOT EXISTS idx_usage_kind ON usage_events(kind, occurred_at);
 
 CREATE TABLE IF NOT EXISTS curator_claims (
   id TEXT PRIMARY KEY,
@@ -171,7 +319,7 @@ CREATE TABLE IF NOT EXISTS published_versions (
   tempo_consensus TEXT,
   aggregated_mood_tags JSONB,
   rating_count INTEGER NOT NULL,
-  catalog_source TEXT NOT NULL DEFAULT 'live' CHECK (catalog_source IN ('demo', 'live', 'authorized')),
+  catalog_source TEXT NOT NULL DEFAULT 'live' CHECK (catalog_source IN ('demo', 'live')),
   published_at TIMESTAMP NOT NULL,
   family_id TEXT
 );
@@ -359,7 +507,7 @@ CREATE TABLE IF NOT EXISTS match_feedback (
   brief_hash TEXT NOT NULL,
   brief_text TEXT NOT NULL,
   submission_id TEXT NOT NULL REFERENCES published_versions(submission_id),
-  catalog_source TEXT NOT NULL DEFAULT 'live' CHECK (catalog_source IN ('demo', 'live', 'authorized')),
+  catalog_source TEXT NOT NULL DEFAULT 'live' CHECK (catalog_source IN ('demo', 'live')),
   fit_score_shown REAL NOT NULL,
   rank_shown INTEGER,
   verdict TEXT NOT NULL,
@@ -471,6 +619,13 @@ export async function resetTestDb(): Promise<void> {
   if (!_pg) return;
   // Drop all rows from every test table. Cheaper than recreating the instance.
   const tables = [
+    'usage_events',
+    'slot_legs',
+    'slots',
+    'channel_embeddings',
+    'listing_embeddings',
+    'channels',
+    'listings',
     'case_events',
     'placement_cases',
     'release_cases',

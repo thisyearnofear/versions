@@ -10,15 +10,12 @@ export type AgentName = 'production' | 'performance' | 'market';
 export type RecipientRole = 'curator' | 'platform' | 'musicbrainz';
 
 // Catalog provenance describes where a take came from. It is intentionally
-// separate from version type, ranking quality, and rights clearance.
-// 'authorized' = published from a submission inside an artist-authorized
-// version program (pilot) — the one source where pre-clearance is a fact
-// (consent recorded per version) rather than an assumption.
-export type CatalogSource = 'demo' | 'live' | 'authorized';
+// separate from version type and ranking quality.
+export type CatalogSource = 'demo' | 'live';
 export type CatalogMode = 'guided_demo' | 'live_catalog' | 'mixed';
 export interface CatalogProvenance {
   source: CatalogSource;
-  label: 'Guided demo' | 'Live catalog' | 'Authorized program';
+  label: 'Guided demo' | 'Live catalog';
   description: string;
 }
 
@@ -121,7 +118,7 @@ export interface BriefSearchLicenseQuote {
 // the specific evidence still required for a final license explicit so a
 // supervisor can distinguish a requestable workflow from a cleared outcome.
 export interface BriefSearchLicensingEvidence {
-  status: 'sample_only' | 'rights_review_required' | 'program_cleared';
+  status: 'sample_only' | 'rights_review_required';
   summary: string;
   outstanding: Array<{
     requirement: 'rights_authority' | 'scope_and_restrictions' | 'final_quote';
@@ -129,40 +126,81 @@ export interface BriefSearchLicensingEvidence {
   }>;
 }
 
-// ── Authorized version programs (pilot) ────────────────
-// MODULAR: the consent record + royalty waterfall for an artist-authorized
-// version program. The concierge pilot mirrors ONE lawyer-drafted agreement
-// per program; these shapes are the structured slice of that agreement that
-// the platform needs to gate, evidence, and settle. Canonical definitions —
-// schema.jsonb and services both consume these.
-export type ProgramStatus = 'active' | 'revoked' | 'completed';
-export type AuthorizationStatus = 'pending_approval' | 'approved' | 'rejected';
+// ── Marketplace supply: unified listing ───────────────
+// MODULAR: one primitive, two supply catalogs. A listing is a slot in a
+// feed that a channel can pick up — either a track (music) or a
+// brand/product (placement). Both are matched against channel ethos in the
+// same vector space and both are either free-with-attribution or paid.
+// There is no per-listing licensing negotiation: one blanket agreement
+// covers every free use, and a paid listing is a self-serve buy.
+export type ListingKind = 'music' | 'placement';
+export type ListingTier = 'free' | 'paid';
+export type PricingModel = 'flat' | 'cpm';
+export type ListingStatus = 'draft' | 'active' | 'paused' | 'exhausted' | 'archived';
 
-export interface ConsentPolicy {
-  allowed_transformations: string[]; // e.g. ['alt_vocals', 'remix', 'mood_flip']
-  prohibited: string[];
-  territories: string[]; // ['worldwide'] or ISO codes
-  term_months: number;
-  revocable: boolean;
-  model_training_allowed: boolean;
-  notes?: string; // free-text summary of the signed agreement
-  agreement_ref?: string; // pointer to the signed document (path/URL)
+export interface ListingPricing {
+  model: PricingModel;
+  // Required when model === 'flat'. Decimal USDC string.
+  flatFeeUsdc?: string;
+  // Required when model === 'cpm'. Decimal USDC per 1000 impressions.
+  cpmUsdc?: string;
 }
 
-// One leg of the per-use royalty waterfall. share_bps is basis points; legs
-// must sum to exactly 10000 (100%).
-export interface RoyaltySplit {
-  wallet: string;
-  label: string; // 'artist' | 'creator' | 'publisher' | 'platform' | ...
-  share_bps: number;
+// ── Compliance surface ────────────────────────────────
+// Paid placements carry a disclosure marker from day one. FTC / platform
+// sponsored-content rules apply to AI-run channels exactly as they do to
+// human ones, so the marker is generated into the attribution string the
+// channel is required to render — not left to the channel to remember.
+export type DisclosureKind = 'sponsored' | 'paid_promotion';
+
+export interface Disclosure {
+  kind: DisclosureKind;
+  // Short in-video/description tag, e.g. "#ad".
+  label: string;
+  // Full sentence the channel must render alongside the attribution.
+  statement: string;
 }
 
-// Derivative-version provenance: how this version was made and from what.
-export interface VersionLineage {
-  creator_tools: string[]; // tool-agnostic labels, e.g. ['suno', 'manual_mix']
-  source_version_ids: string[]; // upstream versions/stems used, if any
-  notes?: string;
+// ── Demand side: distribution channels ────────────────
+export type ChannelPlatform = 'youtube' | 'other';
+export type ChannelVerification = 'pending' | 'verified' | 'failed';
+export type ChannelStatus = 'active' | 'suspended';
+
+// Provenance of a channel's distribution numbers. 'self_reported' is
+// deliberately absent — fake distribution is the fraud that undermines ad
+// marketplaces, so the numbers always come from the platform's own API
+// (or from the deterministic mock in environments without a key).
+export type StatsSource = 'platform_api' | 'mock';
+
+export interface ChannelStats {
+  subscriberCount: number;
+  viewCount: number;
+  videoCount: number;
+  source: StatsSource;
+  verifiedAt: string | null;
 }
+
+// ── Paid tier: sponsor slots ──────────────────────────
+export type SlotStatus =
+  | 'pending_payment'
+  | 'active'
+  | 'paused'
+  | 'exhausted'
+  | 'completed'
+  | 'cancelled';
+
+// ── Usage instrumentation (the data flywheel) ─────────
+// Organic = free-with-attribution. Sponsored = paid slot delivery. Every
+// use of every listing is logged — which channel, which listing, when, and
+// where (video URL when available) — so the catalog's usage is both a
+// matching signal and the sales proof for the paid side.
+export type UsageKind = 'organic' | 'sponsored';
+export type UsageReportedBy = 'channel' | 'platform_api' | 'manual';
+
+// Roles in the flat slot split. Exactly three legs, no waterfall: the
+// supplier who owns the listing, the channel that delivered it, and the
+// platform that matched and settled it.
+export type SlotRecipientRole = 'supplier' | 'channel' | 'platform';
 
 // Audio features extracted from the source audio for agent scoring.
 // Used to make agent ratings defensible — the agents evaluate actual
@@ -178,16 +216,6 @@ export interface AudioFeatures {
   instrumentalness: number | null; // 0-1 (instrumental / vocal)
   valence: number | null;        // 0-1 (positive / negative mood)
   _raw?: Record<string, unknown>; // ffmpeg probe data, for future processing
-}
-
-// Read-side gate for the license route: is this version still inside an
-// active, artist-approved program? Derived at read time so a program
-// revocation stops new licenses immediately without touching old rows.
-export interface ProgramGate {
-  program_id: string;
-  program_status: ProgramStatus;
-  rights_holder_wallet: string;
-  authorization_status: AuthorizationStatus | null;
 }
 
 export interface BriefSearchRow {
@@ -218,26 +246,6 @@ export interface BriefSearchRow {
     emotional_arcs: string[];
     sync_comparables: Array<{ name: string; why: string }>;
     audience_summary: string;
-  };
-  // MODULAR: pilot program data for authorized versions. Only populated when
-  // catalog.source === 'authorized'. Enables the consent lineage visualization.
-  program?: {
-    programId: string;
-    programStatus: ProgramStatus;
-    rightsHolderWallet: string;
-    authorizationStatus: AuthorizationStatus | null;
-    authorizedAt: string | null;
-    consentPolicy: ConsentPolicy;
-    splits: RoyaltySplit[];
-    lineage: VersionLineage | null;
-    audioFeatures: AudioFeatures | null;
-    agentScores: Array<{
-      agent: string;
-      detail: AgentDetail;
-      why_fits: string[];
-    }>;
-    licenseCount: number;
-    totalSettled: number;
   };
 }
 

@@ -33,6 +33,13 @@ const envSchema = z.object({
   PINATA_JWT: z.string().optional(),
   PINATA_GATEWAY: z.string().optional(),
 
+  // Distribution-surface verification (src/adapters/youtube.ts). Optional by
+  // design: without a key the channel probe resolves deterministically from
+  // the URL so onboarding and tests run offline, but the probe reports
+  // mock: true and the channels service holds verification at 'pending'.
+  // A mock probe can never unlock a paid slot.
+  YOUTUBE_API_KEY: z.string().optional(),
+
   // Server tunables
   JSON_BODY_LIMIT: z.string().default('256kb'),
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(12000),

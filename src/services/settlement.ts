@@ -15,6 +15,7 @@ import { db } from '../lib/db';
 import {
   submissions as submissionsTable,
   settlementLegs as legsTable,
+  slotLegs as slotLegsTable,
   x402Proofs as proofsTable,
   arPlayEvents as playsTable,
   publishedVersions as pvTable,
@@ -22,7 +23,7 @@ import {
 } from '../lib/schema';
 import { emit } from '../lib/event-bus';
 import { emitDurable } from './outbox';
-import type { SettlementStatus, RecipientRole } from '../lib/types';
+import type { SettlementStatus, RecipientRole, SlotRecipientRole } from '../lib/types';
 import type { ArcAdapter } from '../adapters/arc';
 
 export const SPLITS = Object.freeze({
@@ -135,6 +136,93 @@ export function expectedLegCountFor(curatorCount: number): number {
   return curatorCount + 2;
 }
 
+// ── Flat slot split (paid placements) ─────────────────
+// MODULAR: paid-slot money, deliberately simpler than SPLITS above. EXACTLY
+// three legs — supplier, channel, platform — with no waterfall and no
+// per-curator fan-out. The marketplace pivot replaced the bespoke per-program
+// royalty waterfall with one published split, so these shares are a product
+// fact rather than a negotiated term.
+//
+// The residue goes to the platform leg: supplier and channel are computed by
+// share and the house absorbs the sub-micro-USDC remainder, so rounding never
+// costs a counterparty. Kept in this module (rather than in slots.ts) so every
+// leg-write invariant lives next to the one it must not drift from.
+export const SLOT_SPLITS = Object.freeze({
+  supplier: 0.60,
+  channel: 0.30,
+  platform: 0.10,
+});
+
+/** A paid slot always settles into exactly this many legs. No exceptions. */
+export const EXPECTED_SLOT_LEG_COUNT = 3;
+
+export interface BuiltSlotLeg {
+  id: string;
+  slot_id: string;
+  recipient_wallet: string;
+  recipient_role: SlotRecipientRole;
+  amount_usdc: string;
+  status: SettlementStatus;
+  created_at: string;
+}
+
+export function buildSlotLegs({
+  slotId,
+  grossUsdc,
+  supplierWallet,
+  channelWallet,
+  platformWallet,
+}: {
+  slotId: string;
+  grossUsdc: string;
+  supplierWallet: string;
+  channelWallet: string;
+  platformWallet: string;
+}): BuiltSlotLeg[] {
+  if (!slotId) throw new Error('slotId is required');
+  if (!supplierWallet) throw new Error('supplierWallet is required');
+  if (!channelWallet) throw new Error('channelWallet is required');
+  if (!platformWallet) throw new Error('platformWallet is required');
+
+  const grossMicro = toMicroUsdc(grossUsdc);
+  if (grossMicro <= 0n) throw new Error('grossUsdc must be a positive amount');
+
+  const supplierMicro =
+    (grossMicro * BigInt(Math.floor(SLOT_SPLITS.supplier * 1000000))) / BigInt(1000000);
+  const channelMicro =
+    (grossMicro * BigInt(Math.floor(SLOT_SPLITS.channel * 1000000))) / BigInt(1000000);
+  const platformMicro = grossMicro - supplierMicro - channelMicro;
+  // Guards against a share table that no longer sums to 1: a negative house
+  // leg means the counterparties were over-allocated, and settling that would
+  // move money the slot never collected.
+  if (platformMicro < 0n) {
+    throw new Error('SLOT_SPLITS over-allocate the gross; platform leg would be negative');
+  }
+
+  const nowIso = new Date().toISOString();
+  const leg = (wallet: string, role: SlotRecipientRole, micro: bigint): BuiltSlotLeg => ({
+    id: randomUUID(),
+    slot_id: slotId,
+    recipient_wallet: wallet,
+    recipient_role: role,
+    amount_usdc: fromMicroUsdc(micro),
+    status: 'pending',
+    created_at: nowIso,
+  });
+
+  const legs = [
+    leg(supplierWallet, 'supplier', supplierMicro),
+    leg(channelWallet, 'channel', channelMicro),
+    leg(platformWallet, 'platform', platformMicro),
+  ];
+  if (legs.length !== EXPECTED_SLOT_LEG_COUNT) {
+    throw new Error(`slot split must produce ${EXPECTED_SLOT_LEG_COUNT} legs`);
+  }
+  return legs;
+}
+
+export type SlotLegRow = typeof slotLegsTable.$inferSelect;
+
 export interface SettleLegResult {
   leg_id: string;
   status: string;
@@ -220,6 +308,16 @@ export interface SettlementService {
       }
   >;
   getLegsForSubmission: (submissionId: string) => Promise<LegRow[]>;
+  /** Paid-slot legs. Same discipline as insertLegsAtomic, flat three-way split. */
+  insertSlotLegsAtomic: (args: {
+    slotId: string;
+    grossUsdc: string;
+    supplierWallet: string;
+    channelWallet: string;
+    platformWallet: string;
+  }) => Promise<BuiltSlotLeg[]>;
+  settleSlotLegsAsync: (legIds: string[]) => Promise<SettleLegResult[]>;
+  getLegsForSlot: (slotId: string) => Promise<SlotLegRow[]>;
   sumSettledFor: (wallet: string) => Promise<number>;
   listEarnings: (wallet: string, opts?: { limit?: number; offset?: number; role?: string; dateFrom?: string; dateTo?: string }) => Promise<EarningsReport>;
   listReceipts: (wallet: string, opts?: { limit?: number; offset?: number; source?: ReceiptSource }) => Promise<ReceiptsReport>;
@@ -430,6 +528,133 @@ export function createSettlementService({
         .from(legsTable)
         .where(eq(legsTable.submissionId, submissionId))
         .orderBy(legsTable.recipientRole, legsTable.id);
+    },
+
+    async insertSlotLegsAtomic({ slotId, grossUsdc, supplierWallet, channelWallet, platformWallet }) {
+      const legs = buildSlotLegs({
+        slotId,
+        grossUsdc,
+        supplierWallet,
+        channelWallet,
+        platformWallet,
+      });
+      // Same contract as insertLegsAtomic: the unique key turns a retried
+      // settlement into a no-op rather than a duplicate payout, and the
+      // re-query is the authoritative set. All three key columns are NOT NULL
+      // on slot_legs, so the constraint actually holds — Postgres treats NULLs
+      // as distinct in a unique index, which would silently defeat it.
+      await db
+        .insert(slotLegsTable)
+        .values(
+          legs.map((l) => ({
+            id: l.id,
+            slotId: l.slot_id,
+            recipientWallet: l.recipient_wallet,
+            recipientRole: l.recipient_role,
+            amountUsdc: l.amount_usdc,
+            status: l.status,
+          })),
+        )
+        .onConflictDoNothing({
+          target: [slotLegsTable.slotId, slotLegsTable.recipientWallet, slotLegsTable.recipientRole],
+        });
+      const existing = await db
+        .select()
+        .from(slotLegsTable)
+        .where(eq(slotLegsTable.slotId, slotId));
+      if (existing.length !== EXPECTED_SLOT_LEG_COUNT) {
+        throw new Error(
+          `slot ${slotId} holds ${existing.length} legs, expected ${EXPECTED_SLOT_LEG_COUNT}`,
+        );
+      }
+      return existing.map((row) => ({
+        id: row.id,
+        slot_id: row.slotId,
+        recipient_wallet: row.recipientWallet,
+        recipient_role: row.recipientRole as SlotRecipientRole,
+        amount_usdc: row.amountUsdc,
+        status: row.status as SettlementStatus,
+        created_at: row.createdAt.toISOString(),
+      }));
+    },
+
+    /**
+     * Async: drive each pending slot leg to 'settled' via arc.sendTransfer.
+     * Mirrors settleLegsAsync — sequential arc calls, no DB transaction held
+     * across a chain round-trip, and a failure marks that one leg without
+     * touching its siblings.
+     */
+    async settleSlotLegsAsync(legIds: string[]): Promise<SettleLegResult[]> {
+      if (!arc) throw new Error('arc adapter is required for settleSlotLegsAsync');
+      const results: SettleLegResult[] = [];
+      for (const legId of legIds) {
+        const [leg] = await db
+          .select()
+          .from(slotLegsTable)
+          .where(eq(slotLegsTable.id, legId))
+          .limit(1);
+        if (!leg) {
+          results.push({ leg_id: legId, status: 'missing' });
+          continue;
+        }
+        if (leg.status === 'settled') {
+          results.push({ leg_id: legId, status: 'settled', tx_hash: leg.txHash ?? undefined });
+          continue;
+        }
+        try {
+          const r = await arc.sendTransfer({
+            from: platformWallet || '',
+            to: leg.recipientWallet,
+            amountUsdc: leg.amountUsdc,
+          });
+          await db
+            .update(slotLegsTable)
+            .set({ txHash: r.hash, settledAt: new Date(), status: 'settled' })
+            .where(eq(slotLegsTable.id, legId));
+          const timestamp = new Date().toISOString();
+          // Canonical receipt stream: a paid-placement leg landed on-chain.
+          await emitDurable('settlement-event', {
+            type: 'settled',
+            source: 'slot',
+            settlementId: leg.id,
+            slotId: leg.slotId,
+            recipientRole: leg.recipientRole,
+            toWallet: leg.recipientWallet,
+            amountUsdc: leg.amountUsdc,
+            txHash: r.hash,
+            mock: !!r.mock,
+            timestamp,
+          });
+          emit('economy-event', {
+            kind: 'slot_leg_settled',
+            settlementId: leg.id,
+            slotId: leg.slotId,
+            recipientRole: leg.recipientRole,
+            toWallet: leg.recipientWallet,
+            amountUsdc: leg.amountUsdc,
+            txHash: r.hash,
+            mock: !!r.mock,
+            timestamp,
+          });
+          results.push({ leg_id: legId, status: 'settled', tx_hash: r.hash, mock: !!r.mock });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          await db
+            .update(slotLegsTable)
+            .set({ status: 'failed' })
+            .where(eq(slotLegsTable.id, legId));
+          results.push({ leg_id: legId, status: 'failed', error: msg });
+        }
+      }
+      return results;
+    },
+
+    async getLegsForSlot(slotId: string): Promise<SlotLegRow[]> {
+      return db
+        .select()
+        .from(slotLegsTable)
+        .where(eq(slotLegsTable.slotId, slotId))
+        .orderBy(slotLegsTable.recipientRole, slotLegsTable.id);
     },
 
     async sumSettledFor(wallet: string): Promise<number> {

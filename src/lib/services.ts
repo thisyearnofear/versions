@@ -32,6 +32,11 @@ import { createCcMixterAdapter, type CcMixterAdapter } from '../adapters/ccmixte
 import { createSupervisorDashboardService, type SupervisorDashboardService } from '../services/supervisor';
 import { createCasesService, type CasesService } from '../services/cases';
 import { createReleaseCasesService, type ReleaseCasesService } from '../services/release-cases';
+import { createChannelsService, type ChannelsService } from '../services/channels';
+import { createListingsService, type ListingsService } from '../services/listings';
+import { createSlotsService, type SlotsService } from '../services/slots';
+import { createUsageService, type UsageService } from '../services/usage';
+import { createChannelProbeAdapter } from '../adapters/youtube';
 import { log } from './logger';
 
 // MODULAR: deterministic agent wallets when env is missing. With
@@ -58,6 +63,10 @@ export interface ServiceRegistry {
   supervisor: SupervisorDashboardService;
   cases: CasesService;
   releaseCases: ReleaseCasesService;
+  channels: ChannelsService;
+  listings: ListingsService;
+  slots: SlotsService;
+  usage: UsageService;
   audioLimiter: RateLimiter;
   generalLimiter: RateLimiter;
   ipfs: PinataClient;
@@ -76,6 +85,7 @@ export interface ServiceRegistry {
     gatewayMock: boolean;
     embeddingMock: boolean;
     ccmixterMock: boolean;
+    channelProbeMock: boolean;
     uploadDir: string;
     ipfsConfigured: boolean;
   };
@@ -185,6 +195,26 @@ function build(): ServiceRegistry {
   const supervisor = createSupervisorDashboardService();
   const cases = createCasesService();
   const releaseCases = createReleaseCasesService();
+  // MODULAR: distribution-surface verification. One adapter instance shared
+  // with the registry config, so /api/health/ready reports the same mock flag
+  // the channels service actually verified against — a channel can never be
+  // 'verified' while this is true.
+  const channelProbe = createChannelProbeAdapter();
+  const channels = createChannelsService(channelProbe);
+  const listings = createListingsService();
+  // MODULAR: the paid tier. Reuses the settlement service's slot legs (flat
+  // three-way split, leg-count invariant asserted there) and the same arc
+  // adapter + platform wallet the publish-fee path uses, so slot money and
+  // submission money share one Arc configuration.
+  const slots = createSlotsService({
+    settlement,
+    arc: arc as ArcAdapter,
+    platformWallet: platformWallet ?? undefined,
+  });
+  // MODULAR: usage instrumentation. Takes the slots service so sponsored
+  // delivery accrues through the single place that enforces the budget cap —
+  // a usage report can never write a spend figure of its own.
+  const usage = createUsageService(slots);
   const sweeper = createSweeper({ settlement, tips });
   const ipfs = createIpfsFromEnv();
 
@@ -216,6 +246,10 @@ function build(): ServiceRegistry {
     supervisor,
     cases,
     releaseCases,
+    channels,
+    listings,
+    slots,
+    usage,
     sweeper,
     audioLimiter,
     generalLimiter,
@@ -237,6 +271,7 @@ function build(): ServiceRegistry {
       gatewayMock: !arcRpcUrl,
       embeddingMock: embeddingAdapter.mock,
       ccmixterMock: ccmixter.mock,
+      channelProbeMock: channelProbe.mock,
       uploadDir,
       ipfsConfigured: ipfs.isConfigured(),
     },
