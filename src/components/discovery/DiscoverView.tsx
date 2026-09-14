@@ -227,7 +227,7 @@ function MatchSearch() {
   );
 
   const hasResults = results && results.rows.length > 0 && !loading;
-  // MODULAR: pilot showcase mode (?showcase=pilot) — a compact 3-beat rail
+  // MODULAR: showcase mode (?showcase=pilot) — a compact 3-beat rail
   // that choreographs the wedge: brief answered → compare the family →
   // license & watch the split land. Gated on the results actually holding a
   // version family, so the rail never promises a beat the page can't show.
@@ -543,7 +543,7 @@ function VersionFamilySiblings({
   );
 }
 
-// MODULAR: pilot showcase rail — three beats that choreograph the
+// MODULAR: showcase rail — three beats that choreograph the
 // marketplace wedge for a live demo. Compact by design: one line
 // per beat, no paragraphs.
 function ShowcaseRail() {

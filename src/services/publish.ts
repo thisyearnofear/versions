@@ -122,9 +122,7 @@ export async function publishSubmission(
       aggregatedMoodTags: assertMoodTagsShape(agg.aggregated_mood_tags, "aggregated_mood_tags"),
       ratingCount: agg.rating_count,
       // MARKETPLACE: 'demo' stays reserved for the seeded CC catalog; every
-      // take that reaches publish is live supply. There is no longer an
-      // 'authorized' provenance — the pivot dropped per-program consent, so
-      // nothing here can claim pre-clearance it cannot prove.
+      // take that reaches publish is live supply.
       catalogSource: 'live',
       publishedAt: new Date(),
       // Group alternate takes of the same work by MusicBrainz id. This is

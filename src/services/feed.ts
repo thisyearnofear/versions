@@ -270,9 +270,7 @@ export function normalizeTimestamp(value: unknown): Date | null {
 // MODULAR: licensing and catalog source are related operational states, but
 // distinct facts. A demo take can be useful for guided evaluation without
 // being able to create a license, job, or settlement. The column is untyped
-// text, so this is the single place that narrows it — a legacy 'authorized'
-// row (from the retired version-program pilot) reads as live supply, which
-// is what it always was.
+// text, so this is the single place that narrows it.
 function catalogSourceFor(version: typeof pvTable.$inferSelect): CatalogSource {
   return version.catalogSource === 'demo' ? 'demo' : 'live';
 }
@@ -749,9 +747,8 @@ export function createFeedService(opts?: { embedding?: EmbeddingAdapter }): Feed
             const embStr = `[${briefEmb.embedding.map((v) => v.toFixed(6)).join(',')}]`;
             // MODULAR: pgvector cosine-distance query. LEFT JOIN
             // version_embeddings so versions without embeddings yet
-            // (authorized pilot data, newly published takes) still
+            // (newly published takes without embeddings yet) still
             // surface — they receive similarity 0 and rank by their
-            // structured-tag score in the hybrid scorer. Rows without
             // embeddings sort last (NULLS LAST).
             const catalogSourceClause = args.catalogSource
               ? sql`AND pv.catalog_source = ${args.catalogSource}`

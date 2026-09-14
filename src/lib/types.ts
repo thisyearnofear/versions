@@ -91,13 +91,13 @@ export interface SettlementLeg {
 // similarity is the primary signal, structured tags provide the
 // `why_fits` citations). See src/services/feed.ts.
 export interface BriefSearchLicenseAvailability {
-  // Demo tracks are intentionally preview-only; live tracks can enter the
-  // authenticated workflow. Authorized-program tracks are the only state
-  // where clearance is recorded per version ('cleared').
+  // Demo tracks are preview-only; live tracks can enter the authenticated
+  // workflow. Both remain unverified until an auditable clearance record
+  // exists.
   status: 'demo_preview' | 'requestable';
   reason: string;
   clearance: {
-    status: 'unverified' | 'cleared';
+    status: 'unverified';
     reason: string;
   };
 }

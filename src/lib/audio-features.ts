@@ -5,9 +5,8 @@
 //   2. Fall back to local ONNX chromagram model → BPM/key/energy
 //   3. Fall back to ffmpeg probe → duration, sample rate, codec (minimal)
 //
-// This is the gating capability for the authorized-version pilot:
-// "ranked by sync fit" only becomes defensible when agents evaluate
-// actual audio characteristics, not just creator-supplied metadata.
+// Audio-aware scoring: "ranked by fit" is only defensible when agents
+// evaluate actual audio characteristics, not just creator-supplied metadata.
 
 import type { AudioFeatures } from './types';
 import fs from 'fs';
@@ -16,7 +15,6 @@ import path from 'path';
 export { type AudioFeatures };
 
 // ── Chromagram constants ──────────────────────────────────────
-const NUM_HARMONICS = 6;
 const CHROMA_DIM = 12;
 
 /**

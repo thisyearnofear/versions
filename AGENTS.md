@@ -113,43 +113,28 @@ field changes, update all of: `agent_reviews.detail` in `src/lib/schema.ts` (jso
 `src/components/curation/AgentMonitor.tsx`. Legacy rows without `detail` /
 `fit_score` must keep grading normally — gate UI rendering on field presence.
 
-## BriefSearchRow consent lineage and version families
+## BriefSearchRow: version families + audio features
 
-`BriefSearchRow` has three pilot additions that enable the authorized-version
-wedge:
+`BriefSearchRow` carries:
 
 - **`family_id?: string`** — groups alternate takes / versions of the same
   song. DiscoverView groups results by `family_id`; the best match renders as
   the primary row, siblings are expandable via a chevron toggle.
-- **`program?: { programId, programStatus, rightsHolderWallet, ... }`** —
-  populated when `catalog.source === 'authorized'`. Contains the full
-  consent program data: consent_policy, splits, lineage, audio_features,
-  agent_scores. Renders as a `ConsentLineagePanel` below the match row in
-  DiscoverView.
 - **`audio_features: AudioFeatures | null`** on submissions — extracted at
   publish time via the 3-tier pipeline (API → chromagram → ffmpeg).
-  Included in agent prompts for defensible audio-aware scoring.
-
-The `ConsentLineagePanel` component (src/components/supervisor/ConsentLineage.tsx)
-renders: consent → lineage → approval → audio features → agent scores →
-settlement waterfall. When `BriefSearchRow.program` is present, the panel
-is rendered below the MatchRow.
+  Included in agent prompts for audio-aware scoring.
 
 ### Wire-format gotchas (learned the hard way)
 
-- **Semantic search must LEFT JOIN `version_embeddings`.** Authorized
-  pilot versions seeded before embedding backfill have no embedding row;
-  an inner JOIN silently drops them from `/discover/brief`. Use
-  `COALESCE(similarity, 0)` + `ORDER BY ... NULLS LAST` so they rank by
-  structured-tag score instead.
+- **Semantic search must LEFT JOIN `version_embeddings`.** Versions seeded
+  before embedding backfill have no embedding row; an inner JOIN silently
+  drops them from `/discover/brief`. Use `COALESCE(similarity, 0)` +
+  `ORDER BY ... NULLS LAST` so they rank by structured-tag score instead.
 - **Never write `sql\`col = ANY(${array})\`` in Drizzle.** It renders as
   `ANY(($1, $2))` — a row constructor, not an array — and throws at
-  runtime. Use `inArray(col, values)` from `drizzle-orm`. This bug was
-  latent in `fetchProgramData` and only fired once authorized versions
-  actually surfaced (empty arrays never executed the query).
+  runtime. Use `inArray(col, values)` from `drizzle-orm`.
 - The semantic path returns raw snake_case rows; keep `family_id` in the
-  SELECT list or version-family grouping silently breaks for authorized
-  rows.
+  SELECT list or version-family grouping silently breaks.
 
 ## Information architecture (three doors)
 
@@ -223,9 +208,9 @@ Version families with 2+ takes render a `FamilyCompare` transport
 (`src/components/discovery/FamilyCompare.tsx`) under the family group:
 the best match (A) and first sibling (B) share ONE player — play/pause,
 one position bar, and an A/B switch that preserves playback position so
-the supervisor hears the same moment under both takes. This is the
-authorized wedge's decision moment; keep it position-preserving and
-self-contained (two `<audio>` elements, no global state).
+the supervisor hears the same moment under both takes. Keep it
+position-preserving and self-contained (two `<audio>` elements, no global
+state).
 
 ## Durable receipt outbox (outbox_events)
 

@@ -270,8 +270,6 @@ function rowToInterest(
 }
 
 // catalog_source is untyped text in the schema, so narrow it in one place.
-// A legacy 'authorized' row (retired version-program pilot) reads as live
-// supply — those were real submissions, not demo data.
 function toCatalogSource(value: string | null | undefined): CatalogSource {
   if (!value) return 'demo';
   return value === 'demo' ? 'demo' : 'live';
@@ -604,8 +602,7 @@ export function createSupervisorDashboardService(): SupervisorDashboardService {
     async createLicense(input) {
       await ensureProfile(input.supervisorWallet);
       const version = await getVersionRow(input.submissionId);
-      // 'demo' takes are preview-only; 'live' and 'authorized' can create
-      // binding licenses (authorized adds the program gate at the route).
+      // 'demo' takes are preview-only; only 'live' can create binding licenses.
       if (!version || version.catalogSource === 'demo') return null;
       const fee = licenseFeeUsdc(input.usageType);
       const now = new Date();
