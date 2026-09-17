@@ -171,12 +171,23 @@ async function main() {
     m.submissionId = id;
   }
 
-  // Listings — both kinds
+  // Listings — both kinds. `create` has no dedupe, so the seed itself must
+  // check (supplier, title) first — a blind re-run duplicates the catalog.
   const allDefs = [...MUSIC_LISTINGS, ...PLACEMENT_LISTINGS];
   console.log(`\n  Creating ${allDefs.length} listings (music ${MUSIC_LISTINGS.length} + placement ${PLACEMENT_LISTINGS.length})...`);
+  const existingByTitle = new Map<string, string>();
+  for (const w of [WALLETS.supplierMusic, WALLETS.supplierBrand]) {
+    for (const l of await listingsSvc.listForSupplier(w, { limit: 200 })) {
+      existingByTitle.set(`${w}:${l.title}`, l.id);
+    }
+  }
   const created: Array<{ id: string; kind: string; tier: string; title: string; flatFee: number | null }> = [];
   for (const def of allDefs) {
     const supplierWallet = def.kind === 'music' ? WALLETS.supplierMusic : WALLETS.supplierBrand;
+    if (existingByTitle.has(`${supplierWallet}:${def.title}`)) {
+      console.log(`    · skip ${def.title} (already listed)`);
+      continue;
+    }
     const result = await listingsSvc.create({
       supplierWallet,
       kind: def.kind,
@@ -233,14 +244,12 @@ async function main() {
   // in CI — the slots gate would fail, so we force a mock-verified channel for the demo.
   // For the seed we tolerate mock: set verification_status=verified when mock is true
   // only for the happy-path demo. In production, real verification is required.
-  // Re-run safe: when every listing already exists `created` is empty — fall back
-  // to the active catalog so the paid proof still lands.
-  const pool = created.length > 0
-    ? created
-    : (await listingsSvc.listActive({ limit: 200 })).map((l) => ({
-        id: l.id, kind: l.kind, tier: l.tier, title: l.title,
-        flatFee: l.pricing?.model === 'flat' ? Number(l.pricing.flatFeeUsdc) : null,
-      }));
+  // Re-run safe: always resolve the demo listings from the live catalog —
+  // covers fresh seeds, partial seeds, and full re-runs uniformly.
+  const pool = (await listingsSvc.listActive({ limit: 200 })).map((l) => ({
+    id: l.id, kind: l.kind, tier: l.tier, title: l.title,
+    flatFee: l.pricing?.model === 'flat' ? Number(l.pricing.flatFeeUsdc) : null,
+  }));
   if (pool.length > 0 && channelIds.length > 0) {
     // Prefer the cheapest flat-fee listing: flat settles all three legs at pay
     // time (a visible 60/30/10 split), and a small fee conserves the treasury.
