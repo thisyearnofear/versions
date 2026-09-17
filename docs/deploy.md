@@ -121,6 +121,39 @@ foundation is clean. No drift, no deferred DDL, no vestigial legal surface.
   If you ever need to re-seed demo data, seed through the marketplace primitives
   (`POST /api/v1/listings`, `POST /api/v1/channels`) instead of legacy SQL.
 
+### Demo re-seed + view_count schema catch-up (2026-09-17 · `379bbd52`/`f22de444`)
+
+The beachhead channels/slots/usage had been wiped post-09-14 (listings
+survived; likely cleared for the real-YouTube re-seed in `d895d03f` but the
+re-run never landed — the seed's paid-proof block was gated on newly-created
+listings, so it silently skipped). Fixed and re-seeded:
+
+- **`channels.view_count` → `text` applied on prod.** `a4b432c6` changed the
+  schema but prod still had `integer`; live verification died inserting Lofi
+  Girl's 2.68B views (int32 overflow). ALTER on the empty table, instant.
+  `drizzle-kit push` is NOT byte-clean of prod — this column was the drift;
+  it is now aligned.
+- **Duplicate purge:** the seed's `create` has no upsert — the re-run had
+  duplicated all 32 listings (64 total). Deleted the 32 re-run rows + their
+  embeddings (`created_at >= 2026-09-17`), snapshot at
+  `~/backups/listings-precleanup-20260917.json`. Seed now dedupes on
+  `(supplier_wallet, title)` before create.
+- **Demo-scale pricing:** original 7 flat-fee listings repriced $12–40 →
+  $1–3.5 via `jsonb_set` (matches the $1 license-fee convention; a full
+  settle now costs the treasury ~$0.65).
+- **Seed wired to real Arc:** `createArcAdapter` now gets env config, and
+  `WALLETS.buyer`/`channelOwner` default to `PLATFORM_WALLET` — the inbound
+  charge is a real platform→platform tx, so `payment_mock: false` end to end.
+
+**Re-seed verification (run locally against prod `DATABASE_URL`):**
+5 channels verified `platform_api` (Lofi Girl 15.8M subs / 2.68B views,
+Chillhop 3.3M, NewRetroWave 1.4M, College Music 1.18M, MAJ 1.13M); slot
+`b2d15fe8` flat $1 on "Analog Drift" → payment + 3 legs all `status: 0x1`
+on Arc (txs in docs/demo-runbook.md); 2 usage_events (1 sponsored + 1
+organic). Probes: `/api/v1/usage` summary live, `/t/:code` 302 → listing,
+`/api/v1/marketplace/search` `mode: semantic`, `/api/health/ready` all
+live. Treasury ~23.9 USDC after faucet drip.
+
 ### Beachhead wedge — channel-ethos ranking + living supply (`79f71ec` → `db2b1ac` · 2026-09-14)
 
 One coherent slice (`lo-fi night drive / study / focus`) so browse feels tight
