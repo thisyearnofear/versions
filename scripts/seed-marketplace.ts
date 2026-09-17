@@ -29,11 +29,14 @@ import { createChannelProbeAdapter } from '../src/adapters/youtube';
 import { createEmbeddingService } from '../src/services/embeddings';
 
 // ── Identities (deterministic, distinct from seed-catalog.ts artist) ──
+// Buyer/channel-owner defaults to PLATFORM_WALLET when set: the payment charge
+// then settles as a real platform→platform tx (payment_mock: false) instead of
+// a deterministic mock hash — cheap, self-funded, and honest on ArcScan.
 const WALLETS = {
   supplierMusic: '0x' + 'c'.repeat(40),
   supplierBrand: '0x' + 'd'.repeat(40),
-  channelOwner: '0x' + 'e'.repeat(40),
-  buyer: '0x' + 'e'.repeat(40), // same as channelOwner so the channel can buy
+  channelOwner: process.env.PLATFORM_WALLET || '0x' + 'e'.repeat(40),
+  buyer: process.env.PLATFORM_WALLET || '0x' + 'e'.repeat(40), // same as channelOwner so the channel can buy
   platform: process.env.PLATFORM_WALLET || '0x' + 'a'.repeat(40),
 };
 
@@ -63,13 +66,13 @@ const MUSIC_LISTINGS: SeedListing[] = [
   { kind: 'music', title: 'Glass Harbor', supplierName: 'Paper Birds', summary: 'Bright acoustic, hopeful morning — paired focus.', tags: ['study','focus','ambient','acoustic','chill'], tier: 'free' },
   { kind: 'music', title: 'Chrome Memory', supplierName: 'The Night Shift', summary: 'Gated reverb + analog synth, gated nostalgia.', tags: ['night drive','midnight','analog','lo-fi','synth'], tier: 'free' },
   { kind: 'music', title: 'Autumn Signal', supplierName: 'Luna Rivera', summary: 'Intimate folk, warm room, quiet reveal.', tags: ['ambient','study','focus','analog','intimate'], tier: 'free' },
-  { kind: 'music', title: 'Neon Study Club', supplierName: 'The Night Shift', summary: 'Paid tier: same ethos, premium master, cleared for monetized use.', tags: ['lo-fi','study','night drive','focus','premium'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '25' } },
+  { kind: 'music', title: 'Neon Study Club', supplierName: 'The Night Shift', summary: 'Paid tier: same ethos, premium master, cleared for monetized use.', tags: ['lo-fi','study','night drive','focus','premium'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '3' } },
   { kind: 'music', title: 'After Midnight (master)', supplierName: 'Kaya Moon', summary: 'R&B lo-fi, late-night focus, disclosure baked in.', tags: ['lo-fi','midnight','study','chill','r&b'], tier: 'paid', pricing: { model: 'cpm', cpmUsdc: '4.50' }, budgetCapUsdc: '200' },
   { kind: 'music', title: 'Highway Hypnosis', supplierName: 'Luna Rivera', summary: 'Hypnotic drive pulse, CPM billed.', tags: ['night drive','focus','ambient','lo-fi','highway'], tier: 'paid', pricing: { model: 'cpm', cpmUsdc: '3.00' }, budgetCapUsdc: '150' },
-  { kind: 'music', title: 'Study Bloom', supplierName: 'Paper Birds', summary: 'Acoustic bloom, paid placement with budget cap.', tags: ['study','focus','ambient','acoustic','chill'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '18' }, budgetCapUsdc: '180' },
-  { kind: 'music', title: 'Analog Drift', supplierName: 'The Wandering Folk', summary: 'Live room drift, analog warmth.', tags: ['analog','ambient','night drive','lo-fi','live room'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '12' } },
+  { kind: 'music', title: 'Study Bloom', supplierName: 'Paper Birds', summary: 'Acoustic bloom, paid placement with budget cap.', tags: ['study','focus','ambient','acoustic','chill'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '2.50' }, budgetCapUsdc: '180' },
+  { kind: 'music', title: 'Analog Drift', supplierName: 'The Wandering Folk', summary: 'Live room drift, analog warmth.', tags: ['analog','ambient','night drive','lo-fi','live room'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '1' } },
   { kind: 'music', title: 'Velvet Night Drive', supplierName: 'Kaya Moon', summary: 'Slow-burn soul for night drive, paid.', tags: ['night drive','midnight','lo-fi','chill','soul'], tier: 'paid', pricing: { model: 'cpm', cpmUsdc: '5.00' }, budgetCapUsdc: '300' },
-  { kind: 'music', title: 'Focus Current', supplierName: 'Luna Rivera', summary: 'Lock-groove focus, no vocals.', tags: ['focus','study','lo-fi','ambient','minimal'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '15' } },
+  { kind: 'music', title: 'Focus Current', supplierName: 'Luna Rivera', summary: 'Lock-groove focus, no vocals.', tags: ['focus','study','lo-fi','ambient','minimal'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '2' } },
   { kind: 'music', title: 'Midnight Bloom (alt)', supplierName: 'Paper Birds', summary: 'Alternate take, same ethos, different texture.', tags: ['study','focus','ambient','chill','acoustic'], tier: 'free' },
   { kind: 'music', title: 'Static Horizon', supplierName: 'The Night Shift', summary: 'Retro-tech drift, night drive tension release.', tags: ['night drive','midnight','synth','lo-fi','analog'], tier: 'free' },
   { kind: 'music', title: 'Quiet Hours', supplierName: 'The Wandering Folk', summary: 'Earnest quiet, study floor, no drums.', tags: ['study','focus','ambient','analog','quiet'], tier: 'free' },
@@ -84,13 +87,13 @@ const PLACEMENT_LISTINGS: SeedListing[] = [
   { kind: 'placement', title: 'Loop & Drift — Headphones', supplierName: 'Loop & Drift', summary: 'Closed-back, warm, non-fatiguing.', tags: ['lo-fi','study','focus','audio','gear'], tier: 'free', images: ['https://picsum.photos/seed/loop-drift/600/400'] },
   { kind: 'placement', title: 'Paper & Thread — Notebooks', supplierName: 'Paper & Thread', summary: 'Dot grid, 120gsm, for the study desk.', tags: ['study','focus','analog','stationery','chill'], tier: 'free', images: ['https://picsum.photos/seed/paper-thread/600/400'] },
   { kind: 'placement', title: 'Coldbrew Co — Sponsor Slot', supplierName: 'Coldbrew Co', summary: 'Sponsored: the study-stream roast. #ad disclosure included.', tags: ['coffee','study','focus','night drive','sponsor'], tier: 'paid', pricing: { model: 'cpm', cpmUsdc: '6.00' }, images: ['https://picsum.photos/seed/coldbrew-sponsor/600/400'], budgetCapUsdc: '250' },
-  { kind: 'placement', title: 'Focus Fuel — Sponsor Slot', supplierName: 'Focus Fuel', summary: 'Sponsored: study chews — paid promotion.', tags: ['study','focus','sponsor','wellness','paid'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '40' }, images: ['https://picsum.photos/seed/focus-sponsor/600/400'], budgetCapUsdc: '400' },
+  { kind: 'placement', title: 'Focus Fuel — Sponsor Slot', supplierName: 'Focus Fuel', summary: 'Sponsored: study chews — paid promotion.', tags: ['study','focus','sponsor','wellness','paid'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '5' }, images: ['https://picsum.photos/seed/focus-sponsor/600/400'], budgetCapUsdc: '400' },
   { kind: 'placement', title: 'Analog Hours — Paid Drop', supplierName: 'Analog Hours', summary: 'Paid drop for tape heads. Budget-capped.', tags: ['analog','lo-fi','midnight','sponsor','music gear'], tier: 'paid', pricing: { model: 'cpm', cpmUsdc: '5.50' }, images: ['https://picsum.photos/seed/analog-paid/600/400'], budgetCapUsdc: '180' },
-  { kind: 'placement', title: 'Noir Optics — Night Pack', supplierName: 'Noir Optics', summary: 'Paid: the night-drive pack.', tags: ['night drive','midnight','sponsor','style','accessories'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '30' }, images: ['https://picsum.photos/seed/noir-paid/600/400'] },
+  { kind: 'placement', title: 'Noir Optics — Night Pack', supplierName: 'Noir Optics', summary: 'Paid: the night-drive pack.', tags: ['night drive','midnight','sponsor','style','accessories'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '4' }, images: ['https://picsum.photos/seed/noir-paid/600/400'] },
   { kind: 'placement', title: 'Loop & Drift — Studio Line', supplierName: 'Loop & Drift', summary: 'Studio line, paid slot.', tags: ['audio','study','focus','sponsor','gear'], tier: 'paid', pricing: { model: 'cpm', cpmUsdc: '4.00' }, images: ['https://picsum.photos/seed/loop-paid/600/400'], budgetCapUsdc: '200' },
   { kind: 'placement', title: 'Paper & Thread — Desk Set', supplierName: 'Paper & Thread', summary: 'Desk set bundle, free with attribution.', tags: ['study','focus','stationery','analog','desk'], tier: 'free', images: ['https://picsum.photos/seed/paper-desk/600/400'] },
   { kind: 'placement', title: 'Midnight Tea Co', supplierName: 'Midnight Tea Co', summary: 'Caffeine-free focus tea for the late session.', tags: ['study','midnight','focus','wellness','chill'], tier: 'free', images: ['https://picsum.photos/seed/midnight-tea/600/400'] },
-  { kind: 'placement', title: 'Signal — Focus App', supplierName: 'Signal', summary: 'Distraction-free timer. Study companion.', tags: ['study','focus','productivity','app','chill'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '22' }, images: ['https://picsum.photos/seed/signal-app/600/400'] },
+  { kind: 'placement', title: 'Signal — Focus App', supplierName: 'Signal', summary: 'Distraction-free timer. Study companion.', tags: ['study','focus','productivity','app','chill'], tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '3.50' }, images: ['https://picsum.photos/seed/signal-app/600/400'] },
 ];
 
 const CHANNEL_DEFS = [
@@ -132,7 +135,15 @@ async function main() {
   const listingsSvc = createListingsService();
   const channelProbe = createChannelProbeAdapter();
   const channelsSvc = createChannelsService(channelProbe);
-  const arc = createArcAdapter();
+  // Wire Arc from env so settlement legs land on-chain when the seed runs
+  // against prod (ARC_RPC_URL + PLATFORM_WALLET_PRIVATE_KEY set). Without
+  // them the adapter stays mock — same as the service registry fallback.
+  const arc = createArcAdapter({
+    rpcUrl: process.env.ARC_RPC_URL,
+    usdcContract: process.env.ARC_USDC_CONTRACT,
+    platformWallet: process.env.PLATFORM_WALLET,
+    platformWalletPrivateKey: process.env.PLATFORM_WALLET_PRIVATE_KEY,
+  });
   const settlement = createSettlementService({ arc: arc as never, platformWallet: WALLETS.platform });
   const slotsSvc = createSlotsService({ settlement, arc: arc as never, platformWallet: WALLETS.platform });
   const usageSvc = createUsageService(slotsSvc);
@@ -163,7 +174,7 @@ async function main() {
   // Listings — both kinds
   const allDefs = [...MUSIC_LISTINGS, ...PLACEMENT_LISTINGS];
   console.log(`\n  Creating ${allDefs.length} listings (music ${MUSIC_LISTINGS.length} + placement ${PLACEMENT_LISTINGS.length})...`);
-  const created: Array<{ id: string; kind: string; tier: string; title: string }> = [];
+  const created: Array<{ id: string; kind: string; tier: string; title: string; flatFee: number | null }> = [];
   for (const def of allDefs) {
     const supplierWallet = def.kind === 'music' ? WALLETS.supplierMusic : WALLETS.supplierBrand;
     const result = await listingsSvc.create({
@@ -185,7 +196,7 @@ async function main() {
       console.log(`    · skip ${def.title}: ${result.code} ${result.message}`);
       continue;
     }
-    created.push({ id: result.listing.id, kind: result.listing.kind, tier: result.listing.tier, title: result.listing.title });
+    created.push({ id: result.listing.id, kind: result.listing.kind, tier: result.listing.tier, title: result.listing.title, flatFee: def.pricing?.model === 'flat' ? Number(def.pricing.flatFeeUsdc) : null });
     console.log(`    + ${result.listing.kind} [${result.listing.tier}] ${result.listing.title} (${result.listing.id.slice(0,8)})`);
   }
   console.log(`  ${created.length} listings created (skipped ${allDefs.length - created.length} existing).`);
@@ -222,8 +233,21 @@ async function main() {
   // in CI — the slots gate would fail, so we force a mock-verified channel for the demo.
   // For the seed we tolerate mock: set verification_status=verified when mock is true
   // only for the happy-path demo. In production, real verification is required.
-  if (created.length > 0 && channelIds.length > 0) {
-    let paidListing = created.find((c) => c.tier === 'paid');
+  // Re-run safe: when every listing already exists `created` is empty — fall back
+  // to the active catalog so the paid proof still lands.
+  const pool = created.length > 0
+    ? created
+    : (await listingsSvc.listActive({ limit: 200 })).map((l) => ({
+        id: l.id, kind: l.kind, tier: l.tier, title: l.title,
+        flatFee: l.pricing?.model === 'flat' ? Number(l.pricing.flatFeeUsdc) : null,
+      }));
+  if (pool.length > 0 && channelIds.length > 0) {
+    // Prefer the cheapest flat-fee listing: flat settles all three legs at pay
+    // time (a visible 60/30/10 split), and a small fee conserves the treasury.
+    const paidListing =
+      pool.filter((c) => c.tier === 'paid' && c.flatFee !== null)
+          .sort((a, b) => (a.flatFee ?? Infinity) - (b.flatFee ?? Infinity))[0]
+      ?? pool.find((c) => c.tier === 'paid');
     if (paidListing) {
       console.log('\n  Demo: paid slot + usage proof...');
       // In prod the first channel is live-verified (Lofi Girl ~15.8M) so the slot gate
@@ -261,7 +285,7 @@ async function main() {
         }
       }
       // Organic free proof — first free listing too
-      const freeListing = created.find((c) => c.tier === 'free');
+      const freeListing = pool.find((c) => c.tier === 'free');
       if (freeListing) {
         const organic = await usageSvc.log({
           listingId: freeListing.id,
