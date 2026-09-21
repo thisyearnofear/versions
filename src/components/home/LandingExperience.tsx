@@ -5,13 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  MarketplaceError,
   createRequestScope,
   marketplaceRequest,
   searchHref,
   browseHref,
   type MarketplaceListing,
 } from "@/lib/marketplace-client";
+import { DEMO_CHANNELS, rankDemoListings } from "@/lib/demo-catalog";
 import { ListingMedia } from "@/components/marketplace/ListingMedia";
 import { PublishingKit } from "@/components/marketplace/PublishingKit";
 import { track } from "@/lib/analytics";
@@ -19,9 +19,9 @@ import { cn } from "@/lib/utils";
 import { AGREEMENT_VERSION } from "@/lib/agreement";
 
 const CONTEXT_CHIPS: Array<{ label: string; query: string }> = [
-  { label: "Late-night study", query: "lo-fi study calm instrumental" },
-  { label: "Morning routine", query: "coffee morning bright upbeat" },
-  { label: "Night drive", query: "night drive warm electronic" },
+  { label: "Late-night study", query: DEMO_CHANNELS[0].query },
+  { label: "Morning routine", query: DEMO_CHANNELS[1].query },
+  { label: "Night drive", query: DEMO_CHANNELS[2].query },
 ];
 
 interface SearchResult {
@@ -46,7 +46,7 @@ export function LandingExperience() {
   const [context, setContext] = useState(CONTEXT_CHIPS[0]);
   const [rows, setRows] = useState<MarketplaceListing[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [degraded, setDegraded] = useState(false);
+  const [demo, setDemo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scope] = useState(() => createRequestScope());
@@ -58,27 +58,47 @@ export function LandingExperience() {
       const { signal, isCurrent } = scope.start();
       setLoading(true);
       (async () => {
+        // DEMO FALLBACK: when the catalog DB is unreachable (or errors),
+        // serve the static demo catalog so the hero always demonstrates the
+        // loop — one unified listing primitive matched to a channel vibe.
+        // Live rows win whenever they exist; demo rows are demo-labeled.
+        const showDemo = () => {
+          if (!isCurrent()) return;
+          setRows(rankDemoListings(query, 4));
+          setSelectedId(null);
+          setDemo(true);
+          setSearchError(null);
+          setLoading(false);
+        };
         try {
           const data = await marketplaceRequest<SearchResult>(
             searchHref({ q: query }, 0).replace("limit=20", "limit=4"),
             { signal },
           );
           if (!isCurrent()) return;
-          setRows(data.rows ?? []);
+          const live = data.rows ?? [];
+          if (live.length > 0) {
+            setRows(live);
+            setSelectedId(null);
+            setDemo(false);
+            setSearchError(null);
+            setLoading(false);
+            return;
+          }
+          if (data.degraded) {
+            showDemo();
+            return;
+          }
+          // Live but genuinely empty (no matches for this query): honest
+          // empty state, not demo rows — don't fake supply that isn't there.
+          setRows([]);
           setSelectedId(null);
-          // Degraded (DB unreachable) still 200s with rows: [] — render an
-          // honest note inline instead of the error panel, so the landing
-          // never red-boxes when Neon is archived/suspended.
-          setDegraded(!!data.degraded);
+          setDemo(false);
           setSearchError(null);
           setLoading(false);
-        } catch (err) {
+        } catch {
           if (!isCurrent()) return;
-          setDegraded(false);
-          setSearchError(
-            err instanceof MarketplaceError ? err.message : "Could not load matches right now.",
-          );
-          setLoading(false);
+          showDemo();
         }
       })();
     },
@@ -192,9 +212,7 @@ export function LandingExperience() {
             ) : rows.length === 0 ? (
               <div className="flex min-h-[16rem] flex-col items-start justify-center">
                 <p className="font-serif text-[15px] text-[var(--color-paper-2)]">
-                  {degraded
-                    ? "The catalog is briefly unreachable — check back soon."
-                    : "No live matches for this context yet."}
+                  No live matches for this context yet.
                 </p>
                 <Link
                   href={browseHref()}
@@ -205,6 +223,11 @@ export function LandingExperience() {
               </div>
             ) : (
               <div>
+                {demo && (
+                  <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--color-hair-strong)] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-paper-2)]">
+                    <span aria-hidden="true">●</span> Demo preview — live catalog unreachable
+                  </p>
+                )}
                 {selected && (
                   <motion.div
                     key={selected.id}
@@ -222,12 +245,18 @@ export function LandingExperience() {
                       priority
                     />
                     <div className="mt-3">
-                      <Link
-                        href={`/listings/${selected.id}`}
-                        className="font-serif text-lg font-bold text-[var(--color-paper)] hover:text-[var(--color-rust)]"
-                      >
-                        {selected.title}
-                      </Link>
+                      {demo ? (
+                        <span className="font-serif text-lg font-bold text-[var(--color-paper)]">
+                          {selected.title}
+                        </span>
+                      ) : (
+                        <Link
+                          href={`/listings/${selected.id}`}
+                          className="font-serif text-lg font-bold text-[var(--color-paper)] hover:text-[var(--color-rust)]"
+                        >
+                          {selected.title}
+                        </Link>
+                      )}
                       <p className="font-serif text-[14px] text-[var(--color-paper-2)]">
                         {selected.supplier_name} · {pricingLabel(selected)}
                       </p>
@@ -321,7 +350,10 @@ export function LandingExperience() {
             </ol>
 
             <div className="lg:pt-1">
-              <p className="marketplace-label mb-2">Publishing kit · {selected ? selected.title : "no match loaded"}</p>
+              <p className="marketplace-label mb-2">
+                Publishing kit · {selected ? selected.title : "no match loaded"}
+                {demo && selected ? " · demo" : ""}
+              </p>
               {selected ? (
                 <div>
                   {selected.tier === "paid" && (
