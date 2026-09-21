@@ -62,6 +62,12 @@
   will-change: transform;
 }
 
+/* Wayfinder anchor jumps ease instead of snapping; the reduced-motion
+   rule below forces this back to auto. */
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--color-paper);
   color: var(--color-ink);
