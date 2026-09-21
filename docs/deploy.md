@@ -371,14 +371,29 @@ at the Neon **pooler** endpoint (`…:6432`) rather than the direct
 endpoint for best throughput; tune `DB_POOL_MAX` (default 10) if you see
 `connectionTimeoutMillis` (10s) failures under load.
 
-**Sweep cron (retention + outbox).** `POST /api/cron/sweep` drives the
-settlement sweeper, the authoritative outbox drain, and retention pruning
-(at most once per 30 min). Retention windows are env-overridable days:
-`RETENTION_OUTBOX_DAYS` (14, processed rows only),
-`RETENTION_TELEMETRY_DAYS` (30), `RETENTION_SEARCHES_DAYS` (90),
-`RETENTION_AUDIT_DAYS` (365 — x402 proofs, play/listen events). Money
-state (`settlement_legs`, `slot_legs`, `licenses`, unprocessed outbox rows)
-is never pruned.
+**Sweep — traffic-driven, with a daily safety net.** The sweep body
+(stuck-leg retry via the settlement sweeper, the authoritative outbox
+drain, retention pruning) runs from two places, not from a fast clock:
+
+1. **Traffic-driven**: every SSE connect calls `maybeSweep()`
+   (`src/services/sweep.ts`) — throttled in-process to at most once per
+   `SWEEP_MIN_INTERVAL_MS` (default 30 min) and never overlapping. A crash
+   mid-settlement heals when the next visitor opens a dashboard; an idle
+   site touches the DB zero times.
+2. **Daily safety net**: `POST /api/cron/sweep` (`0 4 * * *` on the server
+   crontab) covers the no-visitor case. Retention windows are
+   env-overridable days: `RETENTION_OUTBOX_DAYS` (14, processed rows only),
+   `RETENTION_TELEMETRY_DAYS` (30), `RETENTION_SEARCHES_DAYS` (90),
+   `RETENTION_AUDIT_DAYS` (365 — x402 proofs, play/listen events). Money
+   state (`settlement_legs`, `slot_legs`, `licenses`, unprocessed outbox
+   rows) is never pruned.
+
+> **Hard rule (learned 2026-09-21 — Neon CU-hr allowance exhausted):**
+> never schedule any DB-touching job at an interval at or below Neon's
+> scale-to-sleep idle window (5 min by default). A `*/5` sweep crontab kept
+> the compute awake 24/7 and burned ~110 CU-hrs in 20 days, which archived
+> the branch and took every DB-backed surface down. The monitor cron
+> (`*/1`) is exempt — `/api/health/live` deliberately touches no DB.
 
 **Protect the sweep endpoint.** Set `CRON_SECRET` in the server `.env` and
 have the cron job send it as the `x-cron-secret` header:
