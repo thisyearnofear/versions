@@ -17,6 +17,7 @@ import {
 } from '@/lib/services';
 import { resolveAuthenticatedSupervisorIdentity } from '@/lib/supervisor-identity';
 import { ListingCreateSchema } from '@/lib/validation';
+import { log } from '@/lib/logger';
 import type { ListingFailureCode } from '@/services/listings';
 
 export const dynamic = 'force-dynamic';
@@ -57,12 +58,19 @@ export async function GET(req: NextRequest) {
   }
 
   // Public catalog: live supply. Optional kind filter. Paginated.
-  const rows = await services().listings.listActive({
-    kind: kind === 'music' || kind === 'placement' ? kind : undefined,
-    limit,
-    offset,
-  });
-  return successResponse(200, { listings: rows }, requestId);
+  // DB-unreachable (Neon archive/suspend) degrades to an empty list rather
+  // than leaking raw SQL/driver text in a 500 — browse renders "no matches".
+  try {
+    const rows = await services().listings.listActive({
+      kind: kind === 'music' || kind === 'placement' ? kind : undefined,
+      limit,
+      offset,
+    });
+    return successResponse(200, { listings: rows }, requestId);
+  } catch (err) {
+    log.error('listings listActive failed', { requestId, error: (err as Error).message });
+    return successResponse(200, { listings: [], degraded: true }, requestId);
+  }
 }
 
 export async function POST(req: NextRequest) {

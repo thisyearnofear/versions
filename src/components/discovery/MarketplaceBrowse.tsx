@@ -28,6 +28,7 @@ interface SearchResult {
   total: number;
   mode: "semantic" | "tag" | "recent";
   rows: MarketplaceListing[];
+  degraded?: boolean;
 }
 
 function listingHref(listing: MarketplaceListing, channelId: string): string {
@@ -111,6 +112,9 @@ function MarketplaceBrowseContent({ isAuthenticated }: { isAuthenticated: boolea
         .then((data) => {
           if (!isCurrent()) return;
           setResult(data);
+          // Degraded empty results carry raw-SQL-free honesty downstream —
+          // surface a plain note instead of the raw error panel.
+          setError(data.degraded ? "The catalog is briefly unreachable — showing no matches for now." : null);
           setLoading(false);
         })
         .catch((err) => {

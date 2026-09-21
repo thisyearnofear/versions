@@ -12,11 +12,11 @@ import { NextRequest } from 'next/server';
 import {
   services,
   successResponse,
-  errorResponse,
   corsPreflight,
   requestIdFor,
   parsePositiveIntParam,
 } from '@/lib/services';
+import { log } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +48,15 @@ export async function GET(req: NextRequest) {
     });
     return successResponse(200, result, requestId);
   } catch (err) {
-    return errorResponse(requestId, 500, 'MARKETPLACE_SEARCH_FAILED', (err as Error).message);
+    // SAFE: never leak raw SQL/driver text to the browser. The catalog DB
+    // (Neon) can be unreachable during archive/suspend windows — degrade to
+    // an empty result with `degraded: true` so browse renders "no matches"
+    // instead of a 500 + leaked `Failed query:` internals.
+    log.error('marketplace search failed', { requestId, error: (err as Error).message });
+    return successResponse(
+      200,
+      { total: 0, limit, offset, mode: 'recent', rows: [], degraded: true },
+      requestId,
+    );
   }
 }

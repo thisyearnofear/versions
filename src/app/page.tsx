@@ -9,6 +9,11 @@ export const metadata: Metadata = {
     "Find music and product placements that fit what you publish. Use free listings with required credit, or buy a paid placement with clear pricing, disclosure, and settlement on Arc.",
 };
 
+// Fully-static HTML pins its hashed CSS/JS at build time — a shared cache
+// holding it for a year serves dead asset URLs after every deploy
+// (styling breaks until the cache expires). 5 min bounds the damage.
+export const revalidate = 300;
+
 export default function Home() {
   return (
     <div className="flex min-h-[100dvh] flex-1 flex-col">

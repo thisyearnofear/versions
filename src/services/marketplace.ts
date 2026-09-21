@@ -77,6 +77,8 @@ export interface MarketplaceSearchResult {
   offset: number;
   mode: 'semantic' | 'tag' | 'recent';
   rows: MarketplaceRow[];
+  /** Present when the route served a degraded empty result (DB unreachable). */
+  degraded?: boolean;
 }
 
 const CACHE_TTL_MS = 30_000;

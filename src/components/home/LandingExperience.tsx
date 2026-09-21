@@ -28,6 +28,7 @@ interface SearchResult {
   total: number;
   mode: "semantic" | "tag" | "recent";
   rows: MarketplaceListing[];
+  degraded?: boolean;
 }
 
 function pricingLabel(l: MarketplaceListing): string {
@@ -45,6 +46,7 @@ export function LandingExperience() {
   const [context, setContext] = useState(CONTEXT_CHIPS[0]);
   const [rows, setRows] = useState<MarketplaceListing[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [degraded, setDegraded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scope] = useState(() => createRequestScope());
@@ -64,10 +66,15 @@ export function LandingExperience() {
           if (!isCurrent()) return;
           setRows(data.rows ?? []);
           setSelectedId(null);
+          // Degraded (DB unreachable) still 200s with rows: [] — render an
+          // honest note inline instead of the error panel, so the landing
+          // never red-boxes when Neon is archived/suspended.
+          setDegraded(!!data.degraded);
           setSearchError(null);
           setLoading(false);
         } catch (err) {
           if (!isCurrent()) return;
+          setDegraded(false);
           setSearchError(
             err instanceof MarketplaceError ? err.message : "Could not load matches right now.",
           );
@@ -185,7 +192,9 @@ export function LandingExperience() {
             ) : rows.length === 0 ? (
               <div className="flex min-h-[16rem] flex-col items-start justify-center">
                 <p className="font-serif text-[15px] text-[var(--color-paper-2)]">
-                  No live matches for this context yet.
+                  {degraded
+                    ? "The catalog is briefly unreachable — check back soon."
+                    : "No live matches for this context yet."}
                 </p>
                 <Link
                   href={browseHref()}

@@ -50,7 +50,9 @@ export const wagmiConfig = createConfig({
     coinbaseWallet({ appName: "VERSIONS" }),
   ],
   transports: {
-    [mainnet.id]: http(),
+    // viem's built-in mainnet RPC (eth.merkle.io) rejects browser POST
+    // preflights — endless CORS errors in the console for wallet probes.
+    [mainnet.id]: http("https://ethereum-rpc.publicnode.com"),
     [base.id]: http(),
     [baseSepolia.id]: http(),
     [arbitrum.id]: http(),
