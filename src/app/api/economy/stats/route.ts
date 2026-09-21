@@ -4,16 +4,19 @@
 // missing table on a fresh deploy doesn't 500 the route.
 
 import type { NextRequest } from 'next/server';
-import { eq, count, sql } from 'drizzle-orm';
+import { and, eq, count, sql } from 'drizzle-orm';
 import { db } from '../../../../lib/db';
 import {
   agentReviews,
   arPlayEvents,
   briefSearches,
+  channels,
   licensingInterests,
+  listings,
   publishedVersions,
   settlementLegs,
   submissions,
+  usageEvents,
   x402Proofs,
 } from '../../../../lib/schema';
 import { jsonResponse, requestIdFor } from '../../../../lib/services';
@@ -35,7 +38,7 @@ export function OPTIONS() {
 export async function GET(req: NextRequest): Promise<Response> {
   const rid = requestIdFor(req);
   try {
-    const [pubRes, reviewRes, legRes, tipRes, playRes, latencyRes, splitRes, searchRes, interestRes] =
+    const [pubRes, reviewRes, legRes, tipRes, playRes, latencyRes, splitRes, searchRes, interestRes, listingRes, channelRes, usageRes] =
       await Promise.allSettled([
       db.select({ c: count() }).from(publishedVersions),
       db.select({ c: count() }).from(agentReviews),
@@ -78,6 +81,20 @@ export async function GET(req: NextRequest): Promise<Response> {
       // Market-pull demand signals.
       db.select({ c: count() }).from(briefSearches),
       db.select({ c: count() }).from(licensingInterests),
+
+      // Marketplace facts. "Verified" counts platform_api reach only — a
+      // mock-verified demo channel never does (claim discipline).
+      db.select({ c: count() }).from(listings).where(eq(listings.status, 'active')),
+      db
+        .select({ c: count() })
+        .from(channels)
+        .where(and(eq(channels.verificationStatus, 'verified'), eq(channels.statsSource, 'platform_api'))),
+      db
+        .select({
+          total: count(),
+          platform: sql<number>`count(*) FILTER (WHERE ${usageEvents.reportedBy} = 'platform_api')::int`,
+        })
+        .from(usageEvents),
     ]);
 
     const tracksPublished =
@@ -111,6 +128,12 @@ export async function GET(req: NextRequest): Promise<Response> {
         interestRes.status === 'fulfilled' ? Number(interestRes.value[0]?.c ?? 0) : 0,
     };
 
+    const listingsLive = listingRes.status === 'fulfilled' ? Number(listingRes.value[0]?.c ?? 0) : 0;
+    const verifiedChannels = channelRes.status === 'fulfilled' ? Number(channelRes.value[0]?.c ?? 0) : 0;
+    const usesLogged = usageRes.status === 'fulfilled' ? Number(usageRes.value[0]?.total ?? 0) : 0;
+    const usesPlatformReported =
+      usageRes.status === 'fulfilled' ? Number(usageRes.value[0]?.platform ?? 0) : 0;
+
     return jsonResponse(
       200,
       {
@@ -122,6 +145,10 @@ export async function GET(req: NextRequest): Promise<Response> {
           medianReviewLatencySeconds,
           settlementSplit,
           marketPull,
+          listingsLive,
+          verifiedChannels,
+          usesLogged,
+          usesPlatformReported,
         },
       },
       rid,
@@ -140,6 +167,10 @@ export async function GET(req: NextRequest): Promise<Response> {
           medianReviewLatencySeconds: null,
           settlementSplit: [],
           marketPull: { briefSearches: 0, licensingInterests: 0 },
+          listingsLive: 0,
+          verifiedChannels: 0,
+          usesLogged: 0,
+          usesPlatformReported: 0,
         },
       },
       rid,

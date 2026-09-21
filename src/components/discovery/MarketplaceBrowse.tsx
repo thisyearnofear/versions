@@ -33,11 +33,14 @@ type Listing = {
 
 type ChannelLite = { id: string; name: string; can_buy_slots: boolean; verification_status: string; niche?: string | null };
 
-export function MarketplaceBrowse() {
+export function MarketplaceBrowse({ initialQuery = "" }: { initialQuery?: string }) {
   const { showToast } = useToast();
   const [kind, setKind] = useState<"all" | "music" | "placement">("all");
   const [tier, setTier] = useState<"all" | "free" | "paid">("all");
-  const [q, setQ] = useState("");
+  // MODULAR: seeded from ?q= so the landing hero search deep-links straight
+  // into ranked marketplace supply. Threshold (≥2) matches the API's
+  // tag/semantic switch — shorter strings stay on recency.
+  const [q, setQ] = useState(initialQuery);
   const [channelId, setChannelId] = useState("");
   const [listings, setListings] = useState<Listing[]>([]);
   const [mode, setMode] = useState<string>("recent");

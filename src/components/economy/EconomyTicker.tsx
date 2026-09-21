@@ -25,7 +25,13 @@ function eventKey(e: EconomyEvent): string {
     : `${e.kind}|${e.timestamp}|${e.txHash ?? ""}|${e.agentName ?? ""}|${e.submissionId ?? e.versionId ?? ""}`;
 }
 
-export function EconomyTicker({ limit = 12 }: { limit?: number }) {
+export function EconomyTicker({
+  limit = 12,
+  title = "Agent economy",
+}: {
+  limit?: number;
+  title?: string;
+}) {
   const [events, setEvents] = useState<EconomyEvent[]>([]);
   const [live, setLive] = useState<LiveState>("loading");
   const soundOn = useSyncExternalStore(subscribeSound, isSoundEnabled, () => false);
@@ -98,7 +104,7 @@ export function EconomyTicker({ limit = 12 }: { limit?: number }) {
   const visible = useMemo(() => events.slice(0, limit), [events, limit]);
 
   return (
-    <section aria-label="Live agent economy">
+    <section aria-label={title}>
       <div className="flex items-center gap-3 mb-4">
         <span className="relative flex h-2.5 w-2.5">
           {live === "live" && (
@@ -111,7 +117,7 @@ export function EconomyTicker({ limit = 12 }: { limit?: number }) {
           />
         </span>
         <h3 className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-ink-2)]">
-          Agent economy · {live === "live" ? "live" : live === "connecting" ? "reconnecting" : live === "loading" ? "loading" : "recent"}
+          {title} · {live === "live" ? "live" : live === "connecting" ? "reconnecting" : live === "loading" ? "loading" : "recent"}
         </h3>
         <button
           type="button"

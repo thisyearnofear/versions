@@ -47,7 +47,7 @@ const STEPS = [
   {
     num: "04",
     title: "Tracked & settled",
-    body: "Tracking code, disclosure, 60/30/10 on Arc.",
+    body: "Tracking code, disclosure, flat 60/30/10 — supplier / channel / platform, USDC on Arc.",
     icon: (
       <g stroke={INK} strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="8" />
@@ -61,8 +61,9 @@ export function HowItWorks() {
   return (
     <section className="border-t border-[var(--color-hair-strong)] px-4 py-8 sm:px-6 sm:py-10">
       {/* MODULAR: progressive disclosure — collapsed by default so the
-          landing page reads as one funnel (brief → live proof); cold
-          visitors who want the explainer open it on demand. */}
+          landing page reads as one funnel (browse → ethos fit → free/
+          paid → tracked & settled); cold visitors who want the
+          explainer open it on demand. */}
       <details className="group mx-auto max-w-4xl">
         <summary className="kicker mx-auto w-fit cursor-pointer list-none rounded-full px-4 py-2 text-center transition-colors hover:text-[var(--color-rust)]">
           <span className="group-open:hidden">How it works ▸</span>

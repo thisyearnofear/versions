@@ -10,6 +10,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { track } from "@/lib/analytics";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { EconomyTicker } from "@/components/economy/EconomyTicker";
+import { LiveStats } from "@/components/economy/LiveStats";
 import { Reveal, EASE_OUT, Tilt } from "@/components/ui/motion";
 import { WedgeDiagram } from "@/components/home/WedgeDiagram";
 import { SpectrumOrb } from "@/components/home/SpectrumOrb";
@@ -79,6 +80,9 @@ export default function Home() {
               <p className="kicker mt-4">
                 Agreement {AGREEMENT_VERSION} · settled in USDC on Arc · <Link href="/legal/agreement" className="underline decoration-[var(--color-hair-strong)] hover:text-[var(--color-rust)]">read the terms</Link>
               </p>
+              <p className="kicker mt-2">
+                Paid slots unlock on platform-verified reach only · every logged use says who reported it — channel or platform
+              </p>
             </Reveal>
             <Reveal delay={0.1}>
               <Tilt max={6} className="h-full">
@@ -86,12 +90,18 @@ export default function Home() {
                   <p className="kicker mb-4">Live · system proof</p>
                   <LiveDemoButton />
                   <div className="mt-5 border-t border-[var(--color-hair)] pt-5">
-                    <EconomyTicker limit={6} />
+                    <EconomyTicker limit={6} title="Placements & settlements" />
                   </div>
                 </div>
               </Tilt>
             </Reveal>
           </div>
+          <Reveal delay={0.15}>
+            <div className="mx-auto mt-8 max-w-5xl border-t border-[var(--color-hair)] pt-6">
+              <p className="kicker mb-1 text-center">Counted from the rails</p>
+              <LiveStats />
+            </div>
+          </Reveal>
         </section>
 
         <section aria-label="Supply on VERSIONS">
@@ -115,7 +125,7 @@ function Hero() {
       </div>
       <AmbientBars />
       <motion.p className="kicker kicker--accent relative mb-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
-        A marketplace for music &amp; product placements
+        Ad infra for AI-run distribution · music &amp; product placements
       </motion.p>
       <motion.h1
         className="relative mb-4 font-serif text-4xl font-black leading-[0.98] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl"
@@ -136,8 +146,10 @@ function Hero() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1, ease: EASE_OUT }}
       >
-        Channels browse a feed of tracks and products, pick what fits, and use it — free with attribution or paid as a sponsor
-        slot. We match, track, and settle (60/30/10 on Arc).
+        Channels browse a feed of tracks and products, pick what fits, and use it — free with attribution or paid as a
+        sponsor slot. Built for the AI distribution wave — YouTube automation, radio-style feeds — we match, track, and
+        settle: <span className="whitespace-nowrap">60/30/10 supplier / channel / platform</span>, in USDC on Arc
+        <span className="text-[var(--color-ink-3)]"> (Circle&apos;s chain)</span>.
       </motion.p>
       <motion.div className="relative" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2, ease: EASE_OUT }}>
         <BriefSearchBar />
@@ -189,11 +201,15 @@ function BriefSearchBar() {
   const router = useRouter();
   const [brief, setBrief] = useState("");
 
+  // MODULAR: hero search routes to the marketplace browse (?q=), not the
+  // legacy supervisor brief search (?brief=). Music + placements rank by
+  // channel-ethos semantic / tag match on /discover; ?brief= stays the
+  // supervisor deep-link for the brief-search rail lower on that page.
   const submit = (t: string) => {
     const trimmed = t.trim();
-    if (trimmed.length < 3) return;
+    if (trimmed.length < 2) return;
     track("hero_brief_search", { len: trimmed.length });
-    router.push(`/discover?brief=${encodeURIComponent(trimmed)}`);
+    router.push(`/discover?q=${encodeURIComponent(trimmed)}`);
   };
 
   return (
@@ -213,7 +229,7 @@ function BriefSearchBar() {
           enterKeyHint="search"
           className="min-h-[44px] min-w-0 flex-1 rounded-[var(--radius-md)] bg-transparent px-4 py-3 font-serif text-base text-[var(--color-ink)] placeholder:text-[var(--color-ink-3)] focus:outline-none"
         />
-        <button type="submit" disabled={brief.trim().length < 3} className="btn-primary w-full sm:w-auto">
+        <button type="submit" disabled={brief.trim().length < 2} className="btn-primary w-full sm:w-auto">
           Browse
         </button>
       </form>
@@ -222,7 +238,7 @@ function BriefSearchBar() {
         {SUPPLY_EXAMPLES.slice(0, 4).map((e, idx) => (
           <Link
             key={e.label}
-            href={`/discover?brief=${encodeURIComponent(e.brief)}`}
+            href={`/discover?q=${encodeURIComponent(e.brief)}`}
             onClick={() => track("hero_brief_example", { label: e.label })}
             onMouseEnter={() => {
               resumeAudio();

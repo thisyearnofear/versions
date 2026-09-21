@@ -21,6 +21,10 @@ interface Stats {
   medianReviewLatencySeconds: number | null;
   settlementSplit: SplitLeg[];
   marketPull: { briefSearches: number; licensingInterests: number };
+  listingsLive: number;
+  verifiedChannels: number;
+  usesLogged: number;
+  usesPlatformReported: number;
 }
 
 const INITIAL: Stats = {
@@ -30,6 +34,10 @@ const INITIAL: Stats = {
   medianReviewLatencySeconds: null,
   settlementSplit: [],
   marketPull: { briefSearches: 0, licensingInterests: 0 },
+  listingsLive: 0,
+  verifiedChannels: 0,
+  usesLogged: 0,
+  usesPlatformReported: 0,
 };
 
 export function LiveStats() {
@@ -117,6 +125,10 @@ export function LiveStats() {
             briefSearches: Number(d.marketPull?.briefSearches ?? 0),
             licensingInterests: Number(d.marketPull?.licensingInterests ?? 0),
           },
+          listingsLive: Number(d.listingsLive ?? 0),
+          verifiedChannels: Number(d.verifiedChannels ?? 0),
+          usesLogged: Number(d.usesLogged ?? 0),
+          usesPlatformReported: Number(d.usesPlatformReported ?? 0),
         });
         setLoaded(true);
         flushPendingSettlements();
@@ -169,24 +181,34 @@ export function LiveStats() {
       `${licensingInterests} licensing ${licensingInterests === 1 ? "interest" : "interests"}`,
     );
 
+  const { usesLogged, usesPlatformReported } = stats;
+  const reporterCaption =
+    usesLogged > 0
+      ? `reported · platform_api×${usesPlatformReported} · channel×${Math.max(0, usesLogged - usesPlatformReported)}`
+      : null;
+
   return (
     <div className="py-2">
       <div className="flex min-w-0 items-stretch justify-center gap-3 sm:gap-10 md:gap-16">
-        <StatItem label="Tracks" value={stats.tracksPublished} loaded={loaded} />
+        <StatItem label="Listings live" value={stats.listingsLive} loaded={loaded} />
+        <Divider />
+        <StatItem label="Verified channels" value={stats.verifiedChannels} loaded={loaded} />
+        <Divider />
+        <StatItem label="Uses logged" value={stats.usesLogged} loaded={loaded} />
         <Divider />
         <StatItem
-          label="Agent Reviews"
-          value={stats.agentReviews}
-          loaded={loaded}
-        />
-        <Divider />
-        <StatItem
-          label="USDC Settled"
+          label="USDC settled"
           value={stats.usdcSettled}
           loaded={loaded}
           format="usdc"
         />
       </div>
+
+      {reporterCaption && (
+        <div className="mt-3 text-center font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+          {reporterCaption}
+        </div>
+      )}
 
       {speedCaption && (
         <div className="mt-3 text-center font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">

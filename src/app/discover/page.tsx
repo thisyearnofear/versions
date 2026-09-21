@@ -8,7 +8,15 @@ import { FadeIn } from "@/components/ui/FadeIn";
 import { ToastProvider } from "@/components/ui/Toast";
 import { Container } from "@/components/ui/primitives";
 
-export default function DiscoverPage() {
+export default function DiscoverPage({
+  searchParams,
+}: {
+  searchParams?: { q?: string; brief?: string };
+}) {
+  // MODULAR: two search rails share one page. ?q= feeds the marketplace
+  // browse (hero deep-link, ethos-ranked music + placements); ?brief= feeds
+  // the legacy supervisor brief search below it (track catalog + case thread).
+  const initialQuery = typeof searchParams?.q === "string" ? searchParams.q : "";
   return (
     <ToastProvider>
       <div className="flex flex-col flex-1">
@@ -23,7 +31,7 @@ export default function DiscoverPage() {
               />
             </FadeIn>
             <FadeIn delay={0.06}>
-              <MarketplaceBrowse />
+              <MarketplaceBrowse initialQuery={initialQuery} />
             </FadeIn>
             <FadeIn delay={0.1}>
               <Suspense fallback={<DashboardFallback />}>

@@ -1,9 +1,10 @@
 "use client";
 
 // MODULAR: the wedge, drawn instead of described. One SVG that
-// illustrates the whole pipeline — a brief fans out to three agent
-// lenses, converges on the best-fitting take, and settles in USDC on
-// Arc. Nodes pop in sequence on scroll, connectors self-draw, and a
+// illustrates the whole pipeline — supply (track or product) is
+// matched to a channel's ethos, used free with attribution or bought
+// as a sponsor slot, and settles 60/30/10 in USDC on Arc. Nodes pop in
+// sequence on scroll, connectors self-draw, and a
 // dashed "flow" runs the main path (skipped under reduced-motion).
 // Replaces what used to be three paragraphs of explainer copy.
 
@@ -32,7 +33,7 @@ const NODES: Node[] = [
   { x: 668, y: 120, label: "settled · USDC", delay: 0.95, glyph: "coin" },
 ];
 
-// Fan-out from brief → agents, converge agents → match, then → settlement.
+// Supply fans out (music / placement / channel), converges on fit, then → settlement.
 const LINKS = [
   { d: "M 118 112 C 190 100, 240 62, 290 52", delay: 0.15 },
   { d: "M 118 120 L 288 120", delay: 0.2 },

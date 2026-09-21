@@ -11,7 +11,7 @@
 import { createHash, randomBytes } from 'crypto';
 import type { Disclosure, ListingKind, ListingTier } from './types';
 
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://versions.persidian.com').replace(/\/$/, '');
+export const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://versions.persidian.com').replace(/\/$/, '');
 
 /** Path of a listing's public attribution page — the "link back". */
 export function listingPath(listingId: string): string {

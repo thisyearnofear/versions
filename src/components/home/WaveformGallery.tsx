@@ -1,18 +1,20 @@
 "use client";
 
-// MODULAR: kinetic waveform gallery for the landing page. Published
-// album covers ride along an SVG waveform path — scroll advances
-// them across the wave with tangent rotation. Clicking a cover plays
-// the actual track audio. Clicking the wave background plays a pitched
-// tone (Y → note) as an easter egg.
-// Falls back to placeholder covers when the catalog is empty.
+// MODULAR: kinetic supply gallery for the landing page. Live LISTINGS ride
+// along an SVG waveform path — scroll advances them across the wave with
+// tangent rotation. Music covers with audio play on click; placement cards
+// link out to the listing. Falls back to placeholder covers when supply
+// is empty.
+//
+// NOTE: this reads the marketplace supply (GET /api/v1/listings), not the
+// legacy agent-review feed — the gallery shows what a channel can browse,
+// pick, and use today.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { apiClient, type FeedRow } from "@/lib/api-client";
 import { playNoteAt, resumeAudio } from "@/lib/audio-feedback";
 import { generateRatingCover } from "@/lib/cover-gen";
-import { parseMoodTags } from "@/lib/format";
 
 const WAVE_WIDTH = 1600;
 const WAVE_HEIGHT = 280;
@@ -54,14 +56,18 @@ const WAVE_PATH = `M 0 ${WAVE_HEIGHT / 2}
 
 interface CoverItem {
   id: string;
+  kind: "music" | "placement";
   title: string;
   artist: string;
   coverSvg: string | null;
   audioPath: string | null;
-  energy?: string | null;
-  tempo?: string | null;
+  image: string | null;
+  tier: "free" | "paid";
+  tags: string[];
   avgSolo?: number | null;
   avgVocal?: number | null;
+  energy?: string | null;
+  tempo?: string | null;
   moodTags?: string[] | null;
 }
 
@@ -142,26 +148,36 @@ export function WaveformGallery() {
 
   useEffect(() => {
     let cancelled = false;
-    apiClient
-      .getFeed({ limit: MAX_COVERS })
-      .then(({ rows }) => {
+    // Live marketplace supply — music first so covers with audio lead, then
+    // placements so the second catalog is visible on the wave.
+    Promise.allSettled([
+      fetch(`/api/v1/listings?kind=music&limit=${MAX_COVERS}`, { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/v1/listings?kind=placement&limit=${MAX_COVERS}`, { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([musicRes, placementRes]) => {
         if (cancelled) return;
-        const items: CoverItem[] = (rows || [])
+        type ListingRow = {
+          id: string; kind: "music" | "placement"; title: string; supplier_name: string;
+          cover_svg: string | null; audio_path: string | null; images: string[];
+          tier: "free" | "paid"; tags: string[];
+        };
+        const music = ((musicRes.status === "fulfilled" ? musicRes.value?.data?.listings : null) ?? []) as ListingRow[];
+        const placed = ((placementRes.status === "fulfilled" ? placementRes.value?.data?.listings : null) ?? []) as ListingRow[];
+        const items: CoverItem[] = [...music, ...placed]
           .slice(0, MAX_COVERS)
-          .map((r: FeedRow) => ({
-            id: r.submission_id,
+          .map((r) => ({
+            id: r.id,
+            kind: r.kind,
             title: r.title,
-            artist: r.artist_name,
+            artist: r.supplier_name,
             coverSvg: r.cover_svg ?? null,
             audioPath: r.audio_path ?? null,
-            energy: r.energy_consensus,
-            tempo: r.tempo_consensus,
-            avgSolo: r.avg_solo_intensity,
-            avgVocal: r.avg_vocal_quality,
-            moodTags: parseMoodTags(r.aggregated_mood_tags),
+            image: r.images?.[0] ?? null,
+            tier: r.tier,
+            tags: Array.isArray(r.tags) ? r.tags : [],
           }));
         while (items.length < 4) {
-          items.push({ id: `placeholder-${items.length}`, title: "", artist: "", coverSvg: null, audioPath: null });
+          items.push({ id: `placeholder-${items.length}`, kind: "music", title: "", artist: "", coverSvg: null, audioPath: null, image: null, tier: "free", tags: [] });
         }
         setCovers(items);
       })
@@ -170,10 +186,14 @@ export function WaveformGallery() {
         setCovers(
           Array.from({ length: 6 }, (_, i) => ({
             id: `placeholder-${i}`,
+            kind: "music" as const,
             title: "",
             artist: "",
             coverSvg: null,
             audioPath: null,
+            image: null,
+            tier: "free" as const,
+            tags: [],
           })),
         );
       })

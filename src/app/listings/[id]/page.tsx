@@ -1,17 +1,54 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { cache } from "react";
+import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { listings } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Container } from "@/components/ui/primitives";
+import { APP_URL } from "@/lib/attribution";
 
 export const dynamic = "force-dynamic";
 
+// Shared by generateMetadata and the page — one query per request.
+const getListing = cache(async (id: string) => {
+  const [row] = await db.select().from(listings).where(eq(listings.id, id)).limit(1);
+  return row;
+});
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const row = await getListing(id);
+  const url = `${APP_URL}/listings/${id}`;
+  if (!row) {
+    return { title: "Listing not found", robots: { index: false, follow: false } };
+  }
+  const tierLine =
+    row.tier === "free"
+      ? "free with attribution"
+      : row.pricing?.model === "flat"
+        ? `paid · flat ${row.pricing.flatFeeUsdc} USDC`
+        : `paid · CPM ${row.pricing?.cpmUsdc} USDC`;
+  const description =
+    row.summary ??
+    `${row.kind === "music" ? "Track" : "Product placement"} "${row.title}" by ${row.supplierName} on VERSIONS — ${tierLine}.`;
+  return {
+    title: `${row.title} — ${row.supplierName}`,
+    description,
+    alternates: { canonical: url },
+    openGraph: { type: "article", url, title: `${row.title} — ${row.supplierName}`, description },
+  };
+}
+
 export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [row] = await db.select().from(listings).where(eq(listings.id, id)).limit(1);
+  const row = await getListing(id);
   if (!row) return notFound();
 
   return (
