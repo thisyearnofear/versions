@@ -17,7 +17,7 @@ export default function ChannelsPage() {
               <PageIntro
                 eyebrow="Channels"
                 title="Where supply runs."
-                intro="YouTube today, more tomorrow. Connect once, get verified against the platform, and browse music + placements that match what you actually publish — not what you say you publish."
+                intro="Connect your YouTube channel, confirm its reach, and find listings that fit what you publish. Your placements and delivery records stay together."
               />
             </FadeIn>
             <FadeIn delay={0.08}>

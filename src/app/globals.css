@@ -13,8 +13,11 @@
   --color-hair: rgba(26, 26, 26, 0.10);
   --color-hair-strong: rgba(26, 26, 26, 0.24);
 
-  --font-serif: "Fraunces", "Iowan Old Style", "Apple Garamond", Georgia, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-serif: var(--font-fraunces), 'Iowan Old Style', Georgia, serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, Menlo, monospace;
+  /* Accessible muted ink — one step darker than --color-ink-3 for
+     small metadata on paper surfaces. */
+  --color-ink-muted: #6b6b6b;
 
   /* Elevated surface tokens — soft ambient shadows, warm never gray-blue */
   --shadow-soft: 0 1px 2px rgba(26, 26, 26, 0.05), 0 2px 8px rgba(26, 26, 26, 0.04);
@@ -277,6 +280,64 @@ body {
 .skel {
   animation: skeleton-pulse 1.6s ease-in-out infinite;
   background: var(--color-ink);
+}
+
+/* ── Marketplace surfaces ────────────────────────────── */
+.marketplace-kit {
+  background: var(--color-cream);
+  border: 1px solid var(--color-hair);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+}
+@media (min-width: 640px) {
+  .marketplace-kit {
+    padding: 1.25rem;
+  }
+}
+.marketplace-heading {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+}
+@media (min-width: 1024px) {
+  .marketplace-stage {
+    min-height: 28rem;
+  }
+}
+.marketplace-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+}
+.marketplace-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 768px) {
+  .marketplace-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1100px) {
+  .marketplace-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.marketplace-columns {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1024px) {
+  .marketplace-columns {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    align-items: start;
+  }
 }
 
 /* ── Accessibility: honor prefers-reduced-motion ──── */

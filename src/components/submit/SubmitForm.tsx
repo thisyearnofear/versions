@@ -57,7 +57,7 @@ function paymentRecoveredTxHash(phase: PaymentPhase): string | null {
   return null;
 }
 
-export function SubmitForm() {
+export function SubmitForm({ onUploaded }: { onUploaded?: (submission: { id: string; title: string; artistName: string }) => void } = {}) {
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const { showToast } = useToast();
@@ -79,6 +79,7 @@ export function SubmitForm() {
 
   const [state, setState] = useState<SubmitPhase>({ phase: "idle" });
   const [file, setFile] = useState<File | null>(null);
+  const [verifiedUpload, setVerifiedUpload] = useState<{ id: string; title: string; artistName: string } | null>(null);
   const [coverSvg, setCoverSvg] = useState<string | null>(null);
   const [reviews, setReviews] = useState<ReviewItem[] | null>(null);
   const [reviewStatus, setReviewStatus] = useState<string>("");
@@ -99,6 +100,7 @@ export function SubmitForm() {
     setState({ phase: "idle" });
     setFile(null);
     setCoverSvg(null);
+    setVerifiedUpload(null);
     setReviews(null);
     setReviewStatus("");
     formStarted.current = false;
@@ -291,6 +293,11 @@ export function SubmitForm() {
         setState({ phase: "submitting", message: "Uploading audio…" });
         const data = await apiClient.createSubmission(fd2);
         const submissionId = data.id;
+        setVerifiedUpload({
+          id: submissionId,
+          title: String(metadata.title ?? "").trim(),
+          artistName: String(metadata.artistName ?? "").trim(),
+        });
 
         setState({ phase: "pending", submissionId });
         track("payment_initiated", { submissionId });
@@ -643,6 +650,15 @@ export function SubmitForm() {
               >
                 Track your release case →
               </Link>
+            )}
+            {onUploaded && verifiedUpload && (
+              <button
+                type="button"
+                onClick={() => onUploaded(verifiedUpload)}
+                className="btn-secondary self-start"
+              >
+                Use this upload in my listing →
+              </button>
             )}
             <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
               Agent reviews

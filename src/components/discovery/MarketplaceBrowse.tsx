@@ -1,265 +1,416 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ApiError } from "@/lib/api-client";
-import { useToast } from "@/components/ui/Toast";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  MarketplaceError,
+  createRequestScope,
+  listingPriceLabel,
+  marketplaceRequest,
+  searchHref,
+  updateBrowseHref,
+  type ChannelRecord,
+  type MarketplaceListing,
+} from "@/lib/marketplace-client";
+import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
+import { ListingMedia } from "@/components/marketplace/ListingMedia";
+import { WagmiConnectButton } from "@/components/wallet/WagmiConnectButton";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
-type Listing = {
-  id: string;
-  kind: "music" | "placement";
-  title: string;
-  supplier_name: string;
-  summary: string | null;
-  tags: string[];
-  images: string[];
-  cover_svg: string | null;
-  audio_path: string | null;
-  tier: "free" | "paid";
-  pricing: { model: "flat" | "cpm"; flatFeeUsdc?: string; cpmUsdc?: string } | null;
-  budget_cap_usdc: string | null;
-  budget_remaining_usdc: string | null;
-  disclosure: { label: string; statement: string } | null;
-  attribution_text: string;
-  attribution_url: string;
-  attribution_slug: string;
-  status: string;
-  fit_score?: number;
-  why_fits?: string[];
-  similarity?: number | null;
-};
+type Kind = "all" | "music" | "placement";
+type Tier = "all" | "free" | "paid";
 
-type ChannelLite = { id: string; name: string; can_buy_slots: boolean; verification_status: string; niche?: string | null };
+const PAGE = 20;
 
-export function MarketplaceBrowse({ initialQuery = "" }: { initialQuery?: string }) {
-  const { showToast } = useToast();
-  const [kind, setKind] = useState<"all" | "music" | "placement">("all");
-  const [tier, setTier] = useState<"all" | "free" | "paid">("all");
-  // MODULAR: seeded from ?q= so the landing hero search deep-links straight
-  // into ranked marketplace supply. Threshold (≥2) matches the API's
-  // tag/semantic switch — shorter strings stay on recency.
-  const [q, setQ] = useState(initialQuery);
-  const [channelId, setChannelId] = useState("");
-  const [listings, setListings] = useState<Listing[]>([]);
-  const [mode, setMode] = useState<string>("recent");
-  const [loading, setLoading] = useState(false);
-  const [channels, setChannels] = useState<ChannelLite[]>([]);
-  const [usageSummary, setUsageSummary] = useState<{ total_events: number; spend_usdc: string; by_reporter: Record<string, number> } | null>(null);
-  const [buyFor, setBuyFor] = useState<string | null>(null);
-  const [buyChannelId, setBuyChannelId] = useState("");
-  const [buyBudget, setBuyBudget] = useState("");
-  const [buying, setBuying] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
+interface SearchResult {
+  total: number;
+  mode: "semantic" | "tag" | "recent";
+  rows: MarketplaceListing[];
+}
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("limit", "20");
-      if (kind !== "all") params.set("kind", kind);
-      if (tier !== "all") params.set("tier", tier);
-      const hasQuery = q.trim().length >= 2 || channelId;
-      if (hasQuery) {
-        if (q.trim()) params.set("q", q.trim());
-        if (channelId) params.set("channelId", channelId);
-        const res = await fetch(`/api/v1/marketplace/search?${params}`, { credentials: "same-origin" });
-        const json = (await res.json()) as { success?: boolean; data?: { rows?: Listing[]; mode?: string } };
-        setListings(json.data?.rows ?? []);
-        setMode(json.data?.mode ?? "recent");
-      } else {
-        const res = await fetch(`/api/v1/listings?${params}`, { credentials: "same-origin" });
-        const json = (await res.json()) as { success?: boolean; data?: { listings?: Listing[] } };
-        setListings((json.data?.listings ?? []) as Listing[]);
-        setMode("recent");
-      }
-    } catch {
-      showToast("Could not load supply.", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [kind, tier, q, channelId, showToast]);
+function listingHref(listing: MarketplaceListing, channelId: string): string {
+  const p = new URLSearchParams();
+  if (channelId) p.set("channelId", channelId);
+  const suffix = p.size ? `?${p}` : "";
+  return `/listings/${listing.id}${suffix}`;
+}
 
-  const loadChannels = useCallback(async () => {
-    try {
-      const res = await fetch("/api/v1/channels?limit=20", { credentials: "same-origin" });
-      if (!res.ok) return;
-      const json = (await res.json()) as { data?: { channels?: ChannelLite[] } };
-      setChannels(json.data?.channels ?? []);
-      if (json.data?.channels?.[0] && !buyChannelId) setBuyChannelId(json.data.channels[0].id);
-    } catch {}
-  }, [buyChannelId]);
+// MODULAR: seeded from ?q= so the landing hero search deep-links straight
+// into ranked marketplace supply. Threshold (≥2) matches the API's
+// tag/semantic switch — shorter strings stay on recency.
+export function MarketplaceBrowse() {
+  const { walletAddress, isAuthenticated } = useSupervisorAuth();
+  return (
+    <MarketplaceBrowseContent key={walletAddress ?? "guest"} isAuthenticated={isAuthenticated} />
+  );
+}
 
-  const loadUsage = useCallback(async () => {
-    try {
-      const res = await fetch("/api/v1/usage", { credentials: "same-origin" });
-      const json = (await res.json()) as { data?: { summary?: typeof usageSummary } };
-      if (json.data?.summary) setUsageSummary(json.data.summary as never);
-    } catch {}
-  }, []);
+function MarketplaceBrowseContent({ isAuthenticated }: { isAuthenticated: boolean }) {
+  const router = useRouter();
+  const params = useSearchParams();
 
-  useEffect(() => { void load(); }, [load]);
-  useEffect(() => { void loadChannels(); void loadUsage(); }, [loadChannels, loadUsage]);
+  const routeQ = params.get("q") ?? "";
+  const channelId = params.get("channelId") ?? "";
+  const kindRaw = params.get("kind");
+  const tierRaw = params.get("tier");
+  const kind: Kind = kindRaw === "music" || kindRaw === "placement" ? kindRaw : "all";
+  const tier: Tier = tierRaw === "free" || tierRaw === "paid" ? tierRaw : "all";
+  const offsetParam = Number(params.get("offset") ?? "0");
+  const offset = Number.isSafeInteger(offsetParam) && offsetParam > 0 ? offsetParam : 0;
+
+  const [draft, setDraft] = useState({ source: routeQ, text: routeQ });
+  const q = draft.source === routeQ ? draft.text : routeQ;
+
+  const [channels, setChannels] = useState<ChannelRecord[] | null>(null);
+  const [channelsError, setChannelsError] = useState<string | null>(null);
+  const [result, setResult] = useState<SearchResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+  const [channelTick, setChannelTick] = useState(0);
+  const [searchScope] = useState(() => createRequestScope());
+  const [channelScope] = useState(() => createRequestScope());
+
+  const applyPatch = useCallback(
+    (patch: Record<string, string | null>) => {
+      router.replace(updateBrowseHref(params.toString(), patch), { scroll: false });
+    },
+    [params, router],
+  );
 
   // Debounced search on q/channel change — avoid firing on every keystroke
-  const [debouncedQ, setDebouncedQ] = useState(q);
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(q), 350);
-    return () => clearTimeout(t);
-  }, [q]);
-  useEffect(() => { void load(); }, [debouncedQ, channelId, kind, tier]); // re-trigger via debounced
+    if (q === routeQ) return;
+    const t = window.setTimeout(() => {
+      if (q.trim() === routeQ) return;
+      applyPatch({ q: q.trim() || null, offset: null });
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [q, routeQ, applyPatch]);
 
-  const startBuy = useCallback((id: string) => { setBuyFor(id); track("slot_intent", { listingId: id }); }, []);
+  useEffect(() => {
+    const { signal, isCurrent } = searchScope.start();
+    const t = window.setTimeout(() => {
+      if (!isCurrent()) return;
+      setLoading(true);
+      setError(null);
+      marketplaceRequest<SearchResult>(
+        searchHref(
+          {
+            q: routeQ,
+            channelId,
+            kind: kind === "all" ? undefined : kind,
+            tier: tier === "all" ? undefined : tier,
+          },
+          offset,
+        ),
+        { signal },
+      )
+        .then((data) => {
+          if (!isCurrent()) return;
+          setResult(data);
+          setLoading(false);
+        })
+        .catch((err) => {
+          if (!isCurrent()) return;
+          setError(
+            err instanceof MarketplaceError
+              ? err.message
+              : "Could not load supply. Check your connection and retry.",
+          );
+          setLoading(false);
+        });
+    }, 0);
+    return () => {
+      window.clearTimeout(t);
+      searchScope.cancel();
+    };
+  }, [routeQ, channelId, kind, tier, offset, tick, searchScope]);
 
-  const buy = useCallback(async (listingId: string) => {
-    if (!buyChannelId) { showToast("Pick a channel to buy with.", "warning"); return; }
-    setBuying(true);
-    try {
-      const createRes = await fetch("/api/v1/slots", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId, channelId: buyChannelId, budgetUsdc: buyBudget.trim() || null }), credentials: "same-origin" });
-      const createJson = (await createRes.json()) as { success: boolean; error?: { message: string }; data?: { slot: { id: string } } };
-      if (!createRes.ok || !createJson.success) throw new Error(createJson.error?.message ?? `HTTP ${createRes.status}`);
-      const slotId = createJson.data!.slot.id;
-      const payRes = await fetch(`/api/v1/slots/${slotId}/pay`, { method: "POST", credentials: "same-origin" });
-      const payJson = (await payRes.json()) as { success: boolean; error?: { message: string } };
-      if (!payRes.ok || !payJson.success) throw new Error(payJson.error?.message ?? `Created ${slotId.slice(0, 8)} — now pay: POST /api/v1/slots/${slotId}/pay`);
-      track("slot_purchased", { listingId, channelId: buyChannelId });
-      showToast("Placement active — tracking code minted. Report where it ran under Usage.", "success", 5000);
-      setBuyFor(null);
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e);
-      showToast(msg, "error");
-    } finally {
-      setBuying(false);
-    }
-  }, [buyChannelId, buyBudget, showToast]);
+  useEffect(() => {
+    const { signal, isCurrent } = channelScope.start();
+    const t = window.setTimeout(() => {
+      if (!isCurrent()) return;
+      if (!isAuthenticated) {
+        setChannels([]);
+        return;
+      }
+      setChannelsError(null);
+      marketplaceRequest<{ channels: ChannelRecord[] }>("/api/v1/channels?limit=100", { signal })
+        .then((data) => {
+          if (isCurrent()) setChannels(data.channels ?? []);
+        })
+        .catch((err) => {
+          if (!isCurrent()) return;
+          setChannelsError(
+            err instanceof Error ? err.message : "Could not load your channels.",
+          );
+        });
+    }, 0);
+    return () => {
+      window.clearTimeout(t);
+      channelScope.cancel();
+    };
+  }, [isAuthenticated, channelTick, channelScope]);
 
-  const copy = useCallback(async (text: string, label: string) => {
-    try { await navigator.clipboard.writeText(text); showToast(`${label} copied.`, "success", 2000); } catch { showToast(text, "info", 4000); }
-  }, [showToast]);
-
-  const modeLabel = mode === "semantic" ? "ethos" : mode === "tag" ? "tag match" : "recent";
+  const modeLabel =
+    result?.mode === "semantic"
+      ? channelId
+        ? "ranked by channel and search"
+        : "ranked by search"
+      : result?.mode === "tag"
+        ? "tag match"
+        : "recent";
+  const total = result?.total ?? 0;
+  const listings = result?.rows ?? [];
+  const hasMore = offset + PAGE < total;
+  const selectedChannel = (channels ?? []).find((c) => c.id === channelId) ?? null;
 
   return (
-    <section className="mt-4 space-y-4" aria-label="Marketplace supply">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-full border border-[var(--color-hair)] p-1">
-          {(["all", "music", "placement"] as const).map((k) => (
-            <button key={k} type="button" onClick={() => setKind(k)} className={cn("rounded-full px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide", kind === k ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : "text-[var(--color-ink-2)] hover:text-[var(--color-rust)]")}>{k}</button>
-          ))}
+    <section className="mt-4 space-y-4" aria-label="Marketplace supply" aria-busy={loading}>
+      {isAuthenticated && channelsError && (
+        <div role="alert" className="rounded-[var(--radius-md)] border border-[var(--color-rust)] p-3">
+          <p className="font-serif text-[14px] text-[var(--color-rust)]">{channelsError}</p>
+          <button
+            type="button"
+            onClick={() => setChannelTick((t) => t + 1)}
+            className="btn-secondary mt-2"
+          >
+            Retry
+          </button>
         </div>
-        <div className="flex rounded-full border border-[var(--color-hair)] p-1">
-          {(["all", "free", "paid"] as const).map((t) => (
-            <button key={t} type="button" onClick={() => setTier(t)} className={cn("rounded-full px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide", tier === t ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : "text-[var(--color-ink-2)] hover:text-[var(--color-rust)]")}>{t}</button>
-          ))}
+      )}
+      {isAuthenticated && channels !== null && !channelsError && (
+        channels.length > 0 ? (
+          <div className="rounded-[var(--radius-md)] border border-[var(--color-hair)] px-3 py-2">
+            <label className="flex flex-wrap items-center gap-2">
+              <span className="marketplace-label shrink-0">Channel context</span>
+              <select
+                value={channelId}
+                onChange={(e) => applyPatch({ channelId: e.target.value || null, offset: null })}
+                className="min-h-[44px] min-w-0 flex-1 rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-3 font-serif text-[15px]"
+              >
+                <option value="">Any channel — browse the whole catalog</option>
+                {channels.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.verification_status !== "verified" ? " (pending)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : (
+          <div className="rounded-[var(--radius-md)] border border-[var(--color-hair)] px-3 py-2">
+            <p className="font-serif text-[14px] text-[var(--color-ink-2)]">
+              Connect a channel to rank supply against its ethos.{" "}
+              <Link href="/channels" className="text-[var(--color-rust)] underline">
+                Connect a channel →
+              </Link>
+            </p>
+          </div>
+        )
+      )}
+      {channelId && !selectedChannel && (
+        <div className="flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-hair)] px-3 py-2">
+          <p className="font-serif text-[14px] text-[var(--color-ink-2)]">
+            Linked channel context — ranking by the channel that shared this link.
+          </p>
+          <button
+            type="button"
+            onClick={() => applyPatch({ channelId: null })}
+            className="min-h-[44px] rounded-full border border-[var(--color-hair-strong)] px-4 font-mono text-[12px] uppercase tracking-wide text-[var(--color-ink-2)] hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]"
+          >
+            Remove ×
+          </button>
         </div>
-        {channels.length > 0 && (
-          <select value={channelId} onChange={(e) => setChannelId(e.target.value)} className="rounded-full border border-[var(--color-hair)] bg-transparent px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">
-            <option value="">All channels</option>
-            {channels.map((c) => (<option key={c.id} value={c.id}>{c.name.slice(0,28)} · {c.niche ?? c.verification_status}</option>))}
-          </select>
-        )}
-      </div>
-      <div className="flex gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Describe the vibe — lo-fi night drive, study focus, thriller tension…" className="min-w-[220px] flex-1 rounded-full border border-[var(--color-hair)] bg-transparent px-4 py-2 font-serif text-sm placeholder:text-[var(--color-ink-3)] focus:outline-none focus:border-[var(--color-rust)]" />
-        <span className="self-center font-mono text-[10px] text-[var(--color-ink-3)]">{loading ? "…" : `${listings.length} · ${modeLabel}`}</span>
-      </div>
-      {channelId && mode === "semantic" && <p className="font-mono text-[10px] text-[var(--color-rust)]">Personalized by channel ethos + search terms — semantic ranking.</p>}
-      {channelId && mode === "tag" && <p className="font-mono text-[10px] text-[var(--color-ink-3)]">Ranked by tag overlap with your channel ethos.</p>}
+      )}
+      {!isAuthenticated && !channelId && (
+        <div className="flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-hair)] px-3 py-2">
+          <p className="font-serif text-[14px] text-[var(--color-ink-2)]">
+            Browsing the public catalog — sign in to rank supply against your channel.
+          </p>
+          <WagmiConnectButton variant="quiet" />
+        </div>
+      )}
 
-      {usageSummary && usageSummary.total_events > 0 && (
-        <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-3)]">
-          Flywheel: {usageSummary.total_events} uses logged · {usageSummary.spend_usdc} USDC delivered · channel-reported {usageSummary.by_reporter.channel ?? 0} · platform {usageSummary.by_reporter.platform_api ?? 0}
+      <div className="flex flex-wrap items-stretch gap-2">
+        <input
+          value={q}
+          onChange={(e) => setDraft({ source: routeQ, text: e.target.value })}
+          placeholder="Search the vibe you publish…"
+          aria-label="Search listings"
+          className="min-h-[44px] min-w-0 flex-1 rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-4 font-serif text-[15px] focus:outline-none focus:border-[var(--color-rust)]"
+        />
+        <div className="flex rounded-full border border-[var(--color-hair)] p-1" role="group" aria-label="Listing kind">
+          {(["all", "music", "placement"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              aria-pressed={kind === k}
+              onClick={() => applyPatch({ kind: k === "all" ? null : k, offset: null })}
+              className={cn(
+                "min-h-[44px] rounded-full px-4 font-mono text-[12px] uppercase tracking-wide",
+                kind === k
+                  ? "bg-[var(--color-ink)] text-[var(--color-paper)]"
+                  : "text-[var(--color-ink-2)] hover:text-[var(--color-rust)]",
+              )}
+            >
+              {k === "all" ? "All" : k === "music" ? "Music" : "Products"}
+            </button>
+          ))}
+        </div>
+        <div className="flex rounded-full border border-[var(--color-hair)] p-1" role="group" aria-label="Tier">
+          {(["all", "free", "paid"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={tier === t}
+              onClick={() => applyPatch({ tier: t === "all" ? null : t, offset: null })}
+              className={cn(
+                "min-h-[44px] rounded-full px-4 font-mono text-[12px] uppercase tracking-wide",
+                tier === t
+                  ? "bg-[var(--color-ink)] text-[var(--color-paper)]"
+                  : "text-[var(--color-ink-2)] hover:text-[var(--color-rust)]",
+              )}
+            >
+              {t === "all" ? "All tiers" : t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selectedChannel && (
+        <p className="font-mono text-[12px] text-[var(--color-ink-3)]">
+          Channel context: {selectedChannel.name}
+          {selectedChannel.verification_status !== "verified" ? " (pending verification)" : ""}
         </p>
       )}
 
-      {listings.length === 0 ? (
-        <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-hair-strong)] p-8 text-center">
-          <p className="font-serif text-sm text-[var(--color-ink-2)]">{loading ? "Loading supply…" : q.trim() || channelId ? "No supply fits that vibe. Try a broader search or All channels." : "No live supply for that filter. Try All, or list something on the Supply page."}</p>
-          <Link href="/submit" className="mt-3 inline-flex rounded-full border border-[var(--color-hair-strong)] px-4 py-2 font-mono text-[10px] uppercase tracking-wide hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]">Go to Supply →</Link>
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="font-mono text-[12px] uppercase tracking-wide text-[var(--color-ink-3)]">
+          {loading && !result ? "Searching…" : result ? `${total} result${total === 1 ? "" : "s"} · ${modeLabel}` : ""}
+        </p>
+        {(offset > 0 || hasMore) && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={loading || offset === 0}
+              onClick={() => applyPatch({ offset: String(Math.max(0, offset - PAGE)) })}
+              className="btn-secondary disabled:opacity-50"
+            >
+              ← Newer
+            </button>
+            <button
+              type="button"
+              disabled={loading || !hasMore}
+              onClick={() => applyPatch({ offset: String(offset + PAGE) })}
+              className="btn-secondary disabled:opacity-50"
+            >
+              More →
+            </button>
+          </div>
+        )}
+      </div>
+
+      {error ? (
+        <div role="alert" className="rounded-[var(--radius-md)] border border-[var(--color-rust)] p-4">
+          <p className="font-serif text-[15px] text-[var(--color-rust)]">{error}</p>
+          <button
+            type="button"
+            onClick={() => setTick((t) => t + 1)}
+            className="btn-secondary mt-2"
+          >
+            Retry
+          </button>
+        </div>
+      ) : listings.length === 0 && !loading ? (
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-hair)] p-4">
+          <p className="font-serif text-[15px] text-[var(--color-ink-2)]">
+            No listings match{routeQ ? ` “${routeQ}”` : ""} yet.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => applyPatch({ q: null, kind: null, tier: null, offset: null })}
+              className="btn-secondary"
+            >
+              Clear filters
+            </button>
+            <Link href="/submit" className="btn-secondary">
+              List supply →
+            </Link>
+          </div>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className={cn("marketplace-grid", loading && "opacity-70")}>
           {listings.map((l) => (
-            <article key={l.id} className="card-surface overflow-hidden p-0">
+            <article key={l.id} className="card-surface overflow-hidden">
+              <div className="p-3 pb-0">
+                <ListingMedia
+                  title={l.title}
+                  kind={l.kind}
+                  audioPath={l.audio_path}
+                  images={l.images}
+                  coverSvg={l.cover_svg}
+                  compact
+                />
+              </div>
               <div className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <span className={cn("rounded-full px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide", l.kind === "music" ? "bg-[var(--color-paper-2)] text-[var(--color-ink-2)]" : "bg-[var(--color-rust-soft)] text-[var(--color-rust)]")}>{l.kind}</span>
-                  <span className={cn("rounded-full px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide", l.tier === "free" ? "bg-[var(--color-paper-2)] text-[var(--color-ink-2)]" : "bg-[var(--color-ink)] text-[var(--color-paper)]")}>{l.tier === "free" ? "free · attribution" : l.pricing?.model === "flat" ? `paid · flat ${l.pricing.flatFeeUsdc} USDC` : `paid · CPM ${l.pricing?.cpmUsdc} USDC`}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
+                    {l.kind === "music" ? "Music" : "Product"} · {l.tier}
+                  </span>
                 </div>
-                <h4 className="mt-2 font-serif text-base font-bold leading-tight">{l.title}</h4>
-                <p className="font-serif text-sm text-[var(--color-ink-2)]">{l.supplier_name}</p>
-                {l.summary && <p className="mt-1 line-clamp-2 font-serif text-sm leading-snug text-[var(--color-ink-2)]">{l.summary}</p>}
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {l.tags.slice(0, 6).map((t) => (
-                    <span key={t} className="rounded-full bg-[var(--color-paper-2)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">{t}</span>
-                  ))}
-                </div>
-                {(l.why_fits?.length || l.fit_score) ? (
-                  <p className="mt-2 font-mono text-[10px] text-[var(--color-rust)]">{l.why_fits?.join(" · ")}{typeof l.fit_score === "number" && l.fit_score > 0 ? ` · score ${l.fit_score}` : ""}</p>
-                ) : null}
-                {l.tier === "paid" && (
-                  <p className="mt-1 font-mono text-[10px] text-[var(--color-ink-3)]">
-                    {l.budget_remaining_usdc != null ? `Remaining: ${l.budget_remaining_usdc} USDC` : "Uncapped"} · {l.disclosure ? `${l.disclosure.label} disclosure included` : ""}
+                <h4 className="mt-2 font-serif text-base font-bold leading-tight">
+                  <Link
+                    href={listingHref(l, channelId)}
+                    className="hover:text-[var(--color-rust)]"
+                    onClick={() => track("nav_click", { listingId: l.id })}
+                  >
+                    {l.title}
+                  </Link>
+                </h4>
+                <p className="font-serif text-[14px] text-[var(--color-ink-2)]">{l.supplier_name}</p>
+                <p className="mt-1 font-mono text-[12px] uppercase tracking-wide text-[var(--color-ink-3)]">
+                  {listingPriceLabel(l)}
+                </p>
+                {l.summary && (
+                  <p className="mt-1 line-clamp-2 font-serif text-[14px] leading-snug text-[var(--color-ink-2)]">
+                    {l.summary}
                   </p>
                 )}
-                {l.cover_svg ? <div className="mt-3 h-14 overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-hair)] bg-[var(--color-paper-2)] p-1" dangerouslySetInnerHTML={{ __html: l.cover_svg }} /> : null}
-                {l.audio_path && <audio controls preload="none" src={`/api/v1/uploads/${l.audio_path.split("/").pop()}`} className="mt-3 w-full" />}
-                {l.images.length > 0 && (
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    {l.images.slice(0, 3).map((src) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img key={src} src={src} alt="" className="h-16 w-full rounded object-cover" loading="lazy" />
+                {l.why_fits && l.why_fits.length > 0 ? (
+                  <p className="mt-2 font-serif text-[13px] text-[var(--color-rust)]">
+                    Fits: {l.why_fits.join(" · ").replace(/^tag: /g, "")}
+                  </p>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {l.tags.slice(0, 6).map((t) => (
+                      <span key={t} className="rounded-full bg-[var(--color-paper-2)] px-2 py-0.5 font-mono text-[11px] text-[var(--color-ink-2)]">
+                        {t}
+                      </span>
                     ))}
                   </div>
                 )}
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setExpanded(expanded === l.id ? null : l.id)} className="rounded-full border border-[var(--color-hair-strong)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]">{expanded === l.id ? "Hide" : "Details"}</button>
-                  {l.tier === "free" ? (
-                    <button type="button" onClick={() => copy(l.attribution_text, "Attribution")} className="rounded-full bg-[var(--color-paper-2)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide hover:bg-[var(--color-ink)] hover:text-[var(--color-paper)]">Copy attribution</button>
-                  ) : (
-                    <button type="button" onClick={() => startBuy(l.id)} className="rounded-full bg-[var(--color-rust)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-white hover:opacity-90">Buy placement</button>
-                  )}
+                {l.tier === "paid" && (
+                  <p className="mt-2 font-mono text-[12px] text-[var(--color-ink-3)]">
+                    {l.budget_remaining_usdc != null
+                      ? `Campaign remaining: ${l.budget_remaining_usdc} USDC`
+                      : "Uncapped campaign"}
+                  </p>
+                )}
+                <div className="mt-3">
+                  <Link
+                    href={listingHref(l, channelId)}
+                    className="btn-primary inline-flex"
+                    onClick={() => track("slot_intent", { listingId: l.id, tier: l.tier })}
+                  >
+                    {l.tier === "free" ? "Use this listing" : "Review placement"}
+                  </Link>
                 </div>
-                {expanded === l.id && (
-                  <div className="mt-3 rounded-[var(--radius-md)] bg-[var(--color-paper-2)] p-3">
-                    <p className="break-words font-mono text-xs leading-snug text-[var(--color-ink-2)]">{l.attribution_text}</p>
-                    <button type="button" onClick={() => copy(l.attribution_text, "Attribution")} className="mt-2 font-mono text-[10px] uppercase tracking-wide text-[var(--color-rust)] hover:text-[var(--color-ink)]">Copy</button>
-                    <p className="mt-2 break-all font-mono text-[10px] text-[var(--color-ink-3)]">{l.attribution_url}</p>
-                    {l.disclosure && <p className="mt-2 font-mono text-[10px] text-[var(--color-rust)]">{l.disclosure.label} — {l.disclosure.statement}</p>}
-                  </div>
-                )}
-                {buyFor === l.id && (
-                  <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--color-rust)] p-3">
-                    <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-rust)]">Buy this placement</p>
-                    <label className="mt-2 grid gap-1">
-                      <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">Channel</span>
-                      <select value={buyChannelId} onChange={(e) => setBuyChannelId(e.target.value)} className="rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-3 py-2 font-mono text-xs">
-                        <option value="">Pick a channel…</option>
-                        {channels.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name} · {c.verification_status}{c.can_buy_slots ? " · can buy" : " · verify first"}</option>
-                        ))}
-                      </select>
-                    </label>
-                    {l.pricing?.model === "cpm" && (
-                      <label className="mt-2 grid gap-1">
-                        <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">Budget (USDC) — required for CPM</span>
-                        <input value={buyBudget} onChange={(e) => setBuyBudget(e.target.value)} inputMode="decimal" placeholder="e.g. 50" className="rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-3 py-2 font-mono text-sm" />
-                      </label>
-                    )}
-                    {l.pricing?.model === "flat" && (
-                      <label className="mt-2 grid gap-1">
-                        <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">Budget cap (USDC, optional)</span>
-                        <input value={buyBudget} onChange={(e) => setBuyBudget(e.target.value)} inputMode="decimal" placeholder="uncapped" className="rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-3 py-2 font-mono text-sm" />
-                      </label>
-                    )}
-                    <div className="mt-3 flex gap-2">
-                      <button type="button" onClick={() => void buy(l.id)} disabled={buying} className="btn-primary disabled:opacity-50">{buying ? "Buying…" : "Pay & activate"}</button>
-                      <button type="button" onClick={() => setBuyFor(null)} className="rounded-full border border-[var(--color-hair)] px-4 py-2 font-mono text-[10px] uppercase tracking-wide">Cancel</button>
-                    </div>
-                    <p className="mt-2 font-mono text-[10px] text-[var(--color-ink-3)]">Self-serve on Arc. 60/30/10 supplier/channel/platform. Minted tracking code + disclosure baked in. Budget cap enforced atomically.</p>
-                  </div>
-                )}
               </div>
             </article>
           ))}

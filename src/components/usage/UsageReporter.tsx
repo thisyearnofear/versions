@@ -1,86 +1,166 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { ApiError } from "@/lib/api-client";
+import Link from "next/link";
+import {
+  MarketplaceError,
+  parseUsageCount,
+  publishedUrl,
+  reportPlacementUsage,
+} from "@/lib/marketplace-client";
 import { useToast } from "@/components/ui/Toast";
 
-export function UsageReporter({ defaultListingId, defaultChannelId }: { defaultListingId?: string; defaultChannelId?: string }) {
+export function UsageReporter({
+  defaultListingId,
+  defaultChannelId,
+  slotId,
+  listingTitle,
+  channelName,
+  onReported,
+}: {
+  defaultListingId?: string;
+  defaultChannelId?: string;
+  slotId?: string;
+  listingTitle?: string;
+  channelName?: string;
+  onReported?: () => void;
+}) {
   const { showToast } = useToast();
-  const [listingId, setListingId] = useState(defaultListingId ?? "");
-  const [channelId, setChannelId] = useState(defaultChannelId ?? "");
+  const listingId = defaultListingId ?? "";
+  const channelId = defaultChannelId ?? "";
   const [videoUrl, setVideoUrl] = useState("");
-  const [impressions, setImpressions] = useState("1200");
-  const [clicks, setClicks] = useState("0");
+  const [impressions, setImpressions] = useState("");
+  const [clicks, setClicks] = useState("");
   const [busy, setBusy] = useState(false);
-  const [last, setLast] = useState<{ spend_usdc: string; kind: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState<{ kind: string; spend_usdc: string } | null>(null);
 
   const submit = useCallback(async () => {
-    if (!listingId.trim() || !channelId.trim()) { showToast("Pick a listing and a channel.", "warning"); return; }
+    const imps = parseUsageCount(impressions);
+    const clks = parseUsageCount(clicks);
+    if (imps === null || clks === null) {
+      setError("Impressions and clicks must be whole numbers between 0 and 100,000,000.");
+      return;
+    }
+    const url = publishedUrl(videoUrl);
+    if (!url) {
+      setError("Add the published HTTPS URL where it ran.");
+      return;
+    }
     setBusy(true);
+    setError(null);
     try {
-      const res = await fetch("/api/v1/usage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          listingId: listingId.trim(),
-          channelId: channelId.trim(),
-          videoUrl: videoUrl.trim() || null,
-          impressions: Number(impressions) || 0,
-          clicks: Number(clicks) || 0,
-        }),
+      const usage = await reportPlacementUsage({
+        listingId,
+        channelId,
+        slotId: slotId ?? null,
+        videoUrl: url,
+        impressions: imps,
+        clicks: clks,
       });
-      const json = (await res.json()) as { success: boolean; error?: { code?: string; message: string }; data?: { usage: { spend_usdc: string; kind: string; reported_by: string } } };
-      if (!res.ok || !json.success) {
-        const code = json.error?.code ?? "";
-        const hint = code === "BUDGET_EXHAUSTED" ? " — this placement hit its cap and stopped serving." : code === "SLOT_NOT_ACTIVE" ? " — that slot isn't active (paused/exhausted)." : "";
-        throw new Error((json.error?.message ?? `HTTP ${res.status}`) + hint);
-      }
-      setLast({ spend_usdc: json.data!.usage.spend_usdc, kind: json.data!.usage.kind });
-      showToast(json.data!.usage.spend_usdc !== "0" ? `Logged · ${json.data!.usage.spend_usdc} USDC moved against the cap.` : "Logged · free use, no spend — attribution recorded.", "success", 4000);
+      setConfirmed({ kind: usage.kind, spend_usdc: usage.spend_usdc });
+      setVideoUrl("");
+      setImpressions("");
+      setClicks("");
+      showToast(
+        usage.kind === "sponsored"
+          ? `Logged — ${usage.spend_usdc} USDC moved against the cap.`
+          : "Logged — free use recorded, no spend.",
+        "success",
+        4000,
+      );
+      onReported?.();
     } catch (e) {
-      showToast(e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e), "error");
+      const ambiguous =
+        !(e instanceof MarketplaceError) ||
+        e.code === "RESPONSE_UNCONFIRMED" ||
+        e.status >= 500;
+      setError(
+        ambiguous
+          ? "Could not log this report. Refresh the delivery history before retrying — it may have been recorded."
+          : e.message,
+      );
     } finally {
       setBusy(false);
     }
-  }, [listingId, channelId, videoUrl, impressions, clicks, showToast]);
+  }, [impressions, clicks, videoUrl, listingId, channelId, slotId, showToast, onReported]);
+
+  if (!listingId || !channelId) {
+    return (
+      <section className="marketplace-kit" aria-label="Report where it ran">
+        <h3 className="marketplace-heading">Report where it ran</h3>
+        <p className="mt-2 font-serif text-[14px] leading-snug text-[var(--color-ink-2)]">
+          <Link href="/channels" className="text-[var(--color-rust)] underline">
+            Choose a placement from Channels
+          </Link>{" "}
+          to report where it ran.
+        </p>
+      </section>
+    );
+  }
 
   return (
-    <section className="card-surface p-5" aria-label="Report where it ran">
-      <p className="kicker">Report where it ran</p>
-      <h3 className="mt-1 font-serif text-base font-bold">Every use, logged — the flywheel.</h3>
-      <p className="mt-1 font-serif text-sm leading-snug text-[var(--color-ink-2)]">
-        Which channel used which listing, when, where. Sponsored delivery moves spend against the cap atomically; you cannot report spend directly — only impressions.
+    <section aria-label="Report where it ran" className="grid gap-3">
+      <p className="font-mono text-[12px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+        {listingTitle ?? "This listing"}
+        {channelName ? ` on ${channelName}` : ""} — channel-reported delivery · not platform-verified
       </p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <label className="grid gap-1">
+        <span className="marketplace-label">Published URL (https)</span>
+        <input
+          value={videoUrl}
+          onChange={(e) => setVideoUrl(e.target.value)}
+          placeholder="https://www.youtube.com/watch?v=…"
+          inputMode="url"
+          className="min-h-[44px] rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-3 font-mono text-[13px]"
+        />
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1">
-          <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">Listing ID</span>
-          <input value={listingId} onChange={(e) => setListingId(e.target.value)} placeholder="list_…" className="rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-3 py-2 font-mono text-xs" />
+          <span className="marketplace-label">New impressions (this report)</span>
+          <input
+            value={impressions}
+            onChange={(e) => setImpressions(e.target.value)}
+            inputMode="numeric"
+            placeholder="0"
+            className="min-h-[44px] rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-3 font-mono text-[13px]"
+          />
         </label>
         <label className="grid gap-1">
-          <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">Channel ID</span>
-          <input value={channelId} onChange={(e) => setChannelId(e.target.value)} placeholder="chan_…" className="rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-3 py-2 font-mono text-xs" />
-        </label>
-        <label className="grid gap-1 sm:col-span-2">
-          <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">Video URL (where it ran, if any)</span>
-          <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" className="rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-3 py-2 font-mono text-xs" />
-        </label>
-        <label className="grid gap-1">
-          <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">Impressions</span>
-          <input value={impressions} onChange={(e) => setImpressions(e.target.value)} inputMode="numeric" className="rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-3 py-2 font-mono text-sm" />
-        </label>
-        <label className="grid gap-1">
-          <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">Clicks</span>
-          <input value={clicks} onChange={(e) => setClicks(e.target.value)} inputMode="numeric" className="rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-3 py-2 font-mono text-sm" />
+          <span className="marketplace-label">New clicks (this report)</span>
+          <input
+            value={clicks}
+            onChange={(e) => setClicks(e.target.value)}
+            inputMode="numeric"
+            placeholder="0"
+            className="min-h-[44px] rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-transparent px-3 font-mono text-[13px]"
+          />
         </label>
       </div>
-      <button type="button" onClick={submit} disabled={busy} className="btn-primary mt-4 disabled:opacity-50">{busy ? "Logging…" : "Log usage"}</button>
-      {last && (
-        <p className="mt-3 rounded-full bg-[var(--color-paper-2)] px-3 py-2 font-mono text-xs text-[var(--color-ink-2)]">
-          Last: {last.kind} · spend {last.spend_usdc} USDC {last.spend_usdc === "0" ? "(free)" : "(capped)"}
+      <p className="font-mono text-[12px] leading-snug text-[var(--color-ink-3)]">
+        Each report adds to the total — we cannot de-duplicate automatically, so report new delivery only.
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={busy}
+          className="btn-primary disabled:opacity-50"
+        >
+          {busy ? "Logging…" : "Log this use"}
+        </button>
+        {error && (
+          <p role="alert" className="font-serif text-[14px] text-[var(--color-rust)]">
+            {error}
+          </p>
+        )}
+      </div>
+      {confirmed && (
+        <p aria-live="polite" className="rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-[var(--color-paper-2)] px-3 py-2 font-mono text-[12px] text-[var(--color-ink-2)]">
+          Logged — {confirmed.kind === "sponsored" ? `${confirmed.spend_usdc} USDC moved against the cap` : "free use, no spend"}.
+          Reports are cumulative; refresh the history before reporting again.
         </p>
       )}
-      <p className="kicker mt-3">Spend is written only from what the slot actually moved against its cap. Caps are enforced by a guarded atomic UPDATE — concurrent events can never double-spend.</p>
     </section>
   );
 }

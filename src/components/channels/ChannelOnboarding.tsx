@@ -1,10 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSession } from "next-auth/react";
+import { MarketplaceError, browseHref, createRequestScope, marketplaceRequest } from "@/lib/marketplace-client";
 import { ApiError } from "@/lib/api-client";
+import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
 import { useToast } from "@/components/ui/Toast";
 import { agreementFor, AGREEMENT_VERSION } from "@/lib/agreement";
 import { track } from "@/lib/analytics";
+import { WagmiConnectButton } from "@/components/wallet/WagmiConnectButton";
 
 type Channel = {
   id: string;
@@ -23,12 +28,20 @@ type Channel = {
 };
 
 function errMsg(err: unknown): string {
+  if (err instanceof MarketplaceError) return err.message;
   if (err instanceof ApiError) return err.message;
   return err instanceof Error ? err.message : String(err);
 }
 
 export function ChannelOnboarding() {
+  const { walletAddress } = useSupervisorAuth();
+  return <ChannelOnboardingContent key={walletAddress ?? "guest"} />;
+}
+
+function ChannelOnboardingContent() {
   const { showToast } = useToast();
+  const { status: sessionStatus } = useSession();
+  const isAuthed = sessionStatus === "authenticated";
   const [url, setUrl] = useState("");
   const [niche, setNiche] = useState("");
   const [ethos, setEthos] = useState("");
@@ -36,40 +49,60 @@ export function ChannelOnboarding() {
   const [busy, setBusy] = useState(false);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [verifying, setVerifying] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [registered, setRegistered] = useState<Channel | null>(null);
   const agreement = useMemo(() => agreementFor("channel"), []);
+  const [listScope] = useState(() => createRequestScope());
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/v1/channels?limit=12", { credentials: "same-origin" });
-      if (!res.ok) return;
-      const json = (await res.json()) as { data?: { channels?: Channel[] } };
-      setChannels(json.data?.channels ?? []);
-    } catch {
-      // silent
-    }
-  }, []);
+  const load = useCallback(() => {
+    const { signal, isCurrent } = listScope.start();
+    (async () => {
+      if (!isAuthed) {
+        setChannels([]);
+        return;
+      }
+      try {
+        const data = await marketplaceRequest<{ channels: Channel[] }>("/api/v1/channels?limit=12", { signal });
+        if (!isCurrent()) {
+          // silent
+          return;
+        }
+        setChannels(data.channels ?? []);
+      } catch (e) {
+        if (!isCurrent()) return;
+        showToast(errMsg(e), "error");
+      }
+    })();
+  }, [isAuthed, showToast, listScope]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      load();
+    }, 0);
+    return () => {
+      window.clearTimeout(t);
+      listScope.cancel();
+    };
+  }, [load, listScope]);
 
   const register = useCallback(async () => {
     if (!agree) { showToast("Accept the blanket agreement first.", "warning"); return; }
     if (!url.trim()) { showToast("Paste a YouTube channel URL, @handle, or UC… id.", "warning"); return; }
     setBusy(true);
+    setFormError(null);
     try {
-      const res = await fetch("/api/v1/channels", {
+      const data = await marketplaceRequest<{ channel: Channel; alreadyRegistered?: boolean }>("/api/v1/channels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ platformUrl: url.trim(), niche: niche.trim() || null, ethosSummary: ethos.trim() || null, agreementVersion: AGREEMENT_VERSION }),
-        credentials: "same-origin",
       });
-      const json = (await res.json()) as { success: boolean; error?: { message: string }; data?: { channel: Channel; alreadyRegistered?: boolean } };
-      if (!res.ok || !json.success) throw new Error(json.error?.message ?? `HTTP ${res.status}`);
-      track("channel_registered", { verified: json.data!.channel.verification_status === "verified" });
-      showToast(json.data!.alreadyRegistered ? "That surface is already registered." : `Channel connected — ${json.data!.channel.verification_status}.`, json.data!.channel.verification_status === "verified" ? "success" : "info");
-      await load();
-      if (!json.data!.alreadyRegistered) { setUrl(""); }
+      track("channel_registered", { verified: data.channel.verification_status === "verified" });
+      showToast(data.alreadyRegistered ? "That surface is already registered." : `Channel connected — ${data.channel.verification_status}.`, data.channel.verification_status === "verified" ? "success" : "info");
+      setRegistered(data.channel);
+      load();
+      if (!data.alreadyRegistered) { setUrl(""); }
     } catch (e) {
-      showToast(errMsg(e), "error");
+      setFormError(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -78,11 +111,9 @@ export function ChannelOnboarding() {
   const verify = useCallback(async (id: string) => {
     setVerifying(id);
     try {
-      const res = await fetch(`/api/v1/channels/${id}/verify`, { method: "POST", credentials: "same-origin" });
-      const json = (await res.json()) as { success: boolean; error?: { message: string }; data?: { channel: Channel } };
-      if (!res.ok || !json.success) throw new Error(json.error?.message ?? `HTTP ${res.status}`);
-      showToast(json.data!.channel.verification_status === "verified" ? "Verified — paid placements unlocked." : `Still ${json.data!.channel.verification_status}.`, json.data!.channel.verification_status === "verified" ? "success" : "info");
-      await load();
+      const data = await marketplaceRequest<{ channel: Channel }>(`/api/v1/channels/${id}/verify`, { method: "POST" });
+      showToast(data.channel.verification_status === "verified" ? "Verified — paid placements unlocked." : `Still ${data.channel.verification_status}.`, data.channel.verification_status === "verified" ? "success" : "info");
+      load();
     } catch (e) {
       showToast(errMsg(e), "error");
     } finally {
@@ -95,10 +126,16 @@ export function ChannelOnboarding() {
       <p className="kicker">Channels</p>
       <h3 className="mt-1 font-serif text-xl font-black tracking-tight">Connect where you publish.</h3>
       <p className="mt-1 max-w-xl font-serif text-sm leading-snug text-[var(--color-ink-2)]">
-        Paste a YouTube channel URL, handle, or ID. We pull subs and views from the platform — self-reported reach is never accepted.
-        Verification gates paid placements. Niche and ethos tune your browse.
+        Paste a YouTube channel URL, handle, or ID. Subscriber and view numbers come from the platform itself —
+        we never accept numbers you type in. Verified reach unlocks paid placements; niche and ethos tune your browse.
       </p>
 
+      {!isAuthed ? (
+        <div className="mt-4">
+          <p className="font-serif text-[14px] text-[var(--color-ink-2)]">Sign in to connect a channel.</p>
+          <div className="mt-2"><WagmiConnectButton variant="quiet" /></div>
+        </div>
+      ) : (
       <div className="mt-4 grid gap-3">
         <label className="grid gap-1">
           <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-2)]">YouTube channel (URL / @handle / UC…)</span>
@@ -133,9 +170,25 @@ export function ChannelOnboarding() {
           <button type="button" onClick={register} disabled={busy || !agree} className="btn-primary disabled:opacity-50">
             {busy ? "Connecting…" : "Connect channel"}
           </button>
-          <span className="font-mono text-[10px] text-[var(--color-ink-3)]">Without an API key this lands as pending with mock numbers — real verification needs YOUTUBE_API_KEY.</span>
+          <span className="font-mono text-[10px] text-[var(--color-ink-3)]">Numbers come from the platform probe — until it verifies them, the channel stays pending.</span>
         </div>
+        {formError && (
+          <p role="alert" className="font-serif text-[14px] text-[var(--color-rust)]">{formError}</p>
+        )}
       </div>
+      )}
+
+      {registered && (
+        <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-rust)] bg-[var(--color-paper-2)] p-3">
+          <p className="font-serif text-[14px] font-semibold text-[var(--color-ink)]">
+            {registered.name} — {registered.verification_status === "verified" ? "verified, paid placements unlocked." : "connected, pending verification."}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link href={`/channels/${registered.id}`} className="btn-secondary">Open channel workspace →</Link>
+            <Link href={browseHref({ channelId: registered.id })} className="btn-secondary">Browse matched supply →</Link>
+          </div>
+        </div>
+      )}
 
       {channels.length > 0 && (
         <div className="mt-6 grid gap-3">
@@ -143,8 +196,8 @@ export function ChannelOnboarding() {
           {channels.map((c) => (
             <div key={c.id} className="rounded-[var(--radius-md)] border border-[var(--color-hair)] p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="font-serif text-sm font-semibold">{c.name}</span>
-                <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${c.verification_status === "verified" ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : c.verification_status === "pending" ? "bg-[var(--color-paper-2)] text-[var(--color-ink-2)]" : "bg-[var(--color-rust)] text-white"}`}>{c.verification_status}{c.can_buy_slots ? " · can buy" : ""}</span>
+                <Link href={`/channels/${c.id}`} className="font-serif text-sm font-semibold hover:text-[var(--color-rust)]">{c.name}</Link>
+                <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${c.verification_status === "verified" ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : c.verification_status === "pending" ? "bg-[var(--color-paper-2)] text-[var(--color-ink-2)]" : "bg-[var(--color-rust)] text-white"}`}>{c.verification_status === "pending" ? (c.stats.source === "mock" ? "pending · demo" : "pending") : c.verification_status}{c.can_buy_slots ? " · can buy" : ""}</span>
               </div>
               <p className="mt-1 break-all font-mono text-[11px] text-[var(--color-ink-3)]">{c.platform_url}</p>
               <p className="mt-1 font-mono text-[11px] text-[var(--color-ink-2)]">
@@ -159,7 +212,8 @@ export function ChannelOnboarding() {
                 <button type="button" onClick={() => void verify(c.id)} disabled={verifying === c.id} className="rounded-full border border-[var(--color-hair-strong)] px-3 py-1 font-mono text-[10px] uppercase tracking-wide hover:border-[var(--color-rust)] hover:text-[var(--color-rust)] disabled:opacity-50">
                   {verifying === c.id ? "Verifying…" : "Re-verify"}
                 </button>
-                <a href={`/channels/${c.id}`} className="rounded-full border border-[var(--color-hair-strong)] px-3 py-1 font-mono text-[10px] uppercase tracking-wide hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]">Placements →</a>
+                <Link href={`/channels/${c.id}`} className="rounded-full border border-[var(--color-hair-strong)] px-3 py-1 font-mono text-[10px] uppercase tracking-wide hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]">Workspace →</Link>
+                <Link href={browseHref({ channelId: c.id })} className="rounded-full border border-[var(--color-hair-strong)] px-3 py-1 font-mono text-[10px] uppercase tracking-wide hover:border-[var(--color-rust)] hover:text-[var(--color-rust)]">Browse matches →</Link>
               </div>
             </div>
           ))}

@@ -1,34 +1,42 @@
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { PageIntro } from "@/components/ui/PageIntro";
-import { SubmitForm } from "@/components/submit/SubmitForm";
-import { SupplyCreator } from "@/components/supply/SupplyCreator";
+import { SupplyPanel } from "@/components/supply/SupplyPanel";
 import { FadeIn } from "@/components/ui/FadeIn";
 import { ToastProvider } from "@/components/ui/Toast";
 import { Container } from "@/components/ui/primitives";
 
-export default function SubmitPage() {
+export const metadata = {
+  title: "List supply",
+  description:
+    "List a track or a product on VERSIONS. Free listings are used with required credit; paid listings are bought by channel operators with disclosure and tracking built in.",
+};
+
+export default async function SubmitPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = (await searchParams) ?? {};
+  const kindParam = sp.kind;
+  const initialKind =
+    (Array.isArray(kindParam) ? kindParam[0] : kindParam) === "placement" ? "placement" : "music";
+
   return (
     <ToastProvider>
       <div className="flex flex-col flex-1">
         <SiteHeader active="supply" />
         <main className="flex-1">
-          <Container className="py-10">
+          <Container size="wide" className="py-10">
             <FadeIn>
               <PageIntro
                 eyebrow="Supply"
-                title="List a track or a product — live immediately."
-                intro="One blanket agreement, one click-through at creation. A music listing reuses your uploaded track; a placement listing carries its own images. Choose free with attribution or set a flat fee / CPM — paid slots mint a tracking code and carry disclosure from day one."
+                title="Put your work in the right context."
+                intro="Create a music or product listing, choose its terms, and follow its use from one place. Existing uploads can be listed immediately; new audio uploads use the paid review flow."
               />
             </FadeIn>
             <FadeIn delay={0.08}>
-              <SupplyCreator />
-            </FadeIn>
-            <FadeIn delay={0.14}>
-              <div className="mt-10 border-t border-[var(--color-hair)] pt-8">
-                <p className="kicker mb-4">Upload a track</p>
-                <SubmitForm />
-              </div>
+              <SupplyPanel initialKind={initialKind} />
             </FadeIn>
           </Container>
         </main>

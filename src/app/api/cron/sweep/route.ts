@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { timingSafeEqual } from 'crypto';
-import { services, successResponse, errorResponse, corsPreflight, requestIdFor } from '@/lib/services';
-import { drainOutbox, pruneRetention } from '@/services/outbox';
+import { successResponse, errorResponse, corsPreflight, requestIdFor } from '@/lib/services';
+import { runSweep } from '@/services/sweep';
 import { env } from '@/lib/config';
 import { log } from '@/lib/logger';
 
@@ -40,17 +40,11 @@ export function OPTIONS(req: NextRequest) {
 }
 
 async function tickLoop(rid: string) {
-  const result = await services().sweeper.tick();
-  // MODULAR: also drain the durable outbox so any receipt queued but not yet
-  // broadcast (process died mid-emit, SSE was down) replays on the cron
-  // cadence. At-least-once delivery keeps the receipt stream lossless.
-  // The cron tick is the authoritative drain — bypass the in-process
-  // throttle that guards the hot-path SSE-connect caller.
-  const outbox = await drainOutbox(200, { throttle: false });
-  // Retention: prune old rows so append-only tables don't grow forever
-  // (internally throttled to at most one prune per 30 min).
-  const retention = await pruneRetention();
-  return successResponse(200, { result, outbox, retention }, rid);
+  // MODULAR: same body the traffic-driven maybeSweep uses — stuck-leg
+  // retry, the authoritative outbox drain, and retention. This route is
+  // now the daily safety net for the no-visitor case (see sweep.ts).
+  const report = await runSweep();
+  return successResponse(200, { ...report }, rid);
 }
 
 export async function POST(req: NextRequest) {

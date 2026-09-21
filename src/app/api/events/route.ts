@@ -7,6 +7,7 @@
 
 import { subscribe } from '@/lib/event-bus';
 import { drainOutbox } from '@/services/outbox';
+import { maybeSweep } from '@/services/sweep';
 
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'auto';
@@ -16,6 +17,10 @@ export async function GET(req: Request): Promise<Response> {
   // (or the process) was offline, so a reconnect never permanently misses a
   // settlement/tip/play. At-least-once: consumers re-fetch and dedupe by id.
   void drainOutbox();
+  // MODULAR: traffic-driven sweep (stuck-leg retry + authoritative drain +
+  // retention), throttled to once per SWEEP_MIN_INTERVAL_MS. Replaces the
+  // old every-5-min wall-clock cron that kept Neon awake around the clock.
+  void maybeSweep();
   const stream = new ReadableStream({
     start(controller) {
       // Subscribe to all event types that feed clients care about.

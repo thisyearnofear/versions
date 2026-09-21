@@ -25,9 +25,9 @@ export const viewport: Viewport = {
   themeColor: "#f4efe5",
 };
 
-const SITE_TITLE = "VERSIONS — ad infra for AI-run distribution";
+const SITE_TITLE = "VERSIONS — music & product placements that fit your channel";
 const SITE_DESCRIPTION =
-  "One listing primitive — music and product placements — matched to a channel's ethos, used free with attribution or bought as a paid sponsor slot. Platform-verified reach only, tracked, settled flat 60/30/10 supplier / channel / platform in USDC on Arc.";
+  "Find listings that fit what you publish. Use free listings with the required credit, or buy a paid placement with clear pricing, disclosure, tracking, and settlement in USDC on Arc.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
