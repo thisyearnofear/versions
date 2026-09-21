@@ -470,6 +470,14 @@ held ~18 USDC while license fees were $75–250. Fixes shipped:
   the failure instead of swallowing it. Verified live: job `180457`
   reached on-chain `Completed` with real create/complete/payment txs.
 
+> **2026-09-21 update:** the landing `LiveDemoButton` is no longer the
+> submit → pay → review → publish → tip loop (that flow predated the
+> marketplace pivot). It is now a zero-write tour of the public rails:
+> paid supply → logged usage with the by_reporter split → platform-verified
+> reach → the slot's 60/30/10 legs → the unmodified attribution string.
+> The faucet + live-fee path above still backs `npm run ingest:tracks`;
+> there is nothing on the landing page that spends or signs.
+
 Pre-demo checklist: deploy these changes (`git push origin master &&
 ./scripts/deploy-remote.sh`), ingest 2–3 real tracks
 (`npm run ingest:tracks -- --dir <folder>`), pre-auth

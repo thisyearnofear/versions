@@ -8,6 +8,7 @@
 | [primitive-api.md](./primitive-api.md) | Marketplace HTTP contract (listings / channels / slots / usage) + legacy brief→license |
 | [search.md](./search.md) | Browse, supply, matching, channel ethos |
 | [guided-demo-and-billing.md](./guided-demo-and-billing.md) | Catalog provenance, usage proof, settlement safety |
+| [delivery-ingestion.md](./delivery-ingestion.md) | Spec: platform-verified delivery (channel-reported → `platform_api`) |
 | [beachhead.md](./beachhead.md) | How to get to liquidity |
 | [deploy.md](./deploy.md) | Git-only production deploy and guarded schema operations |
 
@@ -17,7 +18,7 @@ Agent conventions (mood tags, feed shape, NFT traces): [../AGENTS.md](../AGENTS.
 
 Supply lists a **music** track or a **placement** product (`POST /api/v1/listings`, live immediately, one blanket agreement) → **Channel** connects and verifies a distribution surface (`POST /api/v1/channels`, platform-pulled stats, `can_buy_slots` only when `verified`) → **Browse** surfaces either kind personalized to ethos (`GET /api/v1/marketplace/search?q=&channelId=` — semantic 70/30 tag hybrid, plus `GET /api/v1/discover/brief` for supervisor brief search) → **Free** use renders attribution (`/listings/:id`, `/t/:code`) → **Paid** slot bought self-serve (`POST /api/v1/slots` → `/pay`, flat 60/30/10 on Arc, tracking code + disclosure, budget cap) → **Every use logged** (`POST /api/v1/usage`, channel-reported by default; `by_reporter` split visible) → settlement legs cap spend atomically.
 
-Guests browse and read. Creating supply, connecting a channel, buying a slot, and logging usage require a wallet session. Free tier is the wedge; paid is ad infra (podcast-ad-slot simple). Beachhead is seeded locally with `npm run seed:marketplace` (idempotent) so browse already feels tight on the first query.
+Guests browse and read. Creating supply, connecting a channel, buying a slot, and logging usage require a wallet session. Free tier is the cold-start mechanism (see [../POSITIONING.md](../POSITIONING.md) — wedge vs primitive vs cold start); paid is ad infra (podcast-ad-slot simple). Beachhead is seeded locally with `npm run seed:marketplace` (idempotent) so browse already feels tight on the first query.
 
 ### Beachhead wedge (what to demo on day one)
 

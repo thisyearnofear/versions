@@ -4,7 +4,7 @@ Music & product placements for distribution channels — matched by ethos, free 
 
 Channels (YouTube automation, radio-style feeds) browse a feed of **music + placements** — same primitive — pick what fits their ethos, and use it. Free use carries a generated attribution you render unmodified; paid placements are flat-fee or CPM with a tracking code, disclosure, and budget cap — self-serve. Thesis: [STRATEGY.md](./STRATEGY.md) · [POSITIONING.md](./POSITIONING.md).
 
-**Live:** [versions.persidian.com](https://versions.persidian.com)  
+**Live:** [versions.persidian.com](https://versions.persidian.com) — 32 listings · 5 verified channels · 1 slot settled for real on Arc (2026-09-17, runbook: [docs/demo-runbook.md](./docs/demo-runbook.md))
 **Repo:** [github.com/thisyearnofear/versions](https://github.com/thisyearnofear/versions)
 
 ## In 30 seconds
@@ -18,21 +18,26 @@ Channels (YouTube automation, radio-style feeds) browse a feed of **music + plac
 Local, zero keys (mock adapters):
 
 ```bash
-npm install && npm run db:push && npm run dev
+npm install && npm run db:push && npm run db:pgvector && npm run dev
 ```
 
-Seed + demo supply (free music + paid CPM placement):
+Seed the beachhead marketplace slice (idempotent — 32 listings + channels with
+ethos embeddings, one paid slot + usage proof):
 
 ```bash
-npm run seed            # legacy demo catalog (optional)
-# Seed marketplace demo via the running app (or call the services in a one-off script)
+npm run seed:marketplace   # beachhead slice (or seed:all for legacy + marketplace)
+npm run seed               # legacy demo catalog only (optional)
 ```
 
-Then `http://localhost:3000`. Full docs: [docs/README.md](./docs/README.md).
+Then `http://localhost:3000`. Without keys everything runs mocked: mock Arc
+hashes, mock LLM reviews/embeddings, mock (`pending`) channels that can't buy.
+Full docs: [docs/README.md](./docs/README.md).
 
 ## Stack
 
-Next.js 16 · Postgres (Neon) · Drizzle · NextAuth (wallet) · Wagmi / RainbowKit · Arc USDC · OpenRouter (LLM + embeddings) · YouTube Data API (channel verification)
+Next.js 16 · Postgres (Neon, pgvector for semantic ranking) · Drizzle · NextAuth (wallet) · Wagmi / RainbowKit · Arc USDC · LLM fallback chain (Venice → HF Qwen → TokenRouter → OpenRouter) + OpenRouter embeddings · YouTube Data API (channel verification)
+
+Claim discipline: "free with attribution" = render `attribution_text` unmodified; "verified" reach = `stats_source = 'platform_api'`; "settled" = a `slot_leg` on Arc. Usage aggregates always show the `by_reporter` split (`channel | platform_api | manual`) — channel-reported delivery is never "verified".
 
 ## Commands
 
@@ -40,8 +45,9 @@ Next.js 16 · Postgres (Neon) · Drizzle · NextAuth (wallet) · Wagmi / Rainbow
 npm run dev          # local
 npm test             # vitest
 npm run verify       # typecheck + tests + lint (CI gate)
-npm run build        # production image
-npm run seed         # demo catalog
+npm run build        # next build . --experimental-build-mode compile
+npm run seed:marketplace  # beachhead demo slice (idempotent)
+npm run seed:all     # legacy catalog + marketplace slice
 npm run check:arc    # live Arc probe
 ./scripts/deploy-remote.sh   # prod app deploy (git-only — see docs/deploy.md)
 npm run db:prod:status       # prod DB state (read-only; run on VPS)
@@ -49,4 +55,8 @@ npm run db:prod:backup       # verified production backup (run on VPS)
 npm run db:prod:restore-drill -- /absolute/path/to/backup.dump  # isolated recovery test
 ```
 
-Env: copy `.env.example`. Omit keys → mock. `OPENROUTER_API_KEY`, Arc vars, and `YOUTUBE_API_KEY` (for verified channels; mock otherwise) go live. Never commit `.env`.
+Env: copy `.env.example`. Omit keys → mock (`GET /api/health/ready` reports
+`arc` / `llm` / `embedding` / `channelProbe` flags). Going live needs
+`OPENROUTER_API_KEY` (or Venice/HF/TokenRouter keys) for real matching,
+`YOUTUBE_API_KEY` for verified channels, and `ARC_RPC_URL` + platform wallet
+key for real settlement. Never commit `.env`.

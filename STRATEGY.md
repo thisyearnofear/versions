@@ -85,7 +85,7 @@ surface.
   field (`channel | platform_api | manual`) must stay visible in every
   aggregate — we do not launder self-reported delivery into "verified."
   Platform-verified delivery is a future ingestion path, not a shipped
-  one.
+  one: spec in [docs/delivery-ingestion.md](./docs/delivery-ingestion.md).
 - **No per-track bespoke terms.** By design — but it means we cannot
   promise a negotiated price, territory carve-out, or training opt-out
   per listing.
