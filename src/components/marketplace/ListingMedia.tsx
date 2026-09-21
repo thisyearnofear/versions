@@ -14,6 +14,7 @@ export function ListingMedia({
   coverSvg,
   compact = false,
   priority = false,
+  fallbackTitle = true,
 }: {
   title: string;
   kind: "music" | "placement";
@@ -22,6 +23,9 @@ export function ListingMedia({
   coverSvg?: string | null;
   compact?: boolean;
   priority?: boolean;
+  /* When false, the no-media fallback tile drops the title — for surfaces
+     (like the landing stage) that render the title directly beneath. */
+  fallbackTitle?: boolean;
 }) {
   const imageUrls = useMemo(
     () => (images ?? []).map(mediaHref).filter((u): u is string => !!u),
@@ -66,10 +70,16 @@ export function ListingMedia({
           )}
         >
           <div className="min-w-0">
+            <svg viewBox="0 0 64 64" className="mb-2 h-7 w-7 opacity-40" aria-hidden="true">
+              <path d="M20 18 L32 46 L44 18" fill="none" stroke="#c84a1f" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" transform="translate(3.5 2)" opacity="0.6" />
+              <path d="M20 18 L32 46 L44 18" fill="none" stroke="#1a1a1a" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
             <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
               {kind === "music" ? "Track" : "Placement"}
             </p>
-            <p className="truncate font-serif text-lg font-bold leading-tight text-[var(--color-ink)]">{title}</p>
+            {fallbackTitle && (
+              <p className="truncate font-serif text-lg font-bold leading-tight text-[var(--color-ink)]">{title}</p>
+            )}
           </div>
         </div>
       )}

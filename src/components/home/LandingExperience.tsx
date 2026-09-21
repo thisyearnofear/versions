@@ -379,6 +379,7 @@ export function LandingExperience() {
                         images={selected.images}
                         coverSvg={selected.cover_svg}
                         priority
+                        fallbackTitle={false}
                       />
                       <div className="mt-3">
                         {demo ? (
@@ -395,6 +396,11 @@ export function LandingExperience() {
                         )}
                         <p className="font-serif text-[14px] text-[var(--color-paper-2)]">
                           {selected.supplier_name} · {pricingLabel(selected)}
+                          {selected.fit_score != null && (
+                            <span className="ml-2 font-mono text-[11px] uppercase tracking-wide opacity-70">
+                              fit {selected.fit_score.toFixed(2)}
+                            </span>
+                          )}
                         </p>
                         {selected.why_fits?.[0] ? (
                           <p className="mt-1 font-serif text-[13px] italic text-[var(--color-paper-2)]">

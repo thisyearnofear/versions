@@ -13,6 +13,7 @@
 // CTAs to /discover + /submit (the live doors), never to a fake checkout.
 
 import type { MarketplaceListing } from './marketplace-client';
+import { generateRatingCover, type RatingCoverInput } from './cover-gen';
 
 export interface DemoChannel {
   id: string;
@@ -27,13 +28,22 @@ export const DEMO_CHANNELS: DemoChannel[] = [
   { id: 'demo-nightdrive', name: 'Midnight Mile', niche: 'night-drive mixes', query: 'night drive warm electronic' },
 ];
 
-function demoListing(partial: Partial<MarketplaceListing> & Pick<MarketplaceListing, 'id' | 'kind' | 'title' | 'supplier_name' | 'summary' | 'tags' | 'tier'>): MarketplaceListing {
+function demoListing(
+  partial: Partial<MarketplaceListing> &
+    Pick<MarketplaceListing, 'id' | 'kind' | 'title' | 'supplier_name' | 'summary' | 'tags' | 'tier'> & {
+      cover?: Omit<RatingCoverInput, 'title' | 'moodTags'>;
+    },
+): MarketplaceListing {
   const free = partial.tier === 'free';
+  const { cover, ...fields } = partial;
   return {
     supplier_wallet: '0x0000000000000000000000000000000000000000',
     submission_id: null,
     images: [],
-    cover_svg: null,
+    // Generated cover art — deterministic per title via cover-gen, same
+    // pipeline live submissions use. Keeps the demo stage visual instead
+    // of an empty title tile; still demo-labeled by the UI.
+    cover_svg: generateRatingCover({ title: fields.title, moodTags: fields.tags, ...cover }),
     audio_path: null,
     pricing: free ? null : { model: 'flat', flatFeeUsdc: '3.00' },
     budget_cap_usdc: null,
@@ -49,7 +59,7 @@ function demoListing(partial: Partial<MarketplaceListing> & Pick<MarketplaceList
     fit_score: 0.9,
     why_fits: (partial.tags ?? []).slice(0, 2),
     similarity: null,
-    ...partial,
+    ...fields,
   } as MarketplaceListing;
 }
 
@@ -58,22 +68,26 @@ export const DEMO_LISTINGS: MarketplaceListing[] = [
     id: 'demo-midnight-study', kind: 'music', title: 'Midnight Study Session', supplier_name: 'Luna Rivera',
     summary: 'Lo-fi tape loop for late-night focus. 84 bpm, vinyl crackle, no vocals.',
     tags: ['lo-fi', 'study', 'focus', 'night drive', 'analog'], tier: 'free',
+    cover: { valence: 'dark', tempo: 'dragging' },
   }),
   demoListing({
     id: 'demo-neon-after', kind: 'music', title: 'Neon After Hours', supplier_name: 'The Night Shift',
     summary: 'Synthwave-tinted lo-fi, steady pulse for night driving.',
     tags: ['lo-fi', 'night drive', 'midnight', 'chill', 'synth'], tier: 'free',
+    cover: { valence: 'dark', tempo: 'rushing', energy: 'higher' },
   }),
   demoListing({
     id: 'demo-paper-lanterns', kind: 'music', title: 'Paper Lanterns', supplier_name: 'Paper Birds',
     summary: 'Fingerpicked guitar + soft pad, sunrise focus.',
     tags: ['ambient', 'study', 'focus', 'acoustic', 'chill'], tier: 'free',
+    cover: { valence: 'bright', tempo: 'locked' },
   }),
   demoListing({
     id: 'demo-warm-tape', kind: 'placement', title: 'Warm Tape — Analog Plugin', supplier_name: 'Fable Audio',
     summary: 'Saturation plugin for dusty drums and glued mixes. Free trial.',
     tags: ['lo-fi', 'analog', 'focus', 'production'], tier: 'paid',
     attribution_text: 'Featured: Warm Tape — Analog Plugin by Fable Audio — via VERSIONS. Paid placement — The channel is paid to feature this product.',
+    cover: { tempo: 'locked', energy: 'same' },
   }),
   demoListing({
     id: 'demo-headphone-stand', kind: 'placement', title: 'Walnut Headphone Stand', supplier_name: 'Analog & Oak',
@@ -85,6 +99,7 @@ export const DEMO_LISTINGS: MarketplaceListing[] = [
     id: 'demo-city-rain', kind: 'music', title: 'City Rain Window', supplier_name: 'Field Notes Club',
     summary: 'Soft piano under sampled rainfall. Made for reading.',
     tags: ['ambient', 'study', 'calm', 'instrumental'], tier: 'free',
+    cover: { valence: 'dark', tempo: 'dragging', energy: 'lower' },
   }),
 ];
 
