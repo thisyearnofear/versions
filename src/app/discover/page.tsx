@@ -3,6 +3,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { MarketplaceBrowse } from "@/components/discovery/MarketplaceBrowse";
+import { KitBar } from "@/components/marketplace/KitBar";
 import { FadeIn } from "@/components/ui/FadeIn";
 import { ToastProvider } from "@/components/ui/Toast";
 import { Container } from "@/components/ui/primitives";
@@ -30,6 +31,8 @@ export default function DiscoverPage() {
         </main>
       </div>
       <SiteFooter />
+      {/* The kit is the guest's payoff — it rides with the shelf. */}
+      <KitBar />
     </ToastProvider>
   );
 }

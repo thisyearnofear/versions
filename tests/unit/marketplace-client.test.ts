@@ -7,6 +7,8 @@ import {
   settlementLabel,
   updateBrowseHref,
   listingPriceLabel,
+  listingPriceBadge,
+  isMarketplaceSort,
   createRequestScope,
   parseUsageCount,
   publishedUrl,
@@ -87,6 +89,21 @@ describe('browseHref', () => {
     expect(browseHref({ kind: 'bogus', tier: 'bogus' })).toBe('/discover');
     expect(browseHref({ q: '  ' })).toBe('/discover');
   });
+
+  it('carries a real sort, keeps the default `fit` out of the URL, drops junk', () => {
+    expect(browseHref({ q: 'lo-fi', sort: 'price_asc' })).toBe('/discover?q=lo-fi&sort=price_asc');
+    expect(browseHref({ sort: 'fit' })).toBe('/discover');
+    expect(browseHref({ sort: 'cheapest' })).toBe('/discover');
+  });
+
+  it('recognises only the API’s own sort keys', () => {
+    expect(isMarketplaceSort('newest')).toBe(true);
+    expect(isMarketplaceSort('price_desc')).toBe(true);
+    expect(isMarketplaceSort('fit')).toBe(true); // valid key, just not URL-worthy
+    expect(isMarketplaceSort('')).toBe(false);
+    expect(isMarketplaceSort(null)).toBe(false);
+    expect(isMarketplaceSort('cheapest')).toBe(false);
+  });
 });
 
 describe('searchHref', () => {
@@ -100,6 +117,13 @@ describe('searchHref', () => {
     expect(p.get('tier')).toBe('free');
     expect(p.get('limit')).toBe('20');
     expect(p.get('offset')).toBe('40');
+  });
+
+  it('forwards the sort to the API so paging cannot lie about order', () => {
+    const href = searchHref({ sort: 'price_asc' }, 20);
+    const p = new URLSearchParams(href.split('?')[1]);
+    expect(p.get('sort')).toBe('price_asc');
+    expect(p.get('offset')).toBe('20');
   });
 });
 
@@ -241,6 +265,21 @@ describe('listingPriceLabel', () => {
     ).toBe('4.50 USDC per 1,000 impressions');
     expect(listingPriceLabel({ tier: 'paid', pricing: null } as never)).toBe(
       'Paid placement · pricing unavailable',
+    );
+  });
+});
+
+describe('listingPriceBadge', () => {
+  it('is the short card form — free, flat, cpm, and unknown', () => {
+    expect(listingPriceBadge({ tier: 'free', pricing: null } as never)).toBe('Free · credit required');
+    expect(
+      listingPriceBadge({ tier: 'paid', pricing: { model: 'flat', flatFeeUsdc: '3.00' } } as never),
+    ).toBe('3.00 USDC flat');
+    expect(
+      listingPriceBadge({ tier: 'paid', pricing: { model: 'cpm', cpmUsdc: '4.50' } } as never),
+    ).toBe('4.50 USDC CPM');
+    expect(listingPriceBadge({ tier: 'paid', pricing: null } as never)).toBe(
+      'Paid · pricing on request',
     );
   });
 });

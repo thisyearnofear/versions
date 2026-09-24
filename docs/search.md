@@ -22,12 +22,15 @@ negotiation — Browse is the product, not the contract.
 
 ## Current experience
 
-- **Browse (`/discover`)** — unified feed above the legacy brief search.
-  Kind filter (`all | music | placement`), text filter over title/brand/
-  summary/tags, tier badge (`free · attribution` / `paid · flat|CPM`),
-  tag chips, audio player or image grid, attribution block with disclosure
-  (`#ad`), buy sheet (pick a verified channel, set budget, `POST /slots`
-  → `/pay`), and a usage proof rollup (`by_reporter` split).
+- **Browse (`/discover`)** — the shelf. Inventory header (`N listings` from
+  the post-facet `total` plus the pre-facet `counts` slice breakdown) →
+  guest channel probe (paste a URL/handle + vibe → `?q=`; no account,
+  no write) → search + kind/tier facets + server-side `sort` →
+  price-badged, prose-fit listing cards (`PriceBadge`, `FitNote`). Then the
+  listing page carries the attribution block with disclosure (`#ad`) and the
+  buy sheet (pick a verified channel, set budget, `POST /slots` → `/pay`),
+  with a usage proof rollup (`by_reporter` split). See
+  [interface.md](./interface.md) for the surface contract.
 - **Supply (`/submit`)** — one card, two kinds (toggle). Title/brand +
   pitch + tags, track picker (music, ownership-checked) or image URLs
   (placement), tier, model, fee/CPM, optional budget cap, live
@@ -42,10 +45,16 @@ negotiation — Browse is the product, not the contract.
   Verified channels unlock paid placements everywhere.
 - **Matching** — listings and channel ethos share the same vector space
   (`listing_embeddings` / `channel_embeddings`, pgvector 512). Browse is
-  now channel-ethos personalized: `GET /api/v1/marketplace/search?q=&channelId=`
+  now channel-ethos personalized: `GET /api/v1/marketplace/search?q=&channelId=&kind=&tier=&sort=&limit=&offset=`
   ranks either catalog by cosine closeness to the channel's ethos text
   (niche + platform description + recent titles) blended with tag overlap
   (70/30 hybrid), with `mode: semantic|tag|recent` in the response.
+  `sort` (`fit` default | `newest` | `price_asc` | `price_desc`) is applied
+  **server-side before paging** — free listings price at 0, so `price_asc`
+  surfaces the free tier first. The response also carries `counts`
+  (`{ total, music, placement, free, paid }`) computed **before** the
+  kind/tier facets, so a chosen facet never collapses the other groups;
+  the top-level `total` stays the post-facet count the pager pages over.
   Free-text `q` adds to the channel vector so `?channelId=&q=lo-fi night drive`
   refines it. The legacy `brief → rank` path (`placement_briefs`,
   `version_embeddings`, 0.7/0.3 hybrid) still runs on `/discover` for
@@ -79,7 +88,7 @@ negotiation — Browse is the product, not the contract.
 ## Routes (marketplace)
 
 ```
-GET  /api/v1/marketplace/search[?q&channelId&kind& tier &limit&offset]  public, personalized ranking (semantic→tag→recent, mode in response, why_fits citations)
+GET  /api/v1/marketplace/search[?q&channelId&kind&tier&sort&limit&offset]  public, personalized ranking (semantic→tag→recent, mode in response, why_fits citations, sort applied pre-page, pre-facet counts)
 GET  /api/v1/listings[?kind=music|placement&limit&offset]    public, live supply
 GET  /api/v1/listings?mine=1&limit                          caller-scoped
 POST /api/v1/listings                                        supplier, agreement required — fire-and-forget listing embedding

@@ -3,8 +3,17 @@ import type { ListingRecord } from '../services/listings';
 import type { ChannelRecord } from '../services/channels';
 import type { SlotRecord, SlotLegRecord } from '../services/slots';
 import type { UsageRecord } from '../services/usage';
+import type { MarketplaceCounts, MarketplaceSort } from '../services/marketplace';
 
 export type { ListingRecord, ChannelRecord, SlotRecord, SlotLegRecord, UsageRecord };
+export type { MarketplaceCounts, MarketplaceSort };
+
+/** Browse sorts the API understands. `fit` is the default ranking order. */
+export const MARKETPLACE_SORTS: readonly MarketplaceSort[] = ['fit', 'newest', 'price_asc', 'price_desc'];
+
+export function isMarketplaceSort(raw: string | null | undefined): raw is MarketplaceSort {
+  return !!raw && (MARKETPLACE_SORTS as readonly string[]).includes(raw);
+}
 
 export type MarketplaceListing = ListingRecord & {
   fit_score?: number;
@@ -32,13 +41,21 @@ export async function marketplaceRequest<T>(url: string, init: RequestInit = {})
 }
 
 export function browseHref(
-  { q, channelId, kind, tier }: { q?: string; channelId?: string; kind?: string; tier?: string } = {},
+  { q, channelId, kind, tier, sort }: {
+    q?: string;
+    channelId?: string;
+    kind?: string;
+    tier?: string;
+    sort?: string;
+  } = {},
 ): string {
   const p = new URLSearchParams();
   if (q?.trim()) p.set('q', q.trim());
   if (channelId) p.set('channelId', channelId);
   if (kind === 'music' || kind === 'placement') p.set('kind', kind);
   if (tier === 'free' || tier === 'paid') p.set('tier', tier);
+  // `fit` is the default — keep it out of the URL so a plain browse stays clean.
+  if (isMarketplaceSort(sort) && sort !== 'fit') p.set('sort', sort);
   return `/discover${p.size ? `?${p}` : ''}`;
 }
 
@@ -68,6 +85,19 @@ export function mediaHref(raw: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Compact price for card badges (M2: price is a first-class citizen).
+ * Shorter than `listingPriceLabel`, which stays the detail-page form.
+ */
+export function listingPriceBadge(listing: Pick<ListingRecord, 'tier' | 'pricing'>): string {
+  if (listing.tier === 'free') return 'Free · credit required';
+  if (listing.pricing?.model === 'flat' && listing.pricing.flatFeeUsdc)
+    return `${listing.pricing.flatFeeUsdc} USDC flat`;
+  if (listing.pricing?.model === 'cpm' && listing.pricing.cpmUsdc)
+    return `${listing.pricing.cpmUsdc} USDC CPM`;
+  return 'Paid · pricing on request';
 }
 
 export function listingPriceLabel(listing: Pick<ListingRecord, 'tier' | 'pricing'>): string {

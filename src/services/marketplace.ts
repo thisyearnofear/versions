@@ -18,7 +18,7 @@
 // like feed.searchByBrief — feed-update invalidates the marketplace keys
 // too.
 
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '../lib/db';
 import {
   listings as listingsTable,
@@ -33,11 +33,30 @@ import { buildChannelEthosText } from './channels';
 import { log } from '../lib/logger';
 import type { ListingKind, ListingTier } from '../lib/types';
 
+/** Sort keys for browse. `fit` (default) keeps the ranking order intact. */
+export type MarketplaceSort = 'fit' | 'newest' | 'price_asc' | 'price_desc';
+
+/**
+ * Facet counts over the match slice, computed BEFORE the kind/tier facets
+ * are applied — so an active facet never collapses its own group counts
+ * (standard marketplace behaviour: the shelf keeps telling you what's in
+ * the other groups while you filter). `total` here is the facet-free
+ * count; the result's top-level `total` is the post-facet count paging uses.
+ */
+export interface MarketplaceCounts {
+  total: number;
+  music: number;
+  placement: number;
+  free: number;
+  paid: number;
+}
+
 export interface MarketplaceSearchArgs {
   query?: string | null;
   channelId?: string | null;
   kind?: ListingKind | null;
   tier?: ListingTier | null;
+  sort?: MarketplaceSort | null;
   tags?: string[] | null;
   limit?: number;
   offset?: number;
@@ -77,6 +96,10 @@ export interface MarketplaceSearchResult {
   offset: number;
   mode: 'semantic' | 'tag' | 'recent';
   rows: MarketplaceRow[];
+  /** Facet counts for the match slice (pre kind/tier facets). */
+  counts?: MarketplaceCounts;
+  /** Sort actually applied (normalised; `fit` when unset). */
+  sort?: MarketplaceSort;
   /** Present when the route served a degraded empty result (DB unreachable). */
   degraded?: boolean;
 }
@@ -124,11 +147,83 @@ function marketplaceCacheKey(args: MarketplaceSearchArgs): string {
     args.channelId || '',
     args.kind || '',
     args.tier || '',
+    normalizeMarketplaceSort(args.sort),
     (args.tags || []).join(','),
     String(args.limit ?? DEFAULT_LIMIT),
     String(args.offset ?? 0),
   ];
   return `marketplace:${parts.join('|')}`;
+}
+
+function normalizeMarketplaceSort(raw: MarketplaceSort | null | undefined): MarketplaceSort {
+  return raw === 'newest' || raw === 'price_asc' || raw === 'price_desc' ? raw : 'fit';
+}
+
+/** Facet counts over the match slice, before the kind/tier facets apply. */
+function countsFor(items: Array<{ kind: string; tier: string }>): MarketplaceCounts {
+  const counts: MarketplaceCounts = { total: items.length, music: 0, placement: 0, free: 0, paid: 0 };
+  for (const item of items) {
+    if (item.kind === 'music') counts.music += 1;
+    else if (item.kind === 'placement') counts.placement += 1;
+    if (item.tier === 'free') counts.free += 1;
+    else if (item.tier === 'paid') counts.paid += 1;
+  }
+  return counts;
+}
+
+/**
+ * Numeric price for sorting. Free supply counts as 0 so `price_asc`
+ * surfaces the free tier first — the wedge, deliberately.
+ */
+function priceValue(tier: string, pricing: unknown): number {
+  if (tier !== 'paid') return 0;
+  const p = pricing as { model?: string; flatFeeUsdc?: string; cpmUsdc?: string } | null;
+  if (!p) return 0;
+  const n = Number(p.model === 'cpm' ? p.cpmUsdc : p.flatFeeUsdc);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Apply the requested sort to already-ranked rows. `fit` is a no-op: the
+ * ranking paths hand over fit order, and only explicit sorts reorder.
+ * A newest-first tiebreak keeps paging deterministic across offsets.
+ */
+function sortMarketplaceRows(rows: MarketplaceRow[], sort: MarketplaceSort): MarketplaceRow[] {
+  if (sort === 'fit') return rows;
+  const byNewest = (a: MarketplaceRow, b: MarketplaceRow) =>
+    (b.created_at ?? '').localeCompare(a.created_at ?? '');
+  const sorted = [...rows];
+  if (sort === 'newest') {
+    sorted.sort(byNewest);
+    return sorted;
+  }
+  sorted.sort((a, b) => {
+    const av = priceValue(a.tier, a.pricing);
+    const bv = priceValue(b.tier, b.pricing);
+    if (av !== bv) return sort === 'price_asc' ? av - bv : bv - av;
+    return byNewest(a, b);
+  });
+  return sorted;
+}
+
+function finalizeMarketplace(opts: {
+  rows: MarketplaceRow[];
+  counts: MarketplaceCounts;
+  mode: MarketplaceSearchResult['mode'];
+  sort: MarketplaceSort;
+  limit: number;
+  offset: number;
+}): MarketplaceSearchResult {
+  const ordered = sortMarketplaceRows(opts.rows, opts.sort);
+  return {
+    total: ordered.length,
+    limit: opts.limit,
+    offset: opts.offset,
+    mode: opts.mode,
+    counts: opts.counts,
+    sort: opts.sort,
+    rows: ordered.slice(opts.offset, opts.offset + opts.limit),
+  };
 }
 
 export function createMarketplaceService(opts?: { embedding?: EmbeddingAdapter }) {
@@ -138,6 +233,7 @@ export function createMarketplaceService(opts?: { embedding?: EmbeddingAdapter }
     queryVec: number[];
     kind: ListingKind | null | undefined;
     tier: ListingTier | null | undefined;
+    sort: MarketplaceSort;
     limit: number;
     offset: number;
     tokens: string[];
@@ -145,8 +241,6 @@ export function createMarketplaceService(opts?: { embedding?: EmbeddingAdapter }
     if (embedding.mock) return null;
     try {
       const vecStr = `[${opts.queryVec.map((v) => v.toFixed(6)).join(',')}]`;
-      const kindClause = opts.kind ? sql`AND l.kind = ${opts.kind}` : sql``;
-      const tierClause = opts.tier ? sql`AND l.tier = ${opts.tier}` : sql``;
       // LEFT JOIN so listings without embeddings still surface (similarity 0)
       const result = await db.execute(sql`
         SELECT
@@ -156,12 +250,14 @@ export function createMarketplaceService(opts?: { embedding?: EmbeddingAdapter }
           COALESCE(1 - (le.embedding <=> ${vecStr}::vector), 0) AS similarity
         FROM listings l
         LEFT JOIN listing_embeddings le ON le.listing_id = l.id
-        WHERE l.status = 'active' ${kindClause} ${tierClause}
+        WHERE l.status = 'active'
         ORDER BY le.embedding <=> ${vecStr}::vector NULLS LAST, l.created_at DESC
         LIMIT 200
       `);
       const rows = (result.rows ?? []) as Array<Record<string, unknown>>;
       if (rows.length === 0) return null;
+      // Facet counts describe the whole match slice — not the facet already on.
+      const counts = countsFor(rows.map((r) => ({ kind: String(r.kind), tier: String(r.tier) })));
       // Map + score
       const scored = rows.map((r) => {
         const tags = (r.tags as string[]) ?? [];
@@ -174,9 +270,10 @@ export function createMarketplaceService(opts?: { embedding?: EmbeddingAdapter }
       });
       // Re-sort by hybrid score (semantic primary + tag secondary)
       scored.sort((a,b) => b.score - a.score);
-      const total = scored.length;
-      const sliced = scored.slice(opts.offset, opts.offset + opts.limit);
-      const outRows: MarketplaceRow[] = sliced.map((s) => {
+      const facet = scored.filter(
+        (s) => (!opts.kind || s.raw.kind === opts.kind) && (!opts.tier || s.raw.tier === opts.tier),
+      );
+      const outRows: MarketplaceRow[] = facet.map((s) => {
         const r = s.raw;
         const cap = r.budget_cap_usdc as string | null;
         const spent = (r.budget_spent_usdc as string) || '0';
@@ -212,7 +309,7 @@ export function createMarketplaceService(opts?: { embedding?: EmbeddingAdapter }
           similarity: s.sim,
         };
       });
-      return { total, limit: opts.limit, offset: opts.offset, mode: 'semantic', rows: outRows };
+      return finalizeMarketplace({ rows: outRows, counts, mode: 'semantic', sort: opts.sort, limit: opts.limit, offset: opts.offset });
     } catch (err) {
       log.warn('marketplace semantic search failed, falling back to tag', { error: (err as Error).message });
       return null;
@@ -223,33 +320,32 @@ export function createMarketplaceService(opts?: { embedding?: EmbeddingAdapter }
     tokens: string[];
     kind: ListingKind | null | undefined;
     tier: ListingTier | null | undefined;
+    sort: MarketplaceSort;
     limit: number;
     offset: number;
     channelTokens?: string[];
   }): Promise<MarketplaceSearchResult> {
+    // Load the whole active slice, then apply kind/tier locally: facet
+    // counts must describe the match slice, not the facet already applied.
     const candidates = await db
       .select()
       .from(listingsTable)
-      .where(
-        opts.kind && opts.tier
-          ? and(eq(listingsTable.status, 'active'), eq(listingsTable.kind, opts.kind), eq(listingsTable.tier, opts.tier))
-          : opts.kind
-            ? and(eq(listingsTable.status, 'active'), eq(listingsTable.kind, opts.kind))
-            : opts.tier
-              ? and(eq(listingsTable.status, 'active'), eq(listingsTable.tier, opts.tier))
-              : eq(listingsTable.status, 'active')
-      )
+      .where(eq(listingsTable.status, 'active'))
       .limit(500);
+    const counts = countsFor(candidates.map((l) => ({ kind: l.kind, tier: l.tier })));
+    const facetCandidates = candidates.filter(
+      (l) => (!opts.kind || l.kind === opts.kind) && (!opts.tier || l.tier === opts.tier),
+    );
+    const byNewestCreatedAt = (
+      a: typeof listingsTable.$inferSelect,
+      b: typeof listingsTable.$inferSelect,
+    ) => (b.createdAt?.getTime?.() ?? 0) - (a.createdAt?.getTime?.() ?? 0);
     // Further tag filter if provided via listing search tags param
     const effectiveTokens = [...opts.tokens, ...(opts.channelTokens ?? [])];
     // If no tokens, return recent
     if (effectiveTokens.length === 0) {
-      const sorted = [...candidates].sort((a,b) => (b.createdAt?.getTime?.() ?? 0) - (a.createdAt?.getTime?.() ?? 0));
-      const total = sorted.length;
-      const offset = opts.offset ?? 0;
-      const limit = opts.limit ?? DEFAULT_LIMIT;
-      const sliced = sorted.slice(offset, offset + limit);
-      const rows: MarketplaceRow[] = sliced.map((l) => ({
+      const sorted = [...facetCandidates].sort(byNewestCreatedAt);
+      const rows: MarketplaceRow[] = sorted.map((l) => ({
         id: l.id,
         kind: l.kind,
         supplier_wallet: l.supplierWallet,
@@ -279,9 +375,9 @@ export function createMarketplaceService(opts?: { embedding?: EmbeddingAdapter }
         why_fits: [],
         similarity: null,
       }));
-      return { total, limit, offset, mode: 'recent', rows };
+      return finalizeMarketplace({ rows, counts, mode: 'recent', sort: opts.sort, limit: opts.limit, offset: opts.offset });
     }
-    const scored = candidates.map((l) => {
+    const scored = facetCandidates.map((l) => {
       const tags = l.tags ?? [];
       const { score, hits } = scoreTagOverlap(tags, effectiveTokens);
       return { l, score, hits };
@@ -294,12 +390,8 @@ export function createMarketplaceService(opts?: { embedding?: EmbeddingAdapter }
     });
     // If no scored hits, fall back to recent (so browse never empty when tags miss)
     if (scored.length === 0) {
-      const sorted = [...candidates].sort((a,b) => (b.createdAt?.getTime?.() ?? 0) - (a.createdAt?.getTime?.() ?? 0));
-      const total = sorted.length;
-      const limit = opts.limit ?? DEFAULT_LIMIT;
-      const offset = opts.offset ?? 0;
-      const sliced = sorted.slice(offset, offset + limit);
-      const rows: MarketplaceRow[] = sliced.map((l) => ({
+      const sorted = [...facetCandidates].sort(byNewestCreatedAt);
+      const rows: MarketplaceRow[] = sorted.map((l) => ({
         id: l.id,
         kind: l.kind,
         supplier_wallet: l.supplierWallet,
@@ -329,13 +421,9 @@ export function createMarketplaceService(opts?: { embedding?: EmbeddingAdapter }
         why_fits: [],
         similarity: null,
       }));
-      return { total: candidates.length, limit, offset, mode: 'recent', rows };
+      return finalizeMarketplace({ rows, counts, mode: 'recent', sort: opts.sort, limit: opts.limit, offset: opts.offset });
     }
-    const total = scored.length;
-    const limit = opts.limit ?? DEFAULT_LIMIT;
-    const offset = opts.offset ?? 0;
-    const sliced = scored.slice(offset, offset + limit);
-    const rows: MarketplaceRow[] = sliced.map((s) => ({
+    const rows: MarketplaceRow[] = scored.map((s) => ({
       id: s.l.id,
       kind: s.l.kind,
       supplier_wallet: s.l.supplierWallet,
@@ -365,14 +453,15 @@ export function createMarketplaceService(opts?: { embedding?: EmbeddingAdapter }
       why_fits: explainTagHits(s.hits),
       similarity: null,
     }));
-    return { total, limit, offset, mode: 'tag', rows };
+    return finalizeMarketplace({ rows, counts, mode: 'tag', sort: opts.sort, limit: opts.limit, offset: opts.offset });
   }
 
   return {
     async search(args: MarketplaceSearchArgs): Promise<MarketplaceSearchResult> {
       const limit = Math.min(MAX_LIMIT, Math.max(1, Number(args.limit) || DEFAULT_LIMIT));
       const offset = Math.max(0, Number(args.offset) || 0);
-      const key = marketplaceCacheKey({ ...args, limit, offset });
+      const sort = normalizeMarketplaceSort(args.sort);
+      const key = marketplaceCacheKey({ ...args, limit, offset, sort });
       return cached(key, CACHE_TTL_MS, async () => {
         const qTokens = tokenize((args.query || '').trim());
         let channelTokens: string[] | undefined;
@@ -395,14 +484,14 @@ export function createMarketplaceService(opts?: { embedding?: EmbeddingAdapter }
             }
             if (textForEmbed) {
               const vec = await embedding.embedText(textForEmbed);
-              const semantic = await semanticSearch({ queryVec: vec.embedding, kind: args.kind, tier: args.tier, limit, offset, tokens });
+              const semantic = await semanticSearch({ queryVec: vec.embedding, kind: args.kind, tier: args.tier, sort, limit, offset, tokens });
               if (semantic && semantic.rows.length > 0) return semantic;
             }
           } catch (err) {
             log.warn('marketplace semantic setup failed', { error: (err as Error).message });
           }
         }
-        return tagSearch({ tokens, kind: args.kind, tier: args.tier, limit, offset, channelTokens: undefined });
+        return tagSearch({ tokens, kind: args.kind, tier: args.tier, sort, limit, offset, channelTokens: undefined });
       }, ['feed-update']);
     },
   };

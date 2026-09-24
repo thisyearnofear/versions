@@ -16,9 +16,14 @@ import {
   requestIdFor,
   parsePositiveIntParam,
 } from '@/lib/services';
+import type { MarketplaceSort } from '@/services/marketplace';
 import { log } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
+
+function parseSort(raw: string | null): MarketplaceSort | null {
+  return raw === 'fit' || raw === 'newest' || raw === 'price_asc' || raw === 'price_desc' ? raw : null;
+}
 
 export function OPTIONS(req: NextRequest) {
   return corsPreflight(requestIdFor(req));
@@ -31,6 +36,7 @@ export async function GET(req: NextRequest) {
   const channelId = searchParams.get('channelId');
   const kind = searchParams.get('kind');
   const tier = searchParams.get('tier');
+  const sort = parseSort(searchParams.get('sort'));
   const limit = parsePositiveIntParam(searchParams.get('limit'), 20, 50);
   const offset = parsePositiveIntParam(searchParams.get('offset'), 0);
 
@@ -43,6 +49,7 @@ export async function GET(req: NextRequest) {
       channelId,
       kind: kindVal,
       tier: tierVal,
+      sort,
       limit,
       offset,
     });
@@ -55,7 +62,16 @@ export async function GET(req: NextRequest) {
     log.error('marketplace search failed', { requestId, error: (err as Error).message });
     return successResponse(
       200,
-      { total: 0, limit, offset, mode: 'recent', rows: [], degraded: true },
+      {
+        total: 0,
+        limit,
+        offset,
+        mode: 'recent',
+        rows: [],
+        counts: { total: 0, music: 0, placement: 0, free: 0, paid: 0 },
+        sort: sort ?? 'fit',
+        degraded: true,
+      },
       requestId,
     );
   }

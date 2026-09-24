@@ -48,7 +48,7 @@ function SignInForm() {
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-rust)] mb-3">
-            Supervisor access
+            Channel access
           </p>
           <h1 className="font-serif text-3xl font-black tracking-tight mb-2">Sign in</h1>
           <p className="font-serif text-base text-[var(--color-ink-2)] leading-snug">
@@ -60,7 +60,8 @@ function SignInForm() {
           {!isConnected ? (
             <div className="text-center space-y-6">
               <p className="font-serif text-base text-[var(--color-ink-2)]">
-                Search stays free. Sign in to shortlist and license.
+                Browsing is free and needs no account. Sign in to save your kit, connect a channel,
+                and buy placements.
               </p>
               <ConnectButton.Custom>
                 {({ openConnectModal, mounted }) => (

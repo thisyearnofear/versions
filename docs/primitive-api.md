@@ -53,15 +53,24 @@ caller-scoped (requires auth). Returns `{ listings: ListingRecord[] }`.
 ### `GET /marketplace/search` — ethos-personalized ranking
 
 Query: `?q` (vibe) `&channelId` (personalize) `&kind=music|placement`
-`&tier=free|paid` `&limit&offset` — public, guest-friendly.
+`&tier=free|paid` `&sort` `&limit&offset` — public, guest-friendly.
 - `q` is free-text (e.g. `lo-fi night drive`); `channelId` pulls the
   store's ethos (niche + platform description + recent titles) so the feed
   ranks by that channel. Both together combine: `q` refines the channel vector.
-- Returns `{ rows: ListingRecord[] & { fit_score, why_fits, similarity }, total, limit, offset, mode }`
+- Returns `{ rows: ListingRecord[] & { fit_score, why_fits, similarity }, total, limit, offset, mode, counts, sort }`
   where `mode` is `semantic` (cosine vs `listing_embeddings`, 70/30 hybrid with tags),
   `tag` (tag-overlap only, e.g. in PGlite/mock), or `recent` (no query/channel).
   `why_fits` cites the matching tags; `similarity` is 0..1 when `mode: semantic`.
+- `sort` is `fit` (default — keeps the ranking order) `| newest | price_asc |
+  price_desc`, applied **before** `offset`/`limit` so paging cannot mis-order.
+  Free supply prices at 0, so `price_asc` surfaces the free tier first.
+- `counts: { total, music, placement, free, paid }` is computed **before** the
+  `kind`/`tier` facets — a facet never collapses the other groups. The top-level
+  `total` remains the post-facet count that paging uses. Clients must not
+  derive either number locally.
 - Invalid `channelId` is ignored (falls back to `q`-only ranking) rather than 404.
+- A degraded (DB-unreachable) response returns `total: 0`, zeroed `counts`, and
+  `degraded: true` — the UI renders "no matches for now", never a fake shelf.
 
 ### `POST /listings` — create supply
 

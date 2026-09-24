@@ -28,7 +28,7 @@
 // format has one source of truth.
 
 import { randomUUID } from 'crypto';
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '../lib/db';
 import {
   channels as channelsTable,
@@ -38,7 +38,7 @@ import {
 } from '../lib/schema';
 import { emit } from '../lib/event-bus';
 import { emitDurable } from './outbox';
-import { fromMicroUsdc, toMicroUsdc, type SettlementService } from './settlement';
+import { fromMicroUsdc, SLOT_SPLITS, toMicroUsdc, type SettlementService } from './settlement';
 import { canBuySlots } from './channels';
 import { attributionCodeFor, newTrackingCode, trackingUrl } from '../lib/attribution';
 import { log } from '../lib/logger';
@@ -151,6 +151,23 @@ export type AccrueOutcome =
   | AccrueResult
   | { ok: false; code: 'SLOT_NOT_FOUND' | 'SLOT_NOT_ACTIVE' | 'BUDGET_EXHAUSTED'; message: string };
 
+export interface ChannelEarnings {
+  channelId: string;
+  /** Flat split that produced every leg. Imported from `SLOT_SPLITS` so the UI cannot drift from the code. */
+  split: { supplier: number; channel: number; platform: number };
+  settled: { total_usdc: string; count: number };
+  pending: { total_usdc: string; count: number };
+  recent: Array<{
+    slot_id: string;
+    amount_usdc: string;
+    status: string;
+    tx_hash: string | null;
+    settled_at: string | null;
+    created_at: string;
+    payment_mock: boolean;
+  }>;
+}
+
 export interface SlotsService {
   create(input: CreateSlotInput): Promise<SlotResult>;
   /**
@@ -180,6 +197,8 @@ export interface SlotsService {
   listForListing(listingId: string, opts?: { limit?: number }): Promise<SlotRecord[]>;
   listForBuyer(wallet: string, opts?: { limit?: number }): Promise<SlotRecord[]>;
   legs(slotId: string): Promise<SlotLegRecord[]>;
+  /** What this channel has actually been paid. Reads `slot_legs` — the only money table for placements. */
+  earningsForChannel(channelId: string): Promise<ChannelEarnings>;
 }
 
 type SlotRow = typeof slotsTable.$inferSelect;
@@ -1029,6 +1048,78 @@ export function createSlotsService({
         .from(slotLegsTable)
         .where(eq(slotLegsTable.slotId, slotId));
       return legRecords(rows);
+    },
+
+    async earningsForChannel(channelId) {
+      // A channel's keep is the `channel` leg on every one of its slots.
+      // The `recipient_role` filter is the only correct owner predicate:
+      // `buyerWallet` is the payer and may not match the leg wallet in every
+      // test/failure path, but the `channel` leg is minted to the channel in
+      // every successful `settleGross`.
+      const rows = await db
+        .select({
+          slotId: slotLegsTable.slotId,
+          amountUsdc: slotLegsTable.amountUsdc,
+          status: slotLegsTable.status,
+          txHash: slotLegsTable.txHash,
+          settledAt: slotLegsTable.settledAt,
+          createdAt: slotLegsTable.createdAt,
+        })
+        .from(slotLegsTable)
+        .innerJoin(slotsTable, eq(slotsTable.id, slotLegsTable.slotId))
+        .where(
+          and(
+            eq(slotsTable.channelId, channelId),
+            eq(slotLegsTable.recipientRole, 'channel'),
+          ),
+        )
+        .orderBy(desc(slotLegsTable.settledAt), desc(slotLegsTable.createdAt));
+
+      let settledMicro = 0n;
+      let pendingMicro = 0n;
+      let settledCount = 0;
+      let pendingCount = 0;
+      for (const r of rows) {
+        const micro = parseUsdc(r.amountUsdc) ?? 0n;
+        if (r.status === 'settled') {
+          settledMicro += micro;
+          settledCount += 1;
+        } else {
+          // `pending` + `failed` both count as not-yet-paid. Treating a
+          // failed leg as "pending" is the honest signal for the operator:
+          // they have not received that money.
+          pendingMicro += micro;
+          pendingCount += 1;
+        }
+      }
+
+      const paymentMockBySlotId: Record<string, boolean> = {};
+      // Pull `payment_mock` for the recent-leg slots in bulk (recent ≤ 20),
+      // so a successful leg never hides mock/real status.
+      const recentSlotIds = [...new Set(rows.slice(0, 20).map((r) => r.slotId))];
+      if (recentSlotIds.length) {
+        const slotRows = await db
+          .select({ id: slotsTable.id, paymentMock: slotsTable.paymentMock })
+          .from(slotsTable)
+          .where(inArray(slotsTable.id, recentSlotIds));
+        for (const s of slotRows) paymentMockBySlotId[s.id] = !!s.paymentMock;
+      }
+
+      return {
+        channelId,
+        split: { supplier: SLOT_SPLITS.supplier, channel: SLOT_SPLITS.channel, platform: SLOT_SPLITS.platform },
+        settled: { total_usdc: fromMicroUsdc(settledMicro), count: settledCount },
+        pending: { total_usdc: fromMicroUsdc(pendingMicro), count: pendingCount },
+        recent: rows.slice(0, 8).map((r) => ({
+          slot_id: r.slotId,
+          amount_usdc: r.amountUsdc,
+          status: r.status,
+          tx_hash: r.txHash,
+          settled_at: toIso(r.settledAt),
+          created_at: r.createdAt.toISOString(),
+          payment_mock: !!paymentMockBySlotId[r.slotId],
+        })),
+      };
     },
   };
 }

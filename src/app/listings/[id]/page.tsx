@@ -8,14 +8,13 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { Container } from "@/components/ui/primitives";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ListingMedia } from "@/components/marketplace/ListingMedia";
-import { ListingActions } from "@/components/marketplace/ListingActions";
+import { BuyBox } from "@/components/marketplace/BuyBox";
+import { PublishingKit } from "@/components/marketplace/PublishingKit";
+import { KitBar } from "@/components/marketplace/KitBar";
 import { APP_URL } from "@/lib/attribution";
 
 export const dynamic = "force-dynamic";
 
-// Shared by generateMetadata and the page — one query per request.
-// Uses in-process services on the monolith, or HTTP when NEXT_PUBLIC_API_URL
-// / INTERNAL_API_URL points at the box (Netlify UI split).
 const getListing = cache(async (id: string) => fetchListingById(id));
 
 export async function generateMetadata({
@@ -66,6 +65,8 @@ export default async function ListingPage({
         ? `paid · flat ${row.pricing.flatFeeUsdc} USDC`
         : `paid · CPM ${row.pricing?.cpmUsdc} USDC`;
 
+  const isActive = row.status === "active";
+
   return (
     <ToastProvider>
       <div className="flex min-h-[100dvh] flex-col">
@@ -80,30 +81,43 @@ export default async function ListingPage({
                 ← Browse
               </Link>
             </p>
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+
+            {/* Two-column: editorial left, commerce right (BuyBox is sticky on lg) */}
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
               <div className="min-w-0">
                 <p className="kicker">
                   {row.kind === "music" ? "Music" : "Product placement"} · {tierLabel}
                   {row.status !== "active" ? ` · ${row.status}` : ""}
                 </p>
                 <h1 className="mt-2 font-serif text-3xl font-black tracking-tight">{row.title}</h1>
-                <p className="font-serif text-lg text-[var(--color-ink-2)]">{row.supplier_name}</p>
+                <p className="mt-1 font-serif text-lg text-[var(--color-ink-2)]">
+                  <Link
+                    href={`/discover?kind=${row.kind}`}
+                    className="hover:text-[var(--color-rust)] hover:underline"
+                    title={`Browse more ${row.kind === "music" ? "tracks" : "placements"}`}
+                  >
+                    {row.supplier_name}
+                  </Link>
+                  <span className="font-mono text-[12px] text-[var(--color-ink-3)]"> — supplier</span>
+                </p>
                 {row.summary && (
                   <p className="mt-3 max-w-2xl font-serif text-[15px] leading-snug text-[var(--color-ink-2)]">
                     {row.summary}
                   </p>
                 )}
-                <div className="mt-3 flex flex-wrap gap-1">
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {row.tags.map((t) => (
-                    <span
+                    <Link
                       key={t}
-                      className="rounded-full bg-[var(--color-paper-2)] px-2 py-0.5 font-mono text-[12px] text-[var(--color-ink-2)]"
+                      href={`/discover?q=${encodeURIComponent(t)}`}
+                      className="rounded-full bg-[var(--color-paper-2)] px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-[var(--color-ink-2)] transition-colors hover:bg-[var(--color-rust)] hover:text-white"
                     >
                       {t}
-                    </span>
+                    </Link>
                   ))}
                 </div>
-                <div className="mt-5">
+
+                <div className="mt-6">
                   <ListingMedia
                     title={row.title}
                     kind={row.kind}
@@ -112,31 +126,58 @@ export default async function ListingPage({
                     coverSvg={row.cover_svg}
                   />
                 </div>
-                {row.tier === "paid" && (
-                  <p className="mt-3 font-mono text-[12px] text-[var(--color-ink-3)]">
-                    {row.budget_remaining_usdc != null
-                      ? `Campaign remaining: ${row.budget_remaining_usdc} USDC`
-                      : "Uncapped campaign"}
+
+                {/* What you actually get — de-prioritized below the fold, honest */}
+                {isActive && row.kind === "music" && row.audio_path && (
+                  <p className="mt-3 font-mono text-[11px] text-[var(--color-ink-3)]">
+                    Audio preview above — the file link is in your kit / the BuyBox credit panel after you copy.
                   </p>
                 )}
+
+                {/* Keep the full PublishingKit as the archival reference — collapsed visually vs BuyBox */}
+                {isActive && (
+                  <div className="mt-8 border-t border-[var(--color-hair)] pt-6">
+                    <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--color-ink-3)]">
+                      Full publishing kit — reference
+                    </h2>
+                    <p className="mt-1 font-serif text-[13px] leading-snug text-[var(--color-ink-3)]">
+                      The BuyBox is the decision. This is the archival record — same credit, same links, same disclosure.
+                    </p>
+                    <div className="mt-3">
+                      <PublishingKit
+                        attributionText={row.attribution_text}
+                        trackingUrl={row.tier === "paid" ? row.attribution_url : row.attribution_url}
+                        linkLabel={row.tier === "paid" ? "Tracking link" : "Attribution link"}
+                        disclosure={row.disclosure}
+                        audioPath={row.audio_path}
+                        images={row.images}
+                        reportHint={false}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {!isActive && (
+                  <div className="mt-6 rounded-[var(--radius-md)] border border-[var(--color-hair)] bg-[var(--color-paper-2)] px-4 py-3">
+                    <p className="font-serif text-[14px] text-[var(--color-ink-2)]">
+                      This listing is <strong className="font-semibold text-[var(--color-ink)]">{row.status}</strong> and not taking new uses right now.{" "}
+                      <Link href="/discover" className="text-[var(--color-rust)] underline">
+                        Browse what&apos;s live
+                      </Link>
+                      .
+                    </p>
+                  </div>
+                )}
               </div>
+
               <aside className="min-w-0">
-                <ListingActions listing={row} initialChannelId={channelId} />
-                <p className="mt-3 font-mono text-[12px] text-[var(--color-ink-3)]">
-                  Uses and placements run under the{" "}
-                  <Link
-                    href="/legal/agreement"
-                    className="underline decoration-[var(--color-hair-strong)] hover:text-[var(--color-rust)]"
-                  >
-                    blanket agreement
-                  </Link>
-                  .
-                </p>
+                <BuyBox listing={row} initialChannelId={channelId} />
               </aside>
             </div>
           </Container>
         </main>
         <SiteFooter />
+        <KitBar />
       </div>
     </ToastProvider>
   );

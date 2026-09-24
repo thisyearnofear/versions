@@ -18,9 +18,9 @@ import { shortAddress } from "@/lib/wallet-identity";
 
 export interface WagmiConnectButtonProps {
   // "default" | "compact" render RainbowKit's built-in button (address chip).
-  // "quiet" is supervisor-first: a subtle, low-emphasis "Sign in" when
+  // "quiet" is operator-first: a subtle, low-emphasis "Sign in" when
   // disconnected (no wallet CTA at the front door) and a slim address chip
-  // once connected. Search stays guest-first either way.
+  // once connected. Browse stays guest-first either way.
   variant?: "default" | "compact" | "quiet";
   // Optional: when true, include the inline "What is a wallet?" glossary
   // below the connect button. Off by default because pages with
@@ -80,7 +80,7 @@ export function WagmiConnectButton({ variant = "default", children, showGlossary
     identity?.displayName ||
     (address ? shortAddress(address) : "Account");
 
-  // MODULAR: supervisor-first variant — a quiet "Sign in" affordance when
+  // MODULAR: operator-first variant — a quiet "Sign in" affordance when
   // disconnected (no loud wallet CTA at the front door) and a slim address
   // chip once connected. Connect → sign chains when finishing auth inline.
   const control =
@@ -99,7 +99,7 @@ export function WagmiConnectButton({ variant = "default", children, showGlossary
                   type="button"
                   onClick={openConnectModal}
                   className="flex min-h-[44px] items-center px-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-ink-3)] transition-colors hover:text-[var(--color-rust)]"
-                  title="Search is free — sign in to shortlist and license"
+                  title="Browsing is free — sign in to save your kit and connect a channel"
                 >
                   Sign in
                 </button>

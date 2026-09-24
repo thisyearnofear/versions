@@ -128,6 +128,27 @@ Also public: `/listings/:id` (attribution), `/placements/:slotId`, `/t/:code`, `
 AR/listener surfaces. Services that still exist in `src/services/*` for settlement/publish
 internals are not product doors — see [docs/architecture-split.md](docs/architecture-split.md).
 
+## Interface & surface discipline
+
+Before touching UI, read [docs/interface.md](docs/interface.md) — it owns the
+marketplace read: surface contracts, the guest-first onboarding ladder, card/
+badge component grammar, and the banned-word list (`supervisor`, `brief`,
+`license`, `agent`, `shortlist`, `curator`, `listener`). Non-negotiables:
+
+- **Inventory before manifesto, price before prose.** Every entry surface states
+  what's on the shelf (counts, price band, that free-with-credit exists) before it
+  explains the thesis.
+- **Relevance before identity.** Guests get a channel-shaped result with no
+  account. Ask for sign-in at persistence and at money, never at first value.
+- **One primary action per viewport** (`.btn-primary`); everything else is a
+  secondary/ghost button.
+- **No listing ends in a clipboard.** A use must leave the visitor holding the
+  asset + credit line, and the kit persists.
+- Claim discipline still governs the look: `verified` / `platform_api` /
+  `settled` / `by_reporter` / `#ad` render exactly as specified — never soften
+  them for visual neatness. Orphaned legacy-thesis components must be deleted
+  or remounted, never left mounted-but-stale.
+
 ## Durable receipt outbox (outbox_events)
 
 The in-process EventBus is fire-and-forget — it can drop a receipt if the

@@ -6,16 +6,22 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   MarketplaceError,
   createRequestScope,
-  listingPriceLabel,
+  isMarketplaceSort,
   marketplaceRequest,
   searchHref,
   updateBrowseHref,
   type ChannelRecord,
+  type MarketplaceCounts,
   type MarketplaceListing,
+  type MarketplaceSort,
 } from "@/lib/marketplace-client";
 import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
 import { ListingMedia } from "@/components/marketplace/ListingMedia";
-import { WagmiConnectButton } from "@/components/wallet/WagmiConnectButton";
+import { PriceBadge } from "@/components/marketplace/PriceBadge";
+import { FitNote } from "@/components/marketplace/FitNote";
+import { AddToKitButton } from "@/components/marketplace/AddToKitButton";
+import { ChannelProbe } from "@/components/discovery/ChannelProbe";
+import { InventoryHeader } from "@/components/discovery/InventoryHeader";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +34,8 @@ interface SearchResult {
   total: number;
   mode: "semantic" | "tag" | "recent";
   rows: MarketplaceListing[];
+  counts?: MarketplaceCounts;
+  sort?: MarketplaceSort;
   degraded?: boolean;
 }
 
@@ -56,8 +64,10 @@ function MarketplaceBrowseContent({ isAuthenticated }: { isAuthenticated: boolea
   const channelId = params.get("channelId") ?? "";
   const kindRaw = params.get("kind");
   const tierRaw = params.get("tier");
+  const sortRaw = params.get("sort");
   const kind: Kind = kindRaw === "music" || kindRaw === "placement" ? kindRaw : "all";
   const tier: Tier = tierRaw === "free" || tierRaw === "paid" ? tierRaw : "all";
+  const sort: MarketplaceSort = isMarketplaceSort(sortRaw) ? sortRaw : "fit";
   const offsetParam = Number(params.get("offset") ?? "0");
   const offset = Number.isSafeInteger(offsetParam) && offsetParam > 0 ? offsetParam : 0;
 
@@ -104,6 +114,7 @@ function MarketplaceBrowseContent({ isAuthenticated }: { isAuthenticated: boolea
             channelId,
             kind: kind === "all" ? undefined : kind,
             tier: tier === "all" ? undefined : tier,
+            sort: sort === "fit" ? undefined : sort,
           },
           offset,
         ),
@@ -131,7 +142,7 @@ function MarketplaceBrowseContent({ isAuthenticated }: { isAuthenticated: boolea
       window.clearTimeout(t);
       searchScope.cancel();
     };
-  }, [routeQ, channelId, kind, tier, offset, tick, searchScope]);
+  }, [routeQ, channelId, kind, tier, sort, offset, tick, searchScope]);
 
   useEffect(() => {
     const { signal, isCurrent } = channelScope.start();
@@ -159,14 +170,6 @@ function MarketplaceBrowseContent({ isAuthenticated }: { isAuthenticated: boolea
     };
   }, [isAuthenticated, channelTick, channelScope]);
 
-  const modeLabel =
-    result?.mode === "semantic"
-      ? channelId
-        ? "ranked by channel and search"
-        : "ranked by search"
-      : result?.mode === "tag"
-        ? "tag match"
-        : "recent";
   const total = result?.total ?? 0;
   const listings = result?.rows ?? [];
   const hasMore = offset + PAGE < total;
@@ -231,14 +234,7 @@ function MarketplaceBrowseContent({ isAuthenticated }: { isAuthenticated: boolea
           </button>
         </div>
       )}
-      {!isAuthenticated && !channelId && (
-        <div className="flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-hair)] px-3 py-2">
-          <p className="font-serif text-[14px] text-[var(--color-ink-2)]">
-            Browsing the public catalog — sign in to rank supply against your channel.
-          </p>
-          <WagmiConnectButton variant="quiet" />
-        </div>
-      )}
+      {!isAuthenticated && <ChannelProbe />}
 
       <div className="flex flex-wrap items-stretch gap-2">
         <input
@@ -284,6 +280,22 @@ function MarketplaceBrowseContent({ isAuthenticated }: { isAuthenticated: boolea
             </button>
           ))}
         </div>
+        <label className="flex min-h-[52px] items-center gap-2 rounded-full border border-[var(--color-hair)] px-3">
+          <span className="marketplace-label shrink-0">Sort</span>
+          <select
+            value={sort}
+            onChange={(e) =>
+              applyPatch({ sort: e.target.value === "fit" ? null : e.target.value, offset: null })
+            }
+            aria-label="Sort listings"
+            className="min-h-[44px] bg-transparent font-mono text-[12px] uppercase tracking-wide text-[var(--color-ink-2)] focus:outline-none"
+          >
+            <option value="fit">Best fit</option>
+            <option value="newest">Newest</option>
+            <option value="price_asc">Price · free first</option>
+            <option value="price_desc">Price · high first</option>
+          </select>
+        </label>
       </div>
 
       {selectedChannel && (
@@ -293,10 +305,18 @@ function MarketplaceBrowseContent({ isAuthenticated }: { isAuthenticated: boolea
         </p>
       )}
 
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="font-mono text-[12px] uppercase tracking-wide text-[var(--color-ink-3)]">
-          {loading && !result ? "Searching…" : result ? `${total} result${total === 1 ? "" : "s"} · ${modeLabel}` : ""}
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <InventoryHeader
+          total={total}
+          counts={result?.counts}
+          mode={result?.mode ?? null}
+          sort={sort}
+          query={routeQ}
+          selectedChannelName={selectedChannel?.name ?? null}
+          kind={kind}
+          tier={tier}
+          loading={loading && !result}
+        />
         {(offset > 0 || hasMore) && (
           <div className="flex gap-2">
             <button
@@ -352,7 +372,7 @@ function MarketplaceBrowseContent({ isAuthenticated }: { isAuthenticated: boolea
         <div className={cn("marketplace-grid", loading && "opacity-70")}>
           {listings.map((l) => (
             <article key={l.id} className="card-surface overflow-hidden">
-              <div className="p-3 pb-0">
+              <div className="relative p-3 pb-0">
                 <ListingMedia
                   title={l.title}
                   kind={l.kind}
@@ -361,14 +381,13 @@ function MarketplaceBrowseContent({ isAuthenticated }: { isAuthenticated: boolea
                   coverSvg={l.cover_svg}
                   compact
                 />
-              </div>
-              <div className="p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
-                    {l.kind === "music" ? "Music" : "Product"} · {l.tier}
-                  </span>
+                {/* M2: price sits in the first two visual fields of the card. */}
+                <div className="pointer-events-none absolute right-5 top-5">
+                  <PriceBadge listing={l} />
                 </div>
-                <h4 className="mt-2 font-serif text-base font-bold leading-tight">
+              </div>
+              <div className="flex flex-col p-4">
+                <h4 className="font-serif text-base font-bold leading-tight">
                   <Link
                     href={listingHref(l, channelId)}
                     className="hover:text-[var(--color-rust)]"
@@ -377,43 +396,40 @@ function MarketplaceBrowseContent({ isAuthenticated }: { isAuthenticated: boolea
                     {l.title}
                   </Link>
                 </h4>
-                <p className="font-serif text-[14px] text-[var(--color-ink-2)]">{l.supplier_name}</p>
-                <p className="mt-1 font-mono text-[12px] uppercase tracking-wide text-[var(--color-ink-3)]">
-                  {listingPriceLabel(l)}
+                <p className="mt-0.5 font-serif text-[14px] text-[var(--color-ink-2)]">
+                  {l.supplier_name}
+                  <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--color-ink-3)]">
+                    {l.kind === "music" ? "Music" : "Product"}
+                  </span>
                 </p>
                 {l.summary && (
                   <p className="mt-1 line-clamp-2 font-serif text-[14px] leading-snug text-[var(--color-ink-2)]">
                     {l.summary}
                   </p>
                 )}
-                {l.why_fits && l.why_fits.length > 0 ? (
-                  <p className="mt-2 font-serif text-[13px] text-[var(--color-rust)]">
-                    Fits: {l.why_fits.join(" · ").replace(/^tag: /g, "")}
-                  </p>
-                ) : (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {l.tags.slice(0, 6).map((t) => (
-                      <span key={t} className="rounded-full bg-[var(--color-paper-2)] px-2 py-0.5 font-mono text-[11px] text-[var(--color-ink-2)]">
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <FitNote whyFits={l.why_fits} tags={l.tags} fitScore={l.fit_score} className="mt-2" />
                 {l.tier === "paid" && (
-                  <p className="mt-2 font-mono text-[12px] text-[var(--color-ink-3)]">
+                  <p className="mt-1 font-mono text-[12px] text-[var(--color-ink-3)]">
                     {l.budget_remaining_usdc != null
                       ? `Campaign remaining: ${l.budget_remaining_usdc} USDC`
                       : "Uncapped campaign"}
                   </p>
                 )}
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Link
                     href={listingHref(l, channelId)}
                     className="btn-primary inline-flex"
-                    onClick={() => track("slot_intent", { listingId: l.id, tier: l.tier })}
+                    onClick={() =>
+                      track("slot_intent", {
+                        listingId: l.id,
+                        tier: l.tier,
+                        action: l.tier === "free" ? "use" : "buy",
+                      })
+                    }
                   >
-                    {l.tier === "free" ? "Use this listing" : "Review placement"}
+                    {l.tier === "free" ? "Use free" : "Buy this placement"}
                   </Link>
+                  <AddToKitButton listing={l} channelId={channelId || null} />
                 </div>
               </div>
             </article>

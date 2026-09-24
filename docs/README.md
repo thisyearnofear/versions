@@ -6,6 +6,7 @@
 | [../POSITIONING.md](../POSITIONING.md) | One-pager |
 | [arc.md](./arc.md) | USDC, x402, ERC-8183/8004, App Kit + slot settlement |
 | [primitive-api.md](./primitive-api.md) | Marketplace HTTP contract (listings / channels / slots / usage) + legacy brief→license |
+| [interface.md](./interface.md) | **Surface spec** — marketplace read, surface contracts, onboarding ladder, copy rules |
 | [search.md](./search.md) | Browse, supply, matching, channel ethos |
 | [guided-demo-and-billing.md](./guided-demo-and-billing.md) | Catalog provenance, usage proof, settlement safety |
 | [delivery-ingestion.md](./delivery-ingestion.md) | Spec: platform-verified delivery (channel-reported → `platform_api`) |

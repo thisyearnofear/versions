@@ -1,9 +1,13 @@
 "use client";
 
-// MODULAR: On-demand guided tour. A 4-step overlay that walks through
-// Connect / Submit / Review / Earn. It never auto-opens — cold visitors
-// meet the passive HowItWorks strip instead — and opens only when the
-// user clicks the "?" trigger. State is ephemeral; nothing is persisted.
+// MODULAR: On-demand guided tour. A 4-step overlay that walks the
+// marketplace ladder — find a fit → use it free → or buy a placement →
+// keep the record. It never auto-opens and opens only when the user clicks
+// the "?" trigger. State is ephemeral; nothing is persisted.
+//
+// Copy follows the vocabulary contract in docs/interface.md §4.5: the
+// banned dead-thesis words (supervisor / brief / license / agents /
+// shortlist / earn-on-play) must not come back here.
 
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -15,24 +19,24 @@ interface TourStep {
 
 const STEPS: TourStep[] = [
   {
-    title: "01 · Describe the scene",
+    title: "01 · Find what fits",
     body:
-      "Paste a brief in plain English — the scene, the mood, the tempo you need. Search is free and needs no wallet: guests browse with a private session identity, and connecting a wallet is optional.",
+      "Type the vibe you publish, or paste your channel URL on Browse — the catalog ranks tracks and product placements against it. Browsing is free and needs no account.",
   },
   {
-    title: "02 · Match the catalog",
+    title: "02 · Use it free",
     body:
-      "Three autonomous AI agents — Production, Performance, and Market — score every alternate take against your brief and return a ranked top 20 with a why-it-fits rationale. No humans in the loop.",
+      "Free listings are free with credit: copy the exact credit line, take the media, and publish. Every use leaves a record, which is how a catalog here proves it actually gets used.",
   },
   {
-    title: "03 · Shortlist & license",
+    title: "03 · Or buy a placement",
     body:
-      "Save briefs to your supervisor dashboard, mark tracks interested, and move them through contacted → licensed. Run the whole sync funnel from one workspace.",
+      "Paid placements show a flat fee or CPM up front, carry the required disclosure, and hold the budget in a cap that cannot be overspent.",
   },
   {
-    title: "04 · Earn on play",
+    title: "04 · Keep the record",
     body:
-      "When a licensed track plays, royalties settle in USDC on Arc instantly — no middlemen. Artists get paid per play; listeners get 10 free plays daily and earn reputation badges.",
+      "Connect and verify your channel to unlock paid placements and keep 30% of every slot you run. Spend settles 60/30/10 — supplier, channel, VERSIONS — in USDC on Arc.",
   },
 ];
 

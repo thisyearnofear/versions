@@ -16,11 +16,13 @@ import {
   marketplaceRequest,
   searchHref,
   browseHref,
+  type MarketplaceCounts,
   type MarketplaceListing,
 } from "@/lib/marketplace-client";
 import { DEMO_CHANNELS, rankDemoListings } from "@/lib/demo-catalog";
 import { ListingMedia } from "@/components/marketplace/ListingMedia";
 import { PublishingKit } from "@/components/marketplace/PublishingKit";
+import { LiveDemoButton } from "@/components/home/LiveDemoButton";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import { AGREEMENT_VERSION } from "@/lib/agreement";
@@ -98,7 +100,9 @@ export function LandingExperience() {
   const [demo, setDemo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<MarketplaceCounts | null>(null);
   const [scope] = useState(() => createRequestScope());
+  const [catalogScope] = useState(() => createRequestScope());
 
   const selected = rows.find((r) => r.id === selectedId) ?? rows[0] ?? null;
   const rowKey = rows.map((r) => r.id).join("|");
@@ -189,6 +193,24 @@ export function LandingExperience() {
     };
   }, [context, loadMatches, scope]);
 
+  // M1: inventory before manifesto. One unfiltered read (limit=1) supplies
+  // the shelf line — the counts are never derived in the client, and the
+  // line is hidden entirely when the catalog is unreachable/degraded.
+  useEffect(() => {
+    const { signal, isCurrent } = catalogScope.start();
+    marketplaceRequest<{ counts?: MarketplaceCounts }>(
+      searchHref({}, 0).replace("limit=20", "limit=1"),
+      { signal },
+    )
+      .then((data) => {
+        if (isCurrent()) setCatalog(data.counts ?? null);
+      })
+      .catch(() => {
+        if (isCurrent()) setCatalog(null);
+      });
+    return () => catalogScope.cancel();
+  }, [catalogScope]);
+
   // MODULAR: hero search routes to the marketplace browse (?q=), not the
   // legacy supervisor brief search (?brief=). Music + placements rank by
   // channel-ethos semantic / tag match on /discover; ?brief= stays the
@@ -232,9 +254,22 @@ export function LandingExperience() {
               One marketplace for both sides of a placement — suppliers list a track or product once
               under a blanket agreement; every use leaves a record.
             </motion.p>
+            {catalog && catalog.total > 0 && (
+              <motion.p
+                variants={rise}
+                custom={4}
+                className="mt-4 font-mono text-[12px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]"
+              >
+                <span className="text-[var(--color-ink)]">{catalog.total} listings live</span>
+                {" · "}
+                {catalog.free} free with credit
+                {" · "}
+                {catalog.paid} paid placements
+              </motion.p>
+            )}
             <motion.form
               variants={rise}
-              custom={4}
+              custom={5}
               onSubmit={(e) => {
                 e.preventDefault();
                 submit(q);
@@ -253,13 +288,16 @@ export function LandingExperience() {
                 Find my fit
               </button>
             </motion.form>
-            <motion.div variants={rise} custom={5}>
-              <Link href="/submit" className="btn-secondary mt-3 inline-block">
-                List a track or product →
+            <motion.div variants={rise} custom={6} className="mt-3 flex flex-wrap items-center gap-2">
+              <Link href="/discover" className="btn-secondary inline-flex">
+                Browse the catalog
+              </Link>
+              <Link href="/discover#channel-probe" className="btn-secondary inline-flex">
+                Paste your channel URL →
               </Link>
             </motion.div>
 
-            <motion.nav variants={rise} custom={6} aria-label="Who this is for" className="mt-8">
+            <motion.nav variants={rise} custom={7} aria-label="Who this is for" className="mt-8">
               <p className="marketplace-label">Who it&apos;s for</p>
               <ul className="mt-2 flex flex-wrap gap-x-7 gap-y-2">
                 {WAYFINDERS.map((w, i) => (
@@ -281,7 +319,7 @@ export function LandingExperience() {
               </ul>
             </motion.nav>
 
-            <motion.div variants={rise} custom={7}>
+            <motion.div variants={rise} custom={8}>
               <p className="marketplace-label mt-8">Example channel context · live catalog matches</p>
               <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Example channel contexts">
                 {CONTEXT_CHIPS.map((chip) => (
@@ -396,11 +434,6 @@ export function LandingExperience() {
                         )}
                         <p className="font-serif text-[14px] text-[var(--color-paper-2)]">
                           {selected.supplier_name} · {pricingLabel(selected)}
-                          {selected.fit_score != null && (
-                            <span className="ml-2 font-mono text-[11px] uppercase tracking-wide opacity-70">
-                              fit {selected.fit_score.toFixed(2)}
-                            </span>
-                          )}
                         </p>
                         {selected.why_fits?.[0] ? (
                           <p className="mt-1 font-serif text-[13px] italic text-[var(--color-paper-2)]">
@@ -716,9 +749,14 @@ export function LandingExperience() {
               </dd>
             </motion.div>
           </motion.dl>
-          <Link href={browseHref()} className="btn-primary mt-8 inline-block">
-            Browse the catalog →
-          </Link>
+          <div className="mt-10">
+            <LiveDemoButton />
+          </div>
+          <div className="mt-8">
+            <Link href={browseHref()} className="btn-primary inline-block">
+              Browse the catalog →
+            </Link>
+          </div>
         </div>
       </section>
     </main>

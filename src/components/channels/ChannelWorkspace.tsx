@@ -16,6 +16,8 @@ import {
 import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
 import { UsageHistory } from "@/components/marketplace/UsageHistory";
 import { WagmiConnectButton } from "@/components/wallet/WagmiConnectButton";
+import { ChannelEarnings } from "@/components/channels/ChannelEarnings";
+import type { ChannelEarnings as ChannelEarningsData } from "@/services/slots";
 
 function statsSourceLabel(source: string | null): string {
   if (source === "platform_api") return "platform-verified";
@@ -43,9 +45,48 @@ function ChannelWorkspaceContent({ channelId }: { channelId: string }) {
   const [usage, setUsage] = useState<UsageRecord[]>([]);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [listingNames, setListingNames] = useState<Record<string, string>>({});
+  const [earnings, setEarnings] = useState<ChannelEarningsData | null>(null);
+  const [earningsLoading, setEarningsLoading] = useState(false);
+  const [earningsError, setEarningsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scope] = useState(() => createRequestScope());
+
+  const loadEarnings = useCallback(
+    (isOwnerNow: boolean) => {
+      if (!isOwnerNow) {
+        setEarnings(null);
+        setEarningsError(null);
+        setEarningsLoading(false);
+        return;
+      }
+      const { signal, isCurrent } = scope.start();
+      setEarningsLoading(true);
+      setEarningsError(null);
+      (async () => {
+        try {
+          const data = await marketplaceRequest<{ earnings: ChannelEarningsData }>(
+            `/api/v1/channels/${encodeURIComponent(channelId)}/earnings`,
+            { signal },
+          );
+          if (!isCurrent()) return;
+          setEarnings(data.earnings);
+        } catch (err) {
+          if (!isCurrent()) return;
+          const msg =
+            err instanceof MarketplaceError && err.status === 404
+              ? null
+              : err instanceof MarketplaceError
+                ? err.message
+                : "Earnings unavailable — retry to load it.";
+          if (msg) setEarningsError(msg);
+        } finally {
+          if (isCurrent()) setEarningsLoading(false);
+        }
+      })();
+    },
+    [channelId, scope],
+  );
 
   const load = useCallback(() => {
     const { signal, isCurrent } = scope.start();
@@ -98,6 +139,7 @@ function ChannelWorkspaceContent({ channelId }: { channelId: string }) {
       } else {
         const owned = (ownRes.value.channels ?? []).some((c) => c.id === channel.id);
         setIsOwner(owned);
+        loadEarnings(owned);
         const channelSlots = (slotsRes.value.slots ?? []).filter(
           (s) => s.channel_id === channel.id,
         );
@@ -119,7 +161,7 @@ function ChannelWorkspaceContent({ channelId }: { channelId: string }) {
       }
       setLoading(false);
     })();
-  }, [channelId, isAuthenticated, scope]);
+  }, [channelId, isAuthenticated, scope, loadEarnings]);
 
   useEffect(() => {
     const t = window.setTimeout(load, 0);
@@ -267,6 +309,30 @@ function ChannelWorkspaceContent({ channelId }: { channelId: string }) {
             Browse matched supply
           </Link>
         </div>
+
+        {/* Keep rate + settled earnings — the "can I make money?" rung. */}
+        {isOwner ? (
+          <div className="mt-4">
+            <ChannelEarnings
+              earnings={earnings}
+              loading={earningsLoading}
+              error={earningsError}
+              onRetry={() => loadEarnings(true)}
+            />
+          </div>
+        ) : (
+          <div className="marketplace-kit mt-4">
+            <h3 className="marketplace-heading">How this channel gets paid</h3>
+            <p className="mt-2 font-serif text-[14px] leading-snug text-[var(--color-ink-2)]">
+              A paid placement on this channel settles flat <strong className="font-semibold text-[var(--color-ink)]">60% supplier · 30% channel · 10% platform</strong>. The channel’s cut is a <code className="rounded bg-[var(--color-paper-2)] px-1 py-0.5 font-mono text-[11px]">slot_legs</code> paid to the channel wallet on Arc — the operator’s settled total is visible only to them.
+            </p>
+            {!isAuthenticated && (
+              <div className="mt-3">
+                <WagmiConnectButton variant="quiet" />
+              </div>
+            )}
+          </div>
+        )}
 
         {ownerDataError ? (
           <div className="marketplace-kit mt-4" role="alert">
