@@ -1,31 +1,28 @@
 # Architecture split — marketplace UI vs API
 
-Target: **thin UI** (Netlify) + **API on the box**, product = the wedge only.
+**UI:** Netlify `versions-persidian` → https://versions.persidian.com  
+**API:** box Traefik → https://api.versions.persidian.com  
 
-## Product surface (keep)
+## Product surface
 
-| Door | Paths |
-|------|--------|
-| Browse | `/discover`, `GET /api/v1/marketplace/search` |
-| Supply | `/submit`, `POST/GET /api/v1/listings`, submissions upload |
-| Channels | `/channels`, verify, slots, usage |
-| Attribution | `/listings/:id`, `/t/:code` |
-| Settlement | slot pay / legs on Arc, cron sweep |
-| Auth / legal | `/auth/signin`, `/legal/agreement` |
+Browse `/discover` · Supply `/submit` · Channels `/channels` ·  
+`/listings/:id` · `/placements/:slotId` · `/t/:code` · `/legal/agreement`
 
-## Cut (deleted — not redirected)
+## Env
 
-Pages: `/agents`, `/supervisor`, `/feed`, `/cases`, `/artists`, `/listeners`, `/curators`, `/admin/*`  
-UI: DiscoverView (briefs/licenses), AgentMonitor, FeedView, tips, economy ticker, AR, case thread  
-API: agents, AR, listeners, curators, cases, licenses, supervisor, discover/brief, economy, events SSE, x402 tip/score, funnel/vitals  
+| Where | Key | Value |
+|-------|-----|--------|
+| Netlify | `NEXT_PUBLIC_API_URL` | `https://api.versions.persidian.com` |
+| Netlify | `NEXT_PUBLIC_APP_URL` | `https://versions.persidian.com` |
+| Box | `ALLOWED_ORIGINS` | UI origins (apex + `*.netlify.app`) |
 
-## Config (split host)
+## DNS cutover
 
-| Env | Role |
-|-----|------|
-| `NEXT_PUBLIC_API_URL` | UI → box API |
-| `ALLOWED_ORIGINS` | Box CORS allowlist for Netlify origin |
-| `LOCAL_UPLOADS=0` + `PINATA_JWT` | No local audio on VPS |
-| `SWEEP_ON_SSE=0` | Cron-only recovery (SSE gone) |
+1. `api.versions.persidian.com` → VPS `144.202.117.160` (A record) — Traefik + LetsEncrypt  
+2. `versions.persidian.com` → Netlify (CNAME `versions-persidian.netlify.app`, or Netlify DNS)  
+3. Keep apex on Traefik until Netlify DNS is live so the site never goes dark  
 
-See [netlify.toml](../netlify.toml) and [deploy.md](./deploy.md).
+## Deploy
+
+- UI: Netlify (CLI `netlify deploy --build --prod` or Git continuous deploy)  
+- API: `./scripts/deploy-remote.sh` on nuncio-vultr  

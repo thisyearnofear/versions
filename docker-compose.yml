@@ -1,14 +1,13 @@
-# VERSIONS — production compose on nuncio-vultr.
+# VERSIONS — production compose on nuncio-vultr (API host).
 #
-# Deploy path (see scripts/DEPLOY.md): git push → ./scripts/deploy-remote.sh
+# Deploy path: git push → ./scripts/deploy-remote.sh
 # Never scp application source. Runtime secrets come from .env (gitignored).
 #
-# Networking matches other boxes on this host:
+# Networking:
 #   - container joins the shared `coolify` Traefik network (no published host port)
-#   - Traefik routes https://versions.persidian.com → app :3000
+#   - Traefik routes https://api.versions.persidian.com → app :3000
+#   - Public UI is on Netlify at https://versions.persidian.com
 #   - TLS via the letsencrypt resolver
-#
-# Coolify UI is optional; this file is what `deploy.sh` actually runs.
 
 services:
   app:
@@ -20,30 +19,32 @@ services:
         NEXT_PUBLIC_ARC_EXPLORER_URL: ${NEXT_PUBLIC_ARC_EXPLORER_URL:-https://testnet.arcscan.app}
         NEXT_PUBLIC_SUBMIT_RECEIPT_TIMEOUT_MS: ${NEXT_PUBLIC_SUBMIT_RECEIPT_TIMEOUT_MS:-60000}
         NEXT_PUBLIC_WC_PROJECT_ID: ${NEXT_PUBLIC_WC_PROJECT_ID:-}
+        # Box image is API-first; UI on Netlify sets its own NEXT_PUBLIC_*.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
-        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://versions.persidian.com}
     image: versions:latest
     container_name: versions
     restart: unless-stopped
-    # Runtime env is injected from the server's .env (never baked into the image).
-    # Coolify manages these in its UI instead; the file only matters for route B.
     env_file:
       - .env
     volumes:
       - ./data/uploads:/app/data/uploads
     networks:
       - coolify
-    # Manual-route Traefik labels. Coolify generates its own equivalent when
-    # you deploy via the UI — comment these out if Coolify manages the resource.
-    # NOTE: the Host rule is hardcoded (NOT a ${DOMAIN} interpolation) so that
-    # a bare `docker compose up` can never silently drop the routing.
     labels:
       - traefik.enable=true
       - traefik.docker.network=coolify
       - traefik.http.services.versions-web.loadbalancer.server.port=3000
+      # API hostname (UI lives on Netlify at versions.persidian.com).
+      - traefik.http.routers.versions-api.entrypoints=https
+      - traefik.http.routers.versions-api.rule=Host(`api.versions.persidian.com`)
+      - traefik.http.routers.versions-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.versions-api.service=versions-web
+      # Keep apex temporarily so cutover isn't a hard break before DNS flips.
       - traefik.http.routers.versions-web.entrypoints=https
       - traefik.http.routers.versions-web.rule=Host(`versions.persidian.com`)
       - traefik.http.routers.versions-web.tls.certresolver=letsencrypt
+      - traefik.http.routers.versions-web.service=versions-web
 
 networks:
   coolify:
