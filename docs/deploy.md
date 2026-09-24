@@ -51,6 +51,39 @@ never writes under `data/uploads`. Confirm with
 Optional: set `SWEEP_ON_SSE=0` and rely on the daily
 `POST /api/cron/sweep` job.
 
+#### Residual `data/uploads` → Grove
+
+After the Netlify/Grove cutover the box still held ~68 MB / ~22 local files
+(seed + ccMixter leftovers). **New** uploads already go to Grove;
+**legacy** paths need a one-shot rewrite of `submissions.audio_path` /
+`listings.audio_path` from `data/uploads/…` → `lens://…`.
+
+```bash
+# From a machine with DATABASE_URL + network to Grove (dry-run first):
+npx tsx scripts/migrate-uploads-to-grove.ts
+npx tsx scripts/migrate-uploads-to-grove.ts --apply --delete-local
+```
+
+**Blocked until Neon is healthy again** (compute/storage quota exceeded
+~2026-09-24; expect recovery in about a week). Do not run `--apply` while
+the pooler returns quota errors. When Neon answers, dry-run → apply →
+confirm `du -sh data/uploads` shrinks, then prune empty leftovers.
+
+### Neon (production DB)
+
+Live DB is Neon (pooled `DATABASE_URL` on the box). As of **2026-09-24**
+the project hit a **quota limit** (“exceeded the quota — upgrade your
+plan”); marketplace reads may return empty / ready may look fine while
+writes and ad-hoc `psql` fail. Plan: wait for allowance reset / upgrade
+(~1 week), then:
+
+1. `curl -sf https://api.versions.persidian.com/api/health/ready`
+2. Smoke browse/supply against the API
+3. Run residual upload migrate (above) if `data/uploads` still has files
+
+Do not point production at a second Neon project without a restore drill
+([Database schema](#database-schema-production) backup steps).
+
 ## Database schema (production)
 
 Production predates Drizzle's `__drizzle_migrations` ledger. It also contained

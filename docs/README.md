@@ -10,8 +10,8 @@
 | [guided-demo-and-billing.md](./guided-demo-and-billing.md) | Catalog provenance, usage proof, settlement safety |
 | [delivery-ingestion.md](./delivery-ingestion.md) | Spec: platform-verified delivery (channel-reported → `platform_api`) |
 | [beachhead.md](./beachhead.md) | How to get to liquidity |
-| [deploy.md](./deploy.md) | Git-only production deploy and guarded schema operations |
-| [architecture-split.md](./architecture-split.md) | Target: Netlify UI + box API; core vs legacy surfaces |
+| [deploy.md](./deploy.md) | Git-only production deploy, Grove uploads, Neon quota note, guarded schema ops |
+| [architecture-split.md](./architecture-split.md) | Netlify UI + box API; Grove; GHCR pull-deploy |
 
 Agent conventions (mood tags, feed shape, NFT traces): [../AGENTS.md](../AGENTS.md).
 
