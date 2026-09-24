@@ -29,7 +29,12 @@ const envSchema = z.object({
   // each agent holds a wallet the arc adapter can sign with.
   AGENT_KEY_SEED: z.string().optional(),
 
-  // IPFS (Pinata JWT is read directly in src/lib/ipfs.ts)
+  // Grove (Lens) object storage — no JWT. chain_id selects retention policy.
+  // https://lens.xyz/docs/storage/usage/upload
+  GROVE_CHAIN_ID: z.string().optional(),
+  GROVE_MOCK: z.string().optional(),
+  GROVE_DISABLED: z.string().optional(),
+  // Legacy Pinata keys ignored if still present in old .env files
   PINATA_JWT: z.string().optional(),
   PINATA_GATEWAY: z.string().optional(),
 

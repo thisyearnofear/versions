@@ -48,6 +48,7 @@ const nextConfig: NextConfig = {
   },
   images: {
     remotePatterns: [
+      { protocol: "https", hostname: "api.grove.storage" },
       { protocol: "https", hostname: "gateway.pinata.cloud" },
       { protocol: "https", hostname: "*.ipfs.w3s.link" },
     ],

@@ -94,9 +94,8 @@ export async function POST(req: NextRequest) {
     // in schema.ts.
     const audioSha256 = crypto.createHash('sha256').update(audioBuffer).digest('hex');
 
-    // MODULAR: Pinata-first. LOCAL_UPLOADS=0 (recommended in prod once
-    // PINATA_JWT is set) refuses the local data/uploads fallback so the
-    // VPS does not accumulate audio — see docs/architecture-split.md.
+    // MODULAR: Grove-first (Lens storage). LOCAL_UPLOADS=0 refuses the
+    // local data/uploads fallback so the VPS does not accumulate audio.
     let audioPath = `data/uploads/${filename}`;
     let audioIpfsCid: string | null = null;
     let ipfsResult: Awaited<ReturnType<typeof svc.ipfs.uploadAudio>> | null = null;
@@ -105,11 +104,16 @@ export async function POST(req: NextRequest) {
     if (svc.ipfs.isConfigured()) {
       try {
         ipfsResult = await svc.ipfs.uploadAudio(audioBuffer, filename, audioContentType);
-        audioIpfsCid = ipfsResult.cid;
-        audioPath = `ipfs://${ipfsResult.cid}`;
-        log.info('audio uploaded to IPFS', { request_id: rid, cid: ipfsResult.cid, source: ipfsResult.source });
+        audioIpfsCid = ipfsResult.cid; // Grove storage_key
+        // Prefer lens:// so mediaHref resolves via Grove gateway; https url also works.
+        audioPath = ipfsResult.uri ?? `lens://${ipfsResult.cid}`;
+        log.info('audio uploaded to Grove', {
+          request_id: rid,
+          storage_key: ipfsResult.cid,
+          source: ipfsResult.source,
+        });
       } catch (err) {
-        log.warn('IPFS upload failed', {
+        log.warn('Grove upload failed', {
           request_id: rid,
           err: (err as Error).message,
           local_fallback: allowLocal,
@@ -128,7 +132,7 @@ export async function POST(req: NextRequest) {
         rid,
         503,
         'IPFS_REQUIRED',
-        'PINATA_JWT is required when LOCAL_UPLOADS=0. Configure Pinata or allow local uploads.',
+        'Grove object storage is disabled (GROVE_DISABLED/GROVE_MOCK). Enable Grove or allow local uploads.',
       );
     }
 
@@ -158,8 +162,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!result.ok) {
-      // Best-effort cleanup: remove the IPFS pin (Pinata has unpin API)
-      // and/or the local file. We don't surface a failure here.
+    // Best-effort cleanup: local file only (Grove immutable objects cannot unpin).
       try {
         const fullPath = path.join(svc.config.uploadDir, filename);
         fs.unlinkSync(fullPath);
@@ -175,14 +178,10 @@ export async function POST(req: NextRequest) {
     // read-repairs historical submissions.
     await svc.releaseCases.ensureForSubmission({ artistWallet, submissionId: result.submission.id });
 
-    // MODULAR: dedup short-circuit cleanup. A retried upload
-    // pinned/uploaded the same audio twice; the canonical
-    // artifact already exists from the prior submission, so
-    // remove the redundant copy in BOTH storage paths.
-    //   - IPFS: best-effort unpin via `svc.ipfs.unpin(cid)` so
-    //     Pinata's per-pin quota doesn't leak under retried
-    //     IPFS uploads (the exact scenario dedup exists for).
-    //   - Local FS: unlinkSync the redundant file.
+    // MODULAR: dedup short-circuit cleanup. A retried upload may
+    // have written a redundant local file or Grove object; the
+    // canonical artifact already exists. Grove immutable ACL cannot
+    // delete — unpin is a no-op. Local FS: unlink the redundant file.
     if (result.deduped) {
       if (ipfsResult) {
         try {

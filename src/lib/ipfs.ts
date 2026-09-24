@@ -1,165 +1,206 @@
-// MODULAR: Pinata IPFS client wrapper.
-// CLEAN: same interface for real and mock clients — the route handler
-//        asks the client to upload and gets back { cid, url }.
-// DRY: the only place that talks to Pinata; the route handler doesn't
-//      import the SDK directly.
-// PERFORMANT: mock client is deterministic (sha256 → base32 CIDv1) so
-//             dev mode and tests get the same CID for the same input.
+// MODULAR: Grove object storage (Lens) — replaces Pinata.
+// Docs: https://lens.xyz/docs/storage/usage/upload
+// CLEAN: same interface the submissions route already uses —
+//        uploadAudio → { cid, url, … }. `cid` is Grove's storage_key
+//        (hex); we keep the field name so audio_ipfs_cid / schema stay.
+// DRY: only this module talks to api.grove.storage.
+//
+// Immutable uploads need no API key — only a chain_id for ACL/retention.
+// Default: Lens Chain mainnet (232). Override with GROVE_CHAIN_ID.
+// Mock mode (tests / GROVE_MOCK=1): deterministic synthetic key, no network.
 
 import { createHash } from "node:crypto";
-import { PinataSDK } from "pinata";
 
-export interface PinataUploadResult {
+const GROVE_API = "https://api.grove.storage";
+/** Lens Chain mainnet — see https://lens.xyz/docs/chain/resources/network-information */
+const DEFAULT_CHAIN_ID = 232;
+
+export interface ObjectStorageUploadResult {
+  /** Grove storage_key (hex). Stored in audio_ipfs_cid for historical reasons. */
   cid: string;
+  /** HTTPS gateway URL for players / attribution. */
   url: string;
+  /** lens://<storage_key> */
+  uri: string;
   size: number;
   contentType: string;
-  source: "pinata" | "mock";
+  source: "grove" | "mock";
 }
 
-export interface PinataClient {
+export interface ObjectStorageClient {
   uploadAudio(
     buffer: Buffer,
     filename: string,
     contentType: string,
-  ): Promise<PinataUploadResult>;
-  // MODULAR: best-effort unpin for the dedup short-circuit path
-  // (see src/app/api/v1/submissions/route.ts). Mock mode is a no-op
-  // since `mockCid` produces a synthetic in-process identifier with
-  // no real pin; real Pinata mode tries the SDK's
-  // `unpin.public.cid([cid])` shape and swallows version-mismatch
-  // errors so the route cleanup never crashes the dedup response.
+  ): Promise<ObjectStorageUploadResult>;
+  /** Immutable Grove objects cannot be deleted; always a no-op. */
   unpin(cid: string): Promise<void>;
-  gatewayUrl(cid: string, filename?: string): string;
+  gatewayUrl(storageKey: string, filename?: string): string;
   isConfigured(): boolean;
-  mode(): "pinata" | "mock";
+  mode(): "grove" | "mock";
 }
 
-export interface PinataConfig {
-  jwt?: string;
-  gateway?: string;
+export interface GroveConfig {
+  /** When true, never hit the network (tests). */
+  mock?: boolean;
+  /** EVM chain id for immutable ACL / retention. */
+  chainId?: number;
+  /** Explicit disable (LOCAL_UPLOADS=0 will then fail closed). */
+  disabled?: boolean;
 }
 
-const DEFAULT_GATEWAY = "https://gateway.pinata.cloud";
+type GroveUploadJson = {
+  storage_key?: string;
+  gateway_url?: string;
+  uri?: string;
+  status_url?: string;
+};
 
-function resolveGateway(config: PinataConfig): string {
-  // Strip any trailing /ipfs path segment so that gatewayUrl()
-  // doesn't double it.
-  return (config.gateway || DEFAULT_GATEWAY)
-    .replace(/\/ipfs\/?$/i, "")
-    .replace(/\/$/, "");
+function mockStorageKey(buffer: Buffer): string {
+  return createHash("sha256").update(buffer).digest("hex");
 }
 
-// MODULAR: deterministic CIDv1 base32 from a buffer hash. Not a real
-// IPFS CID (no multihash/multibase encoding of the actual content)
-// but a stable, content-addressable identifier that's good enough
-// for dev + tests. Format matches real Pinata output (bafy... + base32).
-function mockCid(buffer: Buffer): string {
-  const hash = createHash("sha256").update(buffer).digest();
-  // CIDv1 base32-lowercase with sha256 (code 0x12, length 0x20).
-  // Multicodec: dag-pb (0x70) wrapped in varint; multibase: base32lower 'b'.
-  const prefix = Buffer.from([0x01, 0x70, 0x12, 0x20]);
-  const full = Buffer.concat([prefix, hash]);
-  // base32 lowercase without padding
-  const base32 = full.toString("base64").replace(/=/g, "").toLowerCase();
-  // Pad/truncate to 59 chars (matches CIDv1 + sha256 length)
-  return "bafy" + base32.replace(/[^a-z2-7]/g, "").slice(0, 55);
+function parseChainId(raw: string | undefined): number {
+  if (!raw || !raw.trim()) return DEFAULT_CHAIN_ID;
+  const n = Number(raw.trim());
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_CHAIN_ID;
 }
 
-export function createPinataClient(config: PinataConfig): PinataClient {
-  const jwt = config.jwt;
-  const configured = Boolean(jwt);
-  const gateway = resolveGateway(config);
-
-  // MODULAR: real client. Constructed lazily so dev mode (no keys)
-  // doesn't try to authenticate at boot.
-  let sdk: PinataSDK | null = null;
-  function getSdk(): PinataSDK {
-    if (sdk) return sdk;
-    if (!configured) {
-      throw new Error("Pinata not configured — set PINATA_JWT");
+async function waitForStatus(statusUrl: string, attempts = 20): Promise<void> {
+  for (let i = 0; i < attempts; i++) {
+    const res = await fetch(statusUrl);
+    if (res.ok) {
+      const body = (await res.json().catch(() => null)) as {
+        status?: string;
+        ready?: boolean;
+      } | null;
+      if (
+        body?.ready === true ||
+        body?.status === "ready" ||
+        body?.status === "completed" ||
+        body?.status === "ok"
+      ) {
+        return;
+      }
     }
-    sdk = new PinataSDK({
-      pinataJwt: jwt,
-      pinataGateway: gateway.replace(/^https?:\/\//, ""),
-    });
-    return sdk;
+    await new Promise((r) => setTimeout(r, 250));
   }
+}
+
+export function createGroveClient(config: GroveConfig = {}): ObjectStorageClient {
+  const mock = Boolean(config.mock);
+  const disabled = Boolean(config.disabled);
+  const chainId = config.chainId ?? DEFAULT_CHAIN_ID;
+  const configured = !disabled && !mock;
 
   return {
     mode() {
-      return configured ? "pinata" : "mock";
+      return configured ? "grove" : "mock";
     },
     isConfigured() {
+      // Grove needs no JWT — "configured" means we will attempt a real upload
+      // (not mock / not explicitly disabled).
       return configured;
     },
-    gatewayUrl(cid: string, filename?: string) {
-      const base = `${gateway}/ipfs/${cid}`;
-      return filename ? `${base}/${filename}` : base;
+    gatewayUrl(storageKey: string, _filename?: string) {
+      const key = storageKey.replace(/^lens:\/\//, "");
+      return `${GROVE_API}/${key}`;
     },
-    async unpin(cid: string): Promise<void> {
-      // MODULAR: mock mode → no-op. `mockCid` produces a synthetic
-      // base32 hash with no corresponding IPFS pin anywhere; the
-      // route still sets `audioIpfsCid = null` on the dedup hit so
-      // the response shape stays consistent.
-      if (!configured) return;
-      try {
-        // MODULAR: feature-checked call. The Pinata SDK exposes
-        // `unpin.public.cid([cid])` in recent versions, but the
-        // exact surface drifts across releases. We feature-check
-        // so a future SDK mismatch surfaces as a silent no-op
-        // instead of a 500 on the dedup short-circuit (which is
-        // the user-visible path). Operators with a permanent
-        // version drift can unpin orphans from Pinata's dashboard.
-        const sdk = getSdk() as unknown as {
-          unpin?: { public?: { cid?: (cids: string[]) => Promise<unknown> } };
-        };
-        const fn = sdk.unpin?.public?.cid;
-        if (typeof fn === 'function') {
-          await fn([cid]);
-        }
-      } catch {
-        // swallow — dedup body has already returned success; the
-        // redundant pin becomes an orphan that the operator can
-        // clean up out-of-band if needed.
-      }
+    async unpin(_cid: string): Promise<void> {
+      // Immutable ACL: deletes are not allowed. Dedup short-circuit used to
+      // unpin Pinata pins; under Grove we leave the redundant object.
     },
     async uploadAudio(
       buffer: Buffer,
-      filename: string,
+      _filename: string,
       contentType: string,
-    ): Promise<PinataUploadResult> {
+    ): Promise<ObjectStorageUploadResult> {
       if (!configured) {
-        const cid = mockCid(buffer);
+        const cid = mockStorageKey(buffer);
+        const url = this.gatewayUrl(cid);
         return {
           cid,
-          url: this.gatewayUrl(cid, filename),
+          url,
+          uri: `lens://${cid}`,
           size: buffer.length,
           contentType,
           source: "mock",
         };
       }
-      // Real upload. Pinata's SDK expects a Web `File`. Buffer → File
-      // shim works in Node 22 (the SDK constructor accepts either).
-      const file = new File([new Uint8Array(buffer)], filename, { type: contentType });
-      const result = await getSdk().upload.public.file(file, {
-        metadata: { name: filename },
+
+      // One-step immutable upload (docs): POST body + chain_id query.
+      const endpoint = `${GROVE_API}/?chain_id=${chainId}`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": contentType || "application/octet-stream",
+        },
+        body: new Uint8Array(buffer),
       });
+
+      if (!res.ok && res.status !== 201 && res.status !== 202) {
+        const text = await res.text().catch(() => "");
+        throw new Error(
+          `Grove upload failed (${res.status}): ${text.slice(0, 200) || res.statusText}`,
+        );
+      }
+
+      const json = (await res.json()) as GroveUploadJson;
+      const storageKey = json.storage_key;
+      if (!storageKey) {
+        throw new Error("Grove upload response missing storage_key");
+      }
+
+      if (res.status === 202 && json.status_url) {
+        await waitForStatus(json.status_url).catch(() => {
+          // Best-effort — object is usually readable at the gateway shortly after.
+        });
+      }
+
+      const url = json.gateway_url || this.gatewayUrl(storageKey);
+      const uri = json.uri || `lens://${storageKey}`;
+
       return {
-        cid: result.cid,
-        url: this.gatewayUrl(result.cid, filename),
-        size: result.size,
-        contentType: result.mime_type || contentType,
-        source: "pinata",
+        cid: storageKey,
+        url,
+        uri,
+        size: buffer.length,
+        contentType,
+        source: "grove",
       };
     },
   };
 }
 
-export function createIpfsFromEnv(): PinataClient {
-  const config: PinataConfig = {
-    jwt: process.env.PINATA_JWT || undefined,
-    gateway: process.env.PINATA_GATEWAY || undefined,
-  };
-  return createPinataClient(config);
+/** @deprecated Use ObjectStorageClient — kept for services.ts typing. */
+export type PinataClient = ObjectStorageClient;
+/** @deprecated */
+export type PinataUploadResult = ObjectStorageUploadResult;
+
+export function createIpfsFromEnv(): ObjectStorageClient {
+  const mock =
+    process.env.GROVE_MOCK === "1" ||
+    process.env.GROVE_MOCK === "true" ||
+    // Vitest / empty Grove force mock unless explicitly enabled
+    (process.env.VITEST === "true" && process.env.GROVE_LIVE !== "1");
+  const disabled =
+    process.env.GROVE_DISABLED === "1" || process.env.GROVE_DISABLED === "true";
+
+  return createGroveClient({
+    mock,
+    disabled,
+    chainId: parseChainId(process.env.GROVE_CHAIN_ID),
+  });
 }
+
+/** @deprecated alias */
+export const createPinataClient = (config: {
+  jwt?: string;
+  gateway?: string;
+  mock?: boolean;
+}): ObjectStorageClient =>
+  createGroveClient({
+    // Old tests passed jwt to mean "configured" — map to live grove only if
+    // they somehow still call this; prefer mock when no jwt (legacy semantics).
+    mock: config.mock ?? !config.jwt,
+  });

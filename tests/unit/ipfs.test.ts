@@ -1,46 +1,43 @@
-// MODULAR: IPFS unit tests. Pure logic + factory wiring; no real network IO.
+// MODULAR: Grove object-storage unit tests. Pure logic + factory wiring; no real network IO.
 
 import { describe, it, expect } from 'vitest';
 import {
-  createPinataClient,
+  createGroveClient,
   createIpfsFromEnv,
-  type PinataClient,
+  type ObjectStorageClient,
 } from '../../src/lib/ipfs';
 
-describe('ipfs: isConfigured + mode', () => {
-  it('isConfigured() returns false when no JWT', () => {
-    const client = createPinataClient({});
+describe('grove: isConfigured + mode', () => {
+  it('isConfigured() returns false in mock mode', () => {
+    const client = createGroveClient({ mock: true });
     expect(client.isConfigured()).toBe(false);
     expect(client.mode()).toBe('mock');
   });
 
-  it('isConfigured() returns true when JWT is set', () => {
-    const client = createPinataClient({ jwt: 'test-jwt' });
+  it('isConfigured() returns true for live Grove (no JWT)', () => {
+    const client = createGroveClient({ mock: false, chainId: 232 });
     expect(client.isConfigured()).toBe(true);
-    expect(client.mode()).toBe('pinata');
+    expect(client.mode()).toBe('grove');
   });
 
-  it('createIpfsFromEnv honours PINATA_JWT env var', () => {
-    const prev = process.env.PINATA_JWT;
-    process.env.PINATA_JWT = '';
-    expect(createIpfsFromEnv().isConfigured()).toBe(false);
-    process.env.PINATA_JWT = 'env-jwt';
-    expect(createIpfsFromEnv().isConfigured()).toBe(true);
-    if (prev === undefined) delete process.env.PINATA_JWT;
-    else process.env.PINATA_JWT = prev;
+  it('isConfigured() returns false when disabled', () => {
+    const client = createGroveClient({ disabled: true });
+    expect(client.isConfigured()).toBe(false);
+  });
+
+  it('createIpfsFromEnv uses mock under VITEST', () => {
+    expect(createIpfsFromEnv().mode()).toBe('mock');
   });
 });
 
-describe('ipfs: mockCid via uploadAudio (unconfigured)', () => {
-  // The mockCid function isn't exported, but its behaviour is observable
-  // through uploadAudio in mock mode.
-  let client: PinataClient;
+describe('grove: mock uploadAudio', () => {
+  let client: ObjectStorageClient;
 
   const setup = () => {
-    client = createPinataClient({});
+    client = createGroveClient({ mock: true });
   };
 
-  it('returns deterministic output for the same input', async () => {
+  it('returns deterministic storage keys for the same input', async () => {
     setup();
     const buf = Buffer.from('hello world');
     const a = await client.uploadAudio(buf, 'a.mp3', 'audio/mpeg');
@@ -48,20 +45,20 @@ describe('ipfs: mockCid via uploadAudio (unconfigured)', () => {
     expect(a.cid).toBe(b.cid);
   });
 
-  it('mock CIDs start with "bafy"', async () => {
+  it('mock keys are hex sha256', async () => {
     setup();
-    const buf = Buffer.from([0x01, 0x02, 0x03, 0x04]);
-    const r = await client.uploadAudio(buf, 'x.mp3', 'audio/mpeg');
-    expect(r.cid.startsWith('bafy')).toBe(true);
+    const r = await client.uploadAudio(Buffer.from([0x01, 0x02]), 'x.mp3', 'audio/mpeg');
+    expect(r.cid).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it('mock uploads set source="mock"', async () => {
+  it('mock uploads set source="mock" and lens:// uri', async () => {
     setup();
     const r = await client.uploadAudio(Buffer.from('x'), 'x.mp3', 'audio/mpeg');
     expect(r.source).toBe('mock');
+    expect(r.uri).toBe(`lens://${r.cid}`);
   });
 
-  it('different buffers produce different mock CIDs', async () => {
+  it('different buffers produce different keys', async () => {
     setup();
     const a = await client.uploadAudio(Buffer.from('one'), 'a.mp3', 'audio/mpeg');
     const b = await client.uploadAudio(Buffer.from('two'), 'a.mp3', 'audio/mpeg');
@@ -69,39 +66,22 @@ describe('ipfs: mockCid via uploadAudio (unconfigured)', () => {
   });
 });
 
-describe('ipfs: gatewayUrl', () => {
-  it('returns `${gateway}/ipfs/${cid}`', () => {
-    const c = createPinataClient({});
-    expect(c.gatewayUrl('QmXxx')).toBe('https://gateway.pinata.cloud/ipfs/QmXxx');
+describe('grove: gatewayUrl', () => {
+  it('returns api.grove.storage/<key>', () => {
+    const c = createGroveClient({ mock: true });
+    expect(c.gatewayUrl('abc123')).toBe('https://api.grove.storage/abc123');
   });
 
-  it('appends filename when provided', () => {
-    const c = createPinataClient({});
-    expect(c.gatewayUrl('QmXxx', 'foo.mp3')).toBe(
-      'https://gateway.pinata.cloud/ipfs/QmXxx/foo.mp3',
-    );
-  });
-
-  it('honours custom gateway', () => {
-    const c = createPinataClient({ gateway: 'https://example.com/ipfs/' });
-    // trailing slash is stripped
-    expect(c.gatewayUrl('QmYyy')).toBe('https://example.com/ipfs/QmYyy');
+  it('strips lens:// prefix if present', () => {
+    const c = createGroveClient({ mock: true });
+    expect(c.gatewayUrl('lens://abc123')).toBe('https://api.grove.storage/abc123');
   });
 });
 
-// MODULAR: pins the unpin contract that the submission dedup
-// short-circuit relies on (see src/app/api/v1/submissions/route.ts).
-// A retried IPFS upload that hits the unique index needs the
-// redundant pin released so Pinata's per-pin quota doesn't leak.
-describe('ipfs: unpin', () => {
-  it('mock unpin is a callable no-op (does not throw)', async () => {
-    const c = createPinataClient({});
-    await expect(c.unpin('QmYyy')).resolves.toBeUndefined();
-  });
-
-  it('mock unpin is idempotent across repeated calls', async () => {
-    const c = createPinataClient({});
-    await c.unpin('QmYyy');
-    await expect(c.unpin('QmYyy')).resolves.toBeUndefined();
+describe('grove: unpin', () => {
+  it('is a callable no-op (immutable ACL)', async () => {
+    const c = createGroveClient({ mock: true });
+    await expect(c.unpin('abc')).resolves.toBeUndefined();
+    await expect(c.unpin('abc')).resolves.toBeUndefined();
   });
 });

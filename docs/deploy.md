@@ -41,15 +41,15 @@ Hosting direction: [architecture-split.md](./architecture-split.md).
 
 ### Disk / uploads (box)
 
-After Pinata is live on the server `.env` (`PINATA_JWT`), set
-`LOCAL_UPLOADS=0` and recreate the app container so new audio never
-writes under `data/uploads`. Confirm with
-`curl -sf https://versions.persidian.com/api/health/ready` →
+Object storage is **Grove** (Lens) — no Pinata JWT. Set `GROVE_CHAIN_ID=232`
+(Lens mainnet) and `LOCAL_UPLOADS=0`, recreate the API container so new audio
+never writes under `data/uploads`. Confirm with
+`curl -sf https://api.versions.persidian.com/api/health/ready` →
 `providers.uploads.localAllowed: false` and
-`providers.ipfs.configured: true`.
+`providers.ipfs.configured: true` (means Grove live, not mock).
 
 Optional: set `SWEEP_ON_SSE=0` and rely on the daily
-`POST /api/cron/sweep` job once the UI moves off the box.
+`POST /api/cron/sweep` job.
 
 ## Database schema (production)
 

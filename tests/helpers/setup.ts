@@ -11,7 +11,7 @@ process.env.DATABASE_URL = 'postgresql://placeholder@localhost:5432/placeholder'
 // Use a 40-char fallback so forks that don't load .env still pass validation.
 process.env.NEXTAUTH_SECRET =
   process.env.NEXTAUTH_SECRET || 'test-secret-test-secret-test-secret-40';
-process.env.PINATA_JWT = process.env.PINATA_JWT || '';
+process.env.GROVE_MOCK = process.env.GROVE_MOCK || '1';
 process.env.LLM_API_KEY = process.env.LLM_API_KEY || '';
 // Leave ARC_RPC_URL unset (not empty) — src/lib/config validates it as an
 // optional URL, and an empty string fails `z.string().url().optional()`.

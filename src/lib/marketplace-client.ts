@@ -54,7 +54,14 @@ export function uploadAudioHref(audioPath: string): string {
 }
 
 export function mediaHref(raw: string): string | null {
-  if (raw.startsWith('ipfs://')) return `https://gateway.pinata.cloud/ipfs/${raw.slice(7)}`;
+  // Grove (current): lens://<storage_key> → api.grove.storage
+  if (raw.startsWith('lens://')) {
+    return `https://api.grove.storage/${raw.slice('lens://'.length)}`;
+  }
+  // Legacy Pinata rows still in the DB
+  if (raw.startsWith('ipfs://')) {
+    return `https://gateway.pinata.cloud/ipfs/${raw.slice('ipfs://'.length)}`;
+  }
   try {
     const url = new URL(raw);
     return url.protocol === 'https:' ? url.href : null;

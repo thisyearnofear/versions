@@ -111,6 +111,7 @@ describe('uploadAudioHref', () => {
 
 describe('mediaHref', () => {
   it('maps ipfs and https, rejects everything else', () => {
+    expect(mediaHref('lens://abc123def')).toBe('https://api.grove.storage/abc123def');
     expect(mediaHref('ipfs://bafy123')).toBe('https://gateway.pinata.cloud/ipfs/bafy123');
     expect(mediaHref('https://cdn.example.com/a.png')).toBe('https://cdn.example.com/a.png');
     expect(mediaHref('http://insecure.example.com/a.png')).toBeNull();
