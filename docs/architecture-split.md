@@ -18,8 +18,20 @@ UI pages live on Netlify. The box image is **API-only** (`VERSIONS_ROLE=api`):
 | Netlify | `NEXT_PUBLIC_API_URL` | `https://api.versions.persidian.com` |
 | Netlify | `NEXT_PUBLIC_APP_URL` | `https://versions.persidian.com` |
 | Box | `ALLOWED_ORIGINS` | UI origins (apex + `*.netlify.app`) |
+| Box | `GROVE_CHAIN_ID` | `232` (Lens mainnet immutable ACL) |
+| Box | `LOCAL_UPLOADS` | `0` (no new `data/uploads` writes) |
 | Box | `VERSIONS_IMAGE` | optional override (default `ghcr.io/thisyearnofear/versions:<sha>`) |
 | Box | `GHCR_TOKEN` | only if the GHCR package is private |
+
+## Object storage (Grove)
+
+New audio uploads use Grove (no Pinata JWT). Paths are `lens://<storage_key>`;
+players resolve via `https://api.grove.storage/…` (`mediaHref`).
+
+Legacy files under `data/uploads/` (~68 MB residual at cutover) migrate with
+`scripts/migrate-uploads-to-grove.ts` once **Neon** accepts connections again
+(quota exceeded 2026-09-24; ~1 week). See [deploy.md](./deploy.md) → Disk /
+uploads.
 
 ## DNS (Cloudflare `persidian.com`, DNS only)
 
