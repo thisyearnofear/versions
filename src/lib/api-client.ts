@@ -1,8 +1,9 @@
 // MODULAR: typed API client. Single base URL + JSON helpers. Every
 // fetch in the app goes through this — no raw fetch() in components.
-// Backed by the Next.js App Router (the same origin serves the page
-// and the /api routes), so the base URL is empty.
+// Default: same origin (monolith). Set NEXT_PUBLIC_API_URL when the UI
+// is hosted separately from the API (see docs/architecture-split.md).
 
+import { apiCredentials, apiUrl } from "./api-base";
 import { getGuestId } from "./guest-id";
 import type {
   AgentName,
@@ -78,9 +79,9 @@ async function request<T>(
       ...guestHeaders(),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
-    credentials: "same-origin",
+    credentials: apiCredentials(),
   };
-  const res = await fetch(path, init);
+  const res = await fetch(apiUrl(path), init);
   const text = await res.text();
   let json: Envelope<T> | null = null;
   try {
@@ -650,9 +651,11 @@ export interface AgentIdentityRow {
 export const apiClient = {
   // submissions
   createSubmission(form: FormData): Promise<SubmissionRecord> {
-    return fetch("/api/v1/submissions", { method: "POST", body: form }).then((r) =>
-      handleFetch<SubmissionRecord>(r),
-    );
+    return fetch(apiUrl("/api/v1/submissions"), {
+      method: "POST",
+      body: form,
+      credentials: apiCredentials(),
+    }).then((r) => handleFetch<SubmissionRecord>(r));
   },
   verifyPayment(submissionId: string, body: { txHash: string }): Promise<VerifyPaymentResponse> {
     return api.post<VerifyPaymentResponse>(`/api/v1/submissions/${submissionId}/verify-payment`, body);

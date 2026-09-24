@@ -1,3 +1,4 @@
+import { apiCredentials, apiUrl } from './api-base';
 import type { ListingRecord } from '../services/listings';
 import type { ChannelRecord } from '../services/channels';
 import type { SlotRecord, SlotLegRecord } from '../services/slots';
@@ -19,7 +20,7 @@ export class MarketplaceError extends Error {
 }
 
 export async function marketplaceRequest<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(url, { credentials: 'same-origin', ...init });
+  const response = await fetch(apiUrl(url), { credentials: apiCredentials(), ...init });
   const body = await response.json().catch(() => null);
   if (!response.ok || !body?.success || body.data == null)
     throw new MarketplaceError(
@@ -49,7 +50,7 @@ export function searchHref(input: Parameters<typeof browseHref>[0] = {}, offset 
 }
 
 export function uploadAudioHref(audioPath: string): string {
-  return `/api/v1/uploads/${encodeURIComponent(audioPath.split('/').pop() ?? '')}`;
+  return apiUrl(`/api/v1/uploads/${encodeURIComponent(audioPath.split('/').pop() ?? '')}`);
 }
 
 export function mediaHref(raw: string): string | null {

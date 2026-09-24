@@ -103,5 +103,12 @@ print(f\"  llm: mock={llm.get('mock')} provider={llm.get('provider', 'n/a')} mod
 print(f\"  embedding: mock={emb.get('mock')} provider={emb.get('provider', 'n/a')}\")
 " 2>/dev/null || true
 
+# ── Disk hygiene: reclaim dangling images + aged build cache ──
+# Every deploy rebuilds on-box; without prune, BuildKit layers fill the VPS.
+# Keep the last day of builder cache so the next deploy stays warm.
+log "Pruning unused Docker images and aged build cache..."
+docker image prune -f >/dev/null 2>&1 || log "WARNING: docker image prune failed"
+docker builder prune -f --filter "until=24h" >/dev/null 2>&1 || log "WARNING: docker builder prune failed"
+
 log "Deployed ${AFTER_FULL} (${AFTER})"
 echo "✓ Deploy complete."

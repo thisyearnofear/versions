@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { playNoteAt, resumeAudio } from "@/lib/audio-feedback";
+import { apiCredentials, apiUrl } from "@/lib/api-base";
 import { generateRatingCover } from "@/lib/cover-gen";
 
 const WAVE_WIDTH = 1600;
@@ -151,8 +152,8 @@ export function WaveformGallery() {
     // Live marketplace supply — music first so covers with audio lead, then
     // placements so the second catalog is visible on the wave.
     Promise.allSettled([
-      fetch(`/api/v1/listings?kind=music&limit=${MAX_COVERS}`, { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)),
-      fetch(`/api/v1/listings?kind=placement&limit=${MAX_COVERS}`, { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)),
+      fetch(apiUrl(`/api/v1/listings?kind=music&limit=${MAX_COVERS}`), { credentials: apiCredentials() }).then((r) => (r.ok ? r.json() : null)),
+      fetch(apiUrl(`/api/v1/listings?kind=placement&limit=${MAX_COVERS}`), { credentials: apiCredentials() }).then((r) => (r.ok ? r.json() : null)),
     ])
       .then(([musicRes, placementRes]) => {
         if (cancelled) return;

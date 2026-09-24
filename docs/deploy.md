@@ -25,9 +25,25 @@ cd /home/linuxuser/versions && ./scripts/deploy.sh
 ```
 
 `deploy.sh` requires a clean tree and `.env`, pulls `--ff-only`, rebuilds,
-then gates on `/api/health/live` and `/api/health/ready`. It deliberately does
+then gates on `/api/health/live` and `/api/health/ready`. After a healthy
+deploy it prunes dangling Docker images and BuildKit cache older than 24h
+(so repeated on-box builds do not fill the VPS). It deliberately does
 **not** modify the database schema. Emergency: `DEPLOY_ALLOW_DIRTY=1`. Prefer
 `git reset --hard origin/master` instead.
+
+Hosting direction (UI vs API split): [architecture-split.md](./architecture-split.md).
+
+### Disk / uploads (box)
+
+After Pinata is live on the server `.env` (`PINATA_JWT`), set
+`LOCAL_UPLOADS=0` and recreate the app container so new audio never
+writes under `data/uploads`. Confirm with
+`curl -sf https://versions.persidian.com/api/health/ready` →
+`providers.uploads.localAllowed: false` and
+`providers.ipfs.configured: true`.
+
+Optional: set `SWEEP_ON_SSE=0` and rely on the daily
+`POST /api/cron/sweep` job once the UI moves off the box.
 
 ## Database schema (production)
 

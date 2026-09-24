@@ -296,11 +296,45 @@ export function services(): ServiceRegistry {
 }
 
 // ── response envelope helpers ───────────────────────────
+//
+// CORS: when ALLOWED_ORIGINS is unset, keep legacy `*` (same-origin
+// clients + open simple cross-origin reads). When set (comma-separated),
+// reflect a matching Origin and allow credentials so a Netlify UI can
+// call the box API with session cookies. Origin is stashed in
+// requestIdFor so existing successResponse(requestId) call sites work.
 
-const CORS_HEADERS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  Vary: 'Origin',
-};
+const originByRequestId = new Map<string, string | null>();
+
+function parseAllowedOrigins(): string[] {
+  return (process.env.ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function corsHeadersFor(origin: string | null): Record<string, string> {
+  const allowed = parseAllowedOrigins();
+  if (allowed.length === 0) {
+    return { 'Access-Control-Allow-Origin': '*', Vary: 'Origin' };
+  }
+  if (origin && allowed.includes(origin)) {
+    return {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Credentials': 'true',
+      Vary: 'Origin',
+    };
+  }
+  return { Vary: 'Origin' };
+}
+
+function takeCorsHeaders(requestId: string): Record<string, string> {
+  const origin = originByRequestId.get(requestId) ?? null;
+  originByRequestId.delete(requestId);
+  return corsHeadersFor(origin);
+}
+
+const CORS_ALLOW_HEADERS =
+  'Content-Type, x-request-id, x-supervisor-guest, Authorization, PAYMENT-SIGNATURE';
 
 export function jsonResponse(
   status: number,
@@ -315,7 +349,7 @@ export function jsonResponse(
       'Content-Type': 'application/json; charset=utf-8',
       'Content-Length': String(Buffer.byteLength(payload)),
       'x-request-id': requestId,
-      ...CORS_HEADERS,
+      ...takeCorsHeaders(requestId),
       ...extraHeaders,
     },
   });
@@ -343,9 +377,9 @@ export function corsPreflight(requestId: string): Response {
   return new Response(null, {
     status: 204,
     headers: {
-      ...CORS_HEADERS,
+      ...takeCorsHeaders(requestId),
       'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, x-request-id',
+      'Access-Control-Allow-Headers': CORS_ALLOW_HEADERS,
       'Access-Control-Max-Age': '600',
       'x-request-id': requestId,
     },
@@ -362,8 +396,11 @@ import { randomUUID } from 'crypto';
 
 export function requestIdFor(req: NextRequest): string {
   const incoming = req.headers.get('x-request-id');
-  if (incoming && incoming.trim()) return incoming.trim();
-  return randomUUID();
+  const id = incoming && incoming.trim() ? incoming.trim() : randomUUID();
+  originByRequestId.set(id, req.headers.get('origin'));
+  // Bound the map if a buggy caller never builds a response.
+  if (originByRequestId.size > 10_000) originByRequestId.clear();
+  return id;
 }
 
 export function clientIpFor(req: NextRequest): string | null {

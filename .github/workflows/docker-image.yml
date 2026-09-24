@@ -1,0 +1,41 @@
+# Optional: build the production image off-box so nuncio-vultr only pulls.
+# Enable by adding repository secrets REGISTRY, REGISTRY_USERNAME,
+# REGISTRY_PASSWORD and vars NEXT_PUBLIC_* as needed, then run manually
+# (Actions → Docker image → Run workflow). Wire deploy.sh to
+# `docker compose pull` when you cut over — see docs/architecture-split.md.
+
+name: Docker image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.REGISTRY }}/versions:${{ github.sha }}
+            ${{ secrets.REGISTRY }}/versions:latest
+          build-args: |
+            NEXT_PUBLIC_ARC_RPC_URL=${{ vars.NEXT_PUBLIC_ARC_RPC_URL }}
+            NEXT_PUBLIC_ARC_EXPLORER_URL=${{ vars.NEXT_PUBLIC_ARC_EXPLORER_URL }}
+            NEXT_PUBLIC_WC_PROJECT_ID=${{ secrets.NEXT_PUBLIC_WC_PROJECT_ID }}
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL }}

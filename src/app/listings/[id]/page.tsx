@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { cache } from "react";
 import type { Metadata } from "next";
-import { services } from "@/lib/services";
+import { fetchListingById } from "@/lib/server-marketplace";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Container } from "@/components/ui/primitives";
@@ -14,7 +14,9 @@ import { APP_URL } from "@/lib/attribution";
 export const dynamic = "force-dynamic";
 
 // Shared by generateMetadata and the page — one query per request.
-const getListing = cache(async (id: string) => services().listings.get(id));
+// Uses in-process services on the monolith, or HTTP when NEXT_PUBLIC_API_URL
+// / INTERNAL_API_URL points at the box (Netlify UI split).
+const getListing = cache(async (id: string) => fetchListingById(id));
 
 export async function generateMetadata({
   params,

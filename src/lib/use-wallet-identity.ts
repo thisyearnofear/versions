@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { WalletIdentity } from "@/lib/wallet-identity";
 import { shortAddress } from "@/lib/wallet-identity";
+import { apiCredentials, apiUrl } from "@/lib/api-base";
 
 type Envelope = {
   success?: boolean;
@@ -33,7 +34,9 @@ export function useWalletIdentity(address: string | null | undefined) {
 
     void (async () => {
       try {
-        const res = await fetch(`/api/v1/identity/${encodeURIComponent(address)}`);
+        const res = await fetch(apiUrl(`/api/v1/identity/${encodeURIComponent(address)}`), {
+          credentials: apiCredentials(),
+        });
         if (!res.ok) return;
         const json = (await res.json()) as Envelope;
         const next = json.data?.identity;

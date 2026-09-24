@@ -20,6 +20,8 @@ services:
         NEXT_PUBLIC_ARC_EXPLORER_URL: ${NEXT_PUBLIC_ARC_EXPLORER_URL:-https://testnet.arcscan.app}
         NEXT_PUBLIC_SUBMIT_RECEIPT_TIMEOUT_MS: ${NEXT_PUBLIC_SUBMIT_RECEIPT_TIMEOUT_MS:-60000}
         NEXT_PUBLIC_WC_PROJECT_ID: ${NEXT_PUBLIC_WC_PROJECT_ID:-}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
     image: versions:latest
     container_name: versions
     restart: unless-stopped

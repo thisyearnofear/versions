@@ -48,7 +48,9 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
   RATE_LIMIT_AUDIO_MAX: z.coerce.number().int().positive().default(30),
 
-  // CORS (reserved — not yet wired into route handlers)
+  // CORS — comma-separated UI origins for credentialed cross-origin
+  // API access (Netlify UI → box API). Unset keeps legacy Allow-Origin: *.
+  // Wired in src/lib/services.ts (jsonResponse / corsPreflight).
   ALLOWED_ORIGINS: z.string().optional(),
 
   // Monitoring — wired via instrumentation.ts (Sentry init, env-gated;

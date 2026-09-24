@@ -639,16 +639,12 @@ export function SubmitForm({ onUploaded }: { onUploaded?: (submission: { id: str
 
         {state.phase === "verified" && (
           <div className="border border-[var(--color-hair-strong)] p-4 flex flex-col gap-2">
-            {/* MODULAR: IA consolidation — the artist dashboard is the
-                natural next step after a verified submission (Release
-                Cases + earnings), and it's otherwise unreachable from the
-                three-door nav. Surface it here, in context. */}
             {address && (
               <Link
-                href={`/artists/${address}`}
+                href="/discover"
                 className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-rust)] hover:opacity-80 transition-opacity"
               >
-                Track your release case →
+                Browse the catalog →
               </Link>
             )}
             {onUploaded && verifiedUpload && (

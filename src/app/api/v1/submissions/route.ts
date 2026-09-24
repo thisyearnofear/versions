@@ -13,6 +13,7 @@ import {
   headerBag,
 } from '@/lib/services';
 import { log } from '@/lib/logger';
+import { localUploadsAllowed } from '@/lib/upload-policy';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,14 +94,14 @@ export async function POST(req: NextRequest) {
     // in schema.ts.
     const audioSha256 = crypto.createHash('sha256').update(audioBuffer).digest('hex');
 
-    // MODULAR: Pinata-first upload, local FS fallback. We always
-    // attempt IPFS because the operator may have configured Pinata
-    // but not local storage. If Pinata fails for any reason, we
-    // fall back to the local-FS path so the submission still works
-    // (IPFS is best-effort, not blocking).
+    // MODULAR: Pinata-first. LOCAL_UPLOADS=0 (recommended in prod once
+    // PINATA_JWT is set) refuses the local data/uploads fallback so the
+    // VPS does not accumulate audio — see docs/architecture-split.md.
     let audioPath = `data/uploads/${filename}`;
     let audioIpfsCid: string | null = null;
     let ipfsResult: Awaited<ReturnType<typeof svc.ipfs.uploadAudio>> | null = null;
+    const allowLocal = localUploadsAllowed();
+
     if (svc.ipfs.isConfigured()) {
       try {
         ipfsResult = await svc.ipfs.uploadAudio(audioBuffer, filename, audioContentType);
@@ -108,12 +109,29 @@ export async function POST(req: NextRequest) {
         audioPath = `ipfs://${ipfsResult.cid}`;
         log.info('audio uploaded to IPFS', { request_id: rid, cid: ipfsResult.cid, source: ipfsResult.source });
       } catch (err) {
-        log.warn('IPFS upload failed, falling back to local FS', {
+        log.warn('IPFS upload failed', {
           request_id: rid,
           err: (err as Error).message,
+          local_fallback: allowLocal,
         });
+        if (!allowLocal) {
+          return errorResponse(
+            rid,
+            503,
+            'IPFS_UPLOAD_FAILED',
+            'Object storage upload failed and local disk uploads are disabled (LOCAL_UPLOADS=0).',
+          );
+        }
       }
+    } else if (!allowLocal) {
+      return errorResponse(
+        rid,
+        503,
+        'IPFS_REQUIRED',
+        'PINATA_JWT is required when LOCAL_UPLOADS=0. Configure Pinata or allow local uploads.',
+      );
     }
+
     if (!ipfsResult) {
       // Fallback path: write to local upload dir.
       const fullPath = path.join(svc.config.uploadDir, filename);

@@ -113,126 +113,36 @@ field changes, update all of: `agent_reviews.detail` in `src/lib/schema.ts` (jso
 `src/components/curation/AgentMonitor.tsx`. Legacy rows without `detail` /
 `fit_score` must keep grading normally — gate UI rendering on field presence.
 
-## BriefSearchRow: version families + audio features
+## Information architecture (three doors only)
 
-`BriefSearchRow` carries:
+The product is the marketplace wedge — three doors, nothing else in nav:
 
-- **`family_id?: string`** — groups alternate takes / versions of the same
-  song. DiscoverView groups results by `family_id`; the best match renders as
-  the primary row, siblings are expandable via a chevron toggle.
-- **`audio_features: AudioFeatures | null`** on submissions — extracted at
-  publish time via the 3-tier pipeline (API → chromagram → ffmpeg).
-  Included in agent prompts for audio-aware scoring.
+- **Browse** (`/discover`) — `MarketplaceBrowse`: music + placements matched to channel ethos.
+- **Supply** (`/submit`) — list a track or a product (kind toggle; blanket agreement).
+- **Channels** (`/channels`) — connect YouTube, verify reach; verified unlocks paid slots.
 
-### Wire-format gotchas (learned the hard way)
+Also public: `/listings/:id` (attribution), `/placements/:slotId`, `/t/:code`, `/legal/agreement`.
 
-- **Semantic search must LEFT JOIN `version_embeddings`.** Versions seeded
-  before embedding backfill have no embedding row; an inner JOIN silently
-  drops them from `/discover/brief`. Use `COALESCE(similarity, 0)` +
-  `ORDER BY ... NULLS LAST` so they rank by structured-tag score instead.
-- **Never write `sql\`col = ANY(${array})\`` in Drizzle.** It renders as
-  `ANY(($1, $2))` — a row constructor, not an array — and throws at
-  runtime. Use `inArray(col, values)` from `drizzle-orm`.
-- The semantic path returns raw snake_case rows; keep `family_id` in the
-  SELECT list or version-family grouping silently breaks.
-
-## Information architecture (three doors)
-
-The nav is organized around jobs, not modules — three doors:
-
-- **Browse** (`/discover`) — supply matched to a channel's ethos: music + product placements.
-- **Supply** (`/submit`) — list a track or a product (one card, kind toggle; live immediately under the blanket agreement).
-- **Channels** (`/channels`) — connect a distribution surface (YouTube) and verify reach; verified channels unlock paid placements.
-
-Demoted but kept: **Workspace** (`/supervisor`, cases/shortlists/licenses + library tab `?tab=library`), **System** (`/agents`). `/feed` redirects to `/supervisor?tab=library` for deep links.
-
-**Case thread, family compare, and durable receipt outbox** conventions
-below still apply to the retained brief→license surfaces on `/discover`
-and `/supervisor` (they share settlement rails with `slot_legs`).
-
-Per-wallet dashboards (`/artists/[wallet]`, `/curators/[wallet]`,
-`/listeners/[wallet]`) are NOT nav items — they're reached in context:
-
-- **Artist dashboard** — linked from the `/submit` success state
-  ("Track your release case →"). It's the artist half of the wedge
-  (Release Cases + earnings). After submission, `ensureForSubmission()`
-  creates a release case in the DB; `ReleaseCasesPanel` re-derives the
-  visual state from the submission's live status (payment → curation →
-  outcome). No drift: the card shows exactly what the submission holds.
-- **Curator dashboard** — RETIRED. Human curation was replaced by the
-  three AI agents (only writer of curator ratings is `src/services/agents.ts`),
-  so the page was vestigial and contradicted the "three distinct agent
-  lenses" story. `/curators/[wallet]` redirects to `/agents`; the
-  `/api/v1/curators/*` read endpoints remain. Don't rebuild the page.
-- **Listener dashboard** — consumer beachhead; not the business model.
-  Wired into `FeedView`: when a wallet is connected, every expanded feed
-  row shows a small badge (`"Explorer · 42 plays"`) linking to
-  `/listeners/[wallet]`. Reputation levels (Listener → Explorer → Curator →
-  Tastemaker) match `ListenerDashboard`'s `REP_LEVELS`. Plays accrue via
-  the AR flow; badges/streaks are engagement, not the wedge. Keep reachable
-  as a deep link, not a nav door.
-
-## Case thread (placement case as conversation)
-
-The supervisor job (brief → licensed track) renders as ONE continuous
-surface: the durable placement case appears in-thread on `/discover`
-(`CaseThread` in `src/components/discovery/CaseThread.tsx`), collapsed
-to a status line, expanding into a chronological conversation — brief
-as the supervisor's opening message, every durable `case_events` row
-as a one-line agent reply.
-
-Conventions when touching this surface:
-
-- **Cases are keyed on the BASE brief.** Refinements ("darker", "no
-  vocals") re-run the search inside the SAME case — iteration, not a
-  new placement. `openCase` is idempotent per (supervisor, brief) via
-  the partial unique index on non-terminal statuses.
-- **Events are the source of truth for the thread.** Add new agent
-  voice lines in `eventMessage()` in CaseThread; unknown kinds fall
-  back to a cleaned label, never raw JSON. Record new events in
-  `src/services/cases.ts` alongside the state transition that caused
-  them — the thread must never narrate state it can't prove.
-- **Refresh is key-bump + gentle poll + live SSE.** The parent bumps
-  `threadRefreshKey` on search/shortlist/license; while expanded the
-  thread polls every 10s; and the thread subscribes to the shared SSE
-  settlement stream so a split leg landing on Arc for a shortlisted
-  take flashes in-thread instantly (transient — the durable `settled`
-  case event is the permanent record; the outbox stays source of
-  truth). Don't add a second SSE route here.
-- **Guest-friendly.** Cases work wallet-free (guest pseudo-wallet via
-  `resolveSupervisorIdentity`); the thread renders for any searcher.
-
-## A/B family compare (FamilyCompare)
-
-Version families with 2+ takes render a `FamilyCompare` transport
-(`src/components/discovery/FamilyCompare.tsx`) under the family group:
-the best match (A) and first sibling (B) share ONE player — play/pause,
-one position bar, and an A/B switch that preserves playback position so
-the supervisor hears the same moment under both takes. Keep it
-position-preserving and self-contained (two `<audio>` elements, no global
-state).
+**Deleted (do not rebuild):** `/agents`, `/supervisor`, `/feed`, `/cases`, `/artists`,
+`/listeners`, `/curators`, `/admin`, DiscoverView briefs/licenses, tips, economy SSE UI,
+AR/listener surfaces. Services that still exist in `src/services/*` for settlement/publish
+internals are not product doors — see [docs/architecture-split.md](docs/architecture-split.md).
 
 ## Durable receipt outbox (outbox_events)
 
 The in-process EventBus is fire-and-forget — it can drop a receipt if the
-process dies between "money moved" and "SSE read". The canonical receipt stream
-(`settlement-event`: split legs, tip batches, play payouts, license settlement)
-is therefore emitted via `emitDurable(topic, payload)` in `src/services/outbox.ts`,
+process dies between "money moved" and a consumer read. Money-adjacent
+receipts are emitted via `emitDurable(topic, payload)` in `src/services/outbox.ts`,
 which writes a replayable row to `outbox_events` AND broadcasts immediately.
-`drainOutbox()` (so the receipt is at-least-once) runs from `maybeSweep()` in
-`src/services/sweep.ts` on SSE connect — traffic-driven, throttled in-process
-(≥30 min), never on a wall-clock faster than Neon's scale-to-sleep window —
-plus a daily safety-net `POST /api/cron/sweep`; consumers re-fetch and
-dedupe. The sweep also runs `pruneRetention()` (env-tunable windows,
-max once / 30 min; never touches money tables or unprocessed rows). See
-docs/deploy.md → "Operational constraints" for the single-instance
-requirement and the 2026-09-21 CU-hr rule this design assumes.
+`drainOutbox()` runs from `runSweep()` / `POST /api/cron/sweep` (primary) and
+optionally from legacy hooks — prefer cron once the UI is off-box.
+`pruneRetention()` is env-tunable; never touches money tables or unprocessed
+outbox rows. See docs/deploy.md → "Operational constraints".
 
 Rules: use `emitDurable` for anything a user pays for / is paid for; keep
-`emit` for pure ephemeral UX ticks (throttled typewriter/reveal visuals); never
-treat the outbox as the source of truth for money state (that stays in the
-settlement / license tables); keep `outbox_events` mirrored in
-`tests/helpers/db.ts` when the schema changes.
+`emit` for pure ephemeral UX ticks; never treat the outbox as the source of
+truth for money state; keep `outbox_events` mirrored in `tests/helpers/db.ts`
+when the schema changes.
 
 ## Build & test commands
 

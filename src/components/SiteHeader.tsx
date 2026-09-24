@@ -2,14 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
 import { WagmiConnectButton } from "@/components/wallet/WagmiConnectButton";
 import { track } from "@/lib/analytics";
 
-// Three doors, one marketplace: Browse (discover supply for your channel),
-// Supply (list a track or product), Channels (connect and verify distribution).
-// Workspace (cases/licenses) and proof (agents) stay reachable but demoted.
-export type HeaderRoute = "browse" | "supply" | "channels" | "workspace" | "brief" | "artists" | "agents";
+// Three doors only — Browse, Supply, Channels. Everything else is gone.
+export type HeaderRoute = "browse" | "supply" | "channels";
 
 const JOBS = [
   { id: "browse", label: "Browse", href: "/discover", title: "Music & placements matched to your channel's ethos" },
@@ -20,8 +17,6 @@ const JOBS = [
 export function SiteHeader({ active }: { active?: HeaderRoute }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Menu closes via link onClick (each nav item) and Escape. While open,
-  // lock body scroll and subscribe to the Escape key.
   useEffect(() => {
     if (!menuOpen) return;
     const prev = document.body.style.overflow;
@@ -48,7 +43,6 @@ export function SiteHeader({ active }: { active?: HeaderRoute }) {
           VERSIONS
         </Link>
 
-        {/* Desktop rail — hidden on mobile where the menu button takes over */}
         <div className="hidden min-w-0 items-center gap-2 sm:flex">
           <nav aria-label="Primary" className="min-w-0 flex-1 overflow-x-auto">
             {JOBS.map((t) => (
@@ -68,23 +62,9 @@ export function SiteHeader({ active }: { active?: HeaderRoute }) {
               </Link>
             ))}
           </nav>
-          <Link
-            href="/supervisor"
-            title="Workspace — cases, licenses, library"
-            aria-current={active === "workspace" ? "page" : undefined}
-            onClick={() => track("nav_click", { to: "/supervisor", source: "site_header_system" })}
-            className={`hidden whitespace-nowrap px-3 py-2 font-mono text-[9px] uppercase tracking-[0.16em] transition-colors md:inline ${
-              active === "workspace"
-                ? "text-[var(--color-rust)]"
-                : "text-[var(--color-ink-3)] hover:text-[var(--color-rust)]"
-            }`}
-          >
-            Workspace
-          </Link>
           <WagmiConnectButton variant="quiet" />
         </div>
 
-        {/* Mobile: connect + hamburger (44px touch target) */}
         <div className="flex items-center gap-1 sm:hidden">
           <WagmiConnectButton variant="quiet" />
           <button
@@ -99,62 +79,38 @@ export function SiteHeader({ active }: { active?: HeaderRoute }) {
                 className={`absolute left-0 top-0 block h-[2px] w-full bg-current transition-transform duration-200 ${menuOpen ? "translate-y-[5px] rotate-45" : ""}`}
               />
               <span
-                className={`absolute bottom-0 left-0 block h-[2px] w-full bg-current transition-transform duration-200 ${menuOpen ? "-translate-y-[5px] -rotate-45" : ""}`}
+                className={`absolute left-0 top-[5px] block h-[2px] w-full bg-current transition-opacity duration-200 ${menuOpen ? "opacity-0" : ""}`}
+              />
+              <span
+                className={`absolute left-0 top-[10px] block h-[2px] w-full bg-current transition-transform duration-200 ${menuOpen ? "-translate-y-[5px] -rotate-45" : ""}`}
               />
             </span>
           </button>
         </div>
       </div>
 
-      {/* Mobile menu panel — the three doors + system proof, full-width
-          rows with generous touch targets. */}
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.nav
-            aria-label="Primary mobile"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden border-t border-[var(--color-hair)] bg-[var(--color-paper)] sm:hidden"
-          >
-            <div className="flex flex-col px-4 py-3">
-              {JOBS.map((t) => (
-                <Link
-                  key={t.id}
-                  href={t.href}
-                  aria-current={active === t.id ? "page" : undefined}
-                  onClick={() => closeAndTrack(t.href, "site_header_mobile")}
-                  className={`flex min-h-[48px] items-center justify-between border-b border-[var(--color-hair)] font-mono text-[13px] uppercase tracking-[0.18em] ${
-                    active === t.id ? "text-[var(--color-rust)]" : "text-[var(--color-ink)]"
-                  }`}
-                >
-                  {t.label}
-                  <span aria-hidden="true" className="text-[var(--color-ink-3)]">→</span>
-                </Link>
-              ))}
+      {menuOpen && (
+        <nav aria-label="Primary mobile" className="border-t border-[var(--color-hair)] bg-[var(--color-paper)] sm:hidden">
+          <div className="flex flex-col px-4 py-3">
+            {JOBS.map((t) => (
               <Link
-                href="/supervisor"
-                aria-current={active === "workspace" ? "page" : undefined}
-                onClick={() => closeAndTrack("/supervisor", "site_header_mobile")}
-                className="flex min-h-[48px] items-center justify-between font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--color-ink-3)]"
+                key={t.id}
+                href={t.href}
+                aria-current={active === t.id ? "page" : undefined}
+                onClick={() => closeAndTrack(t.href, "site_header_mobile")}
+                className={`flex min-h-[48px] items-center justify-between border-b border-[var(--color-hair)] font-mono text-[13px] uppercase tracking-[0.18em] ${
+                  active === t.id ? "text-[var(--color-rust)]" : "text-[var(--color-ink)]"
+                }`}
               >
-                Workspace
-                <span aria-hidden="true">→</span>
+                {t.label}
+                <span aria-hidden="true" className="text-[var(--color-ink-3)]">
+                  →
+                </span>
               </Link>
-              <Link
-                href="/agents"
-                aria-current={active === "agents" ? "page" : undefined}
-                onClick={() => closeAndTrack("/agents", "site_header_mobile")}
-                className="flex min-h-[48px] items-center justify-between font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--color-ink-3)]"
-              >
-                System · agent activity
-                <span aria-hidden="true">→</span>
-              </Link>
-            </div>
-          </motion.nav>
-        )}
-      </AnimatePresence>
+            ))}
+          </div>
+        </nav>
+      )}
     </header>
   );
 }

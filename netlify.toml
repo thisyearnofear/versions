@@ -1,0 +1,48 @@
+# Netlify — UI host (Phase 3)
+#
+# The box keeps /api, Arc signing, uploads, cron, and SSE.
+# Netlify builds this Next app as the public UI and talks to the box via
+# NEXT_PUBLIC_API_URL (see docs/architecture-split.md).
+#
+# Required Netlify env:
+#   NEXT_PUBLIC_API_URL=https://versions.persidian.com
+#   NEXT_PUBLIC_APP_URL=https://<your-netlify-site>
+#   NEXT_PUBLIC_ARC_RPC_URL=...
+#   NEXT_PUBLIC_ARC_EXPLORER_URL=...
+#   NEXT_PUBLIC_WC_PROJECT_ID=...
+#   NEXTAUTH_URL=https://<your-netlify-site>   # if auth stays on Netlify
+#   NEXTAUTH_SECRET=...                        # same secret as box if shared session
+#
+# Required box .env (API host):
+#   ALLOWED_ORIGINS=https://<your-netlify-site>
+#   LOCAL_UPLOADS=0
+#   PINATA_JWT=...
+#   SWEEP_ON_SSE=0          # optional: cron-only recovery
+#
+# Auth note: cross-origin NextAuth cookies need Secure + SameSite=None and
+# matching secret; simplest path for v1 is keep sign-in on the box origin
+# or use wallet-only client identity until cookie domain is unified.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Optional same-origin proxy alternative (commented): leave NEXT_PUBLIC_API_URL
+# empty and uncomment so the browser stays on the Netlify host while /api
+# and tracking redirects hit the box. SSE needs buffering disabled at the
+# CDN — prefer NEXT_PUBLIC_API_URL until Traefik/Netlify SSE is verified.
+#
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://versions.persidian.com/api/:splat"
+#   status = 200
+#   force = true
+#
+# [[redirects]]
+#   from = "/t/*"
+#   to = "https://versions.persidian.com/t/:splat"
+#   status = 200
+#   force = true

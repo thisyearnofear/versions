@@ -11,12 +11,13 @@
 | [delivery-ingestion.md](./delivery-ingestion.md) | Spec: platform-verified delivery (channel-reported → `platform_api`) |
 | [beachhead.md](./beachhead.md) | How to get to liquidity |
 | [deploy.md](./deploy.md) | Git-only production deploy and guarded schema operations |
+| [architecture-split.md](./architecture-split.md) | Target: Netlify UI + box API; core vs legacy surfaces |
 
 Agent conventions (mood tags, feed shape, NFT traces): [../AGENTS.md](../AGENTS.md).
 
 ## Marketplace loop (dual catalog)
 
-Supply lists a **music** track or a **placement** product (`POST /api/v1/listings`, live immediately, one blanket agreement) → **Channel** connects and verifies a distribution surface (`POST /api/v1/channels`, platform-pulled stats, `can_buy_slots` only when `verified`) → **Browse** surfaces either kind personalized to ethos (`GET /api/v1/marketplace/search?q=&channelId=` — semantic 70/30 tag hybrid, plus `GET /api/v1/discover/brief` for supervisor brief search) → **Free** use renders attribution (`/listings/:id`, `/t/:code`) → **Paid** slot bought self-serve (`POST /api/v1/slots` → `/pay`, flat 60/30/10 on Arc, tracking code + disclosure, budget cap) → **Every use logged** (`POST /api/v1/usage`, channel-reported by default; `by_reporter` split visible) → settlement legs cap spend atomically.
+Supply lists a **music** track or a **placement** product (`POST /api/v1/listings`, live immediately, one blanket agreement) → **Channel** connects and verifies a distribution surface (`POST /api/v1/channels`, platform-pulled stats, `can_buy_slots` only when `verified`) → **Browse** surfaces either kind personalized to ethos (`GET /api/v1/marketplace/search?q=&channelId=`) → **Free** use renders attribution (`/listings/:id`, `/t/:code`) → **Paid** slot bought self-serve (`POST /api/v1/slots` → `/pay`, flat 60/30/10 on Arc, tracking code + disclosure, budget cap) → **Every use logged** (`POST /api/v1/usage`, channel-reported by default; `by_reporter` split visible) → settlement legs cap spend atomically.
 
 Guests browse and read. Creating supply, connecting a channel, buying a slot, and logging usage require a wallet session. Free tier is the cold-start mechanism (see [../POSITIONING.md](../POSITIONING.md) — wedge vs primitive vs cold start); paid is ad infra (podcast-ad-slot simple). Beachhead is seeded locally with `npm run seed:marketplace` (idempotent) so browse already feels tight on the first query.
 
@@ -28,16 +29,16 @@ One tight ethos where supply and demand already rhyme — `lo-fi night drive / s
 
 | Path | Role |
 |------|------|
-| `/discover` | **Browse** — unified music + placements feed, brief search, usage ticker |
-| `/submit` | **Supply** — music ↔ placement toggle, tier/pricing/cap, agreement click-through |
+| `/discover` | **Browse** — music + placements matched to channel ethos |
+| `/submit` | **Supply** — music ↔ placement toggle, tier/pricing/cap |
 | `/channels` | **Channels** — connect + verify a distribution surface |
-| `/supervisor` | Workspace — cases/shortlists/licenses + library tab + usage reporter |
 | `/listings/:id` | Public attribution page |
+| `/placements/:slotId` | Paid placement detail + usage reporter |
 | `/t/:code` | Tracking redirect → listing |
 | `/legal/agreement` | Blanket ToS (versioned, stamped on every row) |
-| `/agents` | Live review / system proof (demoted) |
-| `/feed` | Redirect → `/supervisor?tab=library` |
 | `/api/health/ready` | Adapter mock/live flags (incl. `channelProbe`) |
+
+Hosting split: [architecture-split.md](./architecture-split.md).
 
 ## Local
 

@@ -13,8 +13,10 @@
 // only as a boolean (connected: true/false) to measure the
 // connect-step drop-off without leaking identity.
 
+import { apiUrl } from "./api-base";
+
 const SESSION_KEY = "versions_session_id";
-const BEACON_URL = "/api/telemetry";
+const BEACON_PATH = "/api/telemetry";
 
 export type AnalyticsEvent =
   | "page_view"
@@ -106,10 +108,10 @@ function flush(): void {
     // sendBeacon is non-blocking and survives page unload.
     if (navigator.sendBeacon) {
       const blob = new Blob([payload], { type: "application/json" });
-      navigator.sendBeacon(BEACON_URL, blob);
+      navigator.sendBeacon(apiUrl(BEACON_PATH), blob);
     } else {
       // Fallback for browsers without sendBeacon.
-      void fetch(BEACON_URL, {
+      void fetch(apiUrl(BEACON_PATH), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: payload,

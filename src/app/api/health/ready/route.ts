@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { jsonResponse, requestIdFor, services } from '../../../../lib/services';
+import { localUploadsAllowed } from '@/lib/upload-policy';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,11 @@ export async function GET(req: NextRequest): Promise<Response> {
           erc8183: { mock: svc.config.erc8183Mock, contract: svc.erc8183.contractAddress },
           erc8004: { mock: svc.config.erc8004Mock, registry: svc.erc8004.registryAddress },
           ipfs: { configured: svc.config.ipfsConfigured },
+          uploads: {
+            localAllowed: localUploadsAllowed(),
+            // True when new audio can land without writing data/uploads.
+            objectStorageReady: svc.config.ipfsConfigured,
+          },
           ccmixter: {
             mock: svc.config.ccmixterMock,
             configured: !svc.config.ccmixterMock,

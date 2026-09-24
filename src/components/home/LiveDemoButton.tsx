@@ -15,6 +15,7 @@ import { setSoundEnabled } from "@/lib/audio-feedback";
 import { track } from "@/lib/analytics";
 import { shortAddress, shortHash, txUrl } from "@/lib/explorer";
 import { fmtUsdc, relativeTime } from "@/lib/format";
+import { apiUrl } from "@/lib/api-base";
 
 type StepStatus = "pending" | "active" | "done" | "failed" | "skipped";
 
@@ -86,7 +87,7 @@ interface Proof {
 
 // The public routes all answer { success, data }; unwrap tolerantly.
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+  const res = await fetch(apiUrl(url));
   const json = (await res.json().catch(() => null)) as { data?: unknown } | null;
   if (!res.ok) {
     const message = (json as { error?: { message?: string } } | null)?.error?.message;

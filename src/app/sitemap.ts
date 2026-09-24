@@ -1,17 +1,12 @@
 // MODULAR: sitemap = the static public doors plus every live listing's
-// attribution page (the URLs our credits point to in the wild). The DB read
-// is guarded so a fresh deploy without tables can't 500 the route — it
-// falls back to the static doors only.
+// attribution page (the URLs our credits point to in the wild). Uses
+// fetchActiveListingIds so a Netlify UI host can build the map via the
+// box API without a local DB pool.
 
 import type { MetadataRoute } from "next";
-import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { listings } from "@/lib/schema";
 import { APP_URL } from "@/lib/attribution";
+import { fetchActiveListingIds } from "@/lib/server-marketplace";
 
-// Listings accrue at runtime, so the sitemap must be generated per
-// request (well, per crawl) — a build-time snapshot would silently
-// freeze the catalog at deploy time.
 export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -25,15 +20,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
-    const rows = await db
-      .select({ id: listings.id, updatedAt: listings.updatedAt })
-      .from(listings)
-      .where(eq(listings.status, "active"));
+    const rows = await fetchActiveListingIds(500);
     return [
       ...staticDoors,
       ...rows.map((r) => ({
         url: `${APP_URL}/listings/${r.id}`,
-        lastModified: r.updatedAt ?? now,
+        lastModified: r.updatedAt ? new Date(r.updatedAt) : now,
         changeFrequency: "weekly" as const,
         priority: 0.6,
       })),

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAccount } from "wagmi";
 import { MarketplaceError, createRequestScope, marketplaceRequest, mediaHref } from "@/lib/marketplace-client";
+import { apiCredentials, apiUrl } from "@/lib/api-base";
 import { useSupervisorAuth } from "@/lib/use-supervisor-auth";
 import { ApiError } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
@@ -87,8 +88,8 @@ export function SupplyCreator({
     (async () => {
       try {
         const res = await fetch(
-          `/api/v1/artists/${walletAddress}/versions?limit=12`,
-          { credentials: "same-origin", signal },
+          apiUrl(`/api/v1/artists/${walletAddress}/versions?limit=12`),
+          { credentials: apiCredentials(), signal },
         );
         if (!res.ok) {
           if (isCurrent()) setSubmissionsError("Could not load your uploads — retry to pick an existing track.");

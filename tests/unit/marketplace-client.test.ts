@@ -29,7 +29,19 @@ describe('marketplaceRequest', () => {
     );
     const data = await marketplaceRequest<{ hello: string }>('/api/v1/x');
     expect(data.hello).toBe('world');
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('/api/v1/x');
     expect(vi.mocked(fetch).mock.calls[0][1]?.credentials).toBe('same-origin');
+  });
+
+  it('prefixes NEXT_PUBLIC_API_URL and uses include credentials', async () => {
+    process.env.NEXT_PUBLIC_API_URL = 'https://api.example.com';
+    stubFetch(async () =>
+      new Response(JSON.stringify({ success: true, data: { ok: true } }), { status: 200 }),
+    );
+    await marketplaceRequest<{ ok: boolean }>('/api/v1/x');
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('https://api.example.com/api/v1/x');
+    expect(vi.mocked(fetch).mock.calls[0][1]?.credentials).toBe('include');
+    delete process.env.NEXT_PUBLIC_API_URL;
   });
 
   it('rejects failed HTTP with the server message and code', async () => {

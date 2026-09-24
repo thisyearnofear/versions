@@ -1,14 +1,13 @@
 // MODULAR: per-listing Open Graph card. These pages are linked from
 // attribution credits in public video descriptions, so the share card
-// carries the listing name, supplier and tier. Reads the DB at request
-// time (dynamic params, no generateStaticParams); missing rows render a
-// neutral card instead of throwing — a broken image route would 404 the
-// card and lose the share preview entirely.
+// carries the listing name, supplier and tier. Reads via
+// fetchListingById (in-process or box API) so a Netlify UI host does
+// not need a DB pool. Missing rows render a neutral card instead of
+// throwing — a broken image route would 404 the card and lose the share
+// preview entirely.
 
 import { ImageResponse } from "next/og";
-import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { listings } from "@/lib/schema";
+import { fetchListingById } from "@/lib/server-marketplace";
 
 export const alt = "VERSIONS listing — music & product placements";
 export const size = { width: 1200, height: 630 };
@@ -33,17 +32,15 @@ export default async function Image({
     tier: string;
   } | null = null;
   try {
-    const [found] = await db
-      .select({
-        title: listings.title,
-        supplierName: listings.supplierName,
-        kind: listings.kind,
-        tier: listings.tier,
-      })
-      .from(listings)
-      .where(eq(listings.id, id))
-      .limit(1);
-    row = found ?? null;
+    const listing = await fetchListingById(id);
+    if (listing) {
+      row = {
+        title: listing.title,
+        supplierName: listing.supplier_name,
+        kind: listing.kind,
+        tier: listing.tier,
+      };
+    }
   } catch {
     row = null;
   }
