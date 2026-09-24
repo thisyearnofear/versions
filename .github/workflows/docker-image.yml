@@ -1,13 +1,30 @@
-# Optional: build the production image off-box so nuncio-vultr only pulls.
-# Enable by adding repository secrets REGISTRY, REGISTRY_USERNAME,
-# REGISTRY_PASSWORD and vars NEXT_PUBLIC_* as needed, then run manually
-# (Actions → Docker image → Run workflow). Wire deploy.sh to
-# `docker compose pull` when you cut over — see docs/architecture-split.md.
+# Build and push the API host image to GHCR (off-box).
+# nuncio-vultr only pulls — no local npm install / next build.
+#
+# Package: ghcr.io/thisyearnofear/versions
+# Tags:    :<git-sha> and :latest
 
 name: Docker image
 
 on:
+  push:
+    branches: [master]
+    paths:
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "package.json"
+      - "package-lock.json"
+      - "next.config.ts"
+      - "src/**"
+      - "public/**"
+      - "scripts/prepare-api-tree.sh"
+      - "scripts/audit-nft-traces.sh"
+      - ".github/workflows/docker-image.yml"
   workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: thisyearnofear/versions
 
 jobs:
   build:
@@ -18,12 +35,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Log in to registry
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ secrets.REGISTRY }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -31,11 +51,28 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.REGISTRY }}/versions:${{ github.sha }}
-            ${{ secrets.REGISTRY }}/versions:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           build-args: |
-            NEXT_PUBLIC_ARC_RPC_URL=${{ vars.NEXT_PUBLIC_ARC_RPC_URL }}
-            NEXT_PUBLIC_ARC_EXPLORER_URL=${{ vars.NEXT_PUBLIC_ARC_EXPLORER_URL }}
+            VERSIONS_ROLE=api
+            NEXT_PUBLIC_APP_URL=https://versions.persidian.com
+            NEXT_PUBLIC_ARC_RPC_URL=https://rpc.testnet.arc.network
+            NEXT_PUBLIC_ARC_EXPLORER_URL=https://testnet.arcscan.app
             NEXT_PUBLIC_WC_PROJECT_ID=${{ secrets.NEXT_PUBLIC_WC_PROJECT_ID }}
-            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
-            NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL }}
+            NEXT_PUBLIC_API_URL=
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Make package public (idempotent)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Public repo → public package so the VPS can pull without a token.
+          gh api --method PUT \
+            "/user/packages/container/versions/visibility" \
+            -f visibility=public \
+            || gh api --method PUT \
+            "/orgs/${{ github.repository_owner }}/packages/container/versions/visibility" \
+            -f visibility=public \
+            || true

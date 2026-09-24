@@ -3,10 +3,15 @@
 # API stays on the box: https://api.versions.persidian.com
 # Site: versions-persidian (papajams) → custom domain versions.persidian.com
 #
-# Required Netlify env (production):
+# Required Netlify env (production, after api.* DNS):
 #   NEXT_PUBLIC_API_URL=https://api.versions.persidian.com
+#   INTERNAL_API_URL=https://api.versions.persidian.com
 #   NEXT_PUBLIC_APP_URL=https://versions.persidian.com
 #   NEXT_PUBLIC_ARC_RPC_URL / NEXT_PUBLIC_ARC_EXPLORER_URL / NEXT_PUBLIC_WC_PROJECT_ID
+#
+# Pre-DNS: NEXT_PUBLIC_API_URL may temporarily be https://versions.persidian.com
+# while apex still resolves to the VPS. Flip to api.* after Cloudflare cutover
+# (scripts/dns-cutover-cloudflare.sh).
 #
 # Required box .env:
 #   ALLOWED_ORIGINS=https://versions.persidian.com,https://versions-persidian.netlify.app

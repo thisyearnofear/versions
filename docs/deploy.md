@@ -1,17 +1,19 @@
 # Production deploy
 
-Live: [versions.persidian.com](https://versions.persidian.com)  
-Host: `nuncio-vultr` · `/home/linuxuser/versions`
+Live UI: [versions.persidian.com](https://versions.persidian.com) (Netlify)  
+Live API: [api.versions.persidian.com](https://api.versions.persidian.com) (`nuncio-vultr`)
 
-**Only path:** `git push origin master` → `./scripts/deploy-remote.sh`
+**Only path:** `git push origin master` → (CI builds image) → `./scripts/deploy-remote.sh`
 
 Never `scp` / `rsync` source onto the server. Secrets stay in gitignored
-`.env` files.
+`.env` files. The VPS **pulls** `ghcr.io/thisyearnofear/versions:<sha>` — it does
+not run `next build` (see [architecture-split.md](./architecture-split.md)).
 
 ## Laptop
 
 ```bash
 git push origin master
+# Wait for Actions “Docker image” (or let deploy.sh retry up to 15m)
 ./scripts/deploy-remote.sh
 ```
 
@@ -24,14 +26,18 @@ Override host/dir: `./scripts/deploy-remote.sh my-host` or
 cd /home/linuxuser/versions && ./scripts/deploy.sh
 ```
 
-`deploy.sh` requires a clean tree and `.env`, pulls `--ff-only`, rebuilds,
-then gates on `/api/health/live` and `/api/health/ready`. After a healthy
-deploy it prunes dangling Docker images and BuildKit cache older than 24h
-(so repeated on-box builds do not fill the VPS). It deliberately does
-**not** modify the database schema. Emergency: `DEPLOY_ALLOW_DIRTY=1`. Prefer
-`git reset --hard origin/master` instead.
+`deploy.sh` requires a clean tree and `.env`, pulls `--ff-only`, **pulls the
+CI image** for that commit, recreates the container, then gates on
+`/api/health/live` and `/api/health/ready`. It prunes dangling images after a
+healthy deploy. It deliberately does **not** modify the database schema.
 
-Hosting direction (UI vs API split): [architecture-split.md](./architecture-split.md).
+Emergencies:
+
+- `DEPLOY_ALLOW_DIRTY=1` — dirty server tree
+- `DEPLOY_BUILD_ON_BOX=1` — build on the VPS (disk spike; avoid)
+- Prefer `git reset --hard origin/master` instead of long-lived dirty trees
+
+Hosting direction: [architecture-split.md](./architecture-split.md).
 
 ### Disk / uploads (box)
 

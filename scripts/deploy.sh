@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy VERSIONS on the VPS — git pull + docker rebuild only.
+# Deploy VERSIONS API host — git pull + docker pull (image built in CI).
 #
 # Hygiene rules (do NOT bypass):
 #   - Never scp/rsync source into the repo on the server; always pull from origin.
@@ -8,9 +8,12 @@
 #   - Or from your laptop: ./scripts/deploy-remote.sh
 #
 # Optional env:
-#   DEPLOY_ALLOW_DIRTY=1   allow deploy with uncommitted server changes (emergency only)
-#   DEPLOY_BRANCH=master   branch to deploy (default: current branch)
-#   DEPLOY_HEALTH_URL      override health base (default: http://127.0.0.1:3000)
+#   DEPLOY_ALLOW_DIRTY=1     allow dirty server tree (emergency)
+#   DEPLOY_BRANCH=master
+#   DEPLOY_HEALTH_URL        default http://127.0.0.1:3000 (via docker exec)
+#   DEPLOY_BUILD_ON_BOX=1    emergency: docker compose build on the VPS
+#   VERSIONS_IMAGE           override image ref (default ghcr.io/.../versions:<sha>)
+#   DEPLOY_PULL_WAIT_SEC     how long to wait for GHCR tag (default 900)
 
 set -euo pipefail
 
@@ -20,11 +23,12 @@ cd "$ROOT"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
 HEALTH_BASE="${DEPLOY_HEALTH_URL:-http://127.0.0.1:3000}"
 MAX_WAIT="${DEPLOY_HEALTH_WAIT_SEC:-90}"
+PULL_WAIT="${DEPLOY_PULL_WAIT_SEC:-900}"
+REGISTRY_IMAGE="${VERSIONS_IMAGE_REPO:-ghcr.io/thisyearnofear/versions}"
 
 log() { printf '→ %s\n' "$*"; }
 fail() { printf '✗ %s\n' "$*" >&2; exit 1; }
 
-# ── Preflight ───────────────────────────────────────────
 command -v docker >/dev/null 2>&1 || fail "docker not found"
 command -v git >/dev/null 2>&1 || fail "git not found"
 [ -f docker-compose.yml ] || fail "run from repo root (missing docker-compose.yml)"
@@ -48,8 +52,6 @@ git fetch origin "$DEPLOY_BRANCH"
 log "Pulling latest (ff-only)..."
 git pull --ff-only origin "$DEPLOY_BRANCH"
 
-# ── Uploads dir must be writable by container uid 1001 (bind mount) ──
-# Host dir ownership can drift (fresh clone, reinstall); fix idempotently.
 mkdir -p data/uploads
 sudo -n chown -R 1001:1001 data/uploads 2>/dev/null \
   || chmod -R a+rwX data/uploads 2>/dev/null \
@@ -59,11 +61,50 @@ AFTER="$(git rev-parse --short HEAD)"
 AFTER_FULL="$(git rev-parse HEAD)"
 log "Now at ${AFTER} ($(git log -1 --format='%s'))"
 
-# ── Build + restart ─────────────────────────────────────
-log "Rebuilding container..."
-docker compose up -d --build --remove-orphans
+# Prefer the sha tag matching this commit; fall back to :latest if overridden.
+if [ -n "${VERSIONS_IMAGE:-}" ]; then
+  IMAGE_REF="$VERSIONS_IMAGE"
+else
+  IMAGE_REF="${REGISTRY_IMAGE}:${AFTER_FULL}"
+fi
+export VERSIONS_IMAGE="$IMAGE_REF"
+log "Image ${VERSIONS_IMAGE}"
 
-# ── Health: live then ready ─────────────────────────────
+if [ "${DEPLOY_BUILD_ON_BOX:-}" = "1" ]; then
+  log "WARNING: DEPLOY_BUILD_ON_BOX=1 — building on the VPS (disk spike)"
+  docker compose build --build-arg VERSIONS_ROLE=api
+  docker compose up -d --remove-orphans
+else
+  # Optional GHCR login when the package is private (public packages need none)
+  GHCR_TOKEN_VAL="${GHCR_TOKEN:-}"
+  GHCR_USER_VAL="${GHCR_USER:-thisyearnofear}"
+  if [ -z "$GHCR_TOKEN_VAL" ] && [ -f .env ]; then
+    GHCR_TOKEN_VAL="$(grep -E '^GHCR_TOKEN=' .env | head -1 | cut -d= -f2- || true)"
+    GHCR_USER_VAL="$(grep -E '^GHCR_USER=' .env | head -1 | cut -d= -f2- || true)"
+    GHCR_USER_VAL="${GHCR_USER_VAL:-thisyearnofear}"
+  fi
+  if [ -n "$GHCR_TOKEN_VAL" ]; then
+    log "Logging in to ghcr.io..."
+    printf '%s' "$GHCR_TOKEN_VAL" | docker login ghcr.io -u "$GHCR_USER_VAL" --password-stdin
+  fi
+
+  log "Pulling image (wait up to ${PULL_WAIT}s for CI)..."
+  deadline=$((SECONDS + PULL_WAIT))
+  until docker pull "$IMAGE_REF"; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      fail "timed out pulling ${IMAGE_REF} — is the Docker image workflow green for this sha?"
+    fi
+    log "Image not ready yet — retry in 20s..."
+    sleep 20
+  done
+
+  # Also tag as :latest locally so compose fallbacks stay coherent
+  docker tag "$IMAGE_REF" "${REGISTRY_IMAGE}:latest" 2>/dev/null || true
+
+  log "Recreating container from pulled image..."
+  docker compose up -d --remove-orphans --force-recreate
+fi
+
 probe() {
   local path="$1"
   if docker exec versions wget -qO- "${HEALTH_BASE}${path}" 2>/dev/null; then
@@ -93,7 +134,6 @@ elif [ "$STATUS" != "ready" ]; then
 fi
 log "Ready ✓ (status=${STATUS:-ready})"
 
-# Surface inference mode when jq/python available
 printf '%s' "$READY_JSON" | python3 -c "
 import json, sys
 d = json.load(sys.stdin).get('data', {}).get('providers', {})
@@ -103,12 +143,9 @@ print(f\"  llm: mock={llm.get('mock')} provider={llm.get('provider', 'n/a')} mod
 print(f\"  embedding: mock={emb.get('mock')} provider={emb.get('provider', 'n/a')}\")
 " 2>/dev/null || true
 
-# ── Disk hygiene: reclaim dangling images + aged build cache ──
-# Every deploy rebuilds on-box; without prune, BuildKit layers fill the VPS.
-# Keep the last day of builder cache so the next deploy stays warm.
-log "Pruning unused Docker images and aged build cache..."
+# Pull-only deploys: prune dangling images (no builder cache growth)
+log "Pruning unused Docker images..."
 docker image prune -f >/dev/null 2>&1 || log "WARNING: docker image prune failed"
-docker builder prune -f --filter "until=24h" >/dev/null 2>&1 || log "WARNING: docker builder prune failed"
 
-log "Deployed ${AFTER_FULL} (${AFTER})"
+log "Deployed ${AFTER_FULL} (${AFTER}) image=${IMAGE_REF}"
 echo "✓ Deploy complete."

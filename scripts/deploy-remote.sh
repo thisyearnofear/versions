@@ -37,6 +37,7 @@ fi
 
 log "Pushed commit ${LOCAL:0:7} — $(git log -1 --format='%s')"
 log "Remote deploy on ${HOST}:${REMOTE_DIR}"
+log "(server will pull ghcr.io/thisyearnofear/versions:${LOCAL} — CI must finish or deploy retries)"
 
 ssh "$HOST" "cd '$REMOTE_DIR' && DEPLOY_BRANCH='$BRANCH' ./scripts/deploy.sh"
 
