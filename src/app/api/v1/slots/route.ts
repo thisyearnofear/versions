@@ -3,7 +3,17 @@
 //   GET  → the caller's placements (`?channelId=` or `?listingId=` adds a filter, still caller-scoped).
 
 import { NextRequest } from 'next/server';
-import { services, successResponse, errorResponse, corsPreflight, requestIdFor, parsePositiveIntParam } from '@/lib/services';
+import {
+  services,
+  successResponse,
+  errorResponse,
+  corsPreflight,
+  rateLimitedResponse,
+  requestIdFor,
+  clientIpFor,
+  headerBag,
+  parsePositiveIntParam,
+} from '@/lib/services';
 import { resolveAuthenticatedSupervisorIdentity } from '@/lib/supervisor-identity';
 import { SlotCreateSchema } from '@/lib/validation';
 import type { SlotFailureCode } from '@/services/slots';
@@ -58,6 +68,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const requestId = requestIdFor(req);
+  const svc = services();
+  // Creating a placement moves campaign budget, so it gets its own budget
+  // rather than sharing `general` with uploads.
+  if (!(await svc.slotCreateLimiter.allow({ headers: headerBag(req) }, clientIpFor(req)))) {
+    return rateLimitedResponse(requestId);
+  }
   const identity = await resolveAuthenticatedSupervisorIdentity();
   if (!identity) {
     return errorResponse(requestId, 401, 'UNAUTHORIZED', 'Sign in to buy a placement.');

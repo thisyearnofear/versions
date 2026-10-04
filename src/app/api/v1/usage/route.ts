@@ -9,7 +9,10 @@ import {
   successResponse,
   errorResponse,
   corsPreflight,
+  rateLimitedResponse,
   requestIdFor,
+  clientIpFor,
+  headerBag,
   parsePositiveIntParam,
 } from '@/lib/services';
 import { resolveAuthenticatedSupervisorIdentity } from '@/lib/supervisor-identity';
@@ -52,6 +55,13 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const requestId = requestIdFor(req);
+  const svc = services();
+  // Reporting is an untrusted write path: it is free, was unrated, and a
+  // sponsored row draws a CPM budget down. Bound it per caller before auth so
+  // an unauthenticated flood can't reach the DB at all.
+  if (!(await svc.usageLimiter.allow({ headers: headerBag(req) }, clientIpFor(req)))) {
+    return rateLimitedResponse(requestId);
+  }
   const identity = await resolveAuthenticatedSupervisorIdentity();
   if (!identity) {
     return errorResponse(requestId, 401, 'UNAUTHORIZED', 'Sign in to report where a placement ran.');
@@ -74,7 +84,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const result = await services().usage.log({
+  const result = await svc.usage.log({
     listingId: parsed.data.listingId,
     channelId: parsed.data.channelId,
     reporterWallet: identity.wallet,
@@ -100,8 +110,14 @@ export async function POST(req: NextRequest) {
       BUDGET_EXHAUSTED: 409,
       INVALID_IMPRESSIONS: 400,
       INVALID_VIDEO_URL: 400,
+      // 429, not 409: the caller did nothing wrong, they are simply early.
+      // Distinguishing it from a real failure stops a channel's automation loop
+      // from treating a cooldown as a broken integration.
+      REPORT_COOLDOWN: 429,
     };
     return errorResponse(requestId, map[result.code] ?? 400, result.code, result.message);
   }
-  return successResponse(201, { usage: result.usage }, requestId);
+  // A deduped report is a success, not a new row: it returned 200 with the
+  // original usage so a retrying caller can treat the response as idempotent.
+  return successResponse(result.deduped ? 200 : 201, { usage: result.usage, deduped: result.deduped }, requestId);
 }

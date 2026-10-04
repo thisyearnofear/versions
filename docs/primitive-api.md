@@ -113,11 +113,12 @@ Body (strict):
 ```json
 { "listingId": "string", "channelId": "string (owned, verified)", "budgetUsdc": "string? (CPM requires; flat optional as cap)" }
 ```
-Guards: listing must be `active` + `paid`, channel must be `verified`, CPM budget clamped to campaign headroom. Returns `201 { slot }` (or `200` if the live slot already exists).
+Guards: listing must be `active` + `paid`, channel must be `verified`, CPM budget clamped to campaign headroom. Returns `201 { slot }` (or `200` if the live slot already exists). Rate-limited by `RATE_LIMIT_SLOT_CREATE_MAX`.
 
 ### `POST /slots/:id/pay` / `POST /slots/:id/complete`
 
-- `/pay` collects the gross (flat fee or CPM escrow), reserves campaign spend atomically, settles flat `60/30/10` `slot_legs` via `insertSlotLegsAtomic` → `settleSlotLegsAsync`, emits the durable receipt (`slot` source). Locks `settlement_lease_id`.
+- `/pay` collects the gross (flat fee or CPM escrow), reserves campaign spend atomically, settles flat `60/30/10` `slot_legs` via `insertSlotLegsAtomic` → `settleSlotLegsAsync`, emits the durable receipt (`slot` source). Locks `settlement_lease_id`. Rate-limited by `RATE_LIMIT_SLOT_PAY_MAX`.
+- **`Idempotency-Key` header (optional, ≤255 chars).** A repeat of a key that already activated this slot replays the original receipt with `200 { …, replayed: true }` instead of `409 SLOT_NOT_PAYABLE`. The key is stored **only on success**, so a key whose payment failed stays reusable. Complementary to `settlement_lease_id`: the lease protects concurrent callers, the key makes a legitimate retry idempotent.
 - `/complete` settles CPM accrued spend (`spend_usdc` only from `slots.accrue`) and refunds unspent escrow; flat is idempotent.
 
 ### `POST /usage` / `GET /usage`
@@ -126,6 +127,9 @@ Guards: listing must be `active` + `paid`, channel must be `verified`, CPM budge
 { "listingId": "string", "channelId": "string (owned)", "slotId": "string? (paid requires; omitted resolves the channel's latest slot)", "videoUrl": "string?", "impressions": 0, "clicks": 0, "attributionCode": "string?", "externalContentId": "string?", "occurredAt": "ISO?" }
 ```
 - No `reportedBy` or `spendUsdc` in the body — `reported_by` is recorded (default `channel`; only the platform probe may write `platform_api`) and spend comes from `slots.accrue`'s capped atomic increment.
+- **Repeat reports cannot double-spend.** `uq_usage_dedup` (partial, on `listing_id, channel_id, external_content_id, occurred_at` where `external_content_id IS NOT NULL`) makes one use of a listing on one piece of content exactly one row. An exact repeat returns `200 { usage: <original>, deduped: true }` and draws no budget; a new row returns `201 { usage, deduped: false }`. The check runs **before** `slots.accrue`, so a retry cannot move a supplier's campaign budget twice.
+- `USAGE_REPORT_COOLDOWN_HOURS` (unset by default) adds an optional per-`(listing, channel)` ceiling measured as the gap between the incoming report and the newest row on file → `429 REPORT_COOLDOWN`. Off by default because batched delivery reports and `manual`/`platform_api` provenance corrections are legitimate; the dedup index is the real guard.
+- Rate-limited by `RATE_LIMIT_USAGE_MAX`.
 - `GET /usage[?listingId|channelId|slotId|since]` → scoped rows or `{ summary: { total_events, by_reporter, spend_usdc, … } }` and `attributionCompliance(listingId)`. Aggregates must quote the `by_reporter` split alongside any total.
 
 ---

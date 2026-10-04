@@ -349,6 +349,43 @@ typecheck fails otherwise:
 
 ---
 
+## 5a. Open `decision` — delivery verification (P3)
+
+**Blocked, deliberately.** A second-pass verifier over reported delivery is the
+highest-value remaining claim-discipline gap, and it must not be built yet.
+
+**The blocker.** `usage_events.reported_by` accepts `'platform_api'`, but
+nothing in the repo ever writes it. `usage.log()` has exactly one call site
+(`POST /api/v1/usage`) and `UsageReportSchema` is `.strict()` with no
+`reportedBy` key — so a reporter cannot assert its own provenance, and
+`by_reporter.platform_verified` is structurally always `0`. There is no
+platform-API path that can attest that *this video used this track*.
+
+**Why a model-based verifier does not close it.** A skeptical second pass over
+a first model's output buys skepticism, not verification. Suparade
+(`backend/verifier.py`) pays off exactly that shape, and it is the one place
+where we should deliberately diverge: their verifier confirms a model's claim
+about a video. Ours would have to reconcile against **platform API data** — the
+same rule that makes channel *reach* verification trustworthy
+(`stats_source = 'platform_api'`, `can_buy_slots`). Otherwise we would be
+converting a `reported_by = 'channel'` row into a `platform_api` claim on a
+model's word, which is precisely the laundering AGENTS.md forbids.
+
+**Order of work when this is picked up:**
+
+1. Build a real delivery attestation — a probe that can confirm a specific
+   piece of content used a specific listing, and is the only writer allowed to
+   set `reported_by = 'platform_api'`.
+2. Only then add a verification pass that gates settlement on it.
+3. The pass must reconcile against platform data, never against a model's own
+   first read.
+
+Until step 1 exists, `by_reporter` stays honest: channel-reported is
+channel-reported, and aggregates keep showing the split rather than a single
+laundered total.
+
+---
+
 ## 6. Acceptance checklist — "does it read as a marketplace?"
 
 - [ ] Above the fold on `/`: what's for sale, how many, price band, that

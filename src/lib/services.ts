@@ -71,6 +71,9 @@ export interface ServiceRegistry {
   marketplace: MarketplaceService;
   audioLimiter: RateLimiter;
   generalLimiter: RateLimiter;
+  usageLimiter: RateLimiter;
+  slotCreateLimiter: RateLimiter;
+  slotPayLimiter: RateLimiter;
   ipfs: PinataClient;
   config: {
     platformWallet: string | null;
@@ -227,6 +230,23 @@ function build(): ServiceRegistry {
   const audioLimiter = createRateLimiter({ windowMs, max: audioMax, label: 'audio' });
   const generalLimiter = createRateLimiter({ windowMs, max: audioMax * 4, label: 'general' });
 
+  // MODULAR: money-adjacent writes get their own limiters. These routes were
+  // previously unrated, so a single caller could write usage rows or create
+  // slot reservations without bound; the per-service caps bound the blast
+  // radius without touching the shared `general` budget that uploads use.
+  // Defaults are deliberately looser than `audio` — a channel's reporting loop
+  // legitimately batches more than one upload a minute.
+  const usageMax = Number(process.env.RATE_LIMIT_USAGE_MAX) || 30;
+  const slotCreateMax = Number(process.env.RATE_LIMIT_SLOT_CREATE_MAX) || 20;
+  const slotPayMax = Number(process.env.RATE_LIMIT_SLOT_PAY_MAX) || 10;
+  const usageLimiter = createRateLimiter({ windowMs, max: usageMax, label: 'usage' });
+  const slotCreateLimiter = createRateLimiter({
+    windowMs,
+    max: slotCreateMax,
+    label: 'slot_create',
+  });
+  const slotPayLimiter = createRateLimiter({ windowMs, max: slotPayMax, label: 'slot_pay' });
+
   // MODULAR: uploads directory. Default /tmp/uploads when env is
   // missing; in production set UPLOAD_DIR to a persistent path.
   const uploadDir =
@@ -258,6 +278,9 @@ function build(): ServiceRegistry {
     sweeper,
     audioLimiter,
     generalLimiter,
+    usageLimiter,
+    slotCreateLimiter,
+    slotPayLimiter,
     ipfs,
     config: {
       platformWallet,

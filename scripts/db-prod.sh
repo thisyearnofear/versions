@@ -132,7 +132,10 @@ restore_drill() {
   source_counts="$(psql "$DATABASE_URL" -XAtc "SELECT (SELECT count(*) FROM licenses)::text || '|' || (SELECT count(*) FROM published_versions)::text || '|' || (SELECT count(*) FROM match_feedback)::text;")"
 
   cleanup() {
-    [ -n "$container_id" ] && docker rm -f "$container_id" >/dev/null 2>&1 || true
+    # `|| true` alone does not protect a `set -u` read of an unset variable, so
+    # default the name before testing it. Without this, a failure anywhere above
+    # the assignment aborts inside the EXIT trap and leaks the container.
+    [ -n "${container_id:-}" ] && docker rm -f "$container_id" >/dev/null 2>&1 || true
   }
   trap cleanup EXIT
 
@@ -145,7 +148,12 @@ restore_drill() {
 
   ready=0
   for _ in $(seq 1 60); do
-    if docker exec "$container_id" pg_isready -U restore -d versions_restore >/dev/null 2>&1; then
+    # Probe over TCP, not the unix socket: `pg_restore` below connects to
+    # 127.0.0.1 from a sibling container, and Postgres can accept socket
+    # connections a second or two before it starts listening on TCP. A
+    # socket-only readiness check therefore races and fails the drill with
+    # "connection refused" on a database that is perfectly healthy.
+    if docker exec "$container_id" pg_isready -h 127.0.0.1 -U restore -d versions_restore >/dev/null 2>&1; then
       ready=1
       break
     fi

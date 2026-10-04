@@ -197,6 +197,12 @@ export type SlotStatus =
 export type UsageKind = 'organic' | 'sponsored';
 export type UsageReportedBy = 'channel' | 'platform_api' | 'manual';
 
+// Lifecycle of a reported use. 'deduped' is an exact repeat of a row already
+// on file (nothing new written, no budget drawn); 'rejected' is a report the
+// cooldown refused. Both are recorded rather than silently dropped so a channel
+// can see why its report did not become a new row.
+export type UsageStatus = 'logged' | 'deduped' | 'rejected';
+
 // Roles in the flat slot split. Exactly three legs, no waterfall: the
 // supplier who owns the listing, the channel that delivered it, and the
 // platform that matched and settled it.

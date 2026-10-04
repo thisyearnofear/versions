@@ -160,10 +160,14 @@ CREATE TABLE IF NOT EXISTS slots (
   payment_tx_hash TEXT,
   payment_mock BOOLEAN NOT NULL DEFAULT FALSE,
   settlement_lease_id TEXT,
+  payment_idempotency_key TEXT,
   settled_at TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS uq_slots_payment_idempotency
+  ON slots(payment_idempotency_key)
+  WHERE payment_idempotency_key IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_slots_active_listing_channel
   ON slots(listing_id, channel_id)
   WHERE status IN ('pending_payment', 'active', 'paused');
@@ -217,6 +221,11 @@ CREATE INDEX IF NOT EXISTS idx_usage_listing ON usage_events(listing_id, occurre
 CREATE INDEX IF NOT EXISTS idx_usage_channel ON usage_events(channel_id, occurred_at);
 CREATE INDEX IF NOT EXISTS idx_usage_slot ON usage_events(slot_id);
 CREATE INDEX IF NOT EXISTS idx_usage_kind ON usage_events(kind, occurred_at);
+-- One use of a listing on a specific piece of content is one row, so a retried
+-- report cannot draw a CPM budget down twice.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_usage_dedup
+  ON usage_events(listing_id, channel_id, external_content_id, occurred_at)
+  WHERE external_content_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS curator_claims (
   id TEXT PRIMARY KEY,

@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { jsonResponse, requestIdFor, services } from '../../../../lib/services';
 import { localUploadsAllowed } from '@/lib/upload-policy';
+import { db } from '@/lib/db';
+import { sql } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,8 +28,31 @@ export async function GET(req: NextRequest): Promise<Response> {
   } catch {
     arcReachable = false;
   }
+
+  // The database is not an optional provider. On 2026-10-04 production Neon
+  // handed out an empty `search_path`, every drizzle query failed with 42P01,
+  // and this endpoint still answered 200 "ready" while the whole catalog was
+  // invisible. A real round-trip is the only check that catches that class of
+  // failure — an adapter's `mock: true` flag says nothing about reachability.
+  let databaseReachable = true;
+  let searchPath: string | null = null;
+  try {
+    const result = await db.execute(sql`SELECT current_setting('search_path') AS search_path`);
+    const row = (result as unknown as { rows?: Array<Record<string, unknown>> }).rows?.[0];
+    searchPath = typeof row?.search_path === 'string' ? row.search_path : null;
+    // A connection can succeed and still be unable to resolve our tables, so
+    // touch a real one rather than trusting the settings read alone.
+    await db.execute(sql`SELECT 1 FROM listings LIMIT 1`);
+  } catch {
+    databaseReachable = false;
+  }
+  // An empty path resolves nothing; drizzle emits unqualified names.
+  const searchPathUsable = databaseReachable && !!searchPath && searchPath.trim() !== '';
+
   const configuredForRealArc = !svc.config.arcMock && !!process.env.PLATFORM_WALLET_PRIVATE_KEY;
-  const degraded = configuredForRealArc && !arcReachable;
+  const arcDegraded = configuredForRealArc && !arcReachable;
+  const dbDegraded = !databaseReachable || !searchPathUsable;
+  const degraded = arcDegraded || dbDegraded;
   const status = degraded ? 'degraded' : 'ready';
   return jsonResponse(
     degraded ? 503 : 200,
@@ -38,6 +63,12 @@ export async function GET(req: NextRequest): Promise<Response> {
         service: 'versions-next-api',
         version: process.env.npm_package_version || '0.0.0',
         providers: {
+          database: {
+            reachable: databaseReachable,
+            searchPath,
+            // False means unqualified queries (all of drizzle's) will fail.
+            usable: searchPathUsable,
+          },
           arc: {
             mock: svc.config.arcMock,
             reachable: arcReachable,

@@ -40,6 +40,26 @@ const pool = connectionString
     })
   : undefined;
 
+// PRODUCTION NOTE — search_path (2026-10-04 incident, now fixed in the
+// database, not here).
+//
+// Production Neon returned an EMPTY search_path for the owner role, so every
+// drizzle query — which emits unqualified table names — failed with 42P01
+// "relation does not exist", and every DB-backed route silently degraded to an
+// empty catalog (`degraded: true`, zero rows; the 32 listings were intact,
+// just unreachable).
+//
+// The fix is `ALTER DATABASE neondb SET search_path TO public`, applied
+// server-side. It is deliberately NOT in code: Neon rejects
+// `options=-c search_path=...` as a startup parameter on pooled connections
+// (08P01), and doing it in a `pool.on('connect')` listener is racy — the
+// listener is synchronous, so pg interleaves the SET with the caller's first
+// query and can let a query run before the path is pinned. The database-level
+// setting applies to every session with no race and no per-connection cost.
+//
+// Verify with: psql "$DATABASE_URL" -XAtc "show search_path"  ->  public
+// If that ever returns empty again, the database setting was dropped.
+
 export const db = pool
   ? drizzle({ client: pool })
   : (undefined as unknown as ReturnType<typeof drizzle>);

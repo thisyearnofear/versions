@@ -17,6 +17,7 @@ import type {
   StatsSource,
   UsageKind,
   UsageReportedBy,
+  UsageStatus,
 } from './types';
 
 // MODULAR: pgvector custom column type. Stores a float array that
@@ -295,6 +296,10 @@ export const slots = pgTable('slots', {
   // licenses.settlement_lease_id: a stale worker cannot release or complete
   // another worker's settlement.
   settlementLeaseId: text('settlement_lease_id'),
+  // Caller-supplied key (Idempotency-Key) for the payment that activated this
+  // slot. Stored on success so a retried request replays the original receipt
+  // instead of erroring on SLOT_NOT_PAYABLE. NULL for slots paid without one.
+  paymentIdempotencyKey: text('payment_idempotency_key'),
   settledAt: timestamp('settled_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -306,6 +311,12 @@ export const slots = pgTable('slots', {
   index('idx_slots_channel').on(table.channelId, table.status),
   index('idx_slots_listing').on(table.listingId, table.status),
   index('idx_slots_buyer').on(table.buyerWallet),
+  // One payment per key. Partial because most callers send no key at all, and
+  // Postgres treats NULLs as distinct so a plain unique index would still work
+  // — the partial form keeps the index small on the common NULL path.
+  uniqueIndex('uq_slots_payment_idempotency')
+    .on(table.paymentIdempotencyKey)
+    .where(sql`${table.paymentIdempotencyKey} IS NOT NULL`),
   check('slots_pricing_model_check', sql`${table.pricingModel} IN ('flat', 'cpm')`),
 ]);
 
@@ -360,7 +371,10 @@ export const usageEvents = pgTable('usage_events', {
   // Spend accrued by this event (CPM slots) or 0 (organic / flat).
   spendUsdc: text('spend_usdc').notNull().default('0'),
   reportedBy: text('reported_by').notNull().$type<UsageReportedBy>(),
-  status: text('status').notNull().default('logged'), // logged|counted|rejected
+  // 'deduped' and 'rejected' were dead states until the repeat-report guard
+  // gave them meaning: a report that matched an existing row, and one refused
+  // by the cooldown, respectively.
+  status: text('status').notNull().$type<UsageStatus>().default('logged'),
   occurredAt: timestamp('occurred_at').defaultNow().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
@@ -370,6 +384,14 @@ export const usageEvents = pgTable('usage_events', {
   index('idx_usage_kind').on(table.kind, table.occurredAt),
   check('usage_events_kind_check', sql`${table.kind} IN ('organic', 'sponsored')`),
   check('usage_events_reported_by_check', sql`${table.reportedBy} IN ('channel', 'platform_api', 'manual')`),
+  // MODULAR: repeat-report guard. One use of a listing on a specific piece of
+  // content is one row — the same video re-reported on a retry must not draw a
+  // CPM budget down twice. Partial on external_content_id being present because
+  // an organic use with no external id has nothing stable to deduplicate on;
+  // those stay unconstrained and the cooldown in the usage service bounds them.
+  uniqueIndex('uq_usage_dedup')
+    .on(table.listingId, table.channelId, table.externalContentId, table.occurredAt)
+    .where(sql`${table.externalContentId} IS NOT NULL`),
   // Sponsored usage must name the slot it was served under, and must carry
   // its tracking code — that is what makes the spend attributable.
   check(

@@ -27,6 +27,7 @@
     "ingest:tracks": "tsx scripts/ingest-my-tracks.ts",
     "extract:features": "tsx scripts/extract-features.ts",
     "check:arc": "tsx scripts/check-arc-live.ts",
+    "reconcile:slots": "tsx scripts/reconcile-slots.ts",
     "benchmark": "tsx scripts/benchmark.ts",
     "primitive:demo": "tsx scripts/primitive-demo.ts",
     "curate": "tsx scripts/curate.ts",

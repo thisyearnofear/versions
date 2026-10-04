@@ -317,7 +317,22 @@ The drill never gives the temporary database network access or connects it to
 the application network. It restores with `--exit-on-error`, verifies
 `pgvector`, compares the restored public schema and constraints plus key
 license/catalog row counts against the live source, then removes the temporary
-container. The first successful post-schema drill ran on 2026-08-12 against
+container.
+
+**Two bugs fixed 2026-10-04** (both pre-existing; the drill had been failing on
+a healthy database):
+
+1. **Readiness raced the TCP listener.** The loop probed `pg_isready` over the
+   unix socket, which succeeds ~1s before Postgres listens on TCP — so
+   `pg_restore` (connecting to `127.0.0.1` from a sibling container) failed with
+   "connection refused". Now probes `-h 127.0.0.1`.
+2. **`set -u` leaked the container.** `cleanup()` read `$container_id` without a
+   default, so any earlier failure aborted *inside the `EXIT` trap* and the
+   temporary database was left running. Now `${container_id:-}`. If you see
+   `versions-restore-drill-*` containers on the host, an older run leaked one;
+   `docker rm -f` them.
+
+The first successful post-schema drill ran on 2026-08-12 against
 `versions-before-schema-20260812T172055Z.dump` (91,548 bytes), restoring the
 expected 8 release columns, 2 provenance constraints, and the then-current
 3/7/2 license/published-version/feedback row counts. The earlier
@@ -409,6 +424,77 @@ Test artifacts (smoke-test and settle-test submissions) were purged
 from the DB and uploads dir after verification.
 
 ## Operational constraints
+
+### Incident — 2026-10-04 — empty `search_path` blanked the whole catalog
+
+**Symptom.** Every DB-backed route silently returned an empty catalog while
+still answering `200`:
+
+```
+GET /api/v1/listings          → 200 {"listings":[],"degraded":true}
+GET /api/v1/marketplace/search → 200 {"total":0,"rows":[],"degraded":true}
+GET /api/v1/usage             → 500
+```
+
+`/api/health/ready` reported **`ready`** throughout, which is why it went
+unnoticed. The 32 listings were intact in the database — just unreachable.
+
+**Cause.** Production Neon handed the owner role an **empty `search_path`**
+(`show search_path` → `''`, `current_schema()` → `null`, confirmed both from a
+workstation and from inside the running container). Drizzle emits unqualified
+table names, so every query failed with `42P01 relation "x" does not exist`.
+
+**Fix.** `ALTER DATABASE neondb SET search_path TO public;` — applied
+server-side, so it covers every session with no per-connection cost. Verified
+persisted in `pg_db_role_setting` as `{search_path=public}`, and a fresh
+connection now reports `public`.
+
+**Why not in code:**
+- Neon **rejects** `options=-c search_path=...` as a startup parameter on
+  pooled connections — `08P01 unsupported startup parameter in options`.
+- A `pool.on('connect')` listener is racy: the event is synchronous, so pg
+  interleaves the `SET` with the caller's first query ("Calling `client.query()`
+  when the client is already executing a query", removed in `pg@9`) and a query
+  can run before the path is pinned.
+
+**Guard added.** `/api/health/ready` now does a real round-trip
+(`SELECT current_setting('search_path')` + `SELECT 1 FROM listings LIMIT 1`)
+and reports `providers.database.{reachable,searchPath,usable}`, returning
+`503 degraded` when the path is empty or unusable. An adapter's `mock: true`
+flag says nothing about reachability — only a query does.
+
+**Verify after any Neon role/plan change** (the likeliest trigger):
+
+```bash
+psql "$DATABASE_URL" -XAtc "show search_path"     # must print: public
+psql "$DATABASE_URL" -XAtc "select count(*) from listings"
+curl -sf https://versions.persidian.com/api/health/ready | jq '.data.providers.database'
+```
+
+**Lesson.** `degraded: true` on a catalog route is a *response shape*, not a
+*failure signal*. A total DB outage and a genuinely empty catalog are
+indistinguishable from the outside unless something actually queries the
+database. Health must assert on the dependency, not on the adapter's config.
+
+**Slot reconciliation is a manual, read-only step.** `slots.pay()` deliberately
+leaves a slot's `settlement_lease_id` **held** when payment throws, rather than
+reopening a slot that may already have been charged. That is deliberate — the
+alternative risks double-charging — but it means an interrupted payment needs a
+human decision, not an automatic retry.
+
+`npm run reconcile:slots` (`scripts/reconcile-slots.ts`) is the first step: it
+lists every slot in an ambiguous state (lease held, paid-but-split-incomplete,
+abandoned checkout) with the evidence needed to decide what happened. It is
+**read-only by design** — no `--fix` flag, no retries, exit code always 0. Never
+re-issue a transfer from a script; confirm the on-chain state first.
+
+**Rate limits on money routes.** `POST /api/v1/usage`, `POST /api/v1/slots`,
+and `POST /api/v1/slots/:id/pay` are rate-limited per IP by
+`RATE_LIMIT_USAGE_MAX` (30), `RATE_LIMIT_SLOT_CREATE_MAX` (20), and
+`RATE_LIMIT_SLOT_PAY_MAX` (10), all inside `RATE_LIMIT_WINDOW_MS` (60s). These
+routes were unrated before. They use the in-memory limiter, so they share the
+single-instance constraint below — in-memory only unless `UPSTASH_REDIS_*` is
+set, and **fail open** on Upstash errors.
 
 **Single instance — do not scale out horizontally.** The in-process
 EventBus (SSE fan-out), TTL cache, in-memory rate limiter, outbox drain

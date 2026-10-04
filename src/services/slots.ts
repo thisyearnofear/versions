@@ -119,6 +119,8 @@ export interface PaidSlotResult {
   tx_hash: string | null;
   mock: boolean;
   legs: SlotLegRecord[];
+  /** True when this response replays an earlier payment rather than charging. */
+  replayed?: boolean;
 }
 
 export type PaidSlotFailure = { ok: false; code: SlotFailureCode; message: string };
@@ -174,8 +176,14 @@ export interface SlotsService {
    * Collect payment and activate. Flat-fee slots settle their three legs
    * immediately; CPM slots escrow the budget and settle only what they
    * actually serve, at `complete`.
+   *
+   * `idempotencyKey` makes a retry safe: if this slot was already activated
+   * under the same key, the original receipt is replayed with
+   * `replayed: true` instead of failing SLOT_NOT_PAYABLE. It complements the
+   * settlement lease — the lease protects concurrent callers, the key makes a
+   * legitimate retry idempotent.
    */
-  pay(slotId: string, buyerWallet: string): Promise<PaidSlotOutcome>;
+  pay(slotId: string, buyerWallet: string, idempotencyKey?: string | null): Promise<PaidSlotOutcome>;
   /**
    * Move delivered impressions/clicks onto a slot. The only writer of
    * `spent_usdc` other than `pay`, and the only place a delivery cap is
@@ -276,6 +284,15 @@ function legRecords(rows: Array<{ recipientRole: string; recipientWallet: string
 }
 
 const slotWithListing = { slot: slotsTable, listing: listingsTable };
+
+/** Read a slot's settlement legs. Shared by the public `legs()` and the pay replay. */
+async function legsFor(slotId: string): Promise<SlotLegRecord[]> {
+  const rows = await db
+    .select()
+    .from(slotLegsTable)
+    .where(eq(slotLegsTable.slotId, slotId));
+  return legRecords(rows);
+}
 
 export function createSlotsService({
   settlement,
@@ -638,10 +655,26 @@ export function createSlotsService({
       }
     },
 
-    async pay(slotId, buyerWallet) {
+    async pay(slotId, buyerWallet, idempotencyKey) {
       const found = await loadOwned(slotId, buyerWallet);
       if ('error' in found) return found.error;
       const { slot, listing } = found;
+
+      // Idempotent replay, checked BEFORE the payable guard: a retry of a
+      // payment that already succeeded must return that receipt, not a
+      // SLOT_NOT_PAYABLE error that reads like a failure.
+      const key = idempotencyKey?.trim() || null;
+      if (key && slot.paymentIdempotencyKey === key && slot.status !== 'pending_payment') {
+        return {
+          ok: true,
+          slot: rowToSlot(slot, listing),
+          charged_usdc: slot.spentUsdc,
+          tx_hash: slot.paymentTxHash,
+          mock: slot.paymentMock,
+          legs: await legsFor(slotId),
+          replayed: true,
+        };
+      }
 
       if (slot.status !== 'pending_payment') {
         return {
@@ -718,6 +751,9 @@ export function createSlotsService({
             paymentMock: tx.mock,
             spentUsdc: spent,
             settlementLeaseId: null,
+            // Stored only on success, so a key that failed to charge is free to
+            // be reused by the caller on a genuine retry.
+            ...(key ? { paymentIdempotencyKey: key } : {}),
             settledAt: isFlat ? now : null,
             updatedAt: now,
           })
@@ -1043,11 +1079,7 @@ export function createSlotsService({
     },
 
     async legs(slotId) {
-      const rows = await db
-        .select()
-        .from(slotLegsTable)
-        .where(eq(slotLegsTable.slotId, slotId));
-      return legRecords(rows);
+      return legsFor(slotId);
     },
 
     async earningsForChannel(channelId) {

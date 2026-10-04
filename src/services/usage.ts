@@ -28,7 +28,7 @@
 // re-implemented here, so the budget cap has exactly one enforcement point.
 
 import { randomUUID } from 'crypto';
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import { db } from '../lib/db';
 import {
   channels as channelsTable,
@@ -38,7 +38,7 @@ import {
 } from '../lib/schema';
 import { log } from '../lib/logger';
 import type { SlotsService } from './slots';
-import type { UsageKind, UsageReportedBy } from '../lib/types';
+import type { UsageKind, UsageReportedBy, UsageStatus } from '../lib/types';
 
 export type UsageFailureCode =
   | 'LISTING_NOT_FOUND'
@@ -51,7 +51,10 @@ export type UsageFailureCode =
   | 'SLOT_NOT_ACTIVE'
   | 'BUDGET_EXHAUSTED'
   | 'INVALID_IMPRESSIONS'
-  | 'INVALID_VIDEO_URL';
+  | 'INVALID_VIDEO_URL'
+  | 'REPORT_COOLDOWN';
+
+export type { UsageStatus };
 
 export interface UsageRecord {
   id: string;
@@ -70,13 +73,21 @@ export interface UsageRecord {
    * on top of the table.
    */
   reported_by: UsageReportedBy;
-  status: string;
+  status: UsageStatus;
   occurred_at: string;
   created_at: string;
 }
 
 export type UsageResult =
-  | { ok: true; usage: UsageRecord }
+  | {
+      ok: true;
+      usage: UsageRecord;
+      /**
+       * True when this exact use was already recorded, so nothing new was
+       * written and no budget was drawn. The returned row is the ORIGINAL.
+       */
+      deduped: boolean;
+    }
   | { ok: false; code: UsageFailureCode; message: string };
 
 export interface LogUsageInput {
@@ -141,6 +152,73 @@ export interface UsageService {
 }
 
 type UsageRow = typeof usageTable.$inferSelect;
+
+/**
+ * MODULAR: optional repeat-report cooldown, per (listing, channel), in hours.
+ *
+ * OFF by default, and deliberately so. The real guard is `uq_usage_dedup`: an
+ * exact repeat of the same use can never be written twice, regardless of
+ * timing. A time window on top of that is a blunt heuristic, and it breaks
+ * legitimate traffic — a channel reporting impressions in batches across
+ * several calls, or a `manual`/`platform_api` row correcting an earlier
+ * self-report of the same use, are both real and both would be refused.
+ *
+ * Left available for operators who want a hard ceiling on how often any one
+ * channel may report any one listing (for instance during a suspected abuse
+ * investigation). Enforced by querying existing rows, never in-process state:
+ * an in-memory window dies with the process, so a retry after a restart or a
+ * second app instance would slip straight past it.
+ */
+function reportCooldownHours(): number {
+  const raw = Number(process.env.USAGE_REPORT_COOLDOWN_HOURS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 0;
+}
+
+/** Find the row a repeated report would duplicate, if any. */
+async function findDuplicate(input: {
+  listingId: string;
+  channelId: string;
+  externalContentId: string | null;
+  occurredAt: Date;
+}): Promise<UsageRow | null> {
+  const [row] = await db
+    .select()
+    .from(usageTable)
+    .where(
+      and(
+        eq(usageTable.listingId, input.listingId),
+        eq(usageTable.channelId, input.channelId),
+        input.externalContentId
+          ? eq(usageTable.externalContentId, input.externalContentId)
+          : isNull(usageTable.externalContentId),
+        eq(usageTable.occurredAt, input.occurredAt),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * The most recent use of this listing on this channel — the row a cooldown
+ * measures against. Returns null when there is nothing to measure against.
+ */
+async function findLatest(input: {
+  listingId: string;
+  channelId: string;
+}): Promise<UsageRow | null> {
+  const [row] = await db
+    .select()
+    .from(usageTable)
+    .where(
+      and(
+        eq(usageTable.listingId, input.listingId),
+        eq(usageTable.channelId, input.channelId),
+      ),
+    )
+    .orderBy(desc(usageTable.occurredAt))
+    .limit(1);
+  return row ?? null;
+}
 
 function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
@@ -235,6 +313,55 @@ export function createUsageService(slots: SlotsService): UsageService {
       let spendUsdc = '0';
       let attributionCode = input.attributionCode?.trim() || null;
       const kind: UsageKind = listing.tier === 'paid' ? 'sponsored' : 'organic';
+      const now = new Date();
+      const occurredAt = input.occurredAt ? new Date(input.occurredAt) : now;
+      const effectiveOccurredAt = Number.isNaN(occurredAt.getTime()) ? now : occurredAt;
+      const externalContentId = input.externalContentId?.trim() || null;
+
+      // MODULAR: both guards run BEFORE any money moves. `slots.accrue` below
+      // is what draws a CPM budget down, so a repeat that reached it would
+      // charge the campaign a second time for one use.
+      //
+      // 1. An exact repeat (same listing, channel, content id and timestamp)
+      //    is the same use, not a new one. Return the original row.
+      const duplicate = await findDuplicate({
+        listingId: listing.id,
+        channelId: channel.id,
+        externalContentId,
+        occurredAt: effectiveOccurredAt,
+      });
+      if (duplicate) {
+        log.info('usage deduped', {
+          usage_id: duplicate.id,
+          listing_id: listing.id,
+          channel_id: channel.id,
+          external_content_id: externalContentId,
+        });
+        return { ok: true, usage: rowToUsage(duplicate), deduped: true };
+      }
+
+      // 2. Optionally, a hard ceiling on how often this (listing, channel) may
+      //    report at all. Off unless USAGE_REPORT_COOLDOWN_HOURS is set, because
+      //    batched delivery reports and provenance corrections are legitimate.
+      //
+      //    Measured between the incoming report and the most recent row rather
+      //    than against wall-clock, so backfilling older deliveries is not
+      //    treated as a burst — a channel catching up on last week's videos is
+      //    exactly the legitimate case this must not refuse.
+      const cooldownHours = reportCooldownHours();
+      if (cooldownHours > 0) {
+        const latest = await findLatest({ listingId: listing.id, channelId: channel.id });
+        const gapMs = latest ? effectiveOccurredAt.getTime() - latest.occurredAt.getTime() : Infinity;
+        // A report dated at or before the newest row is not a new use; treat
+        // the non-positive gap as inside the window.
+        if (gapMs < cooldownHours * 3_600_000) {
+          return {
+            ok: false,
+            code: 'REPORT_COOLDOWN',
+            message: `This listing was already reported on this channel within the last ${cooldownHours}h.`,
+          };
+        }
+      }
 
       if (listing.tier === 'paid') {
         // Paid creative is only usable under a slot. Without one there is
@@ -307,28 +434,44 @@ export function createUsageService(slots: SlotsService): UsageService {
         attributionCode = attributionCode ?? listing.attributionSlug;
       }
 
-      const now = new Date();
-      const occurredAt = input.occurredAt ? new Date(input.occurredAt) : now;
-      const [row] = await db
-        .insert(usageTable)
-        .values({
-          id: randomUUID(),
+      let row: UsageRow;
+      try {
+        [row] = await db
+          .insert(usageTable)
+          .values({
+            id: randomUUID(),
+            listingId: listing.id,
+            channelId: channel.id,
+            slotId,
+            kind,
+            attributionCode,
+            videoUrl,
+            externalContentId,
+            impressions,
+            clicks,
+            spendUsdc,
+            reportedBy,
+            status: 'logged',
+            occurredAt: effectiveOccurredAt,
+            createdAt: now,
+          })
+          .returning();
+      } catch (err) {
+        // uq_usage_dedup caught a concurrent report of the same use that slipped
+        // between the pre-check above and this insert. The index, not the
+        // read, is the real guard — this branch only turns the violation into
+        // the same answer the pre-check would have given.
+        const existing = await findDuplicate({
           listingId: listing.id,
           channelId: channel.id,
-          slotId,
-          kind,
-          attributionCode,
-          videoUrl,
-          externalContentId: input.externalContentId?.trim() || null,
-          impressions,
-          clicks,
-          spendUsdc,
-          reportedBy,
-          status: 'logged',
-          occurredAt: Number.isNaN(occurredAt.getTime()) ? now : occurredAt,
-          createdAt: now,
-        })
-        .returning();
+          externalContentId,
+          occurredAt: effectiveOccurredAt,
+        });
+        if (existing) {
+          return { ok: true, usage: rowToUsage(existing), deduped: true };
+        }
+        throw err;
+      }
 
       log.info('usage logged', {
         usage_id: row.id,
@@ -340,7 +483,7 @@ export function createUsageService(slots: SlotsService): UsageService {
         spend_usdc: spendUsdc,
       });
 
-      return { ok: true, usage: rowToUsage(row) };
+      return { ok: true, usage: rowToUsage(row), deduped: false };
     },
 
     async get(usageId) {
