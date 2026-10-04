@@ -10,6 +10,7 @@
 
 import type { AudioFeatures } from './types';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 export { type AudioFeatures };
@@ -105,7 +106,7 @@ async function extractViaChromagram(audioPath: string): Promise<AudioFeatures> {
 // Convert audio to mono 16-bit PCM WAV in memory
 async function pcmToWavBuffer(audioPath: string): Promise<Buffer> {
   const { execSync } = await import('child_process');
-  const tmpPath = path.join(require('os').tmpdir(), `versions-pcm-${Date.now()}.wav`);
+  const tmpPath = path.join(os.tmpdir(), `versions-pcm-${Date.now()}.wav`);
   try {
     execSync(
       `ffmpeg -y -i "${audioPath}" -af "aresample=44100,aformat=sample_fmts=s16:channel_layouts=mono" "${tmpPath}" 2>/dev/null`,

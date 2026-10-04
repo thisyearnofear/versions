@@ -351,36 +351,41 @@ typecheck fails otherwise:
 
 ## 5a. Open `decision` — delivery verification (P3)
 
-**Blocked, deliberately.** A second-pass verifier over reported delivery is the
-highest-value remaining claim-discipline gap, and it must not be built yet.
+**Blocked, deliberately, and already specified.** A second-pass verifier over
+reported delivery is the highest-value remaining claim-discipline gap. The full
+design is in [delivery-ingestion.md](./delivery-ingestion.md) — read that first;
+this entry only records *why it is not built yet* and the one rule that governs
+its shape.
 
 **The blocker.** `usage_events.reported_by` accepts `'platform_api'`, but
 nothing in the repo ever writes it. `usage.log()` has exactly one call site
 (`POST /api/v1/usage`) and `UsageReportSchema` is `.strict()` with no
 `reportedBy` key — so a reporter cannot assert its own provenance, and
-`by_reporter.platform_verified` is structurally always `0`. There is no
-platform-API path that can attest that *this video used this track*.
+`by_reporter.platform_verified` is structurally always `0`. No platform-API
+path can yet attest that *this video used this listing*.
 
 **Why a model-based verifier does not close it.** A skeptical second pass over
 a first model's output buys skepticism, not verification. Suparade
-(`backend/verifier.py`) pays off exactly that shape, and it is the one place
-where we should deliberately diverge: their verifier confirms a model's claim
-about a video. Ours would have to reconcile against **platform API data** — the
-same rule that makes channel *reach* verification trustworthy
-(`stats_source = 'platform_api'`, `can_buy_slots`). Otherwise we would be
-converting a `reported_by = 'channel'` row into a `platform_api` claim on a
-model's word, which is precisely the laundering AGENTS.md forbids.
+(`backend/verifier.py`) pays off exactly that shape; it is the one place we
+should deliberately diverge. Their verifier confirms a model's claim about a
+video — ours must reconcile against **platform API data**, the same rule that
+makes channel *reach* trustworthy (`stats_source = 'platform_api'`,
+`can_buy_slots`). Otherwise we would convert a `reported_by = 'channel'` row
+into a `platform_api` claim on a model's word, which is exactly the laundering
+AGENTS.md forbids.
 
-**Order of work when this is picked up:**
+**Two rules that carry into any implementation:**
 
-1. Build a real delivery attestation — a probe that can confirm a specific
-   piece of content used a specific listing, and is the only writer allowed to
-   set `reported_by = 'platform_api'`.
-2. Only then add a verification pass that gates settlement on it.
-3. The pass must reconcile against platform data, never against a model's own
-   first read.
+1. **Never mutate a channel row into a platform row.** A failed or pending
+   verification writes its own outcome; the original channel report stays as it
+   was, so the `by_reporter` split remains legible.
+2. **A `platform_api` row means "placement context and delivery confirmed
+   against the platform", never "content proven."** Per
+   `delivery-ingestion.md`, confirming that a video's *audio contains* a
+   specific track needs fingerprinting (Content ID territory) and is out of
+   scope. UI copy must phrase verification that way.
 
-Until step 1 exists, `by_reporter` stays honest: channel-reported is
+Until the platform probe exists, `by_reporter` stays honest: channel-reported is
 channel-reported, and aggregates keep showing the split rather than a single
 laundered total.
 

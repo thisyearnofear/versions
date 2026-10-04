@@ -71,15 +71,45 @@ confirm `du -sh data/uploads` shrinks, then prune empty leftovers.
 
 ### Neon (production DB)
 
-Live DB is Neon (pooled `DATABASE_URL` on the box). As of **2026-09-24**
-the project hit a **quota limit** (“exceeded the quota — upgrade your
-plan”); marketplace reads may return empty / ready may look fine while
-writes and ad-hoc `psql` fail. Plan: wait for allowance reset / upgrade
-(~1 week), then:
+Live DB is Neon (pooled `DATABASE_URL` on the box).
 
-1. `curl -sf https://api.versions.persidian.com/api/health/ready`
-2. Smoke browse/supply against the API
-3. Run residual upload migrate (above) if `data/uploads` still has files
+**Resolved 2026-10-04.** The project hit a **quota limit** on **2026-09-24**
+("exceeded the quota — upgrade your plan"). The outage ran **~10 days**, from
+2026-09-24 until 2026-10-04. Diagnosis, in order:
+
+1. **Immediate cause — quota.** While over quota, Neon served connections with
+   an **empty `search_path`** (`show search_path` → `''`,
+   `current_schema()` → `null`). Drizzle emits unqualified table names, so every
+   query failed `42P01 relation does not exist` and every DB-backed route
+   returned an empty catalog while still answering `200 {"degraded":true}`.
+2. **Fixed by** `ALTER DATABASE neondb SET search_path TO public` once Neon
+   accepted connections again — the setting had been dropped along with the
+   role's defaults. Verified persisted in `pg_db_role_setting`; all 32 listings
+   and both usage rows were intact and are serving again.
+
+**What we could not date precisely.** Container logs were reset by the 2026-10-04
+redeploy and `/api/v1/*` was rarely called, so there is no per-request log.
+Bounding evidence: `versions-sweep.log` holds 1096 consecutive `500`s against
+`POST /api/cron/sweep` (its last success is the line immediately before them),
+and the daily `0 4 * * *` cron explains the file's span. Everything in the
+database predates the outage (`listings` 2026-09-14, `usage_events` 2026-09-17),
+so **no data was lost** — but any visitor between 2026-09-24 and 2026-10-04 saw
+an empty `/discover`. `telemetry_events` holds only 38 client-side `page_view`
+rows and no server-side read events, so it cannot say who consumed the empty
+catalog. If that matters, add a server-side read event to the degraded path.
+
+**Lesson — the blind spot was ours, not Neon's.** `/api/health/ready` reported
+`ready` and `POST /api/cron/sweep` was already 500-ing for days; nothing alerted.
+The per-minute monitor cron was healthy because it probes `/api/health/live`,
+which returns a hardcoded `200` and **touches no DB** (deliberately — see the
+CU-hr rule below). Three gaps, all now addressed or worth addressing:
+
+- `/api/health/ready` now does a real DB round-trip and reports
+  `providers.database.{reachable,searchPath,usable}`, `503` when unusable.
+- `POST /api/cron/sweep` failing daily is an alarm condition; it is not
+  monitored. Worth alerting on.
+- The monitor only writes to its log on a **state change**, so a long silent
+  outage looks identical to a healthy one. Consider logging heartbeats.
 
 Do not point production at a second Neon project without a restore drill
 ([Database schema](#database-schema-production) backup steps).
@@ -427,6 +457,10 @@ from the DB and uploads dir after verification.
 
 ### Incident — 2026-10-04 — empty `search_path` blanked the whole catalog
 
+**Onset was 2026-09-24, not 2026-10-04** — see
+[Neon (production DB)](#neon-production-db) above for the full timeline. This
+section records the mechanism and the fix; that one records the dating.
+
 **Symptom.** Every DB-backed route silently returned an empty catalog while
 still answering `200`:
 
@@ -437,11 +471,14 @@ GET /api/v1/usage             → 500
 ```
 
 `/api/health/ready` reported **`ready`** throughout, which is why it went
-unnoticed. The 32 listings were intact in the database — just unreachable.
+unnoticed for ~10 days — even though `POST /api/cron/sweep` was already
+500-ing nightly. The 32 listings were intact in the database — just
+unreachable.
 
-**Cause.** Production Neon handed the owner role an **empty `search_path`**
+**Cause.** The Neon owner role was being served an **empty `search_path`**
 (`show search_path` → `''`, `current_schema()` → `null`, confirmed both from a
-workstation and from inside the running container). Drizzle emits unqualified
+workstation and from inside the running container) — a consequence of the
+2026-09-24 quota event, not of anything in the repo. Drizzle emits unqualified
 table names, so every query failed with `42P01 relation "x" does not exist`.
 
 **Fix.** `ALTER DATABASE neondb SET search_path TO public;` — applied
